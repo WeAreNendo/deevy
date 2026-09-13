@@ -47,12 +47,19 @@ the worst it can do is arrive as a second paragraph rather than corrupt the firs
 including tombstones for deleted text, so a Document typed into for a month is tens of kilobytes of history
 around a page of prose. On a store the state is written in Yjs's v2 encoding, which is roughly half the size
 of v1; past a quarter of a megabyte, and only when nobody is connected, the room is rebuilt from its markdown
-and the history is dropped. The guard is the whole point and is not a detail: compacting starts the
-Document's identity again, so a browser still holding the old one would merge its copy back in as duplicate
-text. The trade-off is stated rather than solved — a tab that was asleep across a compaction is the one case
-where "keep typing, it will merge when you are back" can return a paragraph twice instead of once. Nothing is
-lost, and a Human can see it and delete it; the alternative was a row that grows without limit on a database
-with a row size limit.
+and the history is dropped. The guard is the whole point and is not a detail: compacting starts the Document's
+identity again, so a browser still holding the old one would merge its copy back in as duplicate text. The
+alternative was a row that grows without limit on a database with a row size limit.
+
+**A tab that slept through a rebuild rebases, it does not sync.** The room is empty when it compacts, but a
+browser that was in it minutes ago is not gone — it is asleep, and it wakes holding a Document whose pieces
+the room no longer has a name for. Every connection therefore says how long ago it last had the room's text,
+as elapsed time rather than a reading of a clock neither end shares, and a room rebuilt since then turns it
+away before a single update moves. What the browser does then is what an Agent does: it drops the copy the
+room cannot take, opens the room again, and replays what it changed as markdown through the same three-way
+merge. Where that merge refuses — the same lines, changed on both sides — the room keeps what it has and the
+editor hands the Human their own words back to place. Nothing is pasted over somebody else, and nothing is
+lost.
 
 **A version is cut by quiet, not by a button.** Thirty seconds of stillness in a room and the merged text
 becomes a version. A cut within ten minutes of the previous one, by the same set of authors, amends that
@@ -135,6 +142,6 @@ be machinery for nothing.
 
 Three weeks of work, a websocket transport, a Durable Object, a paid Workers plan for that deployment, a
 three-way merge with its own failure modes, a blob per Document that carries its history until the room is
-empty enough to compact, and the one case above where a sleeping tab wakes into a compacted room and merges a
-paragraph back twice. The plan is `docs/plans/collaborative-documents.md`, and the first slice is a spike that
-proves the room runs on both runtimes before any of the rest is built.
+empty enough to compact, and a rebase path for the tab that was asleep when it was. The plan is
+`docs/plans/collaborative-documents.md`, and the first slice is a spike that proves the room runs on both
+runtimes before any of the rest is built.

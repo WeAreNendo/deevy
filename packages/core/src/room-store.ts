@@ -237,6 +237,7 @@ async function saveState({
 }: Omit<StoreRoom, "authors">): Promise<void> {
   const key = roomStateKey(room);
   let bytes = Y.encodeStateAsUpdateV2(doc);
+  let compacted = false;
   if (bytes.length > compactOver && (connections ?? 0) === 0) {
     // Everything this Document has ever been, replaced by what it says. The
     // words are what a version is made of and what anybody reads; the history
@@ -244,19 +245,41 @@ async function saveState({
     const fresh = new Y.Doc();
     loadMarkdown(fresh, markdownOf(doc));
     bytes = Y.encodeStateAsUpdateV2(fresh);
+    // Noted, because it is the one thing a browser has to know about: the
+    // Document's identity starts again here, and a copy made before this
+    // moment can no longer be merged into it.
+    compacted = true;
   }
   const state = encode(bytes);
-  const values = {
-    room: key,
-    issueId: room.issue.id,
-    documentId: room.document?.id ?? null,
-    state,
-    updatedAt: now,
-  };
+  const stamped = compacted ? { compactedAt: now } : {};
   await db
     .insert(roomStateTable)
-    .values(values)
-    .onConflictDoUpdate({ target: roomStateTable.room, set: { state, updatedAt: now } });
+    .values({
+      room: key,
+      issueId: room.issue.id,
+      documentId: room.document?.id ?? null,
+      state,
+      updatedAt: now,
+      ...stamped,
+    })
+    .onConflictDoUpdate({
+      target: roomStateTable.room,
+      set: { state, updatedAt: now, ...stamped },
+    });
+}
+
+/**
+ * Whether this room was rebuilt since the moment a browser last held it, and so
+ * whether what that browser holds can still be merged in.
+ *
+ * A compaction replaces every piece of the Document with a piece of the same
+ * text under a new identity. Two documents that share no identities do not
+ * merge — they concatenate — so a tab that slept through one has to put its
+ * words back as markdown instead of as updates (ADR-0021).
+ */
+export async function rebuiltSince(db: Db, room: OpenedRoom, held: Date): Promise<boolean> {
+  const saved = await db.query.roomState.findFirst({ where: { room: roomStateKey(room) } });
+  return saved?.compactedAt ? saved.compactedAt.getTime() > held.getTime() : false;
 }
 
 /*

@@ -195,3 +195,21 @@ describe("an editor in a room", () => {
     expect(screen.queryByText(/Offline/i)).toBeNull();
   });
 });
+
+describe("what a browser typed offline and the room could not take", () => {
+  it("is handed back, rather than dropped or pasted over somebody", async () => {
+    const { room } = roomWith("What the room says now.");
+    mount({ ...room, unmerged: "## Concerns\n\nWritten on a train." });
+
+    // The room keeps what it has; these are her words, to place herself.
+    expect(await screen.findByText(/could not be merged/)).toBeTruthy();
+    expect(screen.getByText(/Written on a train\./)).toBeTruthy();
+  });
+
+  it("says nothing at all in the ordinary case, which is every other case", () => {
+    const { room } = roomWith("What the room says now.");
+    mount(room);
+
+    expect(screen.queryByText(/could not be merged/)).toBeNull();
+  });
+});

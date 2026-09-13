@@ -56,6 +56,14 @@ export const roomState = sqliteTable(
     /** Null for an Issue's description, which is not a Document. */
     documentId: text("document_id").references(() => document.id, { onDelete: "cascade" }),
     state: text("state").notNull(),
+    /**
+     * When this room's history was last swept up and its state rebuilt from
+     * what the Document says. A rebuild starts the Document's identity again,
+     * so a browser that was away across one holds a copy the room can no longer
+     * recognise — and it is told to rebase rather than merge (ADR-0021). Null
+     * for a room that has never grown large enough to need it.
+     */
+    compactedAt: integer("compacted_at", { mode: "timestamp_ms" }),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).default(now).notNull(),
   },
   (table) => [index("room_state_issueId_idx").on(table.issueId)],
