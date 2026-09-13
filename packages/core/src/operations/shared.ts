@@ -318,6 +318,10 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
 export async function requireAssignee(context: ContextFor<"member">, memberId: string) {
   const found = await context.db.query.member.findFirst({
     where: { id: memberId, workspaceId: context.workspace.id },
+    // With their name, because every caller that checks an Assignee is about to
+    // write one into an Event, and a second query for it would be a second
+    // statement against the budget.
+    with: { user: { columns: { name: true } } },
   });
   if (!found) {
     throw new ORPCError("BAD_REQUEST", {

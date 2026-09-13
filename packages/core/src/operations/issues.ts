@@ -48,9 +48,12 @@ export const issues = {
       if (!first) {
         throw new ORPCError("BAD_REQUEST", { message: "This Project has no Workflow States" });
       }
-      if (input.assigneeMemberId) await requireAssignee(context, input.assigneeMemberId);
+      const assignee = input.assigneeMemberId
+        ? await requireAssignee(context, input.assigneeMemberId)
+        : null;
 
       let parentId: string | null = null;
+      let parentKey: string | null = null;
       if (input.parentKey) {
         const parent = await requireIssue(context, input.parentKey);
         if (parent.project.id !== project.id) {
@@ -59,6 +62,7 @@ export const issues = {
           });
         }
         parentId = parent.issue.id;
+        parentKey = issueKey(parent.project.key, parent.issue.number);
       }
 
       const number = await nextIssueNumber(context.db, project.id);
@@ -78,9 +82,41 @@ export const issues = {
         subjectId: created.id,
         projectId: project.id,
         // The State it landed in, so a reader of the log or the inbox sees
-        // where the Issue started, not where it is now.
-        payload: { key: issueKey(project.key, number), title: created.title, state: first.name },
+        // where the Issue started, not where it is now. And what it was opened
+        // under, so an Activity about a sub-issue names its parent rather than
+        // leaving the reader to click (docs/plans/sub-issue-delegation.md).
+        payload: {
+          key: issueKey(project.key, number),
+          title: created.title,
+          state: first.name,
+          ...(parentKey ? { parentKey } : {}),
+        },
       });
+      /*
+       * Handed to somebody at birth is still being handed to them: the Event
+       * goes in, so their inbox hears about it and an Agent's Run starts. It
+       * follows `issue.created` rather than preceding it, because a reader of
+       * the log should see the Issue exist before it is given away, and because
+       * `triggersFor` reads the Issue when the assignment reaches it.
+       *
+       * Where the first State's own rule names the same Agent, both Events want
+       * a Run and only one is opened: the "at most one open Run per
+       * (issue, agent)" rule in `startRun` is what settles it.
+       */
+      if (assignee) {
+        await appendEvent(context, {
+          kind: "issue.assigned",
+          subjectType: "issue",
+          subjectId: created.id,
+          projectId: project.id,
+          payload: {
+            from: null,
+            to: assignee.id,
+            fromName: null,
+            toName: assignee.user.name,
+          },
+        });
+      }
       await openStateDocument(context, created.id, project.id, first);
       return loadIssue(context, created.id);
     },
