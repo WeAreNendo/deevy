@@ -2,6 +2,7 @@ import { lazy, Suspense, useId } from "react";
 import type { EditorMode, Mentionable } from "@/components/tiptap-editor";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useRoom, useRoomsReady } from "@/lib/rooms";
 import { cn } from "@/lib/utils";
 
 // Tiptap is the heaviest thing in the SPA and a list never needs it.
@@ -30,6 +31,14 @@ export interface MarkdownEditorProps {
   /** Rows the hidden textarea holds; the rich editor sizes itself. */
   rows?: number;
   className?: string;
+  /**
+   * The room this text lives in, by name (`document:DEV-1:spec`). Given, and
+   * where the deployment has rooms, the text belongs to everybody in it: the
+   * editor stops being a view of `value` and `onChange` stops being asked to
+   * save, because the room writes its own versions (ADR-0021). Absent, or where
+   * there is no room to join, the editor is exactly what it was.
+   */
+  room?: string;
 }
 
 /**
@@ -57,8 +66,11 @@ export function MarkdownEditor({
   "aria-label": ariaLabel = "Body",
   rows = 12,
   className,
+  room: roomName,
 }: MarkdownEditorProps) {
   const generated = useId();
+  const room = useRoom(roomName);
+  const waiting = Boolean(roomName) && !useRoomsReady();
 
   return (
     <div
@@ -73,18 +85,35 @@ export function MarkdownEditor({
         className,
       )}
     >
-      <Suspense fallback={<Skeleton className="m-3 h-24" />}>
-        <TiptapEditor
-          value={value}
-          onChange={onChange}
-          mode={mode}
-          aria-label={ariaLabel}
-          {...(id ? { id } : {})}
-          {...(placeholder ? { placeholder } : {})}
-          {...(mentions ? { mentions } : {})}
-          {...(onSubmit ? { onSubmit } : {})}
-          {...(autoFocus ? { autoFocus } : {})}
-        />
+      {/*
+       * Until the room question has an answer, the editor is not built: one
+       * that mounted plain and gained a room would load its text twice, and
+       * the second load is somebody else's words arriving over your own.
+       */}
+      {waiting ? <Skeleton className="m-3 h-24" /> : null}
+      {room?.status === "disconnected" ? (
+        // Keep typing: Yjs merges what was written offline when the connection
+        // comes back (ADR-0021). Saying so is the whole feature — an editor
+        // that looks normal while nobody else can see it is a lie.
+        <p role="status" className="px-3 pt-2 text-xs text-muted-foreground">
+          Offline — still editing, and this will merge when you are back.
+        </p>
+      ) : null}
+      <Suspense fallback={waiting ? null : <Skeleton className="m-3 h-24" />}>
+        {waiting ? null : (
+          <TiptapEditor
+            value={value}
+            onChange={onChange}
+            mode={mode}
+            aria-label={ariaLabel}
+            {...(room ? { room } : {})}
+            {...(id ? { id } : {})}
+            {...(placeholder ? { placeholder } : {})}
+            {...(mentions ? { mentions } : {})}
+            {...(onSubmit ? { onSubmit } : {})}
+            {...(autoFocus ? { autoFocus } : {})}
+          />
+        )}
       </Suspense>
       {/*
        * The markdown underneath, hidden: the same text as the editor above it,

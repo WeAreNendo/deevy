@@ -1406,13 +1406,17 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "liveDocuments": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "ok",
                     "time",
                     "devSignIn",
-                    "providers"
+                    "providers",
+                    "liveDocuments"
                   ],
                   "additionalProperties": false
                 }

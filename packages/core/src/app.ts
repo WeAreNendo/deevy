@@ -58,6 +58,12 @@ export interface AppOptions {
    */
   devSignIn?: boolean;
   /**
+   * Whether this deployment serves rooms, which the SPA asks before it opens a
+   * socket (ADR-0021): the Node deployment always does, and a Worker does when
+   * it has the Durable Object binding.
+   */
+  liveDocuments?: boolean;
+  /**
    * Which providers this deployment offers a Human to sign in with, from
    * `signInProviders(env)` in the entry that built the identity configuration.
    * Reported on `health.ping`, so the sign-in page renders what the server
@@ -110,6 +116,7 @@ export function createApp({
   jobs = discardingJobQueue(),
   onError: report = console.error,
   devSignIn = false,
+  liveDocuments = false,
   signInProviders = [],
   webURL,
 }: AppOptions) {
@@ -187,6 +194,7 @@ export function createApp({
     ...(webURL ? { webURL } : {}),
     jobs,
     devSignIn,
+    liveDocuments,
     signInProviders: await offeredProviders(),
   });
   app.use("/rpc/*", async (c, next) => {

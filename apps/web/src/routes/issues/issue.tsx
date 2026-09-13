@@ -24,6 +24,7 @@ import { MarkdownEditor } from "@/components/markdown-editor";
 import { InlineTitle } from "@/components/inline-title";
 import { useAutosave } from "@/lib/autosave";
 import { useMentionables } from "@/lib/mentions";
+import { roomFor, useRoom } from "@/lib/rooms";
 import { PAGE_SCOPE, useShortcut } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { client as orpcClient, orpc } from "@/lib/orpc.ts";
@@ -89,6 +90,8 @@ export function IssuePage({
   });
   const [draftDescription, setDraftDescription] = useState<string | null>(null);
   const mentionables = useMentionables();
+  const descriptionRoom = roomFor({ kind: "description", issueKey });
+  const descriptionLive = Boolean(useRoom(descriptionRoom));
 
   if (issue.isPending) return <p className="text-muted-foreground">Loading {issueKey}…</p>;
   if (issue.isError) {
@@ -110,8 +113,12 @@ export function IssuePage({
     category: state.category as "backlog" | "active" | "done",
   };
 
-  /** Leaving the description, or ⌘Enter in it, is the save. Empty means none. */
+  /**
+   * Leaving the description, or ⌘Enter in it, is the save — where there is no
+   * room. In one, the room saves it when the typing stops (ADR-0021).
+   */
   const saveDescription = () => {
+    if (descriptionLive) return;
     if (draftDescription === null || draftDescription === (description ?? "")) return;
     void edits
       .saveNow({ description: draftDescription.trim() === "" ? null : draftDescription })
@@ -184,6 +191,7 @@ export function IssuePage({
             className="border-transparent bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent"
             id={`description-${key}`}
             aria-label="Description"
+            room={descriptionRoom}
             value={draftDescription ?? description ?? ""}
             onChange={setDraftDescription}
             onBlur={saveDescription}

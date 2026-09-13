@@ -23,6 +23,7 @@
     "@dnd-kit/utilities": "catalog:",
     "@fontsource-variable/inter": "catalog:",
     "@fontsource-variable/jetbrains-mono": "catalog:",
+    "@hocuspocus/provider": "catalog:",
     "@hocuspocus/server": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
@@ -31,6 +32,8 @@
     "@tanstack/react-router": "catalog:",
     "@tiptap/core": "catalog:",
     "@tiptap/extension-code-block-lowlight": "catalog:",
+    "@tiptap/extension-collaboration": "catalog:",
+    "@tiptap/extension-collaboration-caret": "catalog:",
     "@tiptap/extension-list": "catalog:",
     "@tiptap/extension-placeholder": "catalog:",
     "@tiptap/extension-table": "catalog:",
@@ -39,6 +42,7 @@
     "@tiptap/react": "catalog:",
     "@tiptap/starter-kit": "catalog:",
     "@tiptap/suggestion": "catalog:",
+    "@tiptap/y-tiptap": "catalog:",
     "better-auth": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
@@ -55,6 +59,7 @@
     "remark-gfm": "catalog:",
     "sonner": "catalog:",
     "tailwind-merge": "catalog:",
+    "y-protocols": "catalog:",
     "yjs": "catalog:"
   },
   "devDependencies": {

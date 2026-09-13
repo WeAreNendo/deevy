@@ -1,4 +1,8 @@
-import { documentExtensions } from "@deevy/editor";
+import { DOCUMENT_FIELD, documentExtensions } from "@deevy/editor";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCaret from "@tiptap/extension-collaboration-caret";
+import type { Awareness } from "y-protocols/awareness";
+import type * as Y from "yjs";
 import { Editor, Extension, type Range } from "@tiptap/core";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { Placeholder } from "@tiptap/extension-placeholder";
@@ -60,6 +64,8 @@ export interface TiptapEditorProps {
   id?: string;
   "aria-label"?: string;
   className?: string;
+  /** The live Document this is a view of, when it is in a room. */
+  room?: { doc: Y.Doc; awareness: Awareness; me?: { name: string; color: string } };
 }
 
 const lowlight = createLowlight(common);
@@ -368,6 +374,8 @@ export function editorExtensions(options: {
   placeholder?: string;
   mentions?: () => Mentionable[];
   onSubmit?: () => void;
+  /** The live Document this editor is a view of, when it is in a room. */
+  room?: { doc: Y.Doc; awareness: Awareness; me?: { name: string; color: string } };
 }) {
   const block = options.mode === "block";
   const submit = Extension.create({
@@ -387,7 +395,7 @@ export function editorExtensions(options: {
     // Documents. A comment is not versioned and does not want headings or
     // tables, so `inline` keeps its own narrower list.
     ...(block
-      ? documentExtensions()
+      ? documentExtensions({ history: !options.room })
       : [
           StarterKit.configure({
             // Lowlight takes the code block over; the rest of the kit stays.
@@ -404,6 +412,18 @@ export function editorExtensions(options: {
           Markdown.configure({ markedOptions: { gfm: true } }),
         ]),
     Placeholder.configure({ placeholder: options.placeholder ?? "" }),
+    // In a room the text belongs to the Yjs document rather than to this
+    // browser: history is the room's (undo of your own edits, not everybody's),
+    // and the caret extension draws the other Members where they are.
+    ...(options.room
+      ? [
+          Collaboration.configure({ document: options.room.doc, field: DOCUMENT_FIELD }),
+          CollaborationCaret.configure({
+            provider: { awareness: options.room.awareness },
+            user: options.room.me ?? { name: "Somebody", color: "#6366f1" },
+          }),
+        ]
+      : []),
     mentionSuggestion(options.mentions ?? (() => [])),
     ...(block ? [slashCommands] : []),
     submit,
@@ -435,6 +455,7 @@ export default function TiptapEditor({
   id,
   "aria-label": ariaLabel,
   className,
+  room,
 }: TiptapEditorProps) {
   const mentionRef = useRef(mentions);
   mentionRef.current = mentions;
@@ -453,8 +474,9 @@ export default function TiptapEditor({
         placeholder,
         mentions: () => mentionRef.current,
         onSubmit: () => submitRef.current?.(),
+        ...(room ? { room } : {}),
       }),
-    [mode, placeholder],
+    [mode, placeholder, room],
   );
   const editorProps = useMemo(
     () => ({
@@ -471,23 +493,29 @@ export default function TiptapEditor({
 
   const editor = useEditor({
     extensions,
-    content: initial.current,
-    contentType: "markdown",
+    // In a room the content is whatever the room holds; Collaboration fills the
+    // editor from the Yjs document and content of our own would race it.
+    ...(room ? {} : { content: initial.current, contentType: "markdown" as const }),
     autofocus: autoFocus ? "end" : false,
     editorProps,
     onUpdate: ({ editor: current }) => {
+      // A room writes its own versions when it goes quiet, so nobody is asked
+      // to save: `onChange` is for the editors that are still a view of props.
+      if (room) return;
       const markdown = toMarkdown(current);
       lastEmitted.current = markdown;
       onChange(markdown);
     },
   });
 
-  // The Source tab changed the text: load it, quietly.
+  // A `value` changed outside the editor: load it, quietly. Never in a room —
+  // there the text belongs to everybody in it, and writing the page's older
+  // copy over the live one would undo whatever somebody else just typed.
   useEffect(() => {
-    if (!editor || value === lastEmitted.current) return;
+    if (room || !editor || value === lastEmitted.current) return;
     lastEmitted.current = value;
     editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
-  }, [editor, value]);
+  }, [editor, value, room]);
 
   return (
     <div data-slot="markdown-editor" className="flex flex-col">

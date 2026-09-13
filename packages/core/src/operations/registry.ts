@@ -71,6 +71,8 @@ export interface AppContext {
    * `health.ping` reads it, so a signed-out SPA can offer the dev form.
    */
   devSignIn?: boolean;
+  /** Whether this deployment has rooms, so the SPA knows before it opens a socket (ADR-0021). */
+  liveDocuments?: boolean;
   /**
    * The sign-in providers this deployment configured, in the order the sign-in
    * page renders them. Only `health.ping` reads it, so a signed-out SPA knows

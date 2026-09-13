@@ -88,6 +88,9 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // The buttons the sign-in page draws, from the same entries Better Auth
       // was just registered with (docs/plans/sign-in.md).
       signInProviders: signInProviders(authEnv),
+      // Live Documents need a Durable Object, which is a paid feature: without
+      // the binding every editor stays exactly what it was (ADR-0021).
+      liveDocuments: Boolean(bindings.ROOMS),
       // Only when the account has Queues. Absent, `createApp` discards jobs
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).

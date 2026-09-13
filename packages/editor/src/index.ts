@@ -19,9 +19,12 @@ import type * as Y from "yjs";
  * menu, mentions, ⌘Enter — is the SPA's, and none of it changes what a
  * Document *is*.
  */
-export function documentExtensions(): AnyExtension[] {
+export function documentExtensions(options: { history?: boolean } = {}): AnyExtension[] {
   return [
     StarterKit.configure({
+      // A room keeps the history, so that undo is your own edits rather than
+      // everybody's (`@tiptap/extension-collaboration`, ADR-0021).
+      ...(options.history === false ? { undoRedo: false as const } : {}),
       // Lowlight takes the code block over; the rest of the kit stays.
       codeBlock: false,
       heading: { levels: [1, 2, 3, 4] },

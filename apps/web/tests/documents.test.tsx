@@ -70,6 +70,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
             // The second version of the intent is the Agent's, so the byline
             // has two names to put together.
             authorMemberId: index === 1 ? "m-planner" : "m-ada",
+            authorMemberIds: [index === 1 ? "m-planner" : "m-ada"],
             writtenAt: new Date("2026-09-08T10:00:00Z"),
             // v1 of the intent is the version the Intent Gate approved.
             rulings: index === 0 ? [{ decision: "approved", stateId: "s1" }] : [],

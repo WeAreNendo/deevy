@@ -62,6 +62,8 @@ export function buildServer(env: ServerEnv) {
     ...(env.webOrigin ? { webURL: env.webOrigin } : {}),
     secret: env.secret,
     devSignIn: env.devStubOAuth,
+    // The Node deployment always has rooms: the listener below serves them.
+    liveDocuments: true,
     // What the sign-in page draws its buttons from: the providers this
     // environment configured, decided where they are registered rather than in
     // the SPA (docs/plans/sign-in.md).
