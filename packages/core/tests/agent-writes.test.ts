@@ -142,12 +142,18 @@ describe("what an Agent writes", () => {
     const open = new Y.Doc();
     loadMarkdown(open, `${SPEC}\n\n## Concerns\n\nTyped ten seconds ago.`);
     const applied: string[] = [];
+    let announced: { name: string; kind: string } | null = null;
+    // Named the way the browser names it, and nothing else answers: the room a
+    // Human has open is `document:DEV-1:intent`, so a write addressed to
+    // anything else reaches an empty deployment (ADR-0021).
+    const OPEN = "document:DEV-1:intent";
     const rooms = {
-      read: (room: string) =>
-        Promise.resolve(room.startsWith("document:") ? markdownOf(open) : null),
-      apply: (_room: string, markdown: string) => {
+      read: (room: string) => Promise.resolve(room === OPEN ? markdownOf(open) : null),
+      apply: (room: string, markdown: string, by?: { name: string; kind: string }) => {
+        if (room !== OPEN) return Promise.resolve();
         applied.push(markdown);
         loadMarkdown(open, markdown);
+        announced = by ?? null;
         return Promise.resolve();
       },
     };
@@ -169,6 +175,9 @@ describe("what an Agent writes", () => {
 
     // The room heard about it, and what it now holds has both.
     expect(applied).toHaveLength(1);
+    // And the room is told who did it, because an Agent gets no caret and a
+    // Human whose paragraphs just changed is owed an explanation (ADR-0021).
+    expect(announced).toMatchObject({ kind: "agent" });
     expect(markdownOf(open)).toContain("`checkout.create` returns an id.");
     expect(markdownOf(open)).toContain("Typed ten seconds ago.");
 

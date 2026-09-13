@@ -57,6 +57,13 @@ The alternative was a CRDT client in the runtime, and it would have been a worse
 demo: every harness would need a stateful session to write a Document, and `documents.write` is the simplest
 tool deevy offers.
 
+**So the room says who wrote, on the Agent's behalf.** An Agent gets no caret, because there is nothing to
+follow: its write arrives as a block, and a cursor for something that is not there would be a lie. What it
+gets is a line — "Planner just wrote this" — in the Document's header for as long as the change is still a
+surprise. It rides on awareness, which is the right place for it: ephemeral, never a version, gone when the
+room closes. A Human whose paragraphs changed under their hands is owed an explanation, and this is the whole
+of it.
+
 **A conflict refuses the Agent, never the Human.** When the merge genuinely collides — the same lines
 changed on both sides — the write is refused with `CONFLICT` naming the section, and the Agent re-reads and
 tries again. Asymmetric on purpose. The live room is for typing and the API is merge-or-retry; re-reading is

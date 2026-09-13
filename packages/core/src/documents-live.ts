@@ -2,7 +2,7 @@ import { markdownOf } from "@deevy/editor";
 import type { Db, Document } from "@deevy/db";
 import * as Y from "yjs";
 import type { LiveRooms } from "./live-rooms.ts";
-import { decodeState } from "./room-store.ts";
+import { applyState } from "./room-store.ts";
 
 /**
  * What a Document says right now: the room's text when somebody is writing in
@@ -13,12 +13,18 @@ import { decodeState } from "./room-store.ts";
 export async function liveMarkdown(
   db: Db,
   document: Pick<Document, "id" | "currentVersion">,
+  /**
+   * What the room is called on the wire — `roomName()`, the same string the
+   * browser opened its socket with. Not the row's key: a room is named after
+   * the Issue a person can see, and a row is keyed by the id that outlives it.
+   */
+  room: string,
   rooms?: LiveRooms,
 ): Promise<{ body: string; live: boolean }> {
   // An open room first, and only then what was last stored: the state is
   // written when a room goes quiet, so somebody mid-sentence has words in the
   // room that are in no row yet, and merging against the row would lose them.
-  const open = await rooms?.read(`document:${document.id}`);
+  const open = await rooms?.read(room);
   if (open !== null && open !== undefined) return { body: open, live: true };
 
   const state = await db.query.roomState.findFirst({
@@ -26,7 +32,7 @@ export async function liveMarkdown(
   });
   if (state) {
     const doc = new Y.Doc();
-    Y.applyUpdate(doc, decodeState(state.state));
+    applyState(doc, state.state);
     return { body: markdownOf(doc), live: true };
   }
 

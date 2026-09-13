@@ -25,8 +25,9 @@ export {
   type ClientMetadataFetchOptions,
   type MetadataResourceFetch,
 } from "./cimd.ts";
-export type { LiveRooms } from "./live-rooms.ts";
+export type { LiveRooms, Wrote } from "./live-rooms.ts";
 export {
+  announceWrite,
   createRoomServer,
   liveRoomsOf,
   roomAuthenticator,

@@ -97,8 +97,9 @@ under their cursor by a machine.
 ### What a Human sees
 
 - **Carets** with names and Member colours, through `@tiptap/extension-collaboration-caret`.
-- **An Agent gets a banner, not a cursor** — "Planner is writing the spec" — because its edit arrives as a
-  block, not as typing.
+- **An Agent gets a banner, not a cursor** — "Planner just wrote this" — because its edit arrives as a
+  block, not as typing. The Agent never joins the room, so the server says it on the Agent's behalf, through
+  awareness, for twelve seconds after the write lands.
 - **Avatars** of everyone in the Document, in the pane's header beside the byline.
 - **Offline**: keep typing, with a line that says so, and merge on reconnect. A version cut while you were
   away will not contain your words, and the history will show them landing afterwards.

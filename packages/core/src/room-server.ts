@@ -3,7 +3,8 @@ import { ORPCError } from "@orpc/server";
 import type { Db } from "@deevy/db";
 import type { AppContext, ContextFor } from "./operations/registry.ts";
 import { loadMarkdown, markdownOf } from "@deevy/editor";
-import type { LiveRooms } from "./live-rooms.ts";
+import type { Awareness } from "y-protocols/awareness";
+import type { LiveRooms, Wrote } from "./live-rooms.ts";
 import { openRoom, storeRoom } from "./room-store.ts";
 import { authorizeRoom, type OpenedRoom, type Room } from "./rooms.ts";
 
@@ -128,7 +129,7 @@ export function createRoomServer(options: RoomServerOptions): Hocuspocus {
       return Promise.resolve();
     },
 
-    onStoreDocument: async ({ documentName, document, lastContext }) => {
+    onStoreDocument: async ({ documentName, document, lastContext, clientsCount }) => {
       const room = (lastContext as RoomContext).opened;
       const authors = [...(typists.get(documentName) ?? new Set<string>())];
       typists.delete(documentName);
@@ -138,6 +139,10 @@ export function createRoomServer(options: RoomServerOptions): Hocuspocus {
         doc: document,
         authors,
         now: new Date(),
+        // Whether anybody is still in it, which is what decides a compaction:
+        // the last browser leaving is the moment a Document's history can be
+        // swept up without anybody holding the old one (ADR-0021).
+        connections: clientsCount,
         // The Workspace the Issue belongs to: the Event goes in the same log
         // as every other write, because a version cut in a room is a write.
         log: { workspace: { id: (lastContext as RoomContext).workspaceId } },
@@ -173,16 +178,28 @@ export function liveRoomsOf(server: Hocuspocus): LiveRooms {
       const document = openDocument(room);
       return Promise.resolve(document ? markdownOf(document) : null);
     },
-    apply: (room, markdown) => {
+    apply: (room, markdown, by) => {
       const document = openDocument(room);
       if (!document) return Promise.resolve();
       // Into the live document itself. Hocuspocus watches it, so every browser
       // in the room sees the Agent's paragraphs arrive where they are rather
       // than finding out when the page is next loaded.
       loadMarkdown(document, markdown);
+      announceWrite(document, by);
       return Promise.resolve();
     },
   };
+}
+
+/**
+ * The room says who just wrote into it, on their behalf. Awareness is the right
+ * place for it — ephemeral, never a version, gone when the room closes — and
+ * the timestamp rather than a timer is what makes it survive a Durable Object
+ * being hibernated: the screen stops showing it, nobody has to unset it.
+ */
+export function announceWrite(document: { awareness?: Awareness }, by?: Wrote): void {
+  if (!by || !document.awareness) return;
+  document.awareness.setLocalState({ member: by, wroteAt: Date.now() });
 }
 
 /** What a runtime's own socket looks like: the WHATWG interface, as far as it goes. */

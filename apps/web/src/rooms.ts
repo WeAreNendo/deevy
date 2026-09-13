@@ -7,6 +7,7 @@ import {
   roomSocket,
   serveRoomSocket,
 } from "@deevy/core";
+import { announceWrite } from "@deevy/core";
 import type { LiveRooms, RuntimeSocket } from "@deevy/core";
 import type { Hocuspocus } from "@hocuspocus/server";
 import type { DurableObjectBinding, WorkerBindings } from "./env.ts";
@@ -61,6 +62,12 @@ export class DocumentRoom {
       if (!open) return new Response(null, { status: 204 });
       if (url.pathname === "/read") return new Response(markdownOf(open));
       loadMarkdown(open, await request.text());
+      const by = url.searchParams.get("by");
+      const byName = url.searchParams.get("byName");
+      const byKind = url.searchParams.get("byKind");
+      if (by && byName && (byKind === "human" || byKind === "agent")) {
+        announceWrite(open, { id: by, name: byName, kind: byKind });
+      }
       return new Response(null, { status: 204 });
     }
 
@@ -91,9 +98,12 @@ export function workerLiveRooms(rooms: DurableObjectBinding): LiveRooms {
       );
       return answer.status === 204 ? null : await answer.text();
     },
-    apply: async (room, markdown) => {
+    apply: async (room, markdown, by) => {
+      const wrote = by
+        ? `&by=${encodeURIComponent(by.id)}&byName=${encodeURIComponent(by.name)}&byKind=${by.kind}`
+        : "";
       await stub(room).fetch(
-        new Request(`https://room/apply?room=${encodeURIComponent(room)}`, {
+        new Request(`https://room/apply?room=${encodeURIComponent(room)}${wrote}`, {
           method: "POST",
           body: markdown,
         }),

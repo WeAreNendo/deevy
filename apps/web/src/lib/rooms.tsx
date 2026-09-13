@@ -164,18 +164,32 @@ export interface Present {
   kind: "human" | "agent";
   /** This browser's own entry, which the screen does not draw as somebody else. */
   self: boolean;
+  /**
+   * When an Agent wrote into this room, in milliseconds. An Agent never joins
+   * one (ADR-0021) — the server says this on its behalf when it applies a
+   * write, so a Human whose paragraphs just changed is told why.
+   */
+  wroteAt?: number;
 }
+
+/** How long an Agent's write is worth saying out loud. */
+export const JUST_WROTE_MS = 12_000;
 
 /** Everybody in the room, this browser included, without duplicates. */
 export function presenceIn(room: Room | null): Present[] {
   if (!room) return [];
   const seen = new Map<string, Present>();
   for (const [clientId, state] of room.awareness.getStates()) {
-    const member = (state as { member?: Omit<Present, "self"> }).member;
+    const entry = state as { member?: Omit<Present, "self">; wroteAt?: number };
+    const member = entry.member;
     if (!member?.id) continue;
     const self = clientId === room.awareness.clientID;
     const already = seen.get(member.id);
-    seen.set(member.id, { ...member, self: already ? already.self || self : self });
+    seen.set(member.id, {
+      ...member,
+      self: already ? already.self || self : self,
+      ...(typeof entry.wroteAt === "number" ? { wroteAt: entry.wroteAt } : {}),
+    });
   }
   return [...seen.values()];
 }

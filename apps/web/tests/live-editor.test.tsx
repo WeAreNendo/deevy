@@ -3,7 +3,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from "y-protocols/awareness";
 import * as Y from "yjs";
 import { describe, expect, it } from "vite-plus/test";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MarkdownEditor } from "../src/components/markdown-editor.tsx";
+import { Present } from "../src/components/present.tsx";
 import { presenceIn, RoomsContext, type Room } from "../src/lib/rooms.tsx";
 
 /**
@@ -55,6 +57,59 @@ describe("who else is in the Document", () => {
 
   it("is nobody when there is no room", () => {
     expect(presenceIn(null)).toEqual([]);
+  });
+});
+
+describe("an Agent writing into a room", () => {
+  it("says so, rather than being drawn a caret nobody can follow", async () => {
+    const { room, awareness } = roomWith("The spec.");
+    // An Agent never joins a room (ADR-0021). What the room carries is the
+    // server saying one has just written into it.
+    const planner = new Awareness(new Y.Doc());
+    planner.setLocalState({
+      member: { id: "m-planner", name: "Planner", kind: "agent" },
+      wroteAt: Date.now(),
+    });
+    applyAwarenessUpdate(
+      awareness,
+      encodeAwarenessUpdate(planner, [planner.clientID]),
+      "test" as unknown as null,
+    );
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RoomsContext.Provider value={{ roomFor: () => room, ready: true }}>
+          <Present room="document:DEV-1:intent" />
+        </RoomsContext.Provider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(/Planner just wrote this/)).toBeTruthy();
+  });
+
+  it("stops saying it once the moment has passed", () => {
+    const { room, awareness } = roomWith("The spec.");
+    const planner = new Awareness(new Y.Doc());
+    planner.setLocalState({
+      member: { id: "m-planner", name: "Planner", kind: "agent" },
+      // Long enough ago that the reader has seen the paragraphs change.
+      wroteAt: Date.now() - 60_000,
+    });
+    applyAwarenessUpdate(
+      awareness,
+      encodeAwarenessUpdate(planner, [planner.clientID]),
+      "test" as unknown as null,
+    );
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RoomsContext.Provider value={{ roomFor: () => room, ready: true }}>
+          <Present room="document:DEV-1:intent" />
+        </RoomsContext.Provider>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByText(/just wrote this/)).toBeNull();
   });
 });
 

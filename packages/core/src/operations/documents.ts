@@ -4,6 +4,7 @@ import { decodeBasis, encodeBasis, liveMarkdown, replaceSection } from "../docum
 import { clearApprovalsIfGated } from "../gate-freshness.ts";
 import { mergeMarkdown } from "../merge.ts";
 import { applyToRoom } from "../room-store.ts";
+import { roomName } from "../rooms.ts";
 import { DocumentAtVersionSchema, DocumentSchema } from "../schemas.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
@@ -11,6 +12,15 @@ import { defineOperation } from "./registry.ts";
 import type { Document, Issue, Project } from "@deevy/db";
 import type { ContextFor } from "./registry.ts";
 import { requireDocument, requireIssue } from "./shared.ts";
+
+/** What the browser called this Document's room when it opened the socket. */
+function documentRoom(issue: Issue, project: Project, document: Document): string {
+  return roomName({
+    kind: "document",
+    issueKey: `${project.key}-${String(issue.number)}`,
+    document: document.name,
+  });
+}
 
 /**
  * What this write should land as: what it changed, replayed onto what the
@@ -21,10 +31,11 @@ import { requireDocument, requireIssue } from "./shared.ts";
 async function mergedBody(
   context: ContextFor<"member">,
   document: Document,
+  room: string,
   body: string,
   basis: string | null,
 ): Promise<string> {
-  const { body: theirs, live } = await liveMarkdown(context.db, document, context.liveRooms);
+  const { body: theirs, live } = await liveMarkdown(context.db, document, room, context.liveRooms);
   // Nothing to merge against: no basis, and nobody in the room. This is the
   // write `documents.write` has always been.
   if (!basis && !live) return body;
@@ -53,7 +64,8 @@ async function writeTo(
     context.db,
     document,
     body,
-    context.member.id,
+    // Who wrote, so the room can say so to whoever is reading it.
+    { id: context.member.id, name: context.session.user.name, kind: context.member.kind },
     context.liveRooms,
   );
   const version = applied ?? (await writeVersion(context.db, document, body, context.member.id));
@@ -198,7 +210,7 @@ export const documents = {
     }),
     output: DocumentAtVersionSchema,
     handler: async ({ input, context }) => {
-      const { issue } = await requireIssue(context, input.issueKey);
+      const { issue, project } = await requireIssue(context, input.issueKey);
       const found = await requireDocument(context, issue.id, input.name);
       const version = input.version ?? found.currentVersion;
       const row = await context.db.query.documentVersion.findFirst({
@@ -214,7 +226,12 @@ export const documents = {
       const asked = input.version !== undefined;
       const live = asked
         ? { body: row.body, live: false }
-        : await liveMarkdown(context.db, found, context.liveRooms);
+        : await liveMarkdown(
+            context.db,
+            found,
+            documentRoom(issue, project, found),
+            context.liveRooms,
+          );
       return {
         ...found,
         version: row.version,
@@ -264,7 +281,13 @@ export const documents = {
         });
       }
 
-      const body = await mergedBody(context, found, input.body, input.basis ?? null);
+      const body = await mergedBody(
+        context,
+        found,
+        documentRoom(issue, project, found),
+        input.body,
+        input.basis ?? null,
+      );
       return writeTo(context, { issue, project, document: found, body });
     },
   }),
@@ -294,7 +317,12 @@ export const documents = {
     handler: async ({ input, context }) => {
       const { issue, project } = await requireIssue(context, input.issueKey);
       const found = await requireDocument(context, issue.id, input.name);
-      const { body: current } = await liveMarkdown(context.db, found, context.liveRooms);
+      const { body: current } = await liveMarkdown(
+        context.db,
+        found,
+        documentRoom(issue, project, found),
+        context.liveRooms,
+      );
       const written = replaceSection(current, input.section, input.body);
       if (written === null) {
         throw new ORPCError("NOT_FOUND", {

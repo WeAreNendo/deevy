@@ -240,30 +240,35 @@ export async function applyToRoom(
   db: Db,
   document: Document,
   body: string,
-  authorMemberId: string,
+  author: Wrote,
   rooms?: LiveRooms,
 ): Promise<number | null> {
-  const key = `document:${document.id}`;
-  const saved = await db.query.roomState.findFirst({ where: { room: key } });
-  // A room open for ten seconds has been stored nowhere yet — the state is
-  // written when the typing stops — so an open room counts even with no row.
-  const open = await rooms?.read(key);
-  if (!saved && (open === null || open === undefined)) return null;
-
-  const doc = new Y.Doc();
-  if (saved) Y.applyUpdate(doc, decodeState(saved.state));
-  else if (open !== null && open !== undefined) loadMarkdown(doc, open);
-  loadMarkdown(doc, body);
-  // And the room itself, where one is open: a browser holds its own copy, and
-  // a write it never hears about is a write its next quiet would undo.
-  await rooms?.apply(key, body);
-
+  const authorMemberId = author.id;
   const issue = await db.query.issue.findFirst({
     where: { id: document.issueId },
     with: { project: { columns: { key: true } } },
   });
   if (!issue) return null;
   const issueKey = `${issue.project.key}-${String(issue.number)}`;
+  // Two names for one Document, and they are not interchangeable: the row is
+  // keyed by the id it belongs to, and the room is called what the browser
+  // called it when it opened the socket (ADR-0021).
+  const key = `document:${document.id}`;
+  const live = roomName({ kind: "document", issueKey, document: document.name });
+  const saved = await db.query.roomState.findFirst({ where: { room: key } });
+  // A room open for ten seconds has been stored nowhere yet — the state is
+  // written when the typing stops — so an open room counts even with no row.
+  const open = await rooms?.read(live);
+  if (!saved && (open === null || open === undefined)) return null;
+
+  const doc = new Y.Doc();
+  if (saved) applyState(doc, saved.state);
+  else if (open !== null && open !== undefined) loadMarkdown(doc, open);
+  loadMarkdown(doc, body);
+  // And the room itself, where one is open: a browser holds its own copy, and
+  // a write it never hears about is a write its next quiet would undo.
+  await rooms?.apply(live, body, author);
+
   await storeRoom({
     db,
     room: {
