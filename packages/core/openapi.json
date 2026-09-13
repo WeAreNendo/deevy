@@ -64,7 +64,8 @@
                         "mention",
                         "state_rule",
                         "schedule",
-                        "manual"
+                        "manual",
+                        "children_done"
                       ]
                     },
                     "status": {
@@ -232,7 +233,8 @@
                             "mention",
                             "state_rule",
                             "schedule",
-                            "manual"
+                            "manual",
+                            "children_done"
                           ]
                         },
                         "status": {
@@ -435,7 +437,8 @@
                             "mention",
                             "state_rule",
                             "schedule",
-                            "manual"
+                            "manual",
+                            "children_done"
                           ]
                         },
                         "status": {
@@ -643,7 +646,8 @@
                         "mention",
                         "state_rule",
                         "schedule",
-                        "manual"
+                        "manual",
+                        "children_done"
                       ]
                     },
                     "status": {
@@ -776,7 +780,8 @@
                             "mention",
                             "state_rule",
                             "schedule",
-                            "manual"
+                            "manual",
+                            "children_done"
                           ]
                         },
                         "status": {
@@ -1029,7 +1034,8 @@
                               "mention",
                               "state_rule",
                               "schedule",
-                              "manual"
+                              "manual",
+                              "children_done"
                             ]
                           },
                           "status": {
@@ -1226,7 +1232,8 @@
                         "mention",
                         "state_rule",
                         "schedule",
-                        "manual"
+                        "manual",
+                        "children_done"
                       ]
                     },
                     "status": {

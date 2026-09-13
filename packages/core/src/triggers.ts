@@ -48,10 +48,98 @@ export async function triggersFor(db: Db, event: Event): Promise<EventInput[]> {
     event.kind === "gate.approved" ||
     event.kind === "gate.rejected"
   ) {
-    return stateRule(db, event);
+    const events = await stateRule(db, event);
+    // A rejection has closed nothing: the Issue went back, and only arriving in
+    // a `done` State is a child finishing.
+    if (event.kind === "issue.moved" || event.kind === "gate.approved") {
+      events.push(...(await wakeParent(db, event)));
+    }
+    return events;
   }
 
   return [];
+}
+
+/**
+ * An Agent that delegates does not wait — its Run finishes, and this is what
+ * wakes it (docs/plans/sub-issue-delegation.md). When the Issue that just
+ * closed was the last of its parent's sub-issues, the parent is told so and the
+ * Agent that opened them gets a Run to pick the work back up from.
+ *
+ * Three ways this could loop, and what stops each. A parent that is itself a
+ * child closes bottom-up, one wake per level, because each level is only
+ * reached by its own child entering a `done` State. A parent that is already
+ * finished is not waiting for anything and is left alone. And a child reopened
+ * and closed again cannot open a second Run, because at most one is open per
+ * (issue, agent) and the first is still there.
+ */
+async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
+  const child = await db.query.issue.findFirst({
+    where: { id: event.subjectId },
+    columns: { id: true, parentId: true },
+    with: { state: { columns: { category: true } } },
+  });
+  if (!child?.parentId || child.state.category !== "done") return [];
+
+  const parent = await db.query.issue.findFirst({
+    where: { id: child.parentId },
+    columns: { id: true, projectId: true },
+    with: { state: { columns: { category: true } } },
+  });
+  if (!parent || parent.state.category === "done") return [];
+
+  // Across Projects: `done` is a State category and every Workflow has one, so
+  // a child in another Project finishing counts exactly as one here does.
+  const siblings = await db.query.issue.findMany({
+    where: { parentId: parent.id },
+    columns: { id: true, createdBy: true },
+    with: { state: { columns: { category: true } } },
+  });
+  if (siblings.some((one) => one.state.category !== "done")) return [];
+
+  const events: EventInput[] = [
+    {
+      kind: "issue.children_closed",
+      subjectType: "issue",
+      subjectId: parent.id,
+      projectId: parent.projectId,
+      payload: { children: siblings.length },
+    },
+  ];
+
+  /*
+   * The Agent that opened them, and only where they agree on one: two Agents
+   * having each opened some of a parent's children is not a case this knows how
+   * to pick a winner in, and guessing would start a Run on work nobody asked
+   * that Agent for. The Event above still goes in, so the parent is visibly a
+   * Human's rather than silently nobody's — which is also the answer when the
+   * Agent was suspended or lost its grant while the work was being done.
+   */
+  const openers = [...new Set(siblings.map((one) => one.createdBy))].filter(
+    (id): id is string => id !== null,
+  );
+  const [opener, ...others] = await workingAgents(db, openers, event.workspaceId);
+  if (!opener || others.length > 0) return events;
+  if (!(await grantedProject(db, opener, parent.projectId))) return events;
+
+  const started = await startRun(db, {
+    issueId: parent.id,
+    agentMemberId: opener,
+    triggeredByMemberId: event.actorMemberId,
+    trigger: "children_done",
+  });
+  if (started) events.push(runStartedEvent(started, parent.projectId));
+  return events;
+}
+
+/**
+ * Whether this Agent may still see the Project it is about to be given work in.
+ * A grant withdrawn between delegating and the last child finishing is a case
+ * that will happen, and the answer is to start nothing.
+ */
+async function grantedProject(db: Db, memberId: string, projectId: string): Promise<boolean> {
+  const found = await db.query.projectGrant.findFirst({ where: { memberId, projectId } });
+  return Boolean(found);
 }
 
 /**

@@ -371,3 +371,145 @@ describe("a fan-out that has a bottom", () => {
     });
   });
 });
+
+describe("the parent waking when the last child closes", () => {
+  /** DEV-1 with three children, all opened by `planner` and worked by `builder`. */
+  async function delegated(children = 3) {
+    const set = await workspaceWithTwoAgents();
+    for (let one = 1; one <= children; one++) {
+      await set.asPlanner.issues.create({
+        projectKey: "DEV",
+        title: `Part ${String(one)}`,
+        parentKey: "DEV-1",
+        assigneeMemberId: set.builder.member.id,
+      });
+    }
+    return set;
+  }
+
+  const runsOn = async (db: Db, key: string, client: Client) => {
+    const issue = await client.issues.get({ key });
+    return db.query.run.findMany({ where: { issueId: issue.id } });
+  };
+
+  it("does nothing while any of them is still open", async () => {
+    const { db, asAdmin } = await delegated();
+
+    await closeIssue(asAdmin, "DEV-2");
+    await closeIssue(asAdmin, "DEV-3");
+
+    expect(await runsOn(db, "DEV-1", asAdmin)).toHaveLength(0);
+    expect(await db.query.event.findMany({ where: { kind: "issue.children_closed" } })).toEqual([]);
+  });
+
+  it("wakes the Agent that opened them, once, when the last one closes", async () => {
+    const { db, asAdmin, planner } = await delegated();
+
+    await closeIssue(asAdmin, "DEV-2");
+    await closeIssue(asAdmin, "DEV-3");
+    await closeIssue(asAdmin, "DEV-4");
+
+    const runs = await runsOn(db, "DEV-1", asAdmin);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      agentMemberId: planner.member.id,
+      trigger: "children_done",
+      status: "pending",
+    });
+    const closed = await db.query.event.findMany({ where: { kind: "issue.children_closed" } });
+    expect(closed).toHaveLength(1);
+  });
+
+  it("does not wake it a second time when a child is reopened and closed again", async () => {
+    const { db, asAdmin, project } = await delegated(1);
+    await closeIssue(asAdmin, "DEV-2");
+    expect(await runsOn(db, "DEV-1", asAdmin)).toHaveLength(1);
+
+    const backlog = await asAdmin.projects.get({ key: "DEV" });
+    const open = backlog.states.find((state) => state.category === "active");
+    await asAdmin.issues.move({ key: "DEV-2", stateId: open!.id });
+    await closeIssue(asAdmin, "DEV-2");
+
+    expect(await runsOn(db, "DEV-1", asAdmin)).toHaveLength(1);
+    expect(project.id).toBeTruthy();
+  });
+
+  it("leaves a parent that is already finished alone", async () => {
+    const { db, asAdmin } = await delegated(1);
+    await closeIssue(asAdmin, "DEV-1");
+
+    await closeIssue(asAdmin, "DEV-2");
+
+    expect(await runsOn(db, "DEV-1", asAdmin)).toHaveLength(0);
+  });
+
+  it("wakes each level once as a tree closes from the bottom", async () => {
+    const { db, asAdmin, asPlanner, builder, planner } = await workspaceWithTwoAgents();
+    await asPlanner.issues.create({
+      projectKey: "DEV",
+      title: "Middle",
+      parentKey: "DEV-1",
+      assigneeMemberId: builder.member.id,
+    });
+    await asPlanner.issues.create({
+      projectKey: "DEV",
+      title: "Bottom",
+      parentKey: "DEV-2",
+      assigneeMemberId: builder.member.id,
+    });
+
+    await closeIssue(asAdmin, "DEV-3");
+    expect(await runsOn(db, "DEV-2", asAdmin)).toHaveLength(2); // its own, and the wake-up
+    await closeIssue(asAdmin, "DEV-2");
+
+    const top = await runsOn(db, "DEV-1", asAdmin);
+    expect(top).toHaveLength(1);
+    expect(top[0]).toMatchObject({ agentMemberId: planner.member.id, trigger: "children_done" });
+    const closed = await db.query.event.findMany({ where: { kind: "issue.children_closed" } });
+    expect(closed).toHaveLength(2);
+  });
+
+  it("says the children are done even when there is no Agent left to wake", async () => {
+    const { db, asAdmin, asPlanner, planner } = await workspaceWithTwoAgents();
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Only part", parentKey: "DEV-1" });
+    await asAdmin.agents.suspend({ memberId: planner.member.id });
+
+    await closeIssue(asAdmin, "DEV-2");
+
+    // Nothing is started on the Agent's behalf, and the parent is visibly a
+    // Human's problem rather than silently nobody's.
+    expect(await runsOn(db, "DEV-1", asAdmin)).toHaveLength(0);
+    expect(
+      await db.query.event.findMany({ where: { kind: "issue.children_closed" } }),
+    ).toHaveLength(1);
+  });
+
+  it("counts a child in another Project, because done is done wherever it is", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await memberContext(db, { role: "admin", name: "Ada" });
+    const asAdmin = clientFor(admin);
+    const dev = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
+    const ops = await asAdmin.projects.create({ key: "OPS", name: "Operations" });
+    await db.update(workflowStateTable).set({ isGate: false });
+    await asAdmin.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: admin.member,
+      grants: [dev.id, ops.id],
+    });
+    const asPlanner = clientFor(planner);
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Here", parentKey: "DEV-1" });
+    await asPlanner.issues.create({ projectKey: "OPS", title: "There", parentKey: "DEV-1" });
+
+    await closeIssue(asAdmin, "DEV-2");
+    const parent = await asAdmin.issues.get({ key: "DEV-1" });
+    expect(await db.query.run.findMany({ where: { issueId: parent.id } })).toHaveLength(0);
+
+    await closeIssue(asAdmin, "OPS-1");
+
+    const runs = await db.query.run.findMany({ where: { issueId: parent.id } });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ agentMemberId: planner.member.id, trigger: "children_done" });
+  });
+});

@@ -6,7 +6,19 @@ import { member } from "./workspace.ts";
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
 /** What made deevy ask an Agent to work (PLAN.md's four triggers, plus by hand). */
-export const runTriggers = ["assignment", "mention", "state_rule", "schedule", "manual"] as const;
+export const runTriggers = [
+  "assignment",
+  "mention",
+  "state_rule",
+  "schedule",
+  "manual",
+  /**
+   * The last sub-issue of this Issue closed, so the Agent that opened them is
+   * asked to pick the work back up (docs/plans/sub-issue-delegation.md). A
+   * delegating Run finishes rather than waiting, and this is how it is woken.
+   */
+  "children_done",
+] as const;
 
 /**
  * The shape Linear and Plane converged on, so an existing agent ports with a
