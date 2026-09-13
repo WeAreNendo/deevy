@@ -338,12 +338,13 @@ describe("a tab that slept through a rebuild", () => {
     const room = await authorizeRoom(admin, "document:DEV-1:intent");
     const doc = new Y.Doc();
     await openRoom({ db, room, doc });
-    // Edited until the history above the words is worth sweeping up. The
-    // Problem keeps still while the Design is argued over, which is what a
-    // Document under discussion actually looks like.
-    for (let edit = 1; edit <= 300; edit++) {
-      loadMarkdown(doc, said(`The ${String(edit)}th thing anybody said about it.`));
-    }
+    // An afternoon of argument, in two edits: the Problem keeps still while
+    // the Design is rewritten, which is what a Document under discussion looks
+    // like. How large a state has to get before it is swept up is
+    // `room-state.test.ts`'s question; here any size will do, so the threshold
+    // is nothing and what is under test is what a rebuild does to a browser.
+    loadMarkdown(doc, said("The 1st thing anybody said about it."));
+    loadMarkdown(doc, said("The 300th thing anybody said about it."));
     await storeRoom({
       db,
       room,
@@ -351,7 +352,7 @@ describe("a tab that slept through a rebuild", () => {
       authors: [admin.member.id],
       now: new Date(),
       connections: 0,
-      compactOver: 4_000,
+      compactOver: 0,
     });
   }
 
