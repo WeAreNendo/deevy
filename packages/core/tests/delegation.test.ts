@@ -1,5 +1,6 @@
 import {
   notification as notificationTable,
+  run as runTable,
   workflowState as workflowStateTable,
   workspace as workspaceTable,
   type Db,
@@ -7,6 +8,7 @@ import {
 import { createRouterClient } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+import { newId } from "../src/ids.ts";
 import type { DelegationLimits } from "../src/issues.ts";
 import { router } from "../src/operations/index.ts";
 import { agentContext, memberContext, testDb, type MemberContext } from "./helpers.ts";
@@ -653,5 +655,57 @@ describe("what the review found", () => {
     // Project-scoped read of the log has to find it.
     expect(refused?.projectId).toBe(dev.id);
     expect(ops.id).toBeTruthy();
+  });
+});
+
+describe("two sub-issues finishing at the same moment", () => {
+  it("wakes the parent once, because the database will not hold two open Runs", async () => {
+    const { db, asAdmin, asPlanner, planner } = await workspaceWithTwoAgents();
+    await asPlanner.issues.create({ projectKey: "DEV", title: "One", parentKey: "DEV-1" });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Two", parentKey: "DEV-1" });
+
+    // The ordinary ending of a fan-out, not a rare interleaving: each request
+    // reads "no open siblings" before the other has inserted anything.
+    await Promise.all([closeIssue(asAdmin, "DEV-2"), closeIssue(asAdmin, "DEV-3")]);
+
+    const parent = await asAdmin.issues.get({ key: "DEV-1" });
+    const runs = await db.query.run.findMany({ where: { issueId: parent.id } });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ agentMemberId: planner.member.id, trigger: "children_done" });
+  });
+
+  it("refuses a second open Run on one Issue however it is asked for", async () => {
+    const { db, asAdmin, builder } = await workspaceWithTwoAgents();
+    const issue = await asAdmin.issues.get({ key: "DEV-1" });
+
+    await db.insert(runTable).values({
+      id: newId("run"),
+      issueId: issue.id,
+      agentMemberId: builder.member.id,
+      trigger: "manual",
+      status: "active",
+    });
+
+    await expect(
+      db.insert(runTable).values({
+        id: newId("run"),
+        issueId: issue.id,
+        agentMemberId: builder.member.id,
+        trigger: "manual",
+        status: "pending",
+      }),
+    ).rejects.toThrow();
+
+    // A finished one is not a second attempt at anything, so any number may sit
+    // beside it.
+    await db.update(runTable).set({ status: "completed" }).where(eq(runTable.issueId, issue.id));
+    await db.insert(runTable).values({
+      id: newId("run"),
+      issueId: issue.id,
+      agentMemberId: builder.member.id,
+      trigger: "manual",
+      status: "pending",
+    });
+    expect(await db.query.run.findMany({ where: { issueId: issue.id } })).toHaveLength(2);
   });
 });

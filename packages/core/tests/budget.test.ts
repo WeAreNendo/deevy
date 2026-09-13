@@ -3,7 +3,7 @@ import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
-import { countingDb, memberContext } from "./helpers.ts";
+import { agentContext, countingDb, memberContext } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -115,5 +115,106 @@ describe("reading an Issue with children", () => {
 
     expect(statements.length).toBe(withOne);
     expect(withOne).toBeLessThan(d1StatementsPerInvocation);
+  });
+});
+
+/**
+ * What an Agent opening a sub-issue costs. The busiest write deevy has: the
+ * handler's own reads, three ceiling walks, and `appendEvent`'s whole tail
+ * twice over — `issue.created` and then `issue.assigned`, each paying for
+ * notifications, webhook deliveries and the triggers that open the other
+ * Agent's Run (docs/plans/sub-issue-delegation.md).
+ *
+ * A ratchet like the one above, and the one that matters most: it is the path
+ * an admin can make more expensive by raising `maxDelegationDepth`, so the
+ * deepest legal tree is what it is measured at.
+ */
+/*
+ * Fifty-two when it was written, which is over D1's cap and would have failed
+ * on the Worker: the three ceilings walked the tree a row at a time, and the
+ * depth an admin may raise multiplied it. Two recursive queries replaced nine,
+ * and `startRun` stopped reading back a row it had just inserted.
+ */
+const delegating = 44;
+
+describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(delegating)}`, () => {
+  it("stays under D1's cap at the deepest tree the Workspace allows", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const asAda = createRouterClient(router, { context: ada });
+    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+    const channel = await asAda.channels.create({
+      name: "#deevy",
+      webhookUrl: "https://hooks.slack.example/services/T000/B000/xxx",
+    });
+    await asAda.routing.set({
+      rules: [{ notificationKind: null, projectId: null, channelId: channel.id }],
+    });
+    await asAda.webhooks.create({
+      url: "https://agent.example.test/deevy",
+      secret: "whsec_deevy_budget_test",
+    });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: ada.member,
+      grants: [project.id],
+    });
+    const builder = await agentContext(db, {
+      name: "Builder",
+      sponsor: ada.member,
+      grants: [project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+
+    // The deepest tree the default ceilings allow: a root and three below it,
+    // so the next sub-issue sits where the walks are longest.
+    await asAda.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "One", parentKey: "DEV-1" });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Two", parentKey: "DEV-2" });
+
+    statements.length = 0;
+    await asPlanner.issues.create({
+      projectKey: "DEV",
+      title: "Three",
+      parentKey: "DEV-3",
+      assigneeMemberId: builder.member.id,
+    });
+
+    expect(statements.length).toBe(delegating);
+    expect(delegating).toBeLessThan(d1StatementsPerInvocation);
+  });
+
+  it("costs the same however deep an admin lets a tree go", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const asAda = createRouterClient(router, { context: ada });
+    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+    await asAda.workspace.update({ maxDelegationDepth: 8 });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: ada.member,
+      grants: [project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+
+    await asAda.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
+    for (let deeper = 1; deeper <= 7; deeper++) {
+      await asPlanner.issues.create({
+        projectKey: "DEV",
+        title: `Level ${String(deeper)}`,
+        parentKey: `DEV-${String(deeper)}`,
+      });
+    }
+
+    statements.length = 0;
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Deepest", parentKey: "DEV-8" });
+
+    // The whole reason the walks are two recursive queries rather than a loop:
+    // `maxDelegationDepth` is a number the Settings screen invites an admin to
+    // raise, and raising it used to multiply the statements on this write until
+    // the Worker deployment refused it.
+    expect(statements.length).toBeLessThan(d1StatementsPerInvocation);
   });
 });

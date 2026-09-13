@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { issue } from "./issue.ts";
 import { member } from "./workspace.ts";
 
@@ -62,6 +62,18 @@ export const run = sqliteTable(
     index("run_agent_status_idx").on(table.agentMemberId, table.status),
     /** The sweep's one indexed scan: open Runs ordered by silence. */
     index("run_status_lastActivityAt_idx").on(table.status, table.lastActivityAt),
+    /**
+     * At most one *open* Run per (Issue, Agent), enforced by the database
+     * rather than by everybody who inserts one remembering to look first
+     * (`runs.ts`). The rule was only ever true single-threaded: every path
+     * reads and then inserts, and two sub-issues of one parent finishing at the
+     * same moment is the ordinary ending of a fan-out, not a rare interleaving
+     * (docs/plans/sub-issue-delegation.md). Partial, because a finished Run is
+     * not a second attempt at anything and an Issue may have any number of them.
+     */
+    uniqueIndex("run_open_per_issue_agent_uidx")
+      .on(table.issueId, table.agentMemberId)
+      .where(sql`${table.status} in ('pending', 'active', 'awaiting_input', 'stale')`),
   ],
 );
 

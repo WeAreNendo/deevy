@@ -109,28 +109,26 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
   const [opener, ...rest] = await agentsAmong(db, openers, event.workspaceId);
   const delegator = opener && rest.length === 0 ? opener : null;
 
-  const events: EventInput[] = [
-    {
-      kind: "issue.children_closed",
-      subjectType: "issue",
-      subjectId: parent.id,
-      projectId: parent.projectId,
-      // Who split the work, suspended or not: their Sponsor is who this is
-      // addressed to, and a Sponsor whose Agent cannot pick the work back up is
-      // exactly the person who needs to hear that it is finished.
-      payload: { children: siblings.length, ...(delegator ? { openedBy: delegator } : {}) },
-    },
-  ];
+  const closed: EventInput = {
+    kind: "issue.children_closed",
+    subjectType: "issue",
+    subjectId: parent.id,
+    projectId: parent.projectId,
+    // Who split the work, suspended or not: their Sponsor is who this is
+    // addressed to, and a Sponsor whose Agent cannot pick the work back up is
+    // exactly the person who needs to hear that it is finished.
+    payload: { children: siblings.length, ...(delegator ? { openedBy: delegator } : {}) },
+  };
 
   /*
    * A suspended Agent, or one whose grant on this Project was withdrawn while
-   * the work was being done, wakes nothing. The Event above still goes in, so
-   * the parent is visibly a Human's rather than silently nobody's.
+   * the work was being done, wakes nothing. The Event still goes in, so the
+   * parent is visibly a Human's rather than silently nobody's.
    */
-  if (!delegator) return events;
+  if (!delegator) return [closed];
   const [working] = await workingAgents(db, [delegator], event.workspaceId);
-  if (!working) return events;
-  if (!(await grantedProject(db, working, parent.projectId))) return events;
+  if (!working) return [closed];
+  if (!(await grantedProject(db, working, parent.projectId))) return [closed];
 
   const started = await startRun(db, {
     issueId: parent.id,
@@ -141,8 +139,12 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
     triggeredByMemberId: delegator,
     trigger: "children_done",
   });
-  if (started) events.push(runStartedEvent(started, parent.projectId));
-  return events;
+  /*
+   * No Run means somebody else already woke this parent — the other half of a
+   * race, or a Run still open from the last time its sub-issues finished — and
+   * they announced it. Saying it twice is two inbox rows about one thing.
+   */
+  return started ? [closed, runStartedEvent(started, parent.projectId)] : [];
 }
 
 /**
@@ -267,15 +269,27 @@ interface StartRunInput {
  */
 async function startRun(db: Db, input: StartRunInput): Promise<Run | null> {
   if (await openRunFor(db, input.issueId, input.agentMemberId)) return null;
-  const id = newId("run");
-  await db.insert(runTable).values({
-    id,
-    issueId: input.issueId,
-    agentMemberId: input.agentMemberId,
-    triggeredByMemberId: input.triggeredByMemberId,
-    trigger: input.trigger,
-  });
-  return (await db.query.run.findFirst({ where: { id } })) as Run;
+  /*
+   * And again, from the database. The read above is what normally stops a
+   * second Run, but a trigger that reads and then inserts loses to another
+   * request that did the same thing in between — which is not exotic here: two
+   * sub-issues of one parent finishing at the same moment is how a fan-out
+   * ordinarily ends (docs/plans/sub-issue-delegation.md). The partial unique
+   * index settles it, and losing that race is not an error: somebody else
+   * already started the Run this was going to start.
+   */
+  const [started] = await db
+    .insert(runTable)
+    .values({
+      id: newId("run"),
+      issueId: input.issueId,
+      agentMemberId: input.agentMemberId,
+      triggeredByMemberId: input.triggeredByMemberId,
+      trigger: input.trigger,
+    })
+    .onConflictDoNothing()
+    .returning();
+  return (started as Run | undefined) ?? null;
 }
 
 /** The Event a triggered Run announces itself with, in `runs.start`'s shape. */

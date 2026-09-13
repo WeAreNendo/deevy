@@ -37,13 +37,23 @@ sub-issues per Issue, levels deep, and open descendants in one tree. Counts rath
 count is predictable and an Agent can plan against it, where a spend limit that trips halfway through leaves
 half a tree done and nothing that says which half. They bind Agents and not Humans: somebody opening two
 hundred Issues by hand is not the failure mode this exists for, and a limit that stops them is a support
-ticket. Every walk that checks one is bounded by the ceiling it is checking, because D1 counts statements and
-how far past a limit a tree is does not change the answer.
+ticket. The ceilings are checked in two recursive queries rather than by walking the tree a row at a time. That is the
+one piece of raw SQL in `packages/core` and it earns the exception: `issues.create` is the busiest write deevy
+has, the walks put it over D1's fifty-statement cap on the deepest tree the defaults allow, and the cost grew
+with a ceiling the Settings screen invites an admin to raise. `budget.test.ts` holds both — the count, and
+that raising the depth does not change it.
 
 A ceiling that trips appends `delegation.refused`. It is the only Event deevy writes about something that
 did not happen, and it earns that: an Agent which hits a limit notes it and does something else, so without
 the Event the Sponsor never learns that the shape of the work was decided by a number rather than by the
 Agent.
+
+**One open Run per (Issue, Agent) is the database's rule, not a convention.** Every path that starts a Run
+reads first and inserts second, which is only sound single-threaded — and this feature makes the unsound case
+ordinary, because two sub-issues of one parent finishing at the same moment is how a fan-out usually ends. A
+partial unique index holds it; losing that race is not an error, it means somebody else already started the
+Run this one was going to. The Event that says the sub-issues are finished is appended by whichever request
+actually woke the parent, so one ending is one line.
 
 **A sub-issue may live in any Project its Agent was granted, and follows that Project's Workflow.** Work has
 dependencies that run across Projects — the piece that has to land in the API before the piece in the app can

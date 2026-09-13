@@ -102,52 +102,57 @@ export interface DelegationRefusal {
 }
 
 /**
- * How far below the root an Issue sits. Walked upward and **stopped at the
- * ceiling**, because the only question anybody asks is whether the limit is
- * passed: a walk whose length is the height of the tree is a walk whose length
- * nobody bounded, and D1 counts statements (docs/plans/sub-issue-delegation.md).
+ * Everything the three ceilings need, in two statements rather than nine.
+ *
+ * This is the only raw SQL in `packages/core`, and it earns the exception:
+ * `issues.create` is the busiest write deevy has, and walking the tree a row at
+ * a time put it over D1's fifty-statement cap on the deepest tree the default
+ * ceilings allow (`budget.test.ts`). A recursive CTE is plain SQLite, which is
+ * what both runtimes are, and the depth ceiling bounds the recursion in the
+ * query itself rather than in a loop that has to remember to stop.
+ *
+ * Upward first — the parent's own ancestors, which gives its depth and the root
+ * of its tree — then downward from that root, counting what nobody has
+ * finished. Both are capped: the walk stops at the ceiling because how far past
+ * a limit a tree is does not change the answer.
  */
-async function depthOf(db: Db, issueId: string, stopAt: number): Promise<number> {
-  let at: string | null = issueId;
-  let depth = 0;
-  const seen = new Set<string>();
-  while (at && depth <= stopAt) {
-    if (seen.has(at)) return depth;
-    seen.add(at);
-    const row: { parentId: string | null } | undefined = await db.query.issue.findFirst({
-      where: { id: at },
-      columns: { parentId: true },
-    });
-    at = row?.parentId ?? null;
-    if (at) depth++;
-  }
-  return depth;
-}
+async function treeAround(
+  db: Db,
+  parentId: string,
+  depthLimit: number,
+): Promise<{ depth: number; open: number }> {
+  // `level` counts hops from the parent, so the parent itself is 0 and the last
+  // row of the chain is the root. One row per ancestor, at most `depthLimit`+1.
+  const chain = (await db.all(sql`
+    with recursive ancestor(id, parent_id, level) as (
+      select id, parent_id, 0 from issue where id = ${parentId}
+      union all
+      select i.id, i.parent_id, a.level + 1
+        from issue i join ancestor a on i.id = a.parent_id
+       where a.level < ${depthLimit + 1}
+    )
+    select id, level from ancestor order by level desc limit 1
+  `)) as Array<{ id: string; level: number }>;
+  const top = chain[0];
+  const root = top?.id ?? parentId;
+  const depth = top?.level ?? 0;
 
-/**
- * The Issues under this root that nobody has finished, counted breadth-first
- * and **stopped at the ceiling** for the same reason as above: how far past the
- * limit a tree is does not change the answer and is nobody's business.
- */
-async function openUnder(db: Db, rootId: string, stopAt: number): Promise<number> {
-  let frontier = [rootId];
-  const seen = new Set(frontier);
-  let open = 0;
-  while (frontier.length > 0 && open <= stopAt) {
-    const rows = await db.query.issue.findMany({
-      where: { parentId: { in: frontier } },
-      columns: { id: true },
-      with: { state: { columns: { category: true } } },
-    });
-    frontier = [];
-    for (const row of rows) {
-      if (seen.has(row.id)) continue;
-      seen.add(row.id);
-      frontier.push(row.id);
-      if (row.state.category !== "done") open++;
-    }
-  }
-  return open;
+  const counted = (await db.all(sql`
+    with recursive descendant(id, level) as (
+      select id, 0 from issue where id = ${root}
+      union all
+      select i.id, d.level + 1
+        from issue i join descendant d on i.parent_id = d.id
+       where d.level < ${depthLimit + 1}
+    )
+    select count(*) as open
+      from descendant d
+      join issue i on i.id = d.id
+      join workflow_state s on s.id = i.state_id
+     where d.level > 0 and s.category <> 'done'
+  `)) as Array<{ open: number }>;
+
+  return { depth, open: Number(counted[0]?.open ?? 0) };
 }
 
 /**
@@ -169,35 +174,15 @@ export async function refusesDelegation(
     return { limit: "children", allowed: limits.maxChildrenPerIssue };
   }
 
+  const { depth, open } = await treeAround(db, parentId, limits.maxDelegationDepth);
   // The parent's own depth plus the child about to sit under it.
-  const depth = await depthOf(db, parentId, limits.maxDelegationDepth);
   if (depth + 1 > limits.maxDelegationDepth) {
     return { limit: "depth", allowed: limits.maxDelegationDepth };
   }
-
-  const root = await rootOf(db, parentId, limits.maxDelegationDepth);
-  const open = await openUnder(db, root, limits.maxOpenDescendants);
   if (open >= limits.maxOpenDescendants) {
     return { limit: "open", allowed: limits.maxOpenDescendants };
   }
   return null;
-}
-
-/** The top of this Issue's tree, bounded by the depth ceiling for the same reason. */
-async function rootOf(db: Db, issueId: string, stopAt: number): Promise<string> {
-  let at = issueId;
-  const seen = new Set([at]);
-  for (let step = 0; step <= stopAt; step++) {
-    const row: { parentId: string | null } | undefined = await db.query.issue.findFirst({
-      where: { id: at },
-      columns: { parentId: true },
-    });
-    const parent = row?.parentId;
-    if (!parent || seen.has(parent)) return at;
-    seen.add(parent);
-    at = parent;
-  }
-  return at;
 }
 
 /** What the refusal says, in the vocabulary a reader of CONTEXT.md expects. */
