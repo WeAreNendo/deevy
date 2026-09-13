@@ -34,6 +34,15 @@ away when the last person leaves is cheaper and loses a tab that was asleep: its
 identity the server no longer has, and duplicate text rather than merging. Keeping the state is what makes
 "keep typing, it will merge when you are back" true.
 
+**A rebuild depends on nothing but the text.** A room is rebuilt from markdown whenever there is no state to
+open it with — the first time, a server restarted, an object evicted, a blob lost — and a browser that was in
+the room still holds its own copy of the same words. To Yjs, two documents built independently from one text
+are two different pieces of writing that happen to read alike, and merging them appends one to the other:
+that is how an Issue's description quietly becomes four copies of itself. So the pieces a rebuild makes are
+derived from the markdown rather than from whoever is doing the rebuilding, and the same text always rebuilds
+identically. Two rebuilds merge into one Document; a rebuild of _different_ text still looks different, and
+the worst it can do is arrive as a second paragraph rather than corrupt the first.
+
 **A version is cut by quiet, not by a button.** Thirty seconds of stillness in a room and the merged text
 becomes a version. A cut within ten minutes of the previous one, by the same set of authors, amends that
 version instead of adding another — unless a Gate ruling pinned it, in which case it is never touched again.
@@ -114,6 +123,8 @@ be machinery for nothing.
 ## The cost, stated
 
 Three weeks of work, a websocket transport, a Durable Object, a paid Workers plan for that deployment, a
-three-way merge with its own failure modes, and a blob per Document that grows until it is compacted. The
+three-way merge with its own failure modes, a blob per Document that carries its history until the room is
+empty enough to compact, and the one case above where a sleeping tab wakes into a compacted room and merges
+a paragraph back twice. The
 plan is `docs/plans/collaborative-documents.md`, and the first slice is a spike that proves the room runs on
 both runtimes before any of the rest is built.

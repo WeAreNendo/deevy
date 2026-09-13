@@ -144,8 +144,10 @@ Each one ends somewhere defensible, and the first one is the one that decides th
   Tiptap three pinned exactly with the rest of that family, as the catalog requires.
 - **A three-way merge** is a real algorithm with real failure modes. It gets its own unit tests, with worked
   cases, before it is wired to anything.
-- **A blob that grows.** Yjs state accumulates history and needs compaction on store, and D1 has row limits
-  worth respecting.
+- **A rebuild has to be the same rebuild every time.** Opening a room from markdown while a browser holds its
+  own copy of the same words is the common case — a restart, an eviction — and two Yjs documents built
+  independently from one text merge by concatenating. The pieces a rebuild makes are derived from the
+  markdown itself, so the same text always rebuilds identically and the two copies merge into one.
 - **A second representation of a Document**, which deevy refused once for mentions. ADR-0021 argues why this
   one earns it: markdown is still what is stored, read, written and approved; the Yjs state is scratch
   between versions and rebuildable from the last one.

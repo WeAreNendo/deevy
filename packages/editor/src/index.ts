@@ -69,11 +69,17 @@ export function markdownOf(doc: Y.Doc, field: string = DOCUMENT_FIELD): string {
 
 /**
  * Put markdown into a room. Used to open one from the Document's last version,
- * and — once the merge lands — to apply what an Agent wrote into a live room.
+ * and to apply what an Agent wrote into a live room.
  *
  * A write that changes nothing writes nothing: the fragment is compared with
  * what it would become before it is touched, so re-opening a room does not add
  * to its history and an Agent's no-op edit is not an edit.
+ *
+ * Filling an *empty* room is a rebuild rather than an edit — the server
+ * restarted, the object was evicted, the state was lost — and a browser that
+ * was in the room still holds its own copy of the same words. So a rebuild is
+ * made to depend on nothing but the text: the same markdown builds the same
+ * pieces, and the two copies merge into one Document instead of two (ADR-0021).
  */
 export function loadMarkdown(doc: Y.Doc, markdown: string, field: string = DOCUMENT_FIELD): void {
   if (markdownOf(doc, field) === markdown.trim()) return;
@@ -83,9 +89,33 @@ export function loadMarkdown(doc: Y.Doc, markdown: string, field: string = DOCUM
   const json = markdown.trim() === "" ? { type: "doc", content: [] } : manager.parse(markdown);
   const root = ProseMirrorNode.fromJSON(schema, json);
 
-  doc.transact(() => {
-    const fragment = doc.getXmlFragment(field);
-    fragment.delete(0, fragment.length);
-    prosemirrorToYXmlFragment(root, fragment);
-  });
+  const fragment = doc.getXmlFragment(field);
+  const rebuild = fragment.length === 0;
+  const client = doc.clientID;
+  if (rebuild) doc.clientID = seedClient(markdown.trim());
+  try {
+    doc.transact(() => {
+      fragment.delete(0, fragment.length);
+      prosemirrorToYXmlFragment(root, fragment);
+    });
+  } finally {
+    doc.clientID = client;
+  }
+}
+
+/**
+ * Who a rebuild is written by. Yjs tells two pieces of writing apart by the
+ * client that made them, so a rebuild written by a *different* client every
+ * time is a different Document every time. Deriving it from the text gives the
+ * two properties this needs at once: the same words rebuild identically, and
+ * different words never claim to be the same edits under another name.
+ */
+function seedClient(markdown: string): number {
+  let hash = 2_166_136_261;
+  for (let at = 0; at < markdown.length; at++) {
+    hash ^= markdown.charCodeAt(at);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  // Yjs reads zero as "no client", so the one text that hashes to it gets one.
+  return hash >>> 0 || 1;
 }

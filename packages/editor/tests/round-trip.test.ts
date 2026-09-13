@@ -63,3 +63,56 @@ describe("a Document as a room holds it", () => {
     expect(Y.encodeStateAsUpdate(doc).length).toBe(before);
   });
 });
+
+/**
+ * A room is rebuilt from markdown whenever there is no state to open it with —
+ * a server restarted, a Durable Object evicted, a blob lost. A browser that was
+ * in the room when that happened still holds its own copy, and the two are
+ * merged the moment it reconnects.
+ *
+ * Two documents built independently from the same text are, to Yjs, two
+ * different pieces of writing that happen to read alike, and merging them
+ * appends one to the other. That is how an Issue's description quietly becomes
+ * four copies of itself. So a rebuild is made to depend on nothing but the text
+ * (ADR-0021).
+ */
+describe("a room rebuilt from what a Document says", () => {
+  const DESCRIPTION =
+    "The Checkout flow is three Projects' worth of Issues.\n\n## Why now\n\nEvery Run ends in a question.";
+
+  function rebuilt(markdown: string): Y.Doc {
+    const doc = new Y.Doc();
+    loadMarkdown(doc, markdown);
+    return doc;
+  }
+
+  it("comes out the same both times, so reconnecting is not a second copy", () => {
+    const server = rebuilt(DESCRIPTION);
+    const browser = rebuilt(DESCRIPTION);
+
+    Y.applyUpdate(browser, Y.encodeStateAsUpdate(server));
+    Y.applyUpdate(server, Y.encodeStateAsUpdate(browser));
+
+    expect(markdownOf(browser)).toBe(DESCRIPTION);
+    expect(markdownOf(server)).toBe(DESCRIPTION);
+  });
+
+  it("survives being rebuilt over and over, which is what a restart does", () => {
+    const browser = rebuilt(DESCRIPTION);
+    for (let restart = 0; restart < 4; restart++) {
+      Y.applyUpdate(browser, Y.encodeStateAsUpdate(rebuilt(DESCRIPTION)));
+    }
+    expect(markdownOf(browser)).toBe(DESCRIPTION);
+  });
+
+  it("keeps what somebody typed while the room was being rebuilt", () => {
+    const browser = rebuilt(DESCRIPTION);
+    loadMarkdown(browser, `${DESCRIPTION}\n\n## Later\n\nTyped while it was down.`);
+
+    Y.applyUpdate(browser, Y.encodeStateAsUpdate(rebuilt(DESCRIPTION)));
+
+    expect(markdownOf(browser)).toContain("Typed while it was down.");
+    // And the description it was typed under is still there once.
+    expect(markdownOf(browser).match(/Every Run ends in a question\./g)).toHaveLength(1);
+  });
+});
