@@ -5,7 +5,7 @@ Breakdown of the next item off [PLAN.md](../PLAN.md)'s after-v1 list, decided 20
 to the Agent that should do it, stop cleanly rather than sitting and waiting, and be woken when the last of
 them closes — and when none of that can open two hundred Issues while nobody is watching.
 
-Five slices, in dependency order. Each is one PR on `main` and carries its own tests.
+Six slices, in dependency order. Each is one PR on `main` and carries its own tests.
 
 Why this and why now. An Agent's unit of work is an Issue, and its memory is a Run. Both are finite: a Run is
 one attempt ([ADR-0016](../adr/0016-a-run-is-an-agents-and-the-registry-says-which-way-an-operation-faces.md))
@@ -26,7 +26,9 @@ More than it looks like, which is why this plan is five slices and not ten.
   `IssueDetailSchema` already has the field.
 - **`isSelfOrDescendant`** (`packages/core/src/issues.ts`) already refuses a cycle on reparent, walking the
   parent chain with a `seen` set.
-- **A parent must be in the same Project**, refused in both `create` and `update`. That stays (below).
+- **`grantedProjectIds` and `assertProjectVisible`** already decide what a Project-scoped caller can see, and
+  already answer "No such Project" rather than refusing. They are null for a Human and a list for an Agent,
+  which is exactly the boundary a child in another Project has to respect.
 - **`triggersFor`** (`packages/core/src/triggers.ts`) already turns an assignment or a mention into a Run,
   already refuses to let a `run.*` Event start anything, and already holds the "at most one open Run per
   (issue, agent)" rule that is this plan's second recursion guard.
@@ -35,7 +37,7 @@ More than it looks like, which is why this plan is five slices and not ten.
 - **`workspace.update` exists**, and Settings › Workspace is a screen, so the ceilings have somewhere to live.
 - **`run.trigger`** is already an enum of five, so a sixth is a migration and not a new concept.
 
-And three things that are there and are in the way.
+And four things that are there and are in the way.
 
 1. **Creating an Issue with an Assignee appends no `issue.assigned`.** `issues.create` appends
    `issue.created` and nothing else, so nothing starts the assignee's Run and nothing reaches their inbox.
@@ -43,7 +45,9 @@ And three things that are there and are in the way.
    assigned to nobody. Slice 1 is mostly this.
 2. **Nothing knows a parent is waiting.** There is no relationship between a parent's Run and its children's,
    and nothing happens to the parent when they close.
-3. **There is no ceiling on anything.** `isSelfOrDescendant` prevents a cycle and nothing else: no depth cap,
+3. **A parent must be in the same Project**, refused in both `issues.create` and `issues.update`. Slice 2
+   lifts it, and the lifting is not a deleted `if`: see that slice.
+4. **There is no ceiling on anything.** `isSelfOrDescendant` prevents a cycle and nothing else: no depth cap,
    no cap on children, no cap on a tree. Better Auth's rate limiting is explicitly off for Agents
    (`packages/core/src/auth.ts`), because rate limits were put at the edge. An Agent that decides a task has
    forty parts can open forty Issues, each of which opens a Run.
@@ -75,9 +79,20 @@ And three things that are there and are in the way.
 - **A ceiling that trips is an Event, not only an error.** `delegation.refused`, on the parent. An Agent that
   hits a limit will note it and do something else, and the Sponsor needs to know the shape of the work was
   decided by a number rather than by the Agent.
-- **A child lives in its parent's Project**, which is what `issues.create` already enforces. Both Agents
-  already need that Project to see the work, and a child elsewhere raises whose Workflow it follows and whose
-  Gates rule on it — questions worth answering when somebody actually needs them and not before.
+- **A child may live in another Project.** Work has dependencies that run across Projects — the piece that
+  has to land in the API before the piece in the app can — and a delegation that cannot cross a Project
+  boundary cannot express them, which pushes the coordination back onto a Human writing it down twice. The
+  child follows **its own Project's Workflow and its own Project's Gates**, because an Issue has always
+  followed the Workflow of the Project it is in and nothing here is a reason to invent a second rule.
+- **What an Agent may delegate across is what an admin granted it.** `requireProject` already calls
+  `assertProjectVisible`, so an Agent can open a child only in a Project it holds a grant for. That is the
+  control, it already exists, and it needs no new setting: an admin who does not want an Agent reaching the
+  API Project does not grant it.
+- **A parent a caller cannot see is not shown to them**, the same way an ungranted Project reads as "No such
+  Project" rather than as a refusal. But **an Issue whose parent is invisible cannot be reparented** by that
+  caller, and the refusal admits a tree exists without naming it. The asymmetry is deliberate and is the
+  honest trade: hiding the parent entirely and still allowing the move would let an Agent quietly lift an
+  Issue out of a tree it was never shown, which is worse than knowing that some tree is there.
 - **A Gate on a parent with open children is not blocked.** The ruling card says how many are open and the
   Human decides. Nothing an Agent proposes ships without a Human deciding it did
   ([ADR-0014](../adr/0014-an-agents-input-is-untrusted-and-its-tools-are-not.md)); this informs that Human
@@ -90,7 +105,7 @@ And three things that are there and are in the way.
 ## Deferred
 
 A blocking relationship between siblings ("this one cannot start until that one lands") — the ordering here
-is a parent waiting on all of its children, and nothing finer. A child in another Project. A spend ceiling.
+is a parent waiting on all of its children, and nothing finer. A spend ceiling.
 An Agent delegating to a Human, which is assignment and already works, but which nothing in this plan makes
 pleasant. Automatic decomposition: nothing here decides _how_ an Agent should cut work up, only what happens
 when it does. Any change to who may rule a Gate: still a Human, still in a browser, still not an Agent
@@ -107,9 +122,9 @@ not negotiable in any slice below.
    starts other machines; the failure modes are recursion, double-triggering and fan-out, and every one of
    them is invisible in a passing test that was written afterwards to match what the code already did. A
    test that has never failed has proved nothing. Where a slice says "acceptance test", that test exists and
-   fails before its slice is implemented, and the pull request says what the failure looked like. Two of this
-   plan's bugs are already known to be findable this way: the two-Run case in slice 1 and the wake-up loop in
-   slice 3.
+   fails before its slice is implemented, and the pull request says what the failure looked like. Three of
+   this plan's bugs are already known to be findable this way: the two-Run case in slice 1, the wrong Issue
+   key in slice 2, and the wake-up loop in slice 4.
 2. Schema in `packages/db/src/schema/<area>.ts`, relations merged in `relations.ts`, migration generated with
    `vp run db#generate`, `NOT NULL` hand-patched onto text primary keys, `vp run db#check:migrations` green.
 3. Operations through `defineOperation` in their area's module; `NOT_FOUND`, `CONFLICT`, `FORBIDDEN` and
@@ -137,14 +152,19 @@ Sizes are t-shirt estimates for one developer plus agents: S under a day, M two 
 main
 └─ 0 Cost and time accounting per Run          its own plan, ships first
    └─ 1 A child an Agent can actually hand over
-      ├─ 2 A fan-out has a bottom
-      └─ 3 The parent wakes when the last child closes
-         └─ 4 A tree you can see, and an inbox that survives it   needs 1 through 3
-            5 Docs, the ADR, and the release                      needs 1 through 4
+      └─ 2 A child may live in another Project
+         ├─ 3 A fan-out has a bottom
+         └─ 4 The parent wakes when the last child closes
+            └─ 5 A tree you can see, and an inbox that survives it   needs 1 through 4
+               6 Docs, the ADR, and the release                      needs 1 through 5
 ```
 
-Slices 2 and 3 are independent of one another once 1 is in. Built in either order they are the same work;
-built 2 first, slice 3's tests get a bounded tree to walk for free, which is the small reason to prefer it.
+Slices 3 and 4 are independent of one another once 2 is in. Built in either order they are the same work;
+built 3 first, slice 4's tests get a bounded tree to walk for free, which is the small reason to prefer it.
+
+Slice 2 sits where it does because everything after it walks the tree — the ceilings count descendants, the
+wake-up counts open siblings, and the Issue page draws children. Each of those is written once against a tree
+that may cross a Project, or written twice.
 
 ---
 
@@ -181,7 +201,71 @@ notification. The same call with no assignee opens no Run at all.
 
 ---
 
-## Slice 2: A fan-out has a bottom (M)
+## Slice 2: A child may live in another Project (M)
+
+**Goal.** An Agent granted two Projects can open a child in either of them, every Issue is called by its own
+name, and nothing about a Project a caller was not granted reaches them.
+
+Work has dependencies that run across Projects: the piece that has to land in the API before the piece in the
+app can. A delegation that stops at the Project boundary cannot say that, and the coordination goes back to a
+Human writing it down in two places.
+
+**Core.**
+
+- The same-Project refusal comes out of `issues.create` and out of `issues.update`'s reparent. Nothing
+  replaces it: `requireIssue(parentKey)` already calls `assertProjectVisible`, so naming a parent in a
+  Project the caller does not hold already answers "No such Issue", which is the check that was actually
+  wanted.
+- `isSelfOrDescendant` already walks the parent chain by id and does not care about Projects. No change, and
+  a test that says so, because a cycle across two Projects is the one a reader will wonder about.
+
+**The bug this uncovers, and the test that has to be red first.** `loadIssue` reads the current Issue's
+Project once and builds **every** related Issue's key from it:
+
+```ts
+const key = found.project.key;
+// ...
+parent: found.parent ? withKey(found.parent, key) : null,
+children: found.children.map((child) => withKey(child, key)),
+```
+
+Today that is correct because a parent and its children are always in one Project. The moment they are not,
+a child in OPS comes back called `DEV-7`, and everything downstream is wrong in the same way: the Issue page
+links to nothing, `lib/event-text.ts` writes a sentence about an Issue that does not exist, and an Agent that
+follows the key gets somebody else's work or a `NOT_FOUND`. Each related Issue's key is built from **its own**
+Project. **Write the test that asserts a cross-Project child's key before touching the refusal**: it fails on
+today's code with the parent's prefix, and it is the cheapest place this bug will ever be caught.
+
+**What a caller who holds one grant sees.**
+
+- `loadIssue` **omits a parent** whose Project the caller cannot see, and filters children the same way. That
+  is the house rule — an ungranted Project reads as "No such Project", not as a refusal
+  ([docs/plans/m2.md](./m2.md)) — and this follows it rather than inventing a second answer.
+- But `issues.update` **refuses to reparent an Issue whose current parent is invisible** to the caller:
+  "DEV-41 is already part of a tree you cannot see." The refusal admits a tree exists without naming it, and
+  it is the deliberate exception to the line above. Hiding the parent _and_ allowing the move would let an
+  Agent quietly lift an Issue out of a tree it was never shown, which is a worse outcome than knowing some
+  tree is there. This is the one place in the plan where the "does not exist to it" rule is bent, and it is
+  bent on purpose.
+- Everything the server counts for itself — open siblings, descendants, depth — counts across Projects
+  whatever the closing Agent can see. Those are the server's own arithmetic and not a read by a principal, so
+  no grant enters into them. Said here because it looks like an inconsistency and is not.
+
+**Statement budget.** `loadIssue` now needs each related Issue's Project, which is one more relation on the
+query it already makes and not a query per child. `budget.test.ts` gains a case for an Issue with children,
+asserted exactly as that file does; a version of this that reads a Project per child does not ship.
+
+**Acceptance test.** Two Projects, DEV and OPS, and an Agent granted both. It opens a child in OPS under a
+DEV parent: the child is created, `issues.get` on the parent lists it as `OPS-1`, and `issues.get` on the
+child names its parent as `DEV-5`. The child follows OPS's Workflow — it lands in OPS's first State, and OPS's
+Gates are the ones it meets. A second Agent granted **only** OPS reads the child and sees no parent at all;
+its attempt to reparent that child is refused with the message above; its attempt to name `DEV-5` as a parent
+answers "No such Issue". A Human, who is granted nothing and therefore sees everything, sees both sides. An
+Issue cannot become its own ancestor through a Project boundary.
+
+---
+
+## Slice 3: A fan-out has a bottom (M)
 
 **Goal.** An Agent cannot open more Issues than the Workspace allows, and the Workspace's admin can see and
 change what that is.
@@ -220,7 +304,7 @@ exactly, as that file does.
 
 ---
 
-## Slice 3: The parent wakes when the last child closes (L)
+## Slice 4: The parent wakes when the last child closes (L)
 
 **Goal.** An Agent that delegated can stop. When the last child closes, the parent gets a new Run, and the
 Agent picks the work back up from what the tracker says.
@@ -233,7 +317,9 @@ and a migration.
 **Core, in `triggers.ts`.**
 
 - On `issue.moved` and `gate.approved`, if the Issue has now entered a State whose `category` is `done`, and
-  it has a parent: count the parent's other children that are not `done`. If any, nothing happens. If none,
+  it has a parent: count the parent's other children that are not `done`, **across Projects** — `done` is a
+  State category and every Project's Workflow has one, so a child in OPS closing counts exactly as a child in
+  DEV does. If any are open, nothing happens. If none,
   append **`issue.children_closed`** on the parent and start a Run on it with trigger `children_done`.
 - **Whose Run.** The Agent that opened the children — `issue.createdBy` on the children, which will be one
   Agent in every case this plan is about. It must still be an Agent, not suspended, and still granted the
@@ -268,7 +354,7 @@ Event is appended and no Run is started.
 
 ---
 
-## Slice 4: A tree you can see, and an inbox that survives it (M)
+## Slice 5: A tree you can see, and an inbox that survives it (M)
 
 **Goal.** A Human can see what their Agent decided to do, in one place, without it costing them their inbox.
 
@@ -285,7 +371,9 @@ Event is appended and no Run is started.
 **SPA.**
 
 - The Issue page lists children under the parent: key, title, State, Assignee, and a mark where a Run is
-  open. A line above them says who opened them and when — "planner opened 6 sub-issues".
+  open. A child in another Project says which — its key already carries the prefix, and the State is read
+  against that Project's Workflow, so a reader is not left comparing two Workflows' State names as though
+  they were one. A line above them says who opened them and when — "planner opened 6 sub-issues".
 - A child says what it is a child of, which it already does.
 - **The Gate ruling card, on a parent with open children, says so**: "3 of 6 sub-issues are still open." A
   sentence, not a block. The Human rules or does not.
@@ -298,13 +386,15 @@ rather than as kind names. The web tests drive this through `stub-client.ts` as 
 
 ---
 
-## Slice 5: Docs, the ADR, and the release (S)
+## Slice 6: Docs, the ADR, and the release (S)
 
 - **ADR-0022**, "a parent finishes and the last child wakes it", recording what is expensive to reverse: that
   a Run is not held open across delegation, that the ceilings are counts and bind Agents only, that a child
-  lives in its parent's Project, and that a Gate on a parent is informed rather than blocked. It says why the
-  alternative — a `blocked` Run resumed with its context — was refused: a held-open Run is a held-open
-  session with a cost and a timeout, and the stale sweep would have to learn that blocked is not silent.
+  may live in any Project its Agent was granted and follows that Project's Workflow, that a parent a caller
+  cannot see is hidden from them but still stops them reparenting, and that a Gate on a parent is informed
+  rather than blocked. It says why the alternative — a `blocked` Run resumed with its context — was refused:
+  a held-open Run is a held-open session with a cost and a timeout, and the stale sweep would have to learn
+  that blocked is not silent.
 - **PLAN.md**: the after-v1 list loses this item and gains the past-tense paragraph, in the shape the other
   milestones use.
 - **CONTEXT.md**: whether "sub-issue" earns a line in the vocabulary, or whether parent and child are enough.
@@ -328,3 +418,9 @@ Written before the work, to be answered after it, as the last two plans did.
 - Whether one rolled-up notification per wave is the right grain, or whether a Sponsor wants the closes too.
 - Whether `delegation.refused` is read by anybody, or whether it is an Event written to be thorough. If
   nobody looks at it in a month it should go.
+- Whether a tree spread over two Projects reads as one piece of work or as two. Its children sit on two
+  boards, in two Workflows, with two sets of Gates, and the only place it is whole is the parent's page. If
+  that turns out to be too thin, the answer is a view of the tree and not a retreat to one Project.
+- Whether hiding a parent while refusing the reparent is the right pair. It is the one place the "an
+  ungranted Project does not exist to you" rule is bent, and the first Agent to hit that refusal will say
+  whether the message helps or only confuses.

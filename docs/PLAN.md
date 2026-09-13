@@ -258,10 +258,12 @@ slices from [collaborative-documents.md](./plans/collaborative-documents.md), re
 
 **Agent-to-agent delegation through sub-issues** is decided and not yet built: an Agent cuts the work it was
 given into sub-issues, hands each to the Agent that should do it, finishes its own Run rather than sitting and
-waiting, and is woken by the last child closing. Fan-out is bounded by counts an admin sets per Workspace,
-because a machine that can start other machines needs a bottom. Decided in
-[sub-issue-delegation.md](./plans/sub-issue-delegation.md) in five slices, to be recorded in ADR-0022; cost
-and time accounting per Run ships before it, so the first fan-out can be costed rather than guessed at.
+waiting, and is woken by the last child closing. A child may sit in any Project its Agent was granted, so work
+whose parts belong to different Projects can be said in one tree rather than coordinated by hand. Fan-out is
+bounded by counts an admin sets per Workspace, because a machine that can start other machines needs a bottom.
+Decided in [sub-issue-delegation.md](./plans/sub-issue-delegation.md) in six slices, to be recorded in
+ADR-0022; cost and time accounting per Run ships before it, so the first fan-out can be costed rather than
+guessed at.
 
 **After v1**, in rough order: cost and time accounting per Run; agent-to-agent delegation through sub-issues;
 the Slack app; email Channel; private Projects; Postgres adapter; a CLI.
