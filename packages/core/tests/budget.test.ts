@@ -79,3 +79,41 @@ describe(`the D1 request budget: ${String(budget)} statements, under D1's ${Stri
     expect(budget).toBeLessThan(d1StatementsPerInvocation);
   });
 });
+
+/**
+ * What reading an Issue costs, which is the other busy path: the Issue page
+ * asks for it on every visit, and a tree may cross a Project
+ * (docs/plans/sub-issue-delegation.md). The number that matters is that it does
+ * not grow with the number of children — each child's Project comes back on the
+ * relation the query already makes, and a version of this that reads a Project
+ * per child would show up here as six statements instead of one.
+ */
+describe("reading an Issue with children", () => {
+  it("costs the same whether it has one child or six", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const asAda = createRouterClient(router, { context: ada });
+    await asAda.projects.create({ name: "deevy", key: "DEV" });
+    await asAda.projects.create({ name: "Operations", key: "OPS" });
+    await asAda.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
+    await asAda.issues.create({ projectKey: "OPS", title: "One child", parentKey: "DEV-1" });
+
+    statements.length = 0;
+    await asAda.issues.get({ key: "DEV-1" });
+    const withOne = statements.length;
+
+    for (let more = 2; more <= 6; more++) {
+      await asAda.issues.create({
+        projectKey: "OPS",
+        title: `Child ${String(more)}`,
+        parentKey: "DEV-1",
+      });
+    }
+    statements.length = 0;
+    await asAda.issues.get({ key: "DEV-1" });
+
+    expect(statements.length).toBe(withOne);
+    expect(withOne).toBeLessThan(d1StatementsPerInvocation);
+  });
+});

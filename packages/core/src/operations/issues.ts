@@ -19,6 +19,7 @@ import {
   requireIssue,
   requireIssueForMove,
   requireProject,
+  projectVisible,
   withKey,
 } from "./shared.ts";
 
@@ -55,12 +56,15 @@ export const issues = {
       let parentId: string | null = null;
       let parentKey: string | null = null;
       if (input.parentKey) {
+        /*
+         * Any Project the caller was granted, not only this one. Work has
+         * dependencies that run across Projects, and a delegation that stops at
+         * the boundary does not remove the dependency — it moves it onto a
+         * Human writing it down twice (docs/plans/sub-issue-delegation.md).
+         * `requireIssue` is the whole access rule: a parent in a Project this
+         * caller does not hold answers "No such Issue".
+         */
         const parent = await requireIssue(context, input.parentKey);
-        if (parent.project.id !== project.id) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "A parent Issue must be in the same Project",
-          });
-        }
         parentId = parent.issue.id;
         parentKey = issueKey(parent.project.key, parent.issue.number);
       }
@@ -368,15 +372,29 @@ export const issues = {
       // and the timeline read them differently from an edit (docs/plans/m1.md).
       let parentId: string | null | undefined;
       if (input.parentKey !== undefined) {
+        /*
+         * An Issue whose current parent this caller cannot see is not theirs to
+         * move. The parent is hidden from them on a read, which is the rule for
+         * an ungranted Project — but hiding it and allowing the move as well
+         * would let an Agent lift an Issue out of a tree it was never shown.
+         * The refusal admits a tree exists without naming it, and that is the
+         * cheaper of the two costs (docs/plans/sub-issue-delegation.md).
+         */
+        if (found.parentId) {
+          const current = await context.db.query.issue.findFirst({
+            where: { id: found.parentId },
+            columns: { projectId: true },
+          });
+          if (current && !projectVisible(context, current.projectId)) {
+            throw new ORPCError("CONFLICT", {
+              message: `${input.key} is already part of a tree you cannot see.`,
+            });
+          }
+        }
         if (input.parentKey === null) {
           parentId = null;
         } else {
           const parent = await requireIssue(context, input.parentKey);
-          if (parent.project.id !== project.id) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "A parent Issue must be in the same Project",
-            });
-          }
           if (await isSelfOrDescendant(context.db, found.id, parent.issue.id)) {
             throw new ORPCError("BAD_REQUEST", {
               message: "An Issue cannot be its own parent or a child of its own descendant",
