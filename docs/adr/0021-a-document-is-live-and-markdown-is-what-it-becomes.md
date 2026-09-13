@@ -135,7 +135,6 @@ be machinery for nothing.
 
 Three weeks of work, a websocket transport, a Durable Object, a paid Workers plan for that deployment, a
 three-way merge with its own failure modes, a blob per Document that carries its history until the room is
-empty enough to compact, and the one case above where a sleeping tab wakes into a compacted room and merges
-a paragraph back twice. The
-plan is `docs/plans/collaborative-documents.md`, and the first slice is a spike that proves the room runs on
-both runtimes before any of the rest is built.
+empty enough to compact, and the one case above where a sleeping tab wakes into a compacted room and merges a
+paragraph back twice. The plan is `docs/plans/collaborative-documents.md`, and the first slice is a spike that
+proves the room runs on both runtimes before any of the rest is built.

@@ -1,12 +1,12 @@
 import { loadMarkdown, markdownOf } from "@deevy/editor";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from "y-protocols/awareness";
 import * as Y from "yjs";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MarkdownEditor } from "../src/components/markdown-editor.tsx";
 import { Present } from "../src/components/present.tsx";
-import { presenceIn, RoomsContext, type Room } from "../src/lib/rooms.tsx";
+import { JUST_WROTE_MS, presenceIn, RoomsContext, type Room } from "../src/lib/rooms.tsx";
 
 /**
  * A room without a socket: the same Yjs document and awareness the real one
@@ -85,6 +85,43 @@ describe("an Agent writing into a room", () => {
     );
 
     expect(await screen.findByText(/Planner just wrote this/)).toBeTruthy();
+  });
+
+  it("stops saying it on its own, in a room where nothing else happens", async () => {
+    vi.useFakeTimers();
+    try {
+      const { room, awareness } = roomWith("The spec.");
+      const planner = new Awareness(new Y.Doc());
+      planner.setLocalState({
+        member: { id: "m-planner", name: "Planner", kind: "agent" },
+        wroteAt: Date.now(),
+      });
+      applyAwarenessUpdate(
+        awareness,
+        encodeAwarenessUpdate(planner, [planner.clientID]),
+        "test" as unknown as null,
+      );
+
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <RoomsContext.Provider value={{ roomFor: () => room, ready: true }}>
+            <Present room="document:DEV-1:intent" />
+          </RoomsContext.Provider>
+        </QueryClientProvider>,
+      );
+      expect(screen.queryByText(/Planner just wrote this/)).toBeTruthy();
+
+      // Nobody types, nobody joins, nobody leaves: the room gives React no
+      // reason of its own to look again. The line still has to go, because it
+      // promised twelve seconds rather than "until something else happens".
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(JUST_WROTE_MS + 1_000);
+      });
+
+      expect(screen.queryByText(/just wrote this/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stops saying it once the moment has passed", () => {
