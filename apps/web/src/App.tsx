@@ -14,6 +14,7 @@ import {
   invitationInPath,
 } from "@/lib/invitation.ts";
 import { orpc } from "@/lib/orpc.ts";
+import { RoomsProvider } from "@/lib/rooms.tsx";
 import { createAppRouter } from "@/router.tsx";
 import type { ShellProps } from "@/routes/shell.tsx";
 
@@ -205,6 +206,7 @@ function SignedIn({
   onInvitationDropped?: () => void;
 }) {
   const me = useQuery(orpc.me.get.queryOptions());
+  const health = useQuery(orpc.health.ping.queryOptions());
   const context: ShellProps = {
     workspaceName: me.data?.workspace?.name ?? "deevy",
     memberName: me.data?.user.name ?? "",
@@ -245,7 +247,17 @@ function SignedIn({
     );
   }
   if (member.suspendedAt) return <Suspended email={user.email} />;
-  return <RouterProvider router={router} />;
+  return (
+    // One socket for the session, rooms on it per Document (ADR-0021). A
+    // deployment without rooms says so on `health.ping`, and every editor
+    // stays exactly what it was.
+    <RoomsProvider
+      enabled={health.data?.liveDocuments === true}
+      me={{ id: member.id, name: user.name, kind: member.kind }}
+    >
+      <RouterProvider router={router} />
+    </RoomsProvider>
+  );
 }
 
 /**

@@ -1,0 +1,1 @@
+ALTER TABLE `issue` ADD `approvals_cleared_at` integer;

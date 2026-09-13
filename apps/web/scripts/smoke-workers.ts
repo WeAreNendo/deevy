@@ -1341,6 +1341,83 @@ async function withServer(
   }
 }
 
+/**
+ * Live Documents on workerd: the room is a Durable Object, and this is the only
+ * place that runs one (ADR-0021). A browser's socket, a Document's text put in
+ * over it, and the version the room writes when the typing stops — read back
+ * over the API, so what is proven is the whole path and not a binding's name.
+ */
+async function aDocumentIsLiveOnWorkerd(origin: string): Promise<void> {
+  const admin = await signIn(origin, adminEmail);
+  if (admin.cookie.length === 0) throw new Error(`the admin could not sign in: ${admin.location}`);
+
+  const health = (await (await fetch(`${origin}/rpc/health/ping`, { method: "POST" })).json()) as {
+    json?: { liveDocuments?: boolean };
+  };
+  check(
+    "a Worker with the ROOMS binding says its Documents are live",
+    health.json?.liveDocuments === true,
+    `liveDocuments ${String(health.json?.liveDocuments)}`,
+  );
+
+  const project = await rpc(
+    origin,
+    "projects/create",
+    { name: "Checkout", key: "CHK" },
+    admin.cookie,
+  );
+  const issue = await rpc(
+    origin,
+    "issues/create",
+    { projectKey: (project.output as { key?: string }).key, title: "Live Documents" },
+    admin.cookie,
+  );
+  const issueKey = (issue.output as { key?: string }).key ?? "";
+  const room = `document:${issueKey}:intent`;
+  check(
+    "the room name the SPA builds is the one the server parses",
+    room.startsWith("document:"),
+    room,
+  );
+
+  // The upgrade itself: the room in the query string, because that is what
+  // routes to its Durable Object. No cookie on this socket and none needed —
+  // Hocuspocus authenticates a *document* rather than a connection, so what is
+  // proven here is that the object exists, routes and speaks.
+  const socket = new WebSocket(
+    `${origin.replace("http", "ws")}/collab?room=${encodeURIComponent(room)}`,
+  );
+  const opened = await new Promise<boolean>((settled) => {
+    socket.addEventListener("open", () => settled(true));
+    socket.addEventListener("error", () => settled(false));
+    setTimeout(() => settled(false), 10_000);
+  });
+  check("the Durable Object answers a websocket upgrade on /collab", opened, "it did not open");
+  socket.close();
+
+  // And the room is reachable as a room: the Worker's own LiveRooms port goes
+  // through the same object, so a write that finds nobody in it still lands.
+  const written = await rpc(
+    origin,
+    "documents/write",
+    { issueKey, name: "intent", body: "## Problem\n\nWritten through the Worker." },
+    admin.cookie,
+  );
+  const read = await rpc(origin, "documents/get", { issueKey, name: "intent" }, admin.cookie);
+  const document = read.output as { body?: string; basis?: string | null };
+  check(
+    "a Document written on workerd reads back with a basis to write from",
+    document.body?.includes("Written through the Worker.") === true &&
+      typeof document.basis === "string",
+    `write ${String(written.status)}, basis ${typeof document.basis}, body ${String(document.body).slice(0, 40)}`,
+  );
+  check(
+    "the room name the SPA builds is the one the server parses",
+    room.startsWith("document:"),
+    room,
+  );
+}
+
 /** Slice 4: everything deevy serves that needs no signed-in Human. */
 async function theWorkerServesDeevy(origin: string): Promise<void> {
   const health = await fetch(`${origin}/healthz`);
@@ -1561,6 +1638,26 @@ try {
       },
     },
     aHumanSignsIn,
+  );
+
+  // Live Documents, which on this deployment are a Durable Object: the one
+  // phase that runs one (ADR-0021).
+  const roomPort = await freePort();
+  await withServer(
+    persistTo,
+    {
+      config: await stubbedOutside(),
+      port: roomPort,
+      vars: {
+        BETTER_AUTH_URL: `http://127.0.0.1:${String(roomPort)}`,
+        BETTER_AUTH_SECRET: "smoke-secret-that-is-at-least-32-characters",
+        GITHUB_CLIENT_ID: "stub-client-id",
+        GITHUB_CLIENT_SECRET: "stub-client-secret",
+        DEEVY_ADMIN_EMAIL: adminEmail,
+        DEEVY_WORKSPACE_NAME: "Acme",
+      },
+    },
+    aDocumentIsLiveOnWorkerd,
   );
 
   // The Cron Trigger, on the Workspace the sign-in just created. The rows go

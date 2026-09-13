@@ -1,116 +1,170 @@
 # Two Members in one Document at the same time
 
-A plan, 2026-09-12. The Documents pane now edits in place — the view is the editor and leaving the text
-writes a version. That makes the question of what happens when two Members are in the same Document at the
-same time a real one rather than a theoretical one, and it is more likely here than in most tools: an Agent
-does not wait for a Human to finish typing before it writes the spec it was asked for.
+A plan, decided 2026-09-13. The Documents pane edits in place — the view is the editor and leaving the text
+writes a version — so what happens when two Members are in one Document at once is a daily question rather
+than a theoretical one, and deevy has a version of it most tools do not: an Agent does not wait for a Human
+to finish typing before it writes the spec it was asked for.
 
-This is the only item of that batch not built. What shipped instead is the honest interim, below; what it
-would take to do the real thing is the rest of the document, so the cost is on the table before anybody pays
-it.
+The first draft of this document was an options menu. Every question in it has now been answered, so this is
+what gets built, in what order, and what each part costs. The choices that are expensive to reverse are
+recorded in [ADR-0021](../adr/0021-a-document-is-live-and-markdown-is-what-it-becomes.md).
 
-## What ships today: a save is refused rather than silently winning
+## What exists today, and why it is not enough
 
-`documents.write` takes an optional `baseVersion` — the version the text on screen was read from. The
-handler compares it with the Document's `currentVersion` and throws `CONFLICT` when they differ, so:
+`documents.write` takes `baseVersion` — the version the text on screen was read from — and refuses a save
+that would land on top of somebody else's:
 
 - Ada opens the spec at v2 and starts typing.
 - Planner writes v3 from a Run.
 - Ada's editor blurs and tries to save on top of v2. The server refuses; the pane says so and keeps her text.
 
-Nobody's words are lost, and the loser of the race is told. What it does **not** do is merge, or show Ada
-that Planner is in the Document while she is typing, or let the two of them write at once. It is a lock with
-a late and unhelpful error message, and it is a floor, not an answer.
+Nobody's words are lost and the loser of the race is told. But it does not merge, it does not show Ada that
+Planner is in the Document while she types, and the Human who loses the race is the one who was typing. It is
+a floor.
 
-## What "simultaneous" actually requires
+## What is being built
 
-Three separable things, in the order they pay off:
+One room per Document, live text, carets, presence, a version model that survives both, and an Agent path
+that stays markdown-shaped. All of it before any of it ships: half of this is not usefully shippable, and a
+Document that is live for Humans but still refuses Agents would be the wrong half.
 
-1. **Presence** — who else has this Document open, and where their caret is. Cheap, no storage, entirely
-   ephemeral, and it removes most conflicts by making people not collide in the first place.
-2. **Live text** — both carets edit the same text and both see the other's keystrokes. This is the
-   expensive one and the one that cannot be half-built.
-3. **Versions that still mean something** — deevy's Documents are versioned on purpose: a Gate approves
-   text, an Agent is judged on what it wrote, the Activity says "wrote spec v2". A stream of keystrokes has
-   no versions in it, so the two models have to be reconciled deliberately (see "What it costs the domain").
+**Roughly three weeks.** The editor is an afternoon — Tiptap's collaboration extension is a drop-in over
+`@tiptap/y-tiptap`, and nobody writes ProseMirror. The expense is everything behind it: a websocket on two
+runtimes, persistence, the version rules, and the merge.
 
-## Options
+### The room
 
-### A. Presence only (small)
+A Yjs document per `document` row, held by `@hocuspocus/server` 4.7. Hocuspocus v4 runs on `crossws`, which
+has a Cloudflare adapter with Durable Object and hibernation support, so Node and Workers run the same room
+rather than two that drift apart. Two of its hooks are deevy's:
 
-A `documents.presence` stream operation over the existing SSE transport: a Member opening the pane joins,
-heartbeats every 15s, and the pane shows the avatars of everybody else in it, with a line when somebody
-else's version lands ("Planner wrote v3 — reload"). Keep the `baseVersion` refusal underneath.
+- `onAuthenticate` — the Better Auth session on the upgrade request, then the Member, then exactly the
+  authorization `documents.get` applies. A Human who cannot read the Issue cannot open its room.
+- `onStoreDocument`, debounced — this **is** the quiet rule rather than something built beside it.
 
-- **Cost**: a stream operation, an in-memory registry per instance, one component. Days, not weeks.
-- **On Workers**: an in-memory registry does not survive across isolates — presence needs a Durable Object
-  (see below) or a short-TTL KV table, or it silently works on Node and not in production.
-- **Gets you**: the conflicts that matter avoided socially, which is how most small teams work anyway. Does
-  not get you two people typing in one paragraph.
+It mounts as its own route on the Hono app both entries already build. Every operation deevy has is
+request/response or a server-sent stream; a websocket upgrade is neither, so it is not an operation and does
+not pretend to be one (ADR-0009 stands; ADR-0021 says why this sits outside it). Nothing travels over it but
+Yjs updates and awareness.
 
-### B. CRDT over a Durable Object (the real thing)
+`packages/adapters` gains the runtime half — `./node` (the crossws Node adapter) and `./workers` (a
+`DocumentRoom` Durable Object) — behind one interface. The rules stay in `packages/core`, which keeps its
+no-`node:` constraint.
 
-Yjs as the document type and a Cloudflare Durable Object per Document as the room: every edit is a small
-update broadcast to the room and appended to the DO's storage; the DO periodically snapshots the merged
-state.
+### What is stored
 
-**The editor half is nearly free, which is worth saying plainly.** Tiptap is ProseMirror underneath, but
-nobody here would write ProseMirror: `@tiptap/extension-collaboration` (3.31.3, matching the Tiptap already
-pinned) is a drop-in extension whose peers are `yjs`, `@tiptap/pm` — already present — and
-`@tiptap/y-tiptap`, Tiptap's own binding in place of hand-wired `y-prosemirror`.
-`@tiptap/extension-collaboration-caret` adds the other person's cursor. That is an afternoon in
-`tiptap-editor.tsx`.
+A new table, `document_state(document_id → document, state blob, updated_at)`, written on every debounced
+store. The Yjs state is the truth while people type; markdown is what every version is made of, what every
+read returns and what every Agent writes. A room with no state row boots by parsing the latest version's
+markdown into a fresh Yjs document — which is also the recovery path if a blob is ever lost.
 
-- **Cost**: the server half, which is all of it. A websocket transport deevy does not have today (the Event
-  stream is SSE, one way), a Durable Object binding and migration in `wrangler.jsonc`, and a Node
-  equivalent for `apps/server` and for every test — the DO is the one piece with no `node:sqlite`
-  counterpart, so `packages/adapters` grows a third shape. Hocuspocus (`@hocuspocus/server` 4.7) is the
-  ready-made Node room and now speaks through `crossws`, which has a Cloudflare Durable Object adapter — so
-  one server for both runtimes is plausible and worth a spike rather than an assumption. Call it a week if
-  that lands and two to three if it does not, plus a permanent tax on every future change to the editor.
-- **Also**: the markdown-is-the-format decision (`deevy-ui`, slice 3) survives only if the Yjs document is
-  the editor's own tree and markdown stays the serialization written at version time. Agents write markdown
-  over MCP and must not need a CRDT client to do it — so `documents.write` has to apply a whole-body write
-  _into_ the CRDT, not beside it.
-- **Gets you**: Google-Docs behaviour, offline edits that merge, and no conflicts to explain.
+Persisted rather than rebuilt per session because offline has to work: a tab that was asleep merges into a
+document identity the server still has, instead of duplicating text into one it rebuilt.
 
-### C. Operational transform on the existing RPC (not recommended)
+### What a version is now
 
-Server-side OT with a revision number per keystroke batch, over the RPC deevy already has. No new transport,
-no DO, no dependency.
+On a store: always write the state, then decide whether to cut.
 
-- **Cost**: OT is famously easy to get subtly wrong, and the failure mode is a corrupted Document rather
-  than an error message. Every rich-text feature (tables, task lists, code blocks) is a new transform.
-- **Gets you**: the same behaviour as B, worse, with the bugs owned in-house. Listed for completeness.
+- Thirty seconds of quiet cuts a version from the merged markdown.
+- A cut within **ten minutes** of the previous one, by the same set of authors, **amends** it instead of
+  adding another — so an afternoon leaves a handful of readable versions rather than forty.
+- A version a Gate ruling pinned (`gate_decision_document`) is never amended. Nor is one anybody has already
+  opened at that version in History.
+- Authors come from the update origins seen since the last cut, into a new `document_version_author` table —
+  the same shape as the ruling's pin. The log says "Ada and Planner wrote spec v4".
 
-### D. Section locks (the middle, if B is too much)
+No Publish button. A version is a checkpoint the system takes, not a thing a Human must remember, and a
+Document that drifts a long way from its last version is how a Gate ends up approving text nobody published.
 
-Claim the heading you are under; somebody else's claimed sections are read-only and labelled. Fits deevy's
-Documents, which are headed sections by convention (Problem / Proposed outcome / Constraints).
+### How an Agent writes
 
-- **Cost**: presence (A) plus a claim table and an editor that can disable a range. A week.
-- **Gets you**: most of the value where two people are working on the same spec at once, without a CRDT.
-  Feels dated where a modern tool feels live, and a lock still has to expire.
+An Agent never joins the room. It reads markdown and writes markdown, as it does today.
 
-## What it costs the domain
+- `documents.get` returns `{ body, version, basis }` — the live text, the version it derives from, and an
+  opaque `basis` describing the state it was read at.
+- `documents.write` echoes `basis` back (or `baseVersion`, still honoured). The server diffs **the basis text
+  against the submitted body** — what the Agent actually changed — and replays only that onto the live text,
+  as a Yjs transaction whose origin is the Agent's Member. A whole body is never pasted over a paragraph a
+  Human is inside.
+- `documents.writeSection(name, section, body)` addresses a heading instead. It merges by construction, costs
+  a fraction of the payload, and gives the log a line worth reading: "Planner rewrote Requirements in spec".
 
-Whatever is chosen, live text changes what a version **is**, and that is a product decision, not a technical
-one:
+When the merge genuinely collides — the same lines changed on both sides — the write is refused with
+`CONFLICT` naming the section, and the Agent re-reads and tries again. Asymmetric on purpose: the room is for
+typing, the API is merge-or-retry, re-reading is what an Agent is good at, and nobody's sentence is rewritten
+under their cursor by a machine.
 
-- **A version has to be cut by something.** Today it is "somebody left the editor". With live text it has to
-  be an explicit act (a Save/Publish), a debounce, or a Gate. The Activity line "Planner wrote spec v2" is
-  worth keeping; "Planner and Ada edited spec" is not the same sentence.
-- **A Gate approves a version.** This was an open gap when the plan was written and is now closed: a ruling
-  records the version every Document stood at, and the Issue says when the text has been written since
-  (`gate_decision_document`, 2026-09-12). Live text makes that pin more important, not less — it becomes the
-  only fixed point in a Document that is always moving.
-- **An Agent is a peer here too.** Presence, locks and CRDT rooms all have to include Agents, or the feature
-  is for Humans only and deevy's whole premise leaks.
+### What a Human sees
 
-## Recommendation
+- **Carets** with names and Member colours, through `@tiptap/extension-collaboration-caret`.
+- **An Agent gets a banner, not a cursor** — "Planner just wrote this" — because its edit arrives as a
+  block, not as typing. The Agent never joins the room, so the server says it on the Agent's behalf, through
+  awareness, for twelve seconds after the write lands.
+- **Avatars** of everyone in the Document, in the pane's header beside the byline.
+- **Offline**: keep typing, with a line that says so, and merge on reconnect. A version cut while you were
+  away will not contain your words, and the history will show them landing afterwards.
 
-**A now, B later.** The Gate pin is done, which was the correctness bug. Presence plus the conflict refusal
-is a week and removes most of the remaining pain. A CRDT is worth doing once Documents are demonstrably
-being co-written — and since the editor side is a drop-in extension, the decision is entirely about whether
-to own a websocket room on two runtimes. That wants to be a deliberate step, not a side effect of an editor
-change.
+The Issue's **description** gets a room too, having become an editor in its own right — live text and
+presence, no versions, because it has none. **Comments** do not: short, single-author, already their own
+record.
+
+### What changes at a Gate
+
+No freeze. The ruling still pins the version it approved and the Issue still says when the text has moved
+since. What is new is the four-eyes case: when a pinned Document changes while its Issue sits at a Gate with
+approvals already given toward the threshold, **those approvals are cleared** and an Event says why —
+otherwise the second Human approves text the first never saw, which is what a Gate wanting two Humans exists
+to prevent.
+
+## The slices
+
+Each one ends somewhere defensible, and the first one is the one that decides the rest.
+
+1. **The room, empty** (~3 days). Transport, `onAuthenticate`, a Yjs document in memory, two browsers typing
+   into one Document, nothing persisted. Ends by running the same room under `wrangler dev` as a Durable
+   Object. **If that fails, stop and re-plan**: the fallback is `y-crossws` (framework-free, same transport)
+   or two implementations, and slice 6 doubles.
+2. **State and versions** (~4 days). `document_state`, the debounce, the amend rule,
+   `document_version_author`, the Activity wording, the History dialog reading amended versions.
+3. **The editor** (~3 days). Collaboration and caret extensions in `tiptap-editor.tsx`, the Agent banner,
+   avatars in the header, the offline line, the description's room.
+4. **The Agent path** (~4 days). `basis` on reads, the three-way merge, `writeSection`, the conflict refusal,
+   the MCP and OpenAPI snapshots, the Agent capability list.
+5. **Gates** (~1 day). Clearing partial approvals, the Event, the line on the ruling card.
+6. **Workers for real** (~3 days). The Durable Object binding and migration in `wrangler.jsonc`,
+   `OPERATIONS.md` on the paid plan, the acceptance walk.
+
+## What it costs, plainly
+
+- **Three weeks**, and a permanent tax on every future change to the editor.
+- **A paid Workers plan** for that deployment: Durable Objects are not on the free tier. The Node/Docker
+  deployment needs nothing extra.
+- **Seven new dependencies**: `yjs`, `y-protocols`, `@hocuspocus/server`, `@hocuspocus/provider`,
+  `@tiptap/extension-collaboration`, `@tiptap/extension-collaboration-caret`, `@tiptap/y-tiptap` — the
+  Tiptap three pinned exactly with the rest of that family, as the catalog requires.
+- **A three-way merge** is a real algorithm with real failure modes. It gets its own unit tests, with worked
+  cases, before it is wired to anything.
+- **A blob that grows.** Yjs state accumulates history, and D1 has row limits worth respecting. It is stored
+  in the v2 encoding (about half of v1) and rebuilt from its markdown past 256 KB — but only when nobody is
+  connected, because compacting starts the Document's identity again and a browser holding the old one would
+  merge its copy back in as duplicate text. The trade-off that leaves: a tab asleep across a compaction can
+  wake and merge a paragraph back twice. Nothing is lost, and a Human can delete it.
+- **A rebuild has to be the same rebuild every time.** Opening a room from markdown while a browser holds its
+  own copy of the same words is the common case — a restart, an eviction — and two Yjs documents built
+  independently from one text merge by concatenating. The pieces a rebuild makes are derived from the
+  markdown itself, so the same text always rebuilds identically and the two copies merge into one.
+- **A second representation of a Document**, which deevy refused once for mentions. ADR-0021 argues why this
+  one earns it: markdown is still what is stored, read, written and approved; the Yjs state is scratch
+  between versions and rebuildable from the last one.
+
+## How it will be verified
+
+- **Unit**: the merge, with worked three-way cases including the collisions that must refuse; the amend rule
+  against a clock; the version-author set.
+- **Integration**: two Yjs clients against one in-process room — no network, no browser — asserting that
+  concurrent edits converge, that an Agent's merged write lands, and that a quiet cut writes one version with
+  both authors.
+- **Browser**: two tabs on a stubbed instance, typing into one spec, with carets visible in each; an Agent
+  write through MCP landing mid-sentence; a tab put offline and brought back.
+- **Acceptance**: the `wrangler dev` room, in the walk that already runs both deployments locally on every
+  commit.

@@ -1406,13 +1406,17 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "liveDocuments": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "ok",
                     "time",
                     "devSignIn",
-                    "providers"
+                    "providers",
+                    "liveDocuments"
                   ],
                   "additionalProperties": false
                 }
@@ -8066,6 +8070,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -8440,6 +8456,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -8727,6 +8755,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -8777,6 +8806,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -9065,6 +9106,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -9170,6 +9212,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -9229,6 +9276,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -9249,6 +9297,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -9450,6 +9499,18 @@
                             "format": "date-time",
                             "x-native-type": "date"
                           },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "assigneeMemberId": {
                             "type": [
                               "string",
@@ -9737,6 +9798,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -9829,6 +9891,18 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "assigneeMemberId": {
                       "type": [
@@ -10204,6 +10278,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -10491,6 +10577,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -10541,6 +10628,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -10829,6 +10928,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -10934,6 +11034,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -10993,6 +11098,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -11013,6 +11119,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -11124,6 +11231,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -11498,6 +11617,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -11785,6 +11916,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -11835,6 +11967,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -12123,6 +12267,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -12228,6 +12373,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -12287,6 +12437,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -12307,6 +12458,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -12399,6 +12551,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -12773,6 +12937,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -13060,6 +13236,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -13110,6 +13287,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -13398,6 +13587,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -13503,6 +13693,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -13562,6 +13757,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -13582,6 +13778,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -13677,6 +13874,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -14051,6 +14260,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -14338,6 +14559,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -14388,6 +14610,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -14676,6 +14910,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -14781,6 +15016,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -14840,6 +15080,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -14860,6 +15101,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -14956,6 +15198,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -15330,6 +15584,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -15617,6 +15883,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -15667,6 +15934,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -15955,6 +16234,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -16060,6 +16340,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -16119,6 +16404,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -16139,6 +16425,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -16235,6 +16522,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -16609,6 +16908,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -16896,6 +17207,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -16946,6 +17258,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -17234,6 +17558,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -17339,6 +17664,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -17398,6 +17728,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -17418,6 +17749,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -17906,6 +18238,12 @@
                               "null"
                             ]
                           },
+                          "authorMemberIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "writtenAt": {
                             "type": "string",
                             "format": "date-time",
@@ -17951,6 +18289,7 @@
                         "required": [
                           "version",
                           "authorMemberId",
+                          "authorMemberIds",
                           "writtenAt",
                           "rulings"
                         ],
@@ -18052,6 +18391,12 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "basis": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -18064,7 +18409,8 @@
                     "version",
                     "body",
                     "authorMemberId",
-                    "writtenAt"
+                    "writtenAt",
+                    "basis"
                   ],
                   "additionalProperties": false
                 }
@@ -18109,6 +18455,12 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
+                  },
+                  "basis": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -18168,6 +18520,12 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "basis": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -18180,7 +18538,138 @@
                     "version",
                     "body",
                     "authorMemberId",
-                    "writtenAt"
+                    "writtenAt",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/issues/{issueKey}/documents/{name}/sections/{section}": {
+      "post": {
+        "operationId": "documents.writeSection",
+        "summary": "Rewrite one section of a Document, leaving the rest of it alone",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "issueKey",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "section",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "maxLength": 100000
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "currentVersion": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "authorMemberId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "writtenAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "basis": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "issueId",
+                    "name",
+                    "currentVersion",
+                    "createdAt",
+                    "updatedAt",
+                    "version",
+                    "body",
+                    "authorMemberId",
+                    "writtenAt",
+                    "basis"
                   ],
                   "additionalProperties": false
                 }
@@ -19590,6 +20079,18 @@
                                     "format": "date-time",
                                     "x-native-type": "date"
                                   },
+                                  "approvalsClearedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "x-native-type": "date"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
                                   "assigneeMemberId": {
                                     "type": [
                                       "string",
@@ -19877,6 +20378,7 @@
                                   "description",
                                   "stateId",
                                   "stateEnteredAt",
+                                  "approvalsClearedAt",
                                   "assigneeMemberId",
                                   "parentId",
                                   "createdBy",

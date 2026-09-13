@@ -8,6 +8,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { useMentionables } from "@/lib/mentions";
 import { MemberChip } from "@/components/member-chip";
+import { Present } from "@/components/present";
+import { roomFor, useRoom } from "@/lib/rooms";
 import { orpc } from "@/lib/orpc";
 import { ago } from "@/lib/time";
 import { PAGE_SCOPE, useShortcut } from "@/lib/shortcuts";
@@ -108,6 +110,8 @@ function DocumentPane({ issueKey, name, currentVersion }: PaneProps) {
   const mentionables = useMentionables();
 
   // The text on screen: the server's until somebody types, then theirs.
+  const roomName = roomFor({ kind: "document", issueKey, document: name });
+  const live = Boolean(useRoom(roomName));
   const [draft, setDraft] = useState<string | null>(null);
   const [basedOn, setBasedOn] = useState<number | null>(null);
   const body = draft ?? document.data?.body ?? "";
@@ -141,17 +145,25 @@ function DocumentPane({ issueKey, name, currentVersion }: PaneProps) {
     <div className="flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center gap-3">
         <Contributors versions={contributors} fallback={document.data.authorMemberId} />
+        <Present room={roomName} />
         <span className="flex-1" />
-        <span role="status" className="text-xs text-muted-foreground">
-          {autosave.status === "saving"
-            ? "Saving…"
-            : autosave.status === "saved"
-              ? "Saved"
-              : autosave.status === "error"
-                ? (autosave.error ?? "Not saved")
-                : null}
-        </span>
-        {autosave.status === "error" ? (
+        {/*
+         * A live Document saves itself when the room goes quiet, so there is
+         * nothing here to report: the status line belongs to the editor that
+         * still writes through `documents.write` on blur.
+         */}
+        {live ? null : (
+          <span role="status" className="text-xs text-muted-foreground">
+            {autosave.status === "saving"
+              ? "Saving…"
+              : autosave.status === "saved"
+                ? "Saved"
+                : autosave.status === "error"
+                  ? (autosave.error ?? "Not saved")
+                  : null}
+          </span>
+        )}
+        {!live && autosave.status === "error" ? (
           <Button size="xs" variant="outline" onClick={autosave.retry}>
             Retry
           </Button>
@@ -179,25 +191,26 @@ function DocumentPane({ issueKey, name, currentVersion }: PaneProps) {
         </DropdownMenu>
       </div>
 
-      {/* The view is the editor. Leaving the text writes a version of it.
-          It wears no input chrome for that reason: a Document is the page,
-          not a field on it, so it takes the page's own paper and ink. */}
+      {/* The view is the editor. In a room the room writes the versions; where
+          there is no room, leaving the text writes one. It wears no input
+          chrome either way: a Document is the page, not a field on it. */}
       <MarkdownEditor
         className="border-transparent bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent"
         id={`body-${name}`}
+        room={roomName}
         value={body}
         onChange={(next) => {
           setDraft(next);
           if (basedOn === null) setBasedOn(currentVersion);
         }}
         onBlur={() => {
-          if (draft !== null && draft !== document.data.body) void autosave.saveNow(draft);
+          if (!live && draft !== null && draft !== document.data.body) void autosave.saveNow(draft);
         }}
         mentions={mentionables}
         rows={16}
         placeholder={`Write the ${name}…`}
         onSubmit={() => {
-          if (draft !== null && draft !== document.data.body) void autosave.saveNow(draft);
+          if (!live && draft !== null && draft !== document.data.body) void autosave.saveNow(draft);
         }}
       />
 
@@ -222,13 +235,28 @@ function Contributors({
   versions,
   fallback,
 }: {
-  versions: Array<{ authorMemberId: string | null; writtenAt: Date | string }>;
+  versions: Array<{
+    authorMemberId: string | null;
+    authorMemberIds: string[];
+    writtenAt: Date | string;
+  }>;
   fallback: string | null;
 }) {
   const members = useQuery(orpc.members.list.queryOptions({ input: {} }));
   const all = members.data?.members ?? [];
+  // Every hand in every version, oldest first. A version written in a room has
+  // more than one author (ADR-0021), so the byline unions them rather than
+  // naming whoever happened to cut each one.
   const ids = versions.length
-    ? [...new Set([...versions].reverse().map((one) => one.authorMemberId))]
+    ? [
+        ...new Set(
+          [...versions]
+            .reverse()
+            .flatMap((one) =>
+              one.authorMemberIds.length > 0 ? one.authorMemberIds : [one.authorMemberId],
+            ),
+        ),
+      ]
     : [fallback];
   const who = ids.map((id) => all.find((one) => one.id === id)).filter(Boolean);
   const last = versions[0]?.writtenAt;

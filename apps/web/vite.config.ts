@@ -75,6 +75,10 @@ export default defineConfig({
       // discovery has to answer from the same origin as the endpoint it
       // describes, or the OAuth dance in slice 7 looks at the wrong server.
       "/mcp": apiOrigin,
+      // A room is a websocket, and a proxy has to be told: without `ws` the
+      // upgrade is answered by the dev server itself and every Document is
+      // quietly empty (ADR-0021).
+      "/collab": { target: apiOrigin, ws: true },
       "/.well-known": apiOrigin,
     },
   },

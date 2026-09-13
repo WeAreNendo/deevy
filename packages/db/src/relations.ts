@@ -26,7 +26,7 @@ import { event } from "./schema/event.ts";
 import { comment } from "./schema/comment.ts";
 import { notification } from "./schema/notification.ts";
 import { issueLink } from "./schema/link.ts";
-import { document, documentVersion } from "./schema/document.ts";
+import { document, documentVersion, documentVersionAuthor, roomState } from "./schema/document.ts";
 import { gateApprover, gateDecision, gateDecisionDocument } from "./schema/gate.ts";
 import { issue } from "./schema/issue.ts";
 import { issueLabel, label } from "./schema/label.ts";
@@ -76,6 +76,8 @@ export const tables = {
   webhookSubscription,
   gateApprover,
   gateDecisionDocument,
+  documentVersionAuthor,
+  roomState,
 };
 
 const appRelations = defineRelationsPart(tables, (r) => ({
@@ -216,6 +218,22 @@ const appRelations = defineRelationsPart(tables, (r) => ({
     issue: r.one.issue({ from: r.document.issueId, to: r.issue.id, optional: false }),
     versions: r.many.documentVersion({ from: r.document.id, to: r.documentVersion.documentId }),
   },
+  roomState: {
+    issue: r.one.issue({ from: r.roomState.issueId, to: r.issue.id, optional: false }),
+    document: r.one.document({ from: r.roomState.documentId, to: r.document.id }),
+  },
+  documentVersionAuthor: {
+    version: r.one.documentVersion({
+      from: r.documentVersionAuthor.versionId,
+      to: r.documentVersion.id,
+      optional: false,
+    }),
+    member: r.one.member({
+      from: r.documentVersionAuthor.memberId,
+      to: r.member.id,
+      optional: false,
+    }),
+  },
   documentVersion: {
     document: r.one.document({
       from: r.documentVersion.documentId,
@@ -223,6 +241,10 @@ const appRelations = defineRelationsPart(tables, (r) => ({
       optional: false,
     }),
     author: r.one.member({ from: r.documentVersion.authorMemberId, to: r.member.id }),
+    authors: r.many.documentVersionAuthor({
+      from: r.documentVersion.id,
+      to: r.documentVersionAuthor.versionId,
+    }),
   },
   gateDecision: {
     issue: r.one.issue({ from: r.gateDecision.issueId, to: r.issue.id, optional: false }),

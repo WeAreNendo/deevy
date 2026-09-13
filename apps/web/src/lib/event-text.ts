@@ -162,6 +162,13 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
         "muted",
         true,
       );
+    case "gate.approvals_cleared":
+      return say(
+        `cleared ${typeof p.cleared === "number" ? String(p.cleared) : "an"} approval${p.cleared === 1 ? "" : "s"} on the ${str(p.state) ?? ""} Gate`,
+        str(p.name) ? `${str(p.name) ?? ""} changed after it was approved` : null,
+        "gate",
+        false,
+      );
     case "document.updated":
       return say(
         str(p.name)

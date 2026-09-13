@@ -1,10 +1,94 @@
 import { z } from "zod";
 import { writeVersion } from "../documents.ts";
+import { decodeBasis, encodeBasis, liveMarkdown, replaceSection } from "../documents-live.ts";
+import { clearApprovalsIfGated } from "../gate-freshness.ts";
+import { mergeMarkdown } from "../merge.ts";
+import { applyToRoom } from "../room-store.ts";
+import { roomName } from "../rooms.ts";
 import { DocumentAtVersionSchema, DocumentSchema } from "../schemas.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import { defineOperation } from "./registry.ts";
+import type { Document, Issue, Project } from "@deevy/db";
+import type { ContextFor } from "./registry.ts";
 import { requireDocument, requireIssue } from "./shared.ts";
+
+/** What the browser called this Document's room when it opened the socket. */
+function documentRoom(issue: Issue, project: Project, document: Document): string {
+  return roomName({
+    kind: "document",
+    issueKey: `${project.key}-${String(issue.number)}`,
+    document: document.name,
+  });
+}
+
+/**
+ * What this write should land as: what it changed, replayed onto what the
+ * Document says now. Refuses rather than overwriting where the two collide —
+ * the Agent re-reads and tries again, and the Human typing is never
+ * interrupted (ADR-0021).
+ */
+async function mergedBody(
+  context: ContextFor<"member">,
+  document: Document,
+  room: string,
+  body: string,
+  basis: string | null,
+): Promise<string> {
+  const { body: theirs, live } = await liveMarkdown(context.db, document, room, context.liveRooms);
+  // Nothing to merge against: no basis, and nobody in the room. This is the
+  // write `documents.write` has always been.
+  if (!basis && !live) return body;
+
+  const merged = mergeMarkdown({ base: basis ? decodeBasis(basis) : theirs, mine: body, theirs });
+  if (merged.ok) return merged.text;
+  throw new ORPCError("CONFLICT", {
+    message: `${merged.clashed.join(" and ")} changed while you were writing. Read ${document.name} again and write it once more.`,
+  });
+}
+
+/**
+ * One way in for both writes: into the room when there is one, so everybody
+ * looking at it sees the change arrive, and into a version either way.
+ */
+async function writeTo(
+  context: ContextFor<"member">,
+  {
+    issue,
+    project,
+    document,
+    body,
+  }: { issue: Issue; project: Project; document: Document; body: string },
+) {
+  const applied = await applyToRoom(
+    context.db,
+    document,
+    body,
+    // Who wrote, so the room can say so to whoever is reading it.
+    { id: context.member.id, name: context.session.user.name, kind: context.member.kind },
+    context.liveRooms,
+  );
+  const version = applied ?? (await writeVersion(context.db, document, body, context.member.id));
+  // An Agent rewriting a Document under an open Gate starts its counting again,
+  // exactly as a Human typing in it does (ADR-0021).
+  await clearApprovalsIfGated(context.db, { workspace: context.workspace }, issue, document.name);
+  await appendEvent(context, {
+    kind: "document.updated",
+    subjectType: "issue",
+    subjectId: issue.id,
+    projectId: project.id,
+    payload: { name: document.name, version, authorMemberIds: [context.member.id] },
+  });
+  return {
+    ...document,
+    currentVersion: version,
+    version,
+    body,
+    authorMemberId: context.member.id,
+    writtenAt: new Date(),
+    basis: encodeBasis(body),
+  };
+}
 
 export const documents = {
   list: defineOperation({
@@ -47,7 +131,14 @@ export const documents = {
       versions: z.array(
         z.object({
           version: z.number().int(),
+          /** Who cut this version. */
           authorMemberId: z.string().nullable(),
+          /**
+           * Everybody whose keystrokes are in it. A version cut from a live
+           * room regularly has more than one author (ADR-0021), and the byline
+           * reads from this rather than guessing from the one above.
+           */
+          authorMemberIds: z.array(z.string()),
           writtenAt: z.date(),
           /**
            * The Gate rulings made while this version was the current one: what
@@ -70,6 +161,7 @@ export const documents = {
       const rows = await context.db.query.documentVersion.findMany({
         where: { documentId: found.id },
         orderBy: { version: "desc" },
+        with: { authors: true },
       });
       const pinned = await context.db.query.gateDecisionDocument.findMany({
         where: { documentId: found.id },
@@ -79,6 +171,14 @@ export const documents = {
         versions: rows.map((row) => ({
           version: row.version,
           authorMemberId: row.authorMemberId,
+          // A version written before rooms existed names its one author here
+          // too, so a byline never has to ask which kind of version it is.
+          authorMemberIds:
+            row.authors.length > 0
+              ? row.authors.map((one) => one.memberId)
+              : row.authorMemberId
+                ? [row.authorMemberId]
+                : [],
           writtenAt: row.createdAt,
           rulings: pinned
             .filter((one) => one.version === row.version)
@@ -110,7 +210,7 @@ export const documents = {
     }),
     output: DocumentAtVersionSchema,
     handler: async ({ input, context }) => {
-      const { issue } = await requireIssue(context, input.issueKey);
+      const { issue, project } = await requireIssue(context, input.issueKey);
       const found = await requireDocument(context, issue.id, input.name);
       const version = input.version ?? found.currentVersion;
       const row = await context.db.query.documentVersion.findFirst({
@@ -119,12 +219,26 @@ export const documents = {
       if (!row) {
         throw new ORPCError("NOT_FOUND", { message: `No version ${version} of ${input.name}` });
       }
+
+      // Asked for the Document, you get what it says now — which is the room's
+      // text while somebody is typing in it. Asked for a version, you get that
+      // version: reading history is reading history (ADR-0021).
+      const asked = input.version !== undefined;
+      const live = asked
+        ? { body: row.body, live: false }
+        : await liveMarkdown(
+            context.db,
+            found,
+            documentRoom(issue, project, found),
+            context.liveRooms,
+          );
       return {
         ...found,
         version: row.version,
-        body: row.body,
+        body: live.body,
         authorMemberId: row.authorMemberId,
         writtenAt: row.createdAt,
+        basis: asked ? null : encodeBasis(live.body),
       };
     },
   }),
@@ -149,6 +263,13 @@ export const documents = {
        * Agent over MCP, a script — the write lands as it always did.
        */
       baseVersion: z.number().int().min(1).optional(),
+      /**
+       * What `documents.get` handed back with the text this edit started from.
+       * Given, the server merges what this write *changed* onto what the
+       * Document says now, rather than pasting a body composed minutes ago over
+       * a paragraph somebody is in (ADR-0021).
+       */
+      basis: z.string().nullish(),
     }),
     output: DocumentAtVersionSchema,
     handler: async ({ input, context }) => {
@@ -159,22 +280,56 @@ export const documents = {
           message: `${input.name} is at version ${String(found.currentVersion)}; this edit started from ${String(input.baseVersion)}. Read the newer one and write again.`,
         });
       }
-      const version = await writeVersion(context.db, found, input.body, context.member.id);
-      await appendEvent(context, {
-        kind: "document.updated",
-        subjectType: "issue",
-        subjectId: issue.id,
-        projectId: project.id,
-        payload: { name: found.name, version },
-      });
-      return {
-        ...found,
-        currentVersion: version,
-        version,
-        body: input.body,
-        authorMemberId: context.member.id,
-        writtenAt: new Date(),
-      };
+
+      const body = await mergedBody(
+        context,
+        found,
+        documentRoom(issue, project, found),
+        input.body,
+        input.basis ?? null,
+      );
+      return writeTo(context, { issue, project, document: found, body });
+    },
+  }),
+
+  writeSection: defineOperation({
+    name: "documents.writeSection",
+    summary: "Rewrite one section of a Document, leaving the rest of it alone",
+    method: "POST",
+    path: "/issues/{issueKey}/documents/{name}/sections/{section}",
+    auth: "member",
+    agents: true,
+    mcp: true,
+    input: z.object({
+      issueKey: z.string(),
+      name: z.string(),
+      /** The heading, with or without its hashes: `Requirements`, `## Requirements`. */
+      section: z.string().min(1).max(200),
+      body: z.string().max(100_000),
+    }),
+    output: DocumentAtVersionSchema,
+    /*
+     * What an Agent usually means. It merges by construction — the rest of the
+     * Document is not in the payload, so it cannot be pasted over — it costs a
+     * fraction of the bytes, and it gives the log a line worth reading
+     * (ADR-0021).
+     */
+    handler: async ({ input, context }) => {
+      const { issue, project } = await requireIssue(context, input.issueKey);
+      const found = await requireDocument(context, issue.id, input.name);
+      const { body: current } = await liveMarkdown(
+        context.db,
+        found,
+        documentRoom(issue, project, found),
+        context.liveRooms,
+      );
+      const written = replaceSection(current, input.section, input.body);
+      if (written === null) {
+        throw new ORPCError("NOT_FOUND", {
+          message: `${input.name} has no section called ${input.section}. Read it and write the whole body, or use one of its own headings.`,
+        });
+      }
+      return writeTo(context, { issue, project, document: found, body: written });
     },
   }),
 };

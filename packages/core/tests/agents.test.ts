@@ -59,6 +59,7 @@ describe("the Agent capability rule", () => {
       // may see what came before it, and write is still write.
       "documents.versions",
       "documents.write",
+      "documents.writeSection",
       "inbox.list",
       // Its own inbox, scoped to the caller in the same statement it updates
       // with, so a loop that polls `unreadOnly` can stop finding the same work

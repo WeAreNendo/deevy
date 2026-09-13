@@ -13,14 +13,20 @@
     "@deevy/adapters": "workspace:*",
     "@deevy/core": "workspace:*",
     "@deevy/db": "workspace:*",
+    "@hocuspocus/server": "catalog:",
     "@hono/node-server": "catalog:",
     "@orpc/server": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "ws": "catalog:"
   },
   "devDependencies": {
+    "@hocuspocus/common": "catalog:",
+    "@hocuspocus/provider": "catalog:",
     "@types/node": "catalog:",
+    "@types/ws": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "yjs": "catalog:"
   }
 }

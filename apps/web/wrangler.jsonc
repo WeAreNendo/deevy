@@ -3,13 +3,19 @@
   "name": "deevy",
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-04",
+  // `nodejs_compat` because the room's server reaches for `node:crypto` — for
+  // `randomUUID()`, and nothing else (ADR-0021). `new_module_registry` is the
+  // rewritten module resolution that makes a `node:` built-in resolve to one
+  // instance however it was imported; it has no default-on date, so it is
+  // named here on purpose (blog.cloudflare.com/workers-module-registry-nodejs).
+  "compatibility_flags": ["nodejs_compat", "new_module_registry"],
   "assets": {
     "not_found_handling": "single-page-application",
     // Part of the routing table, not configuration: a path createApp mounts
     // that is missing here is answered by the asset handler with the SPA's
     // index.html, a 200 with the wrong body. packages/core/tests/
     // worker-routes.test.ts asserts this list against the app's own routes.
-    "run_worker_first": ["/api/*", "/rpc/*", "/healthz", "/mcp", "/.well-known/*"],
+    "run_worker_first": ["/api/*", "/rpc/*", "/healthz", "/mcp", "/.well-known/*", "/collab"],
   },
   "d1_databases": [
     {
@@ -25,6 +31,15 @@
       // to an open-source repository (docs/OPERATIONS.md).
     },
   ],
+  // One Durable Object per live Document: a room is a single text several
+  // Members type into, and an object is where a single text can exist once
+  // (docs/plans/collaborative-documents.md). Durable Objects are a paid
+  // feature, so a deployment without this binding still serves every Document
+  // — read, write, and a save refused rather than landing on somebody else's.
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "DocumentRoom" }],
+  },
+  "migrations": [{ "tag": "v1", "new_classes": ["DocumentRoom"] }],
   // Every minute, the finest Cloudflare offers, which is why
   // DEEVY_SWEEP_INTERVAL_SECONDS is a Node-only knob (docs/OPERATIONS.md).
   // Cloudflare owns this schedule; the Worker's `scheduled` handler is one

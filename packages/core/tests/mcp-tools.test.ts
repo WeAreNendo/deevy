@@ -39,6 +39,10 @@ describe("the committed tool manifest", () => {
       "comments_create",
       "documents_get",
       "documents_write",
+      // Added with live Documents (ADR-0021): the write an Agent usually
+      // means, which merges by construction because the rest of the Document
+      // is not in the payload.
+      "documents_write_section",
       "inbox_list",
       "issues_create",
       "issues_get",

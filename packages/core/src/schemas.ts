@@ -89,6 +89,8 @@ export const GateStandingSchema = z.object({
   /** How many could give one: the approvers this Gate names, or every Human, less the suspended. */
   eligible: z.number().int(),
   excludeRequester: z.boolean(),
+  /** Approvals this Gate had until the Document under them changed (ADR-0021). */
+  clearedByAnEdit: z.number().int(),
   approvals: z.array(
     z.object({
       memberId: z.string(),
@@ -125,6 +127,12 @@ export const DocumentAtVersionSchema = DocumentSchema.extend({
    * say when version 1 was written, not when the Document last changed.
    */
   writtenAt: z.date(),
+  /**
+   * What to echo back on a write, so the server can merge what you changed
+   * rather than paste what you sent (ADR-0021). Opaque, and null when there is
+   * nothing to write from — reading an older version is reading history.
+   */
+  basis: z.string().nullable(),
 });
 
 export const CommentSchema = createSelectSchema(comment);

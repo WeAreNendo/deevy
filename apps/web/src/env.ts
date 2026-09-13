@@ -24,6 +24,13 @@ const defaultStreamSeconds = 60;
  * `apps/server/src/env.ts` reads from the environment, so one variable
  * configures deevy on either runtime (docs/OPERATIONS.md).
  */
+/** What a Durable Object namespace is, narrowed to what routing a room needs. */
+export interface DurableObjectBinding {
+  idFromName(name: string): DurableObjectId;
+  get(id: DurableObjectId): { fetch(request: Request): Promise<Response> };
+}
+type DurableObjectId = { toString(): string };
+
 export interface WorkerBindings {
   DB: Parameters<typeof createDb>[0];
   /**
@@ -35,6 +42,14 @@ export interface WorkerBindings {
    * beat later (docs/OPERATIONS.md, docs/plans/m3.md slice 9).
    */
   JOBS?: QueueProducer;
+  /**
+   * One Durable Object per live Document (ADR-0021). Optional for the same
+   * reason `JOBS` is: Durable Objects are a paid feature, and a deployment
+   * without them still serves every Document the way it did before — read,
+   * write, and a save refused rather than landing on somebody else's
+   * (docs/OPERATIONS.md).
+   */
+  ROOMS?: DurableObjectBinding;
   BETTER_AUTH_URL?: string;
   BETTER_AUTH_SECRET?: string;
   DEEVY_WEB_ORIGIN?: string;
