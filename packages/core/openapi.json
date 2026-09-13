@@ -64,7 +64,8 @@
                         "mention",
                         "state_rule",
                         "schedule",
-                        "manual"
+                        "manual",
+                        "children_done"
                       ]
                     },
                     "status": {
@@ -232,7 +233,8 @@
                             "mention",
                             "state_rule",
                             "schedule",
-                            "manual"
+                            "manual",
+                            "children_done"
                           ]
                         },
                         "status": {
@@ -435,7 +437,8 @@
                             "mention",
                             "state_rule",
                             "schedule",
-                            "manual"
+                            "manual",
+                            "children_done"
                           ]
                         },
                         "status": {
@@ -643,7 +646,8 @@
                         "mention",
                         "state_rule",
                         "schedule",
-                        "manual"
+                        "manual",
+                        "children_done"
                       ]
                     },
                     "status": {
@@ -776,7 +780,8 @@
                             "mention",
                             "state_rule",
                             "schedule",
-                            "manual"
+                            "manual",
+                            "children_done"
                           ]
                         },
                         "status": {
@@ -1029,7 +1034,8 @@
                               "mention",
                               "state_rule",
                               "schedule",
-                              "manual"
+                              "manual",
+                              "children_done"
                             ]
                           },
                           "status": {
@@ -1226,7 +1232,8 @@
                         "mention",
                         "state_rule",
                         "schedule",
-                        "manual"
+                        "manual",
+                        "children_done"
                       ]
                     },
                     "status": {
@@ -1570,6 +1577,21 @@
                             "slug": {
                               "type": "string"
                             },
+                            "maxChildrenPerIssue": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "maxDelegationDepth": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "maxOpenDescendants": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "createdAt": {
                               "type": "string",
                               "format": "date-time",
@@ -1580,6 +1602,9 @@
                             "id",
                             "name",
                             "slug",
+                            "maxChildrenPerIssue",
+                            "maxDelegationDepth",
+                            "maxOpenDescendants",
                             "createdAt"
                           ],
                           "additionalProperties": false
@@ -1634,6 +1659,21 @@
                     "slug": {
                       "type": "string"
                     },
+                    "maxChildrenPerIssue": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxDelegationDepth": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxOpenDescendants": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -1644,6 +1684,9 @@
                     "id",
                     "name",
                     "slug",
+                    "maxChildrenPerIssue",
+                    "maxDelegationDepth",
+                    "maxOpenDescendants",
                     "createdAt"
                   ],
                   "additionalProperties": false
@@ -1655,7 +1698,7 @@
       },
       "patch": {
         "operationId": "workspace.update",
-        "summary": "Rename the Workspace this instance serves",
+        "summary": "Rename the Workspace this instance serves, and set what an Agent may not go past",
         "requestBody": {
           "required": true,
           "content": {
@@ -1667,11 +1710,23 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 120
+                  },
+                  "maxChildrenPerIssue": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "maxDelegationDepth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "maxOpenDescendants": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2000
                   }
-                },
-                "required": [
-                  "name"
-                ]
+                }
               }
             }
           }
@@ -1693,6 +1748,21 @@
                     "slug": {
                       "type": "string"
                     },
+                    "maxChildrenPerIssue": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxDelegationDepth": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxOpenDescendants": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -1703,6 +1773,9 @@
                     "id",
                     "name",
                     "slug",
+                    "maxChildrenPerIssue",
+                    "maxDelegationDepth",
+                    "maxOpenDescendants",
                     "createdAt"
                   ],
                   "additionalProperties": false
@@ -8360,6 +8433,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "hasOpenRun": {
+                      "type": "boolean"
+                    },
                     "project": {
                       "type": "object",
                       "properties": {
@@ -8745,6 +8821,9 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "hasOpenRun": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -9096,6 +9175,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -9788,6 +9870,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -10182,6 +10267,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "hasOpenRun": {
+                      "type": "boolean"
+                    },
                     "project": {
                       "type": "object",
                       "properties": {
@@ -10567,6 +10655,9 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "hasOpenRun": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -10918,6 +11009,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -11521,6 +11615,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "hasOpenRun": {
+                      "type": "boolean"
+                    },
                     "project": {
                       "type": "object",
                       "properties": {
@@ -11906,6 +12003,9 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "hasOpenRun": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -12257,6 +12357,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -12841,6 +12944,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "hasOpenRun": {
+                      "type": "boolean"
+                    },
                     "project": {
                       "type": "object",
                       "properties": {
@@ -13226,6 +13332,9 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "hasOpenRun": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -13577,6 +13686,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -14164,6 +14276,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "hasOpenRun": {
+                      "type": "boolean"
+                    },
                     "project": {
                       "type": "object",
                       "properties": {
@@ -14549,6 +14664,9 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "hasOpenRun": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -14900,6 +15018,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -15488,6 +15609,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "hasOpenRun": {
+                      "type": "boolean"
+                    },
                     "project": {
                       "type": "object",
                       "properties": {
@@ -15873,6 +15997,9 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "hasOpenRun": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -16224,6 +16351,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -16812,6 +16942,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "hasOpenRun": {
+                      "type": "boolean"
+                    },
                     "project": {
                       "type": "object",
                       "properties": {
@@ -17197,6 +17330,9 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "hasOpenRun": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -17548,6 +17684,9 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "hasOpenRun": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -20015,6 +20154,7 @@
                               "gate_awaiting",
                               "run_awaiting_input",
                               "run_finished",
+                              "delegation",
                               "run_answered"
                             ]
                           },
@@ -20368,6 +20508,9 @@
                                       ],
                                       "additionalProperties": false
                                     }
+                                  },
+                                  "hasOpenRun": {
+                                    "type": "boolean"
                                   }
                                 },
                                 "required": [
@@ -21161,7 +21304,8 @@
                                   "assignment",
                                   "gate_awaiting",
                                   "run_awaiting_input",
-                                  "run_finished"
+                                  "run_finished",
+                                  "delegation"
                                 ]
                               },
                               {
@@ -21233,7 +21377,8 @@
                                 "assignment",
                                 "gate_awaiting",
                                 "run_awaiting_input",
-                                "run_finished"
+                                "run_finished",
+                                "delegation"
                               ]
                             },
                             {
@@ -21288,7 +21433,8 @@
                                   "assignment",
                                   "gate_awaiting",
                                   "run_awaiting_input",
-                                  "run_finished"
+                                  "run_finished",
+                                  "delegation"
                                 ]
                               },
                               {
@@ -21360,7 +21506,8 @@
                               "assignment",
                               "gate_awaiting",
                               "run_awaiting_input",
-                              "run_finished"
+                              "run_finished",
+                              "delegation"
                             ]
                           },
                           "inbox": {
@@ -21400,7 +21547,7 @@
                 "type": "object",
                 "properties": {
                   "preferences": {
-                    "maxItems": 5,
+                    "maxItems": 6,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -21412,7 +21559,8 @@
                             "assignment",
                             "gate_awaiting",
                             "run_awaiting_input",
-                            "run_finished"
+                            "run_finished",
+                            "delegation"
                           ]
                         },
                         "inbox": {
@@ -21457,7 +21605,8 @@
                               "assignment",
                               "gate_awaiting",
                               "run_awaiting_input",
-                              "run_finished"
+                              "run_finished",
+                              "delegation"
                             ]
                           },
                           "inbox": {

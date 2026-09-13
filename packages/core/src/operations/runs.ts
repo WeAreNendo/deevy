@@ -69,14 +69,27 @@ export const runs = {
         });
       }
       const id = newId("run");
-      await context.db.insert(runTable).values({
-        id,
-        issueId: issue.id,
-        agentMemberId: context.member.id,
-        triggeredByMemberId: context.member.id,
-        trigger: "manual",
-      });
-      const row = (await context.db.query.run.findFirst({ where: { id } })) as Run;
+      // The read above normally answers this, but two calls that read before
+      // either inserted would both pass it. The partial unique index is what
+      // actually holds the rule, and losing to it is the same refusal rather
+      // than a constraint error reaching the caller.
+      const [inserted] = await context.db
+        .insert(runTable)
+        .values({
+          id,
+          issueId: issue.id,
+          agentMemberId: context.member.id,
+          triggeredByMemberId: context.member.id,
+          trigger: "manual",
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (!inserted) {
+        throw new ORPCError("CONFLICT", {
+          message: "This Agent already has an open Run on this Issue",
+        });
+      }
+      const row = inserted as Run;
       await appendEvent(context, {
         kind: "run.started",
         subjectType: "run",

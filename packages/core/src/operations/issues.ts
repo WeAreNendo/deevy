@@ -1,7 +1,14 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { issue as issueTable, type Db } from "@deevy/db";
-import { insertIssue, isSelfOrDescendant, issueKey, nextIssueNumber } from "../issues.ts";
+import {
+  delegationRefusalMessage,
+  insertIssue,
+  isSelfOrDescendant,
+  issueKey,
+  nextIssueNumber,
+  refusesDelegation,
+} from "../issues.ts";
 import { oneLabelPerScope, replaceIssueLabels } from "../labels.ts";
 import { resolveMentions } from "../mentions.ts";
 import { assertLeavable, enterState } from "../workflow.ts";
@@ -19,8 +26,41 @@ import {
   requireIssue,
   requireIssueForMove,
   requireProject,
+  projectVisible,
   withKey,
 } from "./shared.ts";
+
+/**
+ * Whether there is room for one more Issue under this parent, for the callers
+ * the ceilings bind (docs/plans/sub-issue-delegation.md). A Human is not one of
+ * them: somebody opening two hundred Issues by hand is not the failure mode
+ * this exists for, and a limit that stops them is a support ticket.
+ *
+ * A refusal is an Event as well as an error, because the Agent will note it and
+ * carry on and the Sponsor is the one who needs to know a number shaped the
+ * work.
+ */
+async function assertRoomBelow(
+  context: ContextFor<"member">,
+  parent: { id: string; projectId: string },
+  parentKey: string,
+): Promise<void> {
+  if (context.member.kind !== "agent") return;
+  const refusal = await refusesDelegation(context.db, parent.id, context.workspace);
+  if (!refusal) return;
+  await appendEvent(context, {
+    kind: "delegation.refused",
+    subjectType: "issue",
+    subjectId: parent.id,
+    // The parent's Project, because the parent is what this is about: a
+    // Project-scoped read of the log has to find it, and a tree may cross one.
+    projectId: parent.projectId,
+    payload: { limit: refusal.limit, allowed: refusal.allowed, parentKey },
+  });
+  throw new ORPCError("BAD_REQUEST", {
+    message: delegationRefusalMessage(refusal, parentKey),
+  });
+}
 
 export const issues = {
   create: defineOperation({
@@ -48,17 +88,25 @@ export const issues = {
       if (!first) {
         throw new ORPCError("BAD_REQUEST", { message: "This Project has no Workflow States" });
       }
-      if (input.assigneeMemberId) await requireAssignee(context, input.assigneeMemberId);
+      const assignee = input.assigneeMemberId
+        ? await requireAssignee(context, input.assigneeMemberId)
+        : null;
 
       let parentId: string | null = null;
+      let parentKey: string | null = null;
       if (input.parentKey) {
+        /*
+         * Any Project the caller was granted, not only this one. Work has
+         * dependencies that run across Projects, and a delegation that stops at
+         * the boundary does not remove the dependency — it moves it onto a
+         * Human writing it down twice (docs/plans/sub-issue-delegation.md).
+         * `requireIssue` is the whole access rule: a parent in a Project this
+         * caller does not hold answers "No such Issue".
+         */
         const parent = await requireIssue(context, input.parentKey);
-        if (parent.project.id !== project.id) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "A parent Issue must be in the same Project",
-          });
-        }
         parentId = parent.issue.id;
+        parentKey = issueKey(parent.project.key, parent.issue.number);
+        await assertRoomBelow(context, parent.issue, parentKey);
       }
 
       const number = await nextIssueNumber(context.db, project.id);
@@ -78,9 +126,48 @@ export const issues = {
         subjectId: created.id,
         projectId: project.id,
         // The State it landed in, so a reader of the log or the inbox sees
-        // where the Issue started, not where it is now.
-        payload: { key: issueKey(project.key, number), title: created.title, state: first.name },
+        // where the Issue started, not where it is now. And what it was opened
+        // under, so an Activity about a sub-issue names its parent rather than
+        // leaving the reader to click (docs/plans/sub-issue-delegation.md).
+        payload: {
+          key: issueKey(project.key, number),
+          title: created.title,
+          state: first.name,
+          ...(parentKey ? { parentKey } : {}),
+          // An Agent opening an Issue under a parent is a delegation, and the
+          // Event says so rather than leaving the inbox to work it out: what a
+          // Notification is, is a pure function of the Event row, and it is
+          // read again hours later with no request around it (ADR-0003).
+          ...(parentId && context.member.kind === "agent"
+            ? { delegatedTo: parentId, delegatedBy: context.member.id }
+            : {}),
+        },
       });
+      /*
+       * Handed to somebody at birth is still being handed to them: the Event
+       * goes in, so their inbox hears about it and an Agent's Run starts. It
+       * follows `issue.created` rather than preceding it, because a reader of
+       * the log should see the Issue exist before it is given away, and because
+       * `triggersFor` reads the Issue when the assignment reaches it.
+       *
+       * Where the first State's own rule names the same Agent, both Events want
+       * a Run and only one is opened: the "at most one open Run per
+       * (issue, agent)" rule in `startRun` is what settles it.
+       */
+      if (assignee) {
+        await appendEvent(context, {
+          kind: "issue.assigned",
+          subjectType: "issue",
+          subjectId: created.id,
+          projectId: project.id,
+          payload: {
+            from: null,
+            to: assignee.id,
+            fromName: null,
+            toName: assignee.user.name,
+          },
+        });
+      }
       await openStateDocument(context, created.id, project.id, first);
       return loadIssue(context, created.id);
     },
@@ -332,20 +419,39 @@ export const issues = {
       // and the timeline read them differently from an edit (docs/plans/m1.md).
       let parentId: string | null | undefined;
       if (input.parentKey !== undefined) {
+        /*
+         * An Issue whose current parent this caller cannot see is not theirs to
+         * move. The parent is hidden from them on a read, which is the rule for
+         * an ungranted Project — but hiding it and allowing the move as well
+         * would let an Agent lift an Issue out of a tree it was never shown.
+         * The refusal admits a tree exists without naming it, and that is the
+         * cheaper of the two costs (docs/plans/sub-issue-delegation.md).
+         */
+        if (found.parentId) {
+          const current = await context.db.query.issue.findFirst({
+            where: { id: found.parentId },
+            columns: { projectId: true },
+          });
+          if (current && !projectVisible(context, current.projectId)) {
+            throw new ORPCError("CONFLICT", {
+              message: `${input.key} is already part of a tree you cannot see.`,
+            });
+          }
+        }
         if (input.parentKey === null) {
           parentId = null;
         } else {
           const parent = await requireIssue(context, input.parentKey);
-          if (parent.project.id !== project.id) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "A parent Issue must be in the same Project",
-            });
-          }
           if (await isSelfOrDescendant(context.db, found.id, parent.issue.id)) {
             throw new ORPCError("BAD_REQUEST", {
               message: "An Issue cannot be its own parent or a child of its own descendant",
             });
           }
+          await assertRoomBelow(
+            context,
+            parent.issue,
+            issueKey(parent.project.key, parent.issue.number),
+          );
           parentId = parent.issue.id;
         }
       }

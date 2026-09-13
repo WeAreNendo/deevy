@@ -70,7 +70,7 @@ export const RunSchema = z.object({
   issueKey: z.string(),
   agentMemberId: z.string(),
   triggeredByMemberId: z.string().nullable(),
-  trigger: z.enum(["assignment", "mention", "state_rule", "schedule", "manual"]),
+  trigger: z.enum(["assignment", "mention", "state_rule", "schedule", "manual", "children_done"]),
   status: z.enum(["pending", "active", "awaiting_input", "completed", "failed", "stale"]),
   summary: z.string().nullable(),
   startedAt: z.date().nullable(),

@@ -184,3 +184,37 @@ describe("describeEvent", () => {
     ).toBe("accepted the invitation for grace@example.com");
   });
 });
+
+describe("describeEvent on a delegation", () => {
+  it("says what was finished, and quotes nothing", () => {
+    // The tone belongs in the tone: an earlier version passed it where the
+    // quotation goes, and the Activity read `finished … of this "agent"`.
+    expect(describeEvent({ kind: "issue.children_closed", payload: { children: 6 } })).toEqual({
+      text: "all 6 sub-issues of this are finished",
+      detail: null,
+      tone: "muted",
+      routine: false,
+    });
+    expect(
+      describeEvent({ kind: "issue.children_closed", payload: { children: 1 } }),
+    ).toMatchObject({ text: "the sub-issue of this is finished", detail: null });
+  });
+
+  it("names the limit a fan-out hit, without quoting it", () => {
+    expect(
+      describeEvent({ kind: "delegation.refused", payload: { limit: "depth", allowed: 3 } }),
+    ).toMatchObject({
+      text: "could not open another sub-issue: sub-issues may not go deeper here (3)",
+      detail: null,
+    });
+  });
+
+  it("does not call a changed limit a rename", () => {
+    expect(
+      describeEvent({ kind: "workspace.updated", payload: { maxDelegationDepth: 5 } }),
+    ).toMatchObject({ text: "set how far an Agent may split work up: 5 levels deep" });
+    expect(describeEvent({ kind: "workspace.updated", payload: { to: "deevy" } })).toMatchObject({
+      text: "renamed the Workspace to deevy",
+    });
+  });
+});

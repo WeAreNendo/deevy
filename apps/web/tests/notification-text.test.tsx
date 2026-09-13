@@ -142,3 +142,32 @@ describe("describeNotification", () => {
     ).toBe("assigned it to you, entering Intent");
   });
 });
+
+describe("describeNotification on a wave of sub-issues", () => {
+  it("does not claim a number it cannot know", () => {
+    // The row is written when the first sub-issue is opened, so the size of the
+    // wave does not exist yet. An earlier version read a payload field that was
+    // never written and said "a sub-issue" however many there were.
+    expect(
+      describeNotification({
+        kind: "delegation",
+        issue,
+        event: { kind: "issue.created", payload: { title: "Refund goes back to the card" } },
+      }),
+    ).toEqual({
+      verb: "opened sub-issues under this",
+      excerpt: "Refund goes back to the card",
+      tone: "agent",
+    });
+  });
+
+  it("says when they are all finished", () => {
+    expect(
+      describeNotification({
+        kind: "delegation",
+        issue,
+        event: { kind: "issue.children_closed", payload: { children: 3 } },
+      }),
+    ).toEqual({ verb: "finished every sub-issue of this", excerpt: null, tone: "agent" });
+  });
+});

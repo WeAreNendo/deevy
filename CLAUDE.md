@@ -19,9 +19,14 @@ behind a loopback proxy that holds the credential, so an Agent pushes where it l
 is in the Run's feed (`docs/plans/agent-owns-git.md`, ADR-0019); the sign-in work then closed what M1 and M2
 both deferred, making a provider configuration (GitHub, Google, GitLab, one generic OIDC), one Human one
 Member across providers, a GitLab group an allowlist rule, and an invitation a link an admin sends
-(`docs/plans/sign-in.md`); and four-eyes Gates then took the first feature off the after-v1 list, giving each
+(`docs/plans/sign-in.md`); four-eyes Gates then took the first feature off the after-v1 list, giving each
 Gate a number of distinct Humans it wants and a choice about whether the one who brought the Issue counts
-(`docs/plans/four-eyes-gates.md`, ADR-0020). v1 is complete; what comes next is PLAN.md's after-v1 list.
+(`docs/plans/four-eyes-gates.md`, ADR-0020); live Documents then made two Members able to write one Document
+at the same time, with the Agent still reading and writing markdown (`docs/plans/collaborative-documents.md`,
+ADR-0021); and sub-issue delegation then let an Agent cut work up and hand the pieces to other Agents,
+finishing its own Run rather than waiting and being woken when the last piece closes, bounded by three counts
+an admin sets per Workspace (`docs/plans/sub-issue-delegation.md`, ADR-0022). v1 is complete; what comes next
+is PLAN.md's after-v1 list.
 
 ## Commands
 

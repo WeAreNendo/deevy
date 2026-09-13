@@ -10,6 +10,18 @@ export const workspace = sqliteTable("workspace", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  /**
+   * What an Agent may not go past when it cuts work into sub-issues
+   * (docs/plans/sub-issue-delegation.md). A machine that can start other
+   * machines needs a bottom, and these are it: how many children one Issue may
+   * have, how deep a tree may go, and how much of one may be open at once. They
+   * bind Agents and not Humans. The defaults are deliberately small — twenty
+   * children is a large decomposition and three deep is a plan, not a pyramid —
+   * and an admin raises them.
+   */
+  maxChildrenPerIssue: integer("max_children_per_issue").default(20).notNull(),
+  maxDelegationDepth: integer("max_delegation_depth").default(3).notNull(),
+  maxOpenDescendants: integer("max_open_descendants").default(50).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
 });
 

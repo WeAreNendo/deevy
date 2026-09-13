@@ -256,8 +256,19 @@ deployments — a Durable Object on the Worker, which is what the first slice ex
 slices from [collaborative-documents.md](./plans/collaborative-documents.md), recorded in
 [ADR-0021](./adr/0021-a-document-is-live-and-markdown-is-what-it-becomes.md).
 
-**After v1**, in rough order: agent-to-agent delegation through sub-issues; cost and time accounting per Run;
-the Slack app; email Channel; private Projects; Postgres adapter; a CLI.
+**Agent-to-agent delegation through sub-issues.** An Agent now cuts the work it was given into sub-issues and
+hands each to the Agent that should do it. It does not wait: its Run finishes with what it handed over, and
+the last sub-issue closing opens a fresh Run on the parent, where it picks the work back up from what the
+tracker says. A sub-issue may sit in any Project its Agent was granted and follows that Project's Workflow, so
+work whose parts belong to different Projects is one tree rather than a coordination somebody does by hand.
+Fan-out is bounded by three counts an admin sets per Workspace — a machine that can start other machines needs
+a bottom — and a ceiling that trips is an Event, so a Sponsor can see that a number shaped the work. A wave of
+sub-issues is one line in that Sponsor's inbox and not forty. Built in six slices from
+[sub-issue-delegation.md](./plans/sub-issue-delegation.md), recorded in
+[ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md).
+
+**After v1**, in rough order: cost and time accounting per Run; the Slack app; email Channel; private
+Projects; Postgres adapter; a CLI.
 
 ## Risks worth naming
 

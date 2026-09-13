@@ -53,7 +53,17 @@ interface Where {
   agentMemberId: string;
 }
 
-/** Runs whose last Activity was `silentMinutes` ago, straight into the table. */
+/**
+ * Runs whose last Activity was `silentMinutes` ago, straight into the table —
+ * **each on an Issue of its own**. One Agent cannot hold two open Runs on one
+ * Issue, and the database says so now rather than leaving it to whoever
+ * inserts one (`schema/run.ts`), so a fixture that piled several onto one
+ * Issue was describing a world that cannot exist. The sweep does not care which
+ * Issue a silent Run is on, which is why it never noticed; the Issue passed in
+ * is the template the new ones are cut from.
+ */
+let seeded = 1_000;
+
 async function seedRuns(
   db: Db,
   where: Where,
@@ -61,17 +71,32 @@ async function seedRuns(
   silentMinutes: number,
   status: RunStatus = "active",
 ) {
-  const ids = Array.from({ length: count }, () => newId("run"));
+  const on = await db.query.issue.findFirst({ where: { id: where.issueId } });
+  if (!on) throw new Error("seedRuns: no such Issue");
+  const rows = Array.from({ length: count }, () => ({
+    id: newId("run"),
+    issueId: newId("issue"),
+    agentMemberId: where.agentMemberId,
+  }));
+  await db.insert(issueTable).values(
+    rows.map((row) => ({
+      id: row.issueId,
+      projectId: on.projectId,
+      number: (seeded += 1),
+      title: `Silent ${String(seeded)}`,
+      stateId: on.stateId,
+      createdBy: on.createdBy,
+    })),
+  );
   await db.insert(runTable).values(
-    ids.map((id) => ({
-      id,
-      ...where,
+    rows.map((row) => ({
+      ...row,
       trigger: "manual" as const,
       status,
       lastActivityAt: new Date(Date.now() - silentMinutes * MINUTE),
     })),
   );
-  return ids;
+  return rows.map((row) => row.id);
 }
 
 async function seedRun(db: Db, where: Where, silentMinutes: number, status: RunStatus = "active") {

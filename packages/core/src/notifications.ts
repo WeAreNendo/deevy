@@ -185,9 +185,21 @@ async function slackTargets(
  * one, and its Events carry that Issue so the inbox needs no second query.
  */
 export function issueOf(event: Event): string | null {
+  // A wave of sub-issues is one line about the parent, so it is the parent the
+  // line points at: the parent is the only place that work is whole
+  // (docs/plans/sub-issue-delegation.md).
+  const under = delegatedUnder(event);
+  if (under) return under;
   if (event.subjectType === "issue") return event.subjectId;
   if (!event.kind.startsWith("run.")) return null;
   const carried = (event.payload as { issueId?: unknown } | null)?.issueId;
+  return typeof carried === "string" ? carried : null;
+}
+
+/** The parent an Agent opened this Issue under, when that is what happened. */
+function delegatedUnder(event: Event): string | null {
+  if (event.kind !== "issue.created") return null;
+  const carried = (event.payload as { delegatedTo?: unknown } | null)?.delegatedTo;
   return typeof carried === "string" ? carried : null;
 }
 
@@ -229,6 +241,10 @@ const gateEventKinds = new Set<Event["kind"]>([
 export function notificationKindOf(event: Event): Notification["kind"] | null {
   if (event.kind === "issue.assigned") return "assignment";
   if (event.kind === "comment.created" || event.kind === "issue.updated") return "mention";
+  // Before the Gate kinds below, which `issue.created` is otherwise one of: a
+  // sub-issue arriving in a Gate is not everybody's business, it is its
+  // Sponsor's, and forty of them are one line.
+  if (delegatedUnder(event) || event.kind === "issue.children_closed") return "delegation";
   if (gateEventKinds.has(event.kind)) return "gate_awaiting";
   // A Run that stopped at a Gate is asking for a decision, not for an answer:
   // the Event says so by carrying the Gate, and that is what the Human is
@@ -258,6 +274,20 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
       memberId,
       kind: "assignment" as const,
     }));
+  }
+
+  const under = delegatedUnder(event);
+  if (under) return delegationRecipients(db, event, under, { rollUp: true });
+  if (event.kind === "issue.children_closed") {
+    // Once per wave by its nature — the last sub-issue closes once — so it is
+    // never rolled up into the line that announced the wave. They say two
+    // different things and a Human wants both. And it is addressed to the
+    // Sponsor of whoever split the work, not of whoever happened to close the
+    // last piece of it.
+    const opened = (event.payload as { openedBy?: unknown } | null)?.openedBy;
+    return typeof opened === "string"
+      ? delegationRecipients(db, event, event.subjectId, { rollUp: false, agent: opened })
+      : [];
   }
 
   if (event.kind === "comment.created" || event.kind === "issue.updated") {
@@ -423,6 +453,53 @@ async function gateRecipients(db: Db, event: Event, gate: Gate): Promise<Recipie
 }
 
 /** Of the given Members, those still able to act. Suspension silences an inbox. */
+/**
+ * Who hears that an Agent split work up, or finished splitting it: the Human
+ * accountable for that Agent, and nobody else. Rolled up to one line per parent
+ * while that line is unread — a wave of forty sub-issues is one thing that
+ * happened, and forty rows about it is an inbox nobody can use
+ * (docs/plans/sub-issue-delegation.md).
+ */
+async function delegationRecipients(
+  db: Db,
+  event: Event,
+  parentId: string,
+  { rollUp, agent }: { rollUp: boolean; agent?: string },
+): Promise<Recipient[]> {
+  const who = agent ?? event.actorMemberId;
+  const actor = who
+    ? await db.query.member.findFirst({
+        where: { id: who },
+        columns: { sponsorId: true, kind: true },
+      })
+    : null;
+  const sponsor = actor?.kind === "agent" ? actor.sponsorId : null;
+  if (!sponsor) return [];
+  /*
+   * Rolled up against the other waves only. An unread "every sub-issue is
+   * finished" line is the same kind on the same parent, and matching it would
+   * mean the wake-up Run's own decomposition — the whole point of waking it —
+   * is never announced.
+   */
+  const already = rollUp
+    ? await db.query.notification.findFirst({
+        where: {
+          recipientMemberId: sponsor,
+          kind: "delegation",
+          issueId: parentId,
+          readAt: { isNull: true },
+          event: { kind: "issue.created" },
+        },
+        columns: { id: true },
+      })
+    : null;
+  if (already) return [];
+  return (await active(db, [sponsor], event)).map((memberId) => ({
+    memberId,
+    kind: "delegation" as const,
+  }));
+}
+
 async function active(db: Db, memberIds: string[], event: Event): Promise<string[]> {
   if (memberIds.length === 0) return [];
   const rows = await db.query.member.findMany({

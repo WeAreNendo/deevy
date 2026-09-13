@@ -48,10 +48,113 @@ export async function triggersFor(db: Db, event: Event): Promise<EventInput[]> {
     event.kind === "gate.approved" ||
     event.kind === "gate.rejected"
   ) {
-    return stateRule(db, event);
+    const events = await stateRule(db, event);
+    // A rejection has closed nothing: the Issue went back, and only arriving in
+    // a `done` State is a child finishing.
+    if (event.kind === "issue.moved" || event.kind === "gate.approved") {
+      events.push(...(await wakeParent(db, event)));
+    }
+    return events;
   }
 
   return [];
+}
+
+/**
+ * An Agent that delegates does not wait — its Run finishes, and this is what
+ * wakes it (docs/plans/sub-issue-delegation.md). When the Issue that just
+ * closed was the last of its parent's sub-issues, the parent is told so and the
+ * Agent that opened them gets a Run to pick the work back up from.
+ *
+ * Three ways this could loop, and what stops each. A parent that is itself a
+ * child closes bottom-up, one wake per level, because each level is only
+ * reached by its own child entering a `done` State. A parent that is already
+ * finished is not waiting for anything and is left alone. And a child reopened
+ * and closed again cannot open a second Run, because at most one is open per
+ * (issue, agent) and the first is still there.
+ */
+async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
+  const child = await db.query.issue.findFirst({
+    where: { id: event.subjectId },
+    columns: { id: true, parentId: true },
+    with: { state: { columns: { category: true } } },
+  });
+  if (!child?.parentId || child.state.category !== "done") return [];
+
+  const parent = await db.query.issue.findFirst({
+    where: { id: child.parentId },
+    columns: { id: true, projectId: true },
+    with: { state: { columns: { category: true } } },
+  });
+  if (!parent || parent.state.category === "done") return [];
+
+  // Across Projects: `done` is a State category and every Workflow has one, so
+  // a child in another Project finishing counts exactly as one here does.
+  const siblings = await db.query.issue.findMany({
+    where: { parentId: parent.id },
+    columns: { id: true, createdBy: true },
+    with: { state: { columns: { category: true } } },
+  });
+  if (siblings.some((one) => one.state.category !== "done")) return [];
+
+  /*
+   * The Agent that opened them, and only where they agree on one: two Agents
+   * having each opened some of a parent's children is not a case this knows how
+   * to pick a winner in, and guessing would start a Run on work nobody asked
+   * that Agent for.
+   */
+  const openers = [...new Set(siblings.map((one) => one.createdBy))].filter(
+    (id): id is string => id !== null,
+  );
+  const [opener, ...rest] = await agentsAmong(db, openers, event.workspaceId);
+  const delegator = opener && rest.length === 0 ? opener : null;
+
+  const closed: EventInput = {
+    kind: "issue.children_closed",
+    subjectType: "issue",
+    subjectId: parent.id,
+    projectId: parent.projectId,
+    // Who split the work, suspended or not: their Sponsor is who this is
+    // addressed to, and a Sponsor whose Agent cannot pick the work back up is
+    // exactly the person who needs to hear that it is finished.
+    payload: { children: siblings.length, ...(delegator ? { openedBy: delegator } : {}) },
+  };
+
+  /*
+   * A suspended Agent, or one whose grant on this Project was withdrawn while
+   * the work was being done, wakes nothing. The Event still goes in, so the
+   * parent is visibly a Human's rather than silently nobody's.
+   */
+  if (!delegator) return [closed];
+  const [working] = await workingAgents(db, [delegator], event.workspaceId);
+  if (!working) return [closed];
+  if (!(await grantedProject(db, working, parent.projectId))) return [closed];
+
+  const started = await startRun(db, {
+    issueId: parent.id,
+    agentMemberId: working,
+    // The Agent that split the work, not whoever happened to close the last
+    // part of it. This field decides who hears when the Run finishes
+    // (`notifications.ts`), and a passing Human must not inherit that.
+    triggeredByMemberId: delegator,
+    trigger: "children_done",
+  });
+  /*
+   * No Run means somebody else already woke this parent — the other half of a
+   * race, or a Run still open from the last time its sub-issues finished — and
+   * they announced it. Saying it twice is two inbox rows about one thing.
+   */
+  return started ? [closed, runStartedEvent(started, parent.projectId)] : [];
+}
+
+/**
+ * Whether this Agent may still see the Project it is about to be given work in.
+ * A grant withdrawn between delegating and the last child finishing is a case
+ * that will happen, and the answer is to start nothing.
+ */
+async function grantedProject(db: Db, memberId: string, projectId: string): Promise<boolean> {
+  const found = await db.query.projectGrant.findFirst({ where: { memberId, projectId } });
+  return Boolean(found);
 }
 
 /**
@@ -122,6 +225,16 @@ async function startRuns(
   return events;
 }
 
+/** Of the Members named, those that are Agents at all, suspended or not. */
+async function agentsAmong(db: Db, memberIds: string[], workspaceId: string): Promise<string[]> {
+  if (memberIds.length === 0) return [];
+  const rows = await db.query.member.findMany({
+    where: { id: { in: memberIds }, workspaceId, kind: "agent" },
+    columns: { id: true },
+  });
+  return rows.map((row) => row.id);
+}
+
 /**
  * Of the Members named, those a Run is work for: a Human is not triggered, and
  * a suspended Member does nothing (docs/PLAN.md's Sponsor cascade). One query,
@@ -156,15 +269,27 @@ interface StartRunInput {
  */
 async function startRun(db: Db, input: StartRunInput): Promise<Run | null> {
   if (await openRunFor(db, input.issueId, input.agentMemberId)) return null;
-  const id = newId("run");
-  await db.insert(runTable).values({
-    id,
-    issueId: input.issueId,
-    agentMemberId: input.agentMemberId,
-    triggeredByMemberId: input.triggeredByMemberId,
-    trigger: input.trigger,
-  });
-  return (await db.query.run.findFirst({ where: { id } })) as Run;
+  /*
+   * And again, from the database. The read above is what normally stops a
+   * second Run, but a trigger that reads and then inserts loses to another
+   * request that did the same thing in between — which is not exotic here: two
+   * sub-issues of one parent finishing at the same moment is how a fan-out
+   * ordinarily ends (docs/plans/sub-issue-delegation.md). The partial unique
+   * index settles it, and losing that race is not an error: somebody else
+   * already started the Run this was going to start.
+   */
+  const [started] = await db
+    .insert(runTable)
+    .values({
+      id: newId("run"),
+      issueId: input.issueId,
+      agentMemberId: input.agentMemberId,
+      triggeredByMemberId: input.triggeredByMemberId,
+      trigger: input.trigger,
+    })
+    .onConflictDoNothing()
+    .returning();
+  return (started as Run | undefined) ?? null;
 }
 
 /** The Event a triggered Run announces itself with, in `runs.start`'s shape. */

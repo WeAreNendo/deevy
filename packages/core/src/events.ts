@@ -44,6 +44,22 @@ export type EventKind =
   | "issue.updated"
   | "issue.assigned"
   | "issue.reparented"
+  /**
+   * An Agent asked for one more sub-issue than this Workspace allows, and did
+   * not get it (docs/plans/sub-issue-delegation.md). The one Event here that
+   * records something *not* happening, and it earns its place: an Agent that
+   * hits a ceiling notes it and does something else, so without this the
+   * Sponsor never learns that the shape of the work was decided by a number.
+   */
+  | "delegation.refused"
+  /**
+   * Every sub-issue of this Issue is finished. A delegating Run does not wait —
+   * it finishes, and this is what wakes the Agent that opened them
+   * (docs/plans/sub-issue-delegation.md). Appended even where there is no Agent
+   * left to wake, so a parent whose children are done is visibly a Human's
+   * rather than silently nobody's.
+   */
+  | "issue.children_closed"
   | "issue.moved"
   /**
    * One Human's approval of a Gate that wants more than one, and the Issue

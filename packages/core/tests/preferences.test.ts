@@ -1,3 +1,4 @@
+import { humanNotificationKinds } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
@@ -27,7 +28,10 @@ describe("what one Human wants to hear about, and where", () => {
 
     const { preferences } = await asBob.preferences.get({});
 
-    expect(preferences).toHaveLength(5);
+    // One row per kind a Human is sent, whatever that list has grown to: the
+    // point is that every kind is offered and defaults to on, not that there
+    // are five of them.
+    expect(preferences).toHaveLength(humanNotificationKinds.length);
     expect(preferences).toContainEqual({ kind: "gate_awaiting", inbox: true, slack: true });
     expect(preferences.every((row) => row.inbox && row.slack)).toBe(true);
   });

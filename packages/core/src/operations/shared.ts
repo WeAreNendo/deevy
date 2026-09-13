@@ -167,10 +167,21 @@ export const QueryFlag = z.union([z.boolean(), z.stringbool()]);
  * the Project row; a middleware would have to resolve the id a second time.
  */
 export function assertProjectVisible(context: ContextFor<"member">, projectId: string): void {
-  const granted = context.grantedProjectIds;
-  if (granted && !granted.includes(projectId)) {
+  if (!projectVisible(context, projectId)) {
     throw new ORPCError("NOT_FOUND", { message: "No such Project" });
   }
+}
+
+/**
+ * The same question without the throw, for the places that have to leave
+ * something out rather than refuse: a parent or a child in a Project this
+ * caller was not granted is not shown to them at all
+ * (docs/plans/sub-issue-delegation.md). Null grants are a Human, who sees
+ * every Project this Workspace has.
+ */
+export function projectVisible(context: ContextFor<"member">, projectId: string): boolean {
+  const granted = context.grantedProjectIds;
+  return !granted || granted.includes(projectId);
 }
 
 /** The Project an operation names by key, or NOT_FOUND. Scoped to the Workspace. */
@@ -281,13 +292,36 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
     with: {
       ...issueWith,
       project: true,
-      parent: { with: issueWith },
-      children: { with: issueWith, orderBy: { number: "asc" } },
+      // Each related Issue with its own Project, because a tree may cross one
+      // and an Issue is called by its own name or by a lie: a key built from
+      // the wrong Project links to nothing and reads as somebody else's work
+      // (docs/plans/sub-issue-delegation.md). One relation, not a query each.
+      parent: { with: { ...issueWith, project: true } },
+      children: { with: { ...issueWith, project: true }, orderBy: { number: "asc" } },
       gateDecisions: { orderBy: { createdAt: "asc" }, with: { documents: true } },
     },
   });
   if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Issue" });
   const key = found.project.key;
+  const shown = found.children.filter((child) => projectVisible(context, child.projectId));
+  /*
+   * Which children an Agent is working right now: one query for all of them,
+   * not one each, so reading an Issue costs the same whether it has one child
+   * or six (`budget.test.ts`).
+   */
+  const working = new Set(
+    shown.length === 0
+      ? []
+      : (
+          await context.db.query.run.findMany({
+            where: {
+              issueId: { in: shown.map((child) => child.id) },
+              status: { in: ["pending", "active", "awaiting_input"] },
+            },
+            columns: { issueId: true },
+          })
+        ).map((run) => run.issueId),
+  );
   // Only a Gate has a standing, and only a Gate pays for one: an Issue in Build
   // asks nothing (docs/plans/four-eyes-gates.md).
   const gate = found.state.isGate
@@ -301,8 +335,14 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
     : null;
   return {
     ...withKey(found, key),
-    parent: found.parent ? withKey(found.parent, key) : null,
-    children: found.children.map((child) => withKey(child, key)),
+    parent:
+      found.parent && projectVisible(context, found.parent.projectId)
+        ? withKey(found.parent, found.parent.project.key)
+        : null,
+    children: shown.map((child) => ({
+      ...withKey(child, child.project.key),
+      hasOpenRun: working.has(child.id),
+    })),
     gateDecisions: found.gateDecisions.map((decision) => ({
       ...decision,
       documents: decision.documents.map((pinned) => ({
@@ -318,6 +358,10 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
 export async function requireAssignee(context: ContextFor<"member">, memberId: string) {
   const found = await context.db.query.member.findFirst({
     where: { id: memberId, workspaceId: context.workspace.id },
+    // With their name, because every caller that checks an Assignee is about to
+    // write one into an Event, and a second query for it would be a second
+    // statement against the budget.
+    with: { user: { columns: { name: true } } },
   });
   if (!found) {
     throw new ORPCError("BAD_REQUEST", {

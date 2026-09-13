@@ -24,7 +24,13 @@ async function withIssue(db: MemberContext["db"]) {
 const storedFor = async (db: MemberContext["db"], key: string) =>
   await db.query.roomState.findFirst({ where: { room: key } });
 
-/** A Document edited the way a Document is edited: many small changes, one text. */
+/**
+ * A Document edited the way a Document is edited: many small changes, one text.
+ * Forty rather than a realistic few hundred, with the threshold lowered to
+ * match — the rule under test is "past the threshold, with nobody in the room",
+ * and three hundred markdown parses prove the same thing while being slow
+ * enough to time out on a loaded machine.
+ */
 function editedOften(doc: Y.Doc, times: number) {
   for (let edit = 1; edit <= times; edit++) {
     loadMarkdown(doc, `## Problem\n\nThe ${String(edit)}th thing anybody said about this.`);
@@ -113,7 +119,7 @@ describe("what a room's state costs", () => {
       authors: [admin.member.id],
       now: new Date(),
       connections: 0,
-      compactOver: 4_000,
+      compactOver: 400,
     });
 
     const after = await storedFor(db, roomStateKey(room));
@@ -132,7 +138,7 @@ describe("what a room's state costs", () => {
     const room = await authorizeRoom(admin, "document:DEV-1:intent");
     const doc = new Y.Doc();
     await openRoom({ db, room, doc });
-    editedOften(doc, 300);
+    editedOften(doc, 40);
 
     // Compacting is starting the Document's identity again, and a browser
     // holding the old one would merge its copy back in as duplicate text.
@@ -143,11 +149,11 @@ describe("what a room's state costs", () => {
       authors: [admin.member.id],
       now: new Date(),
       connections: 2,
-      compactOver: 4_000,
+      compactOver: 400,
     });
 
     const after = await storedFor(db, roomStateKey(room));
-    expect(after!.state.length).toBeGreaterThan(4_000);
+    expect(after!.state.length).toBeGreaterThan(400);
   });
 
   it("says when it was swept up, so a browser that was away can be told", async () => {
@@ -157,7 +163,10 @@ describe("what a room's state costs", () => {
     const room = await authorizeRoom(admin, "document:DEV-1:intent");
     const doc = new Y.Doc();
     await openRoom({ db, room, doc });
-    editedOften(doc, 300);
+    // Whether a state is large enough to sweep up is the two tests above; this
+    // one is about the mark that is left when it happens, so the threshold is
+    // nothing and the Document is one edit rather than three hundred.
+    loadMarkdown(doc, "## Problem\n\nArgued over once.");
 
     const slept = new Date(Date.now() - 60_000);
     // Nothing has been swept up yet, so nobody's copy is out of date.
@@ -171,7 +180,7 @@ describe("what a room's state costs", () => {
       authors: [admin.member.id],
       now,
       connections: 0,
-      compactOver: 4_000,
+      compactOver: 0,
     });
 
     const after = await storedFor(db, roomStateKey(room));

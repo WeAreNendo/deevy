@@ -20,6 +20,7 @@ const stub = vi.hoisted(() => ({
       user: { id: "u-bob", name: "Bob Vance", email: "bob@example.com", image: null },
     },
   ],
+  saved: [] as Array<Record<string, unknown>>,
   rules: [
     { id: "r-1", kind: "email_domain", value: "example.com", createdAt: new Date() },
     { id: "r-2", kind: "github_org", value: "acme", createdAt: new Date() },
@@ -33,6 +34,30 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const client = stubClient({
     members: { list: async () => ({ members: stub.members }) },
     allowlist: { list: async () => ({ rules: stub.rules }) },
+    workspace: {
+      get: async () => ({
+        id: "w1",
+        name: "deevy",
+        slug: "deevy",
+        maxChildrenPerIssue: 20,
+        maxDelegationDepth: 3,
+        maxOpenDescendants: 50,
+        createdAt: new Date("2026-09-06"),
+      }),
+      update: async (input: Record<string, unknown>) => {
+        stub.saved.push(input);
+        return {
+          id: "w1",
+          name: "deevy",
+          slug: "deevy",
+          maxChildrenPerIssue: 20,
+          maxDelegationDepth: 3,
+          maxOpenDescendants: 50,
+          createdAt: new Date("2026-09-06"),
+          ...input,
+        };
+      },
+    },
   });
   return { client, orpc: createTanstackQueryUtils(client) };
 });
@@ -40,6 +65,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
 const { MembersPage } = await import("../src/routes/settings/members.tsx");
 const { mount } = await import("./mount.tsx");
 const { AllowlistRow } = await import("../src/routes/settings/allowlist.tsx");
+const { DelegationRow } = await import("../src/routes/settings/workspace.tsx");
 
 describe("the Members settings page", () => {
   it("lists every Member with their role and handle", async () => {
@@ -85,5 +111,41 @@ describe("the Allowlist row of Workspace › General", () => {
 
     expect(await screen.findByLabelText("Match on")).toBeTruthy();
     expect(screen.getByLabelText("Domain")).toBeTruthy();
+  });
+});
+
+describe("how far an Agent may split work", () => {
+  it("shows the three ceilings this Workspace is set to", async () => {
+    mount(<DelegationRow />);
+
+    expect(await screen.findByLabelText("Sub-issues each")).toHaveProperty("value", "20");
+    expect(screen.getByLabelText("Levels deep")).toHaveProperty("value", "3");
+    expect(screen.getByLabelText("Open in one tree")).toHaveProperty("value", "50");
+    // They are about Agents, and a Human reading the page should not wonder
+    // whether they are about to be stopped by one.
+    expect(screen.getByText(/do not apply to you/)).toBeTruthy();
+  });
+
+  it("saves the one that changed, and only that one", async () => {
+    stub.saved.length = 0;
+    mount(<DelegationRow />);
+    const field = await screen.findByLabelText("Levels deep");
+
+    fireEvent.change(field, { target: { value: "5" } });
+    fireEvent.blur(field);
+
+    await waitFor(() => expect(stub.saved).toHaveLength(1));
+    expect(stub.saved[0]).toEqual({ maxDelegationDepth: 5 });
+  });
+
+  it("saves nothing when the number was not touched", async () => {
+    stub.saved.length = 0;
+    mount(<DelegationRow />);
+    const field = await screen.findByLabelText("Levels deep");
+
+    fireEvent.focus(field);
+    fireEvent.blur(field);
+
+    expect(stub.saved).toHaveLength(0);
   });
 });

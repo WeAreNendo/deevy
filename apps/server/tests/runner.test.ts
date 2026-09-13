@@ -65,17 +65,40 @@ async function seedWorkspace(db: Db, options: SeedOptions = {}) {
   return { workspaceId, agentMemberId, issueId };
 }
 
-/** Silent Runs on that Issue, `silentMinutes` since anyone heard from the Agent. */
+/**
+ * Silent Runs, `silentMinutes` since anyone heard from the Agent — each on an
+ * Issue of its own, because one Agent cannot hold two open Runs on one Issue
+ * and the database says so (`schema/run.ts`). The sweep does not care which
+ * Issue a silent Run is on; the one passed in is the template.
+ */
 async function seedRuns(
   db: Db,
   where: { issueId: string; agentMemberId: string },
   count: number,
   silentMinutes: number,
 ) {
+  const on = await db.query.issue.findFirst({ where: { id: where.issueId } });
+  if (!on) throw new Error("seedRuns: no such Issue");
+  const rows = Array.from({ length: count }, (_unused, at) => ({
+    id: newId("run"),
+    issueId: newId("issue"),
+    agentMemberId: where.agentMemberId,
+    number: on.number + at + 1,
+  }));
+  await db.insert(issueTable).values(
+    rows.map((row) => ({
+      id: row.issueId,
+      projectId: on.projectId,
+      number: row.number,
+      title: `Silent ${String(row.number)}`,
+      stateId: on.stateId,
+    })),
+  );
   await db.insert(runTable).values(
-    Array.from({ length: count }, () => ({
-      id: newId("run"),
-      ...where,
+    rows.map((row) => ({
+      id: row.id,
+      issueId: row.issueId,
+      agentMemberId: row.agentMemberId,
       trigger: "manual" as const,
       status: "active" as const,
       lastActivityAt: new Date(Date.now() - silentMinutes * MINUTE),

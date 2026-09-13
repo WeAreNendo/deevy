@@ -353,7 +353,6 @@ function execute(persistTo: string, sql: string): Promise<void> {
 }
 
 /** The Issue every seeded Run is on, so the phase can ask for them by key. */
-const sweptIssueKey = "SWP-1";
 
 /**
  * An Agent with `count` Runs that have been silent for 31 minutes, straight
@@ -367,10 +366,18 @@ const sweptIssueKey = "SWP-1";
  */
 function seedSilentRuns(persistTo: string, count: number): Promise<void> {
   const silentFor = 31 * 60 * 1000;
+  // An Issue each, because one Agent cannot hold two open Runs on one Issue and
+  // the database says so (`packages/db/src/schema/run.ts`). The sweep does not
+  // care which Issue a silent Run is on; what it needs is `count` of them.
+  const issues = Array.from(
+    { length: count },
+    (_, at) =>
+      `('swept-issue-${String(at)}', 'swept-project', ${String(at + 1)}, 'Ship the thing', 'swept-state')`,
+  ).join(", ");
   const runs = Array.from(
     { length: count },
     (_, at) =>
-      `('swept-run-${String(at)}', 'swept-issue', 'swept-member', 'manual', 'active', ` +
+      `('swept-run-${String(at)}', 'swept-issue-${String(at)}', 'swept-member', 'manual', 'active', ` +
       `cast(unixepoch('subsecond') * 1000 as integer) - ${String(silentFor)})`,
   ).join(", ");
   return execute(
@@ -381,7 +388,7 @@ function seedSilentRuns(persistTo: string, count: number): Promise<void> {
       `INSERT INTO agent (member_id) VALUES ('swept-member')`,
       `INSERT INTO project (id, workspace_id, key, name) SELECT 'swept-project', id, 'SWP', 'Sweeping' FROM workspace LIMIT 1`,
       `INSERT INTO workflow_state (id, project_id, name, position, category) VALUES ('swept-state', 'swept-project', 'Doing', 1, 'active')`,
-      `INSERT INTO issue (id, project_id, number, title, state_id) VALUES ('swept-issue', 'swept-project', 1, 'Ship the thing', 'swept-state')`,
+      `INSERT INTO issue (id, project_id, number, title, state_id) VALUES ${issues}`,
       `INSERT INTO run (id, issue_id, agent_member_id, trigger, status, last_activity_at) VALUES ${runs}`,
     ].join("; "),
   );
@@ -407,9 +414,19 @@ async function trigger(origin: string): Promise<number> {
   return fired.status;
 }
 
-/** The status of every Run on the swept Issue, as the API reports them. */
+/**
+ * The status of every Run the seeded Agent holds, as the API reports them. By
+ * Agent rather than by Issue: one Agent cannot hold two open Runs on one Issue
+ * (`packages/db/src/schema/run.ts`), so the sixty silent Runs the sweep is
+ * given sit on sixty Issues.
+ */
 async function sweptStatuses(origin: string, cookie: string): Promise<string[]> {
-  const listed = await rpc(origin, "runs/list", { issueKey: sweptIssueKey, limit: 200 }, cookie);
+  const listed = await rpc(
+    origin,
+    "runs/list",
+    { agentMemberId: "swept-member", limit: 200 },
+    cookie,
+  );
   const runs = (listed.output as { runs?: Array<{ status?: string }> } | null)?.runs;
   if (!runs) throw new Error(`the Runs could not be read: ${listed.body.slice(0, 300)}`);
   return runs.map((run) => run.status ?? "");

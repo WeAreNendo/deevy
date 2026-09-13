@@ -20,24 +20,54 @@ export const workspace = {
 
   update: defineOperation({
     name: "workspace.update",
-    summary: "Rename the Workspace this instance serves",
+    summary: "Rename the Workspace this instance serves, and set what an Agent may not go past",
     method: "PATCH",
     path: "/workspace",
     auth: "admin",
-    input: z.object({ name: z.string().trim().min(1).max(120) }),
+    input: z.object({
+      name: z.string().trim().min(1).max(120).optional(),
+      /**
+       * The three ceilings on delegation (docs/plans/sub-issue-delegation.md).
+       * Left out, each keeps what it has: a client written before they existed
+       * cannot widen one by saving the Workspace, the way a Gate's threshold is
+       * kept from widening by accident.
+       */
+      maxChildrenPerIssue: z.number().int().min(1).max(500).optional(),
+      maxDelegationDepth: z.number().int().min(1).max(20).optional(),
+      maxOpenDescendants: z.number().int().min(1).max(2_000).optional(),
+    }),
     output: WorkspaceSchema,
     handler: async ({ input, context }) => {
-      if (input.name === context.workspace.name) return context.workspace;
+      const renamed = input.name !== undefined && input.name !== context.workspace.name;
+      const limits = {
+        ...(input.maxChildrenPerIssue === undefined
+          ? {}
+          : { maxChildrenPerIssue: input.maxChildrenPerIssue }),
+        ...(input.maxDelegationDepth === undefined
+          ? {}
+          : { maxDelegationDepth: input.maxDelegationDepth }),
+        ...(input.maxOpenDescendants === undefined
+          ? {}
+          : { maxOpenDescendants: input.maxOpenDescendants }),
+      };
+      if (!renamed && Object.keys(limits).length === 0) return context.workspace;
+
       const [row] = await context.db
         .update(workspaceTable)
-        .set({ name: input.name, slug: slugify(input.name) })
+        .set({
+          ...(renamed && input.name ? { name: input.name, slug: slugify(input.name) } : {}),
+          ...limits,
+        })
         .where(eq(workspaceTable.id, context.workspace.id))
         .returning();
       await appendEvent(context, {
         kind: "workspace.updated",
         subjectType: "workspace",
         subjectId: context.workspace.id,
-        payload: { from: context.workspace.name, to: input.name },
+        payload: {
+          ...(renamed ? { from: context.workspace.name, to: input.name } : {}),
+          ...limits,
+        },
       });
       return row ?? context.workspace;
     },
