@@ -99,9 +99,28 @@ export function MarkdownEditor({
           Offline — still editing, and this will merge when you are back.
         </p>
       ) : null}
+      {room?.unmerged ? (
+        // A rebuilt room and an offline tab that changed the same lines. The
+        // room keeps what it has; these are the Human's own words, handed back
+        // rather than dropped, because nothing here is allowed to lose text.
+        <details className="px-3 pt-2 text-xs text-muted-foreground">
+          <summary role="status" className="cursor-pointer">
+            Some of what you wrote offline could not be merged. Here it is.
+          </summary>
+          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs">
+            {room.unmerged}
+          </pre>
+        </details>
+      ) : null}
       <Suspense fallback={waiting ? null : <Skeleton className="m-3 h-24" />}>
         {waiting ? null : (
           <TiptapEditor
+            /*
+             * The room's own document, by name. A room that is rebuilt hands
+             * over a new one, and an editor bound to the old one would go on
+             * showing a text nobody else can see — so it is rebuilt with it.
+             */
+            key={room ? room.doc.guid : "no-room"}
             value={value}
             onChange={onChange}
             mode={mode}

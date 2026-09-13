@@ -3,7 +3,7 @@ import { roomState as roomStateTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import * as Y from "yjs";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { openRoom, roomStateKey, storeRoom } from "../src/room-store.ts";
+import { openRoom, rebuiltSince, roomStateKey, storeRoom } from "../src/room-store.ts";
 import { authorizeRoom } from "../src/rooms.ts";
 import { router } from "../src/operations/index.ts";
 import { memberContext, testDb, type MemberContext } from "./helpers.ts";
@@ -148,5 +148,51 @@ describe("what a room's state costs", () => {
 
     const after = await storedFor(db, roomStateKey(room));
     expect(after!.state.length).toBeGreaterThan(4_000);
+  });
+
+  it("says when it was swept up, so a browser that was away can be told", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin } = await withIssue(db);
+    const room = await authorizeRoom(admin, "document:DEV-1:intent");
+    const doc = new Y.Doc();
+    await openRoom({ db, room, doc });
+    editedOften(doc, 300);
+
+    const slept = new Date(Date.now() - 60_000);
+    // Nothing has been swept up yet, so nobody's copy is out of date.
+    expect(await rebuiltSince(db, room, slept)).toBe(false);
+
+    const now = new Date();
+    await storeRoom({
+      db,
+      room,
+      doc,
+      authors: [admin.member.id],
+      now,
+      connections: 0,
+      compactOver: 4_000,
+    });
+
+    const after = await storedFor(db, roomStateKey(room));
+    expect(after!.compactedAt).toEqual(now);
+    // A tab that last had this room a minute ago holds a Document the room can
+    // no longer recognise; one that had it since does not.
+    expect(await rebuiltSince(db, room, slept)).toBe(true);
+    expect(await rebuiltSince(db, room, new Date(now.getTime() + 1))).toBe(false);
+  });
+
+  it("leaves the mark alone when there was nothing to sweep up", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin } = await withIssue(db);
+    const room = await authorizeRoom(admin, "document:DEV-1:intent");
+    const doc = new Y.Doc();
+    await openRoom({ db, room, doc });
+    loadMarkdown(doc, "## Problem\n\nShort, and staying that way.");
+    await storeRoom({ db, room, doc, authors: [admin.member.id], now: new Date() });
+
+    const after = await storedFor(db, roomStateKey(room));
+    expect(after!.compactedAt).toBeNull();
   });
 });

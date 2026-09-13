@@ -5,7 +5,8 @@ import type { AppContext, ContextFor } from "./operations/registry.ts";
 import { loadMarkdown, markdownOf } from "@deevy/editor";
 import type { Awareness } from "y-protocols/awareness";
 import type { LiveRooms, Wrote } from "./live-rooms.ts";
-import { openRoom, storeRoom } from "./room-store.ts";
+import { readRoomGreeting, RoomRebuilt } from "./room-handshake.ts";
+import { openRoom, rebuiltSince, storeRoom } from "./room-store.ts";
 import { authorizeRoom, type OpenedRoom, type Room } from "./rooms.ts";
 
 /**
@@ -114,8 +115,23 @@ export function createRoomServer(options: RoomServerOptions): Hocuspocus {
     maxDebounce: options.atMostEveryMs ?? 120_000,
 
     // Every connection authenticates; there is no anonymous room.
-    onAuthenticate: (payload) =>
-      authenticate({ documentName: payload.documentName, request: payload.request }),
+    onAuthenticate: async (payload) => {
+      const context = await authenticate({
+        documentName: payload.documentName,
+        request: payload.request,
+      });
+      /*
+       * And every connection says how long ago it last had this room's text. A
+       * room rebuilt since then shares no identities with what that browser is
+       * holding, so syncing the two would put the Document in twice — it is
+       * turned away instead, and puts its words back as markdown (ADR-0021).
+       */
+      const said = readRoomGreeting(payload.token);
+      if (said.syncedMsAgo === null) return context;
+      const when = new Date(Date.now() - said.syncedMsAgo);
+      if (await rebuiltSince(db, context.opened, when)) throw new RoomRebuilt();
+      return context;
+    },
 
     onLoadDocument: async ({ documentName, document, context }) => {
       const room = (context as RoomContext).opened;

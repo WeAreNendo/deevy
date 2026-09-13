@@ -10,7 +10,9 @@
     "./cimd": "./src/cimd.ts",
     "./router": "./src/operations/index.ts",
     "./openapi": "./src/openapi.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./room-handshake": "./src/room-handshake.ts",
+    "./merge": "./src/merge.ts"
   },
   "scripts": {
     "snapshot:openapi": "node scripts/snapshot-openapi.ts",

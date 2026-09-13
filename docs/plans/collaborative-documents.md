@@ -144,11 +144,11 @@ Each one ends somewhere defensible, and the first one is the one that decides th
   Tiptap three pinned exactly with the rest of that family, as the catalog requires.
 - **A three-way merge** is a real algorithm with real failure modes. It gets its own unit tests, with worked
   cases, before it is wired to anything.
-- **A blob that grows.** Yjs state accumulates history, and D1 has row limits worth respecting. It is stored
-  in the v2 encoding (about half of v1) and rebuilt from its markdown past 256 KB — but only when nobody is
+- **A blob that grows.** Yjs state accumulates history, and D1 has row limits worth respecting. It is stored in
+  the v2 encoding (about half of v1) and rebuilt from its markdown past 256 KB — but only when nobody is
   connected, because compacting starts the Document's identity again and a browser holding the old one would
-  merge its copy back in as duplicate text. The trade-off that leaves: a tab asleep across a compaction can
-  wake and merge a paragraph back twice. Nothing is lost, and a Human can delete it.
+  merge its copy back in as duplicate text. A tab that was asleep across one is told so when it reconnects, and
+  puts what it typed back as markdown through the three-way merge rather than syncing it in.
 - **A rebuild has to be the same rebuild every time.** Opening a room from markdown while a browser holds its
   own copy of the same words is the common case — a restart, an eviction — and two Yjs documents built
   independently from one text merge by concatenating. The pieces a rebuild makes are derived from the

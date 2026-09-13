@@ -2,8 +2,12 @@ import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/pro
 import { createRouterClient } from "@orpc/server";
 import * as Y from "yjs";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { loadMarkdown } from "@deevy/editor";
+import { loadMarkdown, markdownOf } from "@deevy/editor";
+import { mergeMarkdown } from "../src/merge.ts";
+import { REBUILT, roomGreeting } from "../src/room-handshake.ts";
 import { createRoomServer, serveRoomSocket } from "../src/room-server.ts";
+import { openRoom, storeRoom } from "../src/room-store.ts";
+import { authorizeRoom } from "../src/rooms.ts";
 import { router } from "../src/operations/index.ts";
 import { memberContext, testDb, type MemberContext } from "./helpers.ts";
 
@@ -115,7 +119,14 @@ async function withIssue(db: MemberContext["db"]) {
  * `contextFrom` reads it — here it reads a header, so one room can hold two
  * Members without minting sessions for them.
  */
-function join(server: ReturnType<typeof createRoomServer>, name: string, doc: Y.Doc, as = "ada") {
+function join(
+  server: ReturnType<typeof createRoomServer>,
+  name: string,
+  doc: Y.Doc,
+  as = "ada",
+  /** What this browser says when it knocks, and what it does when turned away. */
+  said?: { token?: string; refused?: (reason: string) => void },
+) {
   // The socket is its own object in v4, and it is the half that takes the
   // WebSocket implementation — here, one that reaches the room in-process.
   const websocketProvider = new HocuspocusProviderWebsocket({
@@ -132,7 +143,8 @@ function join(server: ReturnType<typeof createRoomServer>, name: string, doc: Y.
     websocketProvider,
     name,
     document: doc,
-    token: "cookie",
+    token: said?.token ?? "cookie",
+    ...(said?.refused ? { onAuthenticationFailed: ({ reason }) => said.refused?.(reason) } : {}),
   });
   // A provider handed a socket it did not make does not attach itself: that is
   // how one socket carries several Documents, and it is the client shape the
@@ -308,5 +320,171 @@ describe("two Members in one room", () => {
     const hers = join(open, "document:DEV-1:intent", new Y.Doc());
     await settle();
     expect(hers.isAuthenticated).toBe(true);
+  });
+});
+
+/** A Document of two sections: the Problem, which nobody is touching, and the Design, which everybody is. */
+const said = (design: string) => `## Problem\n\nCheckout loses the cart.\n\n## Design\n\n${design}`;
+
+describe("a tab that slept through a rebuild", () => {
+  /**
+   * The room is occasionally rebuilt from its markdown so its state does not
+   * grow forever, and a rebuild gives every piece of the Document a new
+   * identity. A browser still holding the old one shares nothing with it, so
+   * Yjs would put both copies in one text rather than merging them — which is
+   * how an Issue's description once came back four times over (ADR-0021).
+   */
+  async function rebuiltRoom(db: MemberContext["db"], admin: MemberContext) {
+    const room = await authorizeRoom(admin, "document:DEV-1:intent");
+    const doc = new Y.Doc();
+    await openRoom({ db, room, doc });
+    // An afternoon of argument, in two edits: the Problem keeps still while
+    // the Design is rewritten, which is what a Document under discussion looks
+    // like. How large a state has to get before it is swept up is
+    // `room-state.test.ts`'s question; here any size will do, so the threshold
+    // is nothing and what is under test is what a rebuild does to a browser.
+    loadMarkdown(doc, said("The 1st thing anybody said about it."));
+    loadMarkdown(doc, said("The 300th thing anybody said about it."));
+    await storeRoom({
+      db,
+      room,
+      doc,
+      authors: [admin.member.id],
+      now: new Date(),
+      connections: 0,
+      compactOver: 0,
+    });
+  }
+
+  it("is turned away, rather than syncing the Document in a second time", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await withIssue(db);
+    await rebuiltRoom(db, admin);
+    const server = createRoomServer({ db, contextFrom: whoever({ ada: admin }) });
+
+    // Her tab still holds what the Document said before the rebuild.
+    const sleeping = new Y.Doc();
+    loadMarkdown(sleeping, said("The 1st thing anybody said about it."));
+    let refused: string | null = null;
+    join(server, "document:DEV-1:intent", sleeping, "ada", {
+      token: roomGreeting({ syncedMsAgo: 60_000 }),
+      refused: (reason) => (refused = reason),
+    });
+    await settle();
+
+    expect(refused).toBe(REBUILT);
+    // And nothing of the room's reached her document, so there is one copy of
+    // the text to put back rather than two to untangle.
+    expect(markdownOf(sleeping)).toBe(said("The 1st thing anybody said about it."));
+  });
+
+  it("is let in when it had the room after the rebuild, which is every ordinary reconnect", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await withIssue(db);
+    await rebuiltRoom(db, admin);
+    const server = createRoomServer({ db, contextFrom: whoever({ ada: admin }) });
+
+    const back = new Y.Doc();
+    let refused: string | null = null;
+    join(server, "document:DEV-1:intent", back, "ada", {
+      // A blink ago: the rebuild is older than this tab's copy of the room.
+      token: roomGreeting({ syncedMsAgo: 0 }),
+      refused: (reason) => (refused = reason),
+    });
+    await settle();
+
+    expect(refused).toBeNull();
+    expect(markdownOf(back)).toContain("The 300th thing anybody said about it.");
+  });
+
+  it("puts back what was typed while it was away, and the Document is in there once", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await withIssue(db);
+    // What the room said when her tab last had it.
+    const BEFORE = said("The 1st thing anybody said about it.");
+    await rebuiltRoom(db, admin);
+    const server = createRoomServer({ db, contextFrom: whoever({ ada: admin }) });
+
+    // She kept typing while she was offline, as the editor told her she could:
+    // a sentence in the section nobody else was arguing about.
+    const sleeping = new Y.Doc();
+    loadMarkdown(
+      sleeping,
+      BEFORE.replace("Checkout loses the cart.", "Checkout loses the cart on a slow network."),
+    );
+    let refused: string | null = null;
+    join(server, "document:DEV-1:intent", sleeping, "ada", {
+      token: roomGreeting({ syncedMsAgo: 60_000 }),
+      refused: (reason) => (refused = reason),
+    });
+    await settle();
+    expect(refused).toBe(REBUILT);
+
+    // What the browser does about it: drop the copy the room cannot take, open
+    // the room again, and replay what it changed as markdown — the same
+    // three-way merge an Agent's write goes through.
+    const mine = markdownOf(sleeping);
+    const fresh = new Y.Doc();
+    join(server, "document:DEV-1:intent", fresh, "ada", {
+      token: roomGreeting({ syncedMsAgo: null }),
+    });
+    await settle();
+    const merged = mergeMarkdown({ base: BEFORE, mine, theirs: markdownOf(fresh) });
+    expect(merged.ok).toBe(true);
+    if (merged.ok) loadMarkdown(fresh, merged.text);
+    await settle();
+
+    const back = markdownOf(fresh);
+    // Her sentence is there, the room's argument is there, and neither is
+    // there twice — which is the whole point of turning her away first.
+    expect(back.match(/Checkout loses the cart on a slow network\./g)).toHaveLength(1);
+    expect(back.match(/## Problem/g)).toHaveLength(1);
+    expect(back).toContain("The 300th thing anybody said about it.");
+  });
+
+  it("hands back what it cannot place, rather than overwriting somebody with it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await withIssue(db);
+    const BEFORE = said("The 1st thing anybody said about it.");
+    await rebuiltRoom(db, admin);
+    const server = createRoomServer({ db, contextFrom: whoever({ ada: admin }) });
+
+    // This time she rewrote the very line the room spent the afternoon on.
+    const mine = said("Let us not do this at all.");
+    const fresh = new Y.Doc();
+    join(server, "document:DEV-1:intent", fresh, "ada", {
+      token: roomGreeting({ syncedMsAgo: null }),
+    });
+    await settle();
+    const theirs = markdownOf(fresh);
+
+    const merged = mergeMarkdown({ base: BEFORE, mine, theirs });
+    // Refused, and so the room keeps what it has: the editor shows her these
+    // words instead of pasting them over an argument she did not see.
+    expect(merged.ok).toBe(false);
+    expect(markdownOf(fresh)).toBe(theirs);
+  });
+
+  it("is let in when it holds nothing at all, which is every first visit", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await withIssue(db);
+    await rebuiltRoom(db, admin);
+    const server = createRoomServer({ db, contextFrom: whoever({ ada: admin }) });
+
+    const fresh = new Y.Doc();
+    let refused: string | null = null;
+    join(server, "document:DEV-1:intent", fresh, "ada", {
+      token: roomGreeting({ syncedMsAgo: null }),
+      refused: (reason) => (refused = reason),
+    });
+    await settle();
+
+    expect(refused).toBeNull();
+    expect(markdownOf(fresh)).toContain("The 300th thing anybody said about it.");
   });
 });

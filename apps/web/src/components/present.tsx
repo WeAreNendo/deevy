@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { MemberChip } from "@/components/member-chip";
 import { useMembersById } from "@/lib/mentions";
 import { JUST_WROTE_MS, presenceIn, useRoom } from "@/lib/rooms";
@@ -21,6 +22,22 @@ export function Present({ room: name }: { room: string | undefined }) {
   const wrote = here.find(
     (one) => one.kind === "agent" && one.wroteAt && Date.now() - one.wroteAt < JUST_WROTE_MS,
   );
+
+  // The line expires by the clock, and a room can be perfectly still while it
+  // does: an Agent wrote, nobody else is typing, nothing changes. So the
+  // moment it is due is booked, rather than waited for.
+  const [, expire] = useState(0);
+  useEffect(() => {
+    if (!wrote?.wroteAt) return;
+    const due = Math.max(wrote.wroteAt + JUST_WROTE_MS - Date.now(), 0);
+    const timer = setTimeout(() => {
+      expire((count) => count + 1);
+    }, due);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [wrote?.wroteAt]);
+
   if (humans.length === 0 && !wrote) return null;
 
   return (
