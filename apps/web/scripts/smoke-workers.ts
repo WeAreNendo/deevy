@@ -353,7 +353,6 @@ function execute(persistTo: string, sql: string): Promise<void> {
 }
 
 /** The Issue every seeded Run is on, so the phase can ask for them by key. */
-const sweptIssueKey = "SWP-1";
 
 /**
  * An Agent with `count` Runs that have been silent for 31 minutes, straight
@@ -415,9 +414,19 @@ async function trigger(origin: string): Promise<number> {
   return fired.status;
 }
 
-/** The status of every Run on the swept Issue, as the API reports them. */
+/**
+ * The status of every Run the seeded Agent holds, as the API reports them. By
+ * Agent rather than by Issue: one Agent cannot hold two open Runs on one Issue
+ * (`packages/db/src/schema/run.ts`), so the sixty silent Runs the sweep is
+ * given sit on sixty Issues.
+ */
 async function sweptStatuses(origin: string, cookie: string): Promise<string[]> {
-  const listed = await rpc(origin, "runs/list", { issueKey: sweptIssueKey, limit: 200 }, cookie);
+  const listed = await rpc(
+    origin,
+    "runs/list",
+    { agentMemberId: "swept-member", limit: 200 },
+    cookie,
+  );
   const runs = (listed.output as { runs?: Array<{ status?: string }> } | null)?.runs;
   if (!runs) throw new Error(`the Runs could not be read: ${listed.body.slice(0, 300)}`);
   return runs.map((run) => run.status ?? "");
