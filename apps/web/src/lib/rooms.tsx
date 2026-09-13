@@ -1,4 +1,4 @@
-import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Awareness } from "y-protocols/awareness";
@@ -48,10 +48,14 @@ export const RoomsContext = createContext<Rooms>({ roomFor: () => null, ready: t
 const COLLAB_URL = "/collab";
 
 /**
- * One socket for the page, a room on it per Document. Hocuspocus multiplexes
- * several documents over one connection, which is why the socket is here and
- * the provider is per room: an Issue page has the description and two or three
- * Documents open at once, and four sockets would be four sign-ins.
+ * A socket per room, and the room named in the URL.
+ *
+ * Hocuspocus can carry several Documents over one connection, and the first
+ * draft of this did — but a room is a Durable Object, and the platform has to
+ * know *which* object to route an upgrade to before any message has been sent.
+ * So the name rides on the query string, one socket opens per room, and the
+ * Worker routes each to its own object. On Node they all land on the same
+ * in-process server and nothing about it matters (ADR-0021).
  */
 export function RoomsProvider({
   enabled,
@@ -63,45 +67,41 @@ export function RoomsProvider({
   me: { id: string; name: string; kind: "human" | "agent" } | null;
   children: ReactNode;
 }) {
-  const [socket, setSocket] = useState<HocuspocusProviderWebsocket | null>(null);
   const [status, setStatus] = useState<Room["status"]>("connecting");
   const providers = useRef(new Map<string, HocuspocusProvider>());
-  const attached = useRef(new Set<string>());
 
   useEffect(() => {
-    if (!enabled) return;
-    const url = new URL(COLLAB_URL, window.location.origin);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const opened = new HocuspocusProviderWebsocket({
-      url: url.toString(),
-      onConnect: () => setStatus("connected"),
-      onDisconnect: () => setStatus("disconnected"),
-    });
-    setSocket(opened);
+    const open = providers.current;
     return () => {
-      for (const provider of providers.current.values()) provider.destroy();
-      providers.current.clear();
-      attached.current.clear();
-      opened.destroy();
-      setSocket(null);
+      for (const provider of open.values()) provider.destroy();
+      open.clear();
     };
-  }, [enabled]);
+  }, []);
 
   const rooms = useMemo<Rooms>(
     () => ({
-      // Nothing is waited for where there are no rooms at all.
-      ready: !enabled || socket !== null,
+      // Nothing is waited for: a room's socket is made when the room is asked
+      // for, so there is no moment where the answer is "not yet".
+      ready: true,
       roomFor: (name) => {
-        if (!socket) return null;
+        if (!enabled) return null;
         let provider = providers.current.get(name);
         if (!provider) {
+          const url = new URL(COLLAB_URL, window.location.origin);
+          url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+          // The room in the URL, because the platform routes on it.
+          url.searchParams.set("room", name);
           provider = new HocuspocusProvider({
-            websocketProvider: socket,
+            url: url.toString(),
             name,
             // The session on the upgrade is what authorises this; the token is
             // only what makes Hocuspocus ask, because a server with an
             // `onAuthenticate` waits to be told who is knocking.
             token: "session",
+            onStatus: ({ status: became }) => {
+              setStatus(became === "connected" ? "connected" : "connecting");
+            },
+            onDisconnect: () => setStatus("disconnected"),
           });
           providers.current.set(name, provider);
         }
@@ -109,17 +109,12 @@ export function RoomsProvider({
       },
       join: (name) => {
         const provider = providers.current.get(name);
-        if (!provider || attached.current.has(name)) return;
-        attached.current.add(name);
-        // A provider handed a socket it did not make does not attach itself:
-        // that is how one socket carries several Documents.
-        provider.attach();
         // Who is here, for everybody else's header and caret. Awareness is
         // ephemeral by design: leave, and this goes with you.
-        if (me) provider.awareness?.setLocalStateField("member", me);
+        if (provider && me) provider.awareness?.setLocalStateField("member", me);
       },
     }),
-    [socket, status, me, enabled],
+    [status, me, enabled],
   );
 
   return <RoomsContext.Provider value={rooms}>{children}</RoomsContext.Provider>;

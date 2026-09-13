@@ -29,6 +29,12 @@ or in `.claude/launch.json`, which is where the 3010 comes from. A sign-in page 
 this looks like when it is wrong — the page draws one button per provider `health.ping` reports, and a proxy
 pointing at something that is not deevy answers nothing.
 
+**A room is a websocket, and the proxy has to be told.** Live Documents open `/collab` on the same origin
+the page came from, so the session cookie travels with the upgrade; `apps/web/vite.config.ts` proxies it
+with `ws: true`, and without that the dev server answers the upgrade itself and every Document is quietly
+empty. The Node deployment serves the same route on the port it already listens on, so nothing else is
+needed in development (ADR-0021).
+
 **And the SPA's own port follows the launcher.** Both configurations in `.claude/launch.json` set
 `autoPort`, so a busy 5173 does not stop the preview: the launcher picks a free port, hands it to the child
 as `PORT`, and Vite's `server.port` reads it. `strictPort` is on, because the alternative is Vite quietly

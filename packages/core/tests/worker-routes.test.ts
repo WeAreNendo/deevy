@@ -119,6 +119,19 @@ describe("the Worker's routing table", () => {
     expect(servedByTheAssetHandler(testApp(), await runWorkerFirst())).toEqual([]);
   });
 
+  /**
+   * The one path the rule above cannot find for itself. A room is a websocket
+   * upgrade rather than an operation, so `createApp` never mounts it (ADR-0021)
+   * and `app.routes` does not carry it — and a `/collab` missing from this list
+   * is answered by the asset handler with the SPA's index.html, which looks
+   * like an empty Document rather than like a routing mistake.
+   */
+  it("carries /collab, which the Worker answers beside the app rather than through it", async () => {
+    const rules = await runWorkerFirst();
+
+    expect(rules.some((rule) => ruleMatches(rule, "/collab"))).toBe(true);
+  });
+
   it("catches a route the app grows without a rule to carry it", async () => {
     const app = testApp();
     app.get("/metrics", (c) => c.json({ ok: true }));

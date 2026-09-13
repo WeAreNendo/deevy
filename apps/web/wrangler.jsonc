@@ -15,7 +15,7 @@
     // that is missing here is answered by the asset handler with the SPA's
     // index.html, a 200 with the wrong body. packages/core/tests/
     // worker-routes.test.ts asserts this list against the app's own routes.
-    "run_worker_first": ["/api/*", "/rpc/*", "/healthz", "/mcp", "/.well-known/*"],
+    "run_worker_first": ["/api/*", "/rpc/*", "/healthz", "/mcp", "/.well-known/*", "/collab"],
   },
   "d1_databases": [
     {
