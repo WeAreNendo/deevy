@@ -98,10 +98,13 @@ export function RoomsProvider({
             // only what makes Hocuspocus ask, because a server with an
             // `onAuthenticate` waits to be told who is knocking.
             token: "session",
+            // Scheduled, never straight away: the provider says "connecting"
+            // from inside its own constructor, and the constructor runs while
+            // whichever pane asked for the room is still rendering.
             onStatus: ({ status: became }) => {
-              setStatus(became === "connected" ? "connected" : "connecting");
+              queueMicrotask(() => setStatus(became === "connected" ? "connected" : "connecting"));
             },
-            onDisconnect: () => setStatus("disconnected"),
+            onDisconnect: () => queueMicrotask(() => setStatus("disconnected")),
           });
           providers.current.set(name, provider);
         }
