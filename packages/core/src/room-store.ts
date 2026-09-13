@@ -14,8 +14,8 @@ import * as Y from "yjs";
 import { appendEvent, type EventSource } from "./events.ts";
 import { clearApprovalsIfGated } from "./gate-freshness.ts";
 import { newId } from "./ids.ts";
-import type { LiveRooms } from "./live-rooms.ts";
-import type { OpenedRoom } from "./rooms.ts";
+import type { LiveRooms, Wrote } from "./live-rooms.ts";
+import { roomName, type OpenedRoom } from "./rooms.ts";
 
 /**
  * How long after a version was cut a further quiet still belongs to it. One
@@ -44,7 +44,7 @@ export function roomStateKey(room: OpenedRoom): string {
 export async function openRoom({ db, room, doc }: RoomWork): Promise<void> {
   const saved = await db.query.roomState.findFirst({ where: { room: roomStateKey(room) } });
   if (saved) {
-    Y.applyUpdate(doc, decodeState(saved.state));
+    applyState(doc, saved.state);
     return;
   }
 
@@ -63,10 +63,28 @@ async function currentMarkdown(db: Db, room: OpenedRoom): Promise<string> {
   return version?.body ?? "";
 }
 
+/**
+ * How large a room's stored state may get before it is rebuilt (ADR-0021).
+ * Yjs keeps every edit that ever happened, so a Document grows by about fifty
+ * bytes a change whatever its text does: four hundred edits of a two-line
+ * paragraph is twenty kilobytes of state for two hundred bytes of markdown.
+ * D1 has a row limit, and a Document that stops saving is worse than one that
+ * has forgotten how it got here.
+ */
+const COMPACT_OVER_BYTES = 256 * 1024;
+
 export interface StoreRoom extends RoomWork {
   /** Every Member whose keystrokes are in what is about to be written. */
   authors: string[];
   now: Date;
+  /**
+   * How many browsers are in the room. Compacting starts the Document's
+   * identity again, and one still holding the old identity would merge its copy
+   * back in as duplicate text — so it only ever happens to an empty room.
+   */
+  connections?: number;
+  /** Where the rebuild starts, in bytes of state. The default is the one above. */
+  compactOver?: number;
   /**
    * Where the Event goes. Absent in a test that only wants the rows; present
    * everywhere else, because the log is the only record of what happened and a
@@ -84,9 +102,25 @@ export interface StoreRoom extends RoomWork {
  * ruling — in which case it is amended. A ruling's version is never touched
  * again: text somebody approved cannot change under its own approval.
  */
-export async function storeRoom({ db, room, doc, authors, now, log }: StoreRoom): Promise<void> {
+export async function storeRoom({
+  db,
+  room,
+  doc,
+  authors,
+  now,
+  log,
+  connections,
+  compactOver,
+}: StoreRoom): Promise<void> {
   const markdown = markdownOf(doc);
-  await saveState({ db, room, doc, now });
+  await saveState({
+    db,
+    room,
+    doc,
+    now,
+    ...(connections === undefined ? {} : { connections }),
+    ...(compactOver === undefined ? {} : { compactOver }),
+  });
 
   if (!room.document) {
     // A description has no versions. It is saved where the Issue keeps it.
@@ -193,9 +227,25 @@ async function nameAuthors(db: Db, versionId: string, authors: string[]): Promis
 }
 
 /** The room's own state, which is the live truth until the next version is cut. */
-async function saveState({ db, room, doc, now }: Omit<StoreRoom, "authors">): Promise<void> {
+async function saveState({
+  db,
+  room,
+  doc,
+  now,
+  connections,
+  compactOver = COMPACT_OVER_BYTES,
+}: Omit<StoreRoom, "authors">): Promise<void> {
   const key = roomStateKey(room);
-  const state = encode(Y.encodeStateAsUpdate(doc));
+  let bytes = Y.encodeStateAsUpdateV2(doc);
+  if (bytes.length > compactOver && (connections ?? 0) === 0) {
+    // Everything this Document has ever been, replaced by what it says. The
+    // words are what a version is made of and what anybody reads; the history
+    // above them is scratch, and this is where it is swept up (ADR-0021).
+    const fresh = new Y.Doc();
+    loadMarkdown(fresh, markdownOf(doc));
+    bytes = Y.encodeStateAsUpdateV2(fresh);
+  }
+  const state = encode(bytes);
   const values = {
     room: key,
     issueId: room.issue.id,
@@ -212,16 +262,27 @@ async function saveState({ db, room, doc, now }: Omit<StoreRoom, "authors">): Pr
 /*
  * base64 rather than a blob: node:sqlite hands binary back as a Buffer and D1
  * as an ArrayBuffer, and the schema is read by both (packages/db, ADR-0006).
+ *
+ * Yjs's own v2 encoding under it, which is about half the size of v1 for the
+ * same document — the cheapest thing that can be done about a state that grows
+ * with every edit. Marked, because the first rooms wrote v1 and a row written
+ * then still has to open.
  */
+const V2 = "v2:";
+
 function encode(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
+  return `${V2}${btoa(binary)}`;
 }
 
-export function decodeState(state: string): Uint8Array {
-  const binary = atob(state);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+/** Applies to a document either way: the marker says which decoder the update wants. */
+export function applyState(doc: Y.Doc, state: string): void {
+  const v2 = state.startsWith(V2);
+  const binary = atob(v2 ? state.slice(V2.length) : state);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  if (v2) Y.applyUpdateV2(doc, bytes);
+  else Y.applyUpdate(doc, bytes);
 }
 
 /**

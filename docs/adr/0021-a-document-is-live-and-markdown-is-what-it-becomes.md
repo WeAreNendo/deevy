@@ -43,6 +43,17 @@ derived from the markdown rather than from whoever is doing the rebuilding, and 
 identically. Two rebuilds merge into one Document; a rebuild of _different_ text still looks different, and
 the worst it can do is arrive as a second paragraph rather than corrupt the first.
 
+**The state is compacted, and only when the room is empty.** A Yjs state carries every edit ever made,
+including tombstones for deleted text, so a Document typed into for a month is tens of kilobytes of history
+around a page of prose. On a store the state is written in Yjs's v2 encoding, which is roughly half the size
+of v1; past a quarter of a megabyte, and only when nobody is connected, the room is rebuilt from its markdown
+and the history is dropped. The guard is the whole point and is not a detail: compacting starts the
+Document's identity again, so a browser still holding the old one would merge its copy back in as duplicate
+text. The trade-off is stated rather than solved — a tab that was asleep across a compaction is the one case
+where "keep typing, it will merge when you are back" can return a paragraph twice instead of once. Nothing is
+lost, and a Human can see it and delete it; the alternative was a row that grows without limit on a database
+with a row size limit.
+
 **A version is cut by quiet, not by a button.** Thirty seconds of stillness in a room and the merged text
 becomes a version. A cut within ten minutes of the previous one, by the same set of authors, amends that
 version instead of adding another — unless a Gate ruling pinned it, in which case it is never touched again.
