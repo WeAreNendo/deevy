@@ -475,6 +475,12 @@ async function delegationRecipients(
     : null;
   const sponsor = actor?.kind === "agent" ? actor.sponsorId : null;
   if (!sponsor) return [];
+  /*
+   * Rolled up against the other waves only. An unread "every sub-issue is
+   * finished" line is the same kind on the same parent, and matching it would
+   * mean the wake-up Run's own decomposition — the whole point of waking it —
+   * is never announced.
+   */
   const already = rollUp
     ? await db.query.notification.findFirst({
         where: {
@@ -482,6 +488,7 @@ async function delegationRecipients(
           kind: "delegation",
           issueId: parentId,
           readAt: { isNull: true },
+          event: { kind: "issue.created" },
         },
         columns: { id: true },
       })

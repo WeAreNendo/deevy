@@ -135,7 +135,10 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
   const started = await startRun(db, {
     issueId: parent.id,
     agentMemberId: working,
-    triggeredByMemberId: event.actorMemberId,
+    // The Agent that split the work, not whoever happened to close the last
+    // part of it. This field decides who hears when the Run finishes
+    // (`notifications.ts`), and a passing Human must not inherit that.
+    triggeredByMemberId: delegator,
     trigger: "children_done",
   });
   if (started) events.push(runStartedEvent(started, parent.projectId));

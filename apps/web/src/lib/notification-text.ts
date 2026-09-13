@@ -26,10 +26,6 @@ export interface DescribableNotification {
 const text = (value: unknown): string | null =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
-/** "3 sub-issues", or "a sub-issue" where the number is not worth saying. */
-const count = (value: unknown): string =>
-  typeof value === "number" && value > 1 ? `${String(value)} sub-issues` : "a sub-issue";
-
 export function describeNotification(row: DescribableNotification): NotificationText {
   const payload =
     row.event.payload && typeof row.event.payload === "object" && !Array.isArray(row.event.payload)
@@ -63,16 +59,17 @@ export function describeNotification(row: DescribableNotification): Notification
       };
     }
     case "delegation":
-      // One line for a whole wave of sub-issues, or for the moment they are all
-      // finished (docs/plans/sub-issue-delegation.md). It names the parent,
-      // because the parent is the only place the work is whole.
+      /*
+       * One line for a whole wave of sub-issues, or for the moment they are all
+       * finished (docs/plans/sub-issue-delegation.md). It names the parent,
+       * because the parent is the only place the work is whole — and it does
+       * not say how many, because the row is written when the first of them is
+       * opened and the wave is not finished being opened yet. The excerpt is
+       * that first one's title, which is the most useful thing there is.
+       */
       return row.event.kind === "issue.children_closed"
         ? { verb: "finished every sub-issue of this", excerpt: null, tone: "agent" }
-        : {
-            verb: `opened ${count(payload.siblings)} under this`,
-            excerpt: text(payload.title),
-            tone: "agent",
-          };
+        : { verb: "opened sub-issues under this", excerpt: text(payload.title), tone: "agent" };
     case "gate_awaiting":
       switch (row.event.kind) {
         case "gate.rejected":

@@ -30,7 +30,7 @@ Work one Issue at a time, in this order.
 
    A Document that already says what this State needs is done work, not a reason to stop. An Issue sitting in
    a Gate with its Document written and nobody asked to rule on it is the most common thing you will find, and
-   it is waiting on step 6, not on you. Rewriting it to have something to do is worse than going straight to
+   it is waiting on step 7, not on you. Rewriting it to have something to do is worse than going straight to
    the Gate.
 
 6. **If the work is too big for one Issue, split it.** Not every Issue is one change: some are three or

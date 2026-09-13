@@ -186,9 +186,12 @@ export function GateControls({
           {openChildren > 0 ? (
             // Said rather than enforced. The Human rules or does not; this is
             // so they are not the last to know their Agent is still working.
-            <p role="status" className="text-sm text-muted-foreground">
-              {openChildren} of {childCount} sub-issues {openChildren === 1 ? "is" : "are"} still
-              open.
+            // Not a live region: it never changes while anybody is reading it,
+            // and the Gate banner above is the one thing on this card that
+            // announces itself (the deevy-ui skill).
+            <p className="text-sm text-muted-foreground">
+              {openChildren} of {childCount} {childCount === 1 ? "sub-issue" : "sub-issues"}{" "}
+              {openChildren === 1 ? "is" : "are"} still open.
             </p>
           ) : null}
 

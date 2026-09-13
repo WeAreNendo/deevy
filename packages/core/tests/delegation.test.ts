@@ -1,4 +1,5 @@
 import {
+  notification as notificationTable,
   workflowState as workflowStateTable,
   workspace as workspaceTable,
   type Db,
@@ -561,5 +562,96 @@ describe("an inbox that survives a fan-out", () => {
     const rolled = (await inboxOf(db, admin.member.id)).filter((one) => one.kind === "delegation");
     // The wave, and the wave finishing.
     expect(rolled).toHaveLength(2);
+  });
+});
+
+describe("what the review found", () => {
+  const inboxOf = async (db: Db, memberId: string) =>
+    db.query.notification.findMany({ where: { recipientMemberId: memberId } });
+
+  it("still tells the Humans who rule a Gate that a sub-issue arrived in one", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await memberContext(db, { role: "admin", name: "Ada" });
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    const asAdmin = clientFor(admin);
+    const project = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
+    await asAdmin.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: admin.member,
+      grants: [project.id],
+    });
+
+    // The default Workflow's first State is a Gate, so every sub-issue lands in
+    // one. Rolling the wave up must not take the Gate's own recipients with it.
+    await clientFor(planner).issues.create({
+      projectKey: "DEV",
+      title: "A part",
+      parentKey: "DEV-1",
+    });
+
+    expect((await inboxOf(db, bob.member.id)).map((one) => one.kind)).toContain("gate_awaiting");
+    expect((await inboxOf(db, admin.member.id)).map((one) => one.kind)).toContain("delegation");
+  });
+
+  it("announces a second wave, which the first wave's ending used to swallow", async () => {
+    const { db, admin, asAdmin, asPlanner } = await workspaceWithTwoAgents();
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Wave one", parentKey: "DEV-1" });
+    // Read, which is what makes the next wave a new line rather than a repeat
+    // of one still sitting there unread.
+    await db.update(notificationTable).set({ readAt: new Date() });
+    await closeIssue(asAdmin, "DEV-2");
+
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Wave two", parentKey: "DEV-1" });
+
+    const waves = (await inboxOf(db, admin.member.id)).filter(
+      (one) => one.kind === "delegation",
+    ).length;
+    // The wave, its ending, and the next wave. The ending is unread when the
+    // next wave arrives, and used to swallow it.
+    expect(waves).toBe(3);
+  });
+
+  it("credits the woken Run to the Agent that split the work, not to whoever closed the last part", async () => {
+    const { db, asAdmin, asPlanner, planner } = await workspaceWithTwoAgents();
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Only part", parentKey: "DEV-1" });
+
+    await closeIssue(clientFor(bob), "DEV-2");
+
+    const parent = await asAdmin.issues.get({ key: "DEV-1" });
+    const [run] = await db.query.run.findMany({ where: { issueId: parent.id } });
+    // `triggeredByMemberId` decides who hears the Run finished, so a passing
+    // Human must not inherit the delegating Agent's Sponsor's mail.
+    expect(run?.triggeredByMemberId).toBe(planner.member.id);
+  });
+
+  it("files a refusal against the parent's own Project, wherever the child was going", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await memberContext(db, { role: "admin", name: "Ada" });
+    const asAdmin = clientFor(admin);
+    const dev = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
+    const ops = await asAdmin.projects.create({ key: "OPS", name: "Operations" });
+    await db.update(workspaceTable).set({ maxChildrenPerIssue: 1 });
+    await asAdmin.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: admin.member,
+      grants: [dev.id, ops.id],
+    });
+    const asPlanner = clientFor(planner);
+    await asPlanner.issues.create({ projectKey: "OPS", title: "One", parentKey: "DEV-1" });
+
+    await expect(
+      asPlanner.issues.create({ projectKey: "OPS", title: "Two", parentKey: "DEV-1" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const [refused] = await db.query.event.findMany({ where: { kind: "delegation.refused" } });
+    // The Event is about the parent, so it belongs to the parent's Project: a
+    // Project-scoped read of the log has to find it.
+    expect(refused?.projectId).toBe(dev.id);
+    expect(ops.id).toBeTruthy();
   });
 });

@@ -42,18 +42,19 @@ import {
  */
 async function assertRoomBelow(
   context: ContextFor<"member">,
-  parentId: string,
+  parent: { id: string; projectId: string },
   parentKey: string,
-  projectId: string,
 ): Promise<void> {
   if (context.member.kind !== "agent") return;
-  const refusal = await refusesDelegation(context.db, parentId, context.workspace);
+  const refusal = await refusesDelegation(context.db, parent.id, context.workspace);
   if (!refusal) return;
   await appendEvent(context, {
     kind: "delegation.refused",
     subjectType: "issue",
-    subjectId: parentId,
-    projectId,
+    subjectId: parent.id,
+    // The parent's Project, because the parent is what this is about: a
+    // Project-scoped read of the log has to find it, and a tree may cross one.
+    projectId: parent.projectId,
     payload: { limit: refusal.limit, allowed: refusal.allowed, parentKey },
   });
   throw new ORPCError("BAD_REQUEST", {
@@ -105,7 +106,7 @@ export const issues = {
         const parent = await requireIssue(context, input.parentKey);
         parentId = parent.issue.id;
         parentKey = issueKey(parent.project.key, parent.issue.number);
-        await assertRoomBelow(context, parent.issue.id, parentKey, project.id);
+        await assertRoomBelow(context, parent.issue, parentKey);
       }
 
       const number = await nextIssueNumber(context.db, project.id);
@@ -448,9 +449,8 @@ export const issues = {
           }
           await assertRoomBelow(
             context,
-            parent.issue.id,
+            parent.issue,
             issueKey(parent.project.key, parent.issue.number),
-            found.projectId,
           );
           parentId = parent.issue.id;
         }

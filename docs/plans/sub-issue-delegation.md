@@ -18,7 +18,7 @@ stated in the small: the tracker is the shared state, not the chat log.
 
 ## What is already there
 
-More than it looks like, which is why this plan is five slices and not ten.
+More than it looks like, which is why this plan is six slices and not ten.
 
 - **`issue.parentId` exists**, `issues.create` takes `parentKey` and `issues.update` can reparent. Both are
   `agents: true`, so an Agent can already open a child Issue.
@@ -286,9 +286,9 @@ deep is a plan, not a pyramid — and every one of them is a number an admin can
 
 **Core.**
 
-- `delegationDepth(db, issueId)` walks the parent chain. It is bounded by `max_delegation_depth + 1` reads
+- `depthOf(db, issueId, stopAt)` walks the parent chain. It is bounded by `max_delegation_depth + 1` reads
   because anything deeper is already refused, which is what keeps it inside the statement budget.
-- `openDescendants(db, rootId)` counts the Issues under a root that are not in a `done` State, breadth-first,
+- `openUnder(db, rootId, stopAt)` counts the Issues under a root that are not in a `done` State, breadth-first,
   bounded by the ceiling: it stops counting at the limit, because the only question is whether the limit is
   passed and the exact number beyond it is nobody's business.
 - `issues.create` and `issues.update` (when reparenting) refuse past any of the three **when the caller is an

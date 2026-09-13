@@ -189,7 +189,7 @@ describe("the Issue page", () => {
     await mountAt("/issues/DEV-1");
 
     // Said, not enforced: the buttons are still there.
-    expect(await screen.findByText(/1 of 1 sub-issues is still open/)).toBeTruthy();
+    expect(await screen.findByText(/1 of 1 sub-issue is still open/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
   });
 

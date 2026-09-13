@@ -320,13 +320,21 @@ export function IssuePage({
                           reader of this list wants and cannot get from the
                           State (docs/plans/sub-issue-delegation.md). */}
                       {child.hasOpenRun ? (
+                        // `img` rather than a bare span: a generic role carries
+                        // no accessible name, so the label would be there in
+                        // the DOM and absent from a screen reader.
                         <span
+                          role="img"
                           aria-label="An Agent is working this"
                           title="An Agent is working this"
                           className="size-1.5 rounded-full bg-agent"
                         />
                       ) : null}
-                      <span className="text-xs text-muted-foreground">{child.state.name}</span>
+                      {/* A State's name is whatever the Workflow editor called
+                          it, and the rail is narrow. */}
+                      <span className="max-w-24 truncate text-xs text-muted-foreground">
+                        {child.state.name}
+                      </span>
                     </span>
                   </li>
                 ))}
