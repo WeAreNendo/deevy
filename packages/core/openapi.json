@@ -1570,6 +1570,21 @@
                             "slug": {
                               "type": "string"
                             },
+                            "maxChildrenPerIssue": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "maxDelegationDepth": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "maxOpenDescendants": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "createdAt": {
                               "type": "string",
                               "format": "date-time",
@@ -1580,6 +1595,9 @@
                             "id",
                             "name",
                             "slug",
+                            "maxChildrenPerIssue",
+                            "maxDelegationDepth",
+                            "maxOpenDescendants",
                             "createdAt"
                           ],
                           "additionalProperties": false
@@ -1634,6 +1652,21 @@
                     "slug": {
                       "type": "string"
                     },
+                    "maxChildrenPerIssue": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxDelegationDepth": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxOpenDescendants": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -1644,6 +1677,9 @@
                     "id",
                     "name",
                     "slug",
+                    "maxChildrenPerIssue",
+                    "maxDelegationDepth",
+                    "maxOpenDescendants",
                     "createdAt"
                   ],
                   "additionalProperties": false
@@ -1655,7 +1691,7 @@
       },
       "patch": {
         "operationId": "workspace.update",
-        "summary": "Rename the Workspace this instance serves",
+        "summary": "Rename the Workspace this instance serves, and set what an Agent may not go past",
         "requestBody": {
           "required": true,
           "content": {
@@ -1667,11 +1703,23 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 120
+                  },
+                  "maxChildrenPerIssue": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "maxDelegationDepth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "maxOpenDescendants": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2000
                   }
-                },
-                "required": [
-                  "name"
-                ]
+                }
               }
             }
           }
@@ -1693,6 +1741,21 @@
                     "slug": {
                       "type": "string"
                     },
+                    "maxChildrenPerIssue": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxDelegationDepth": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxOpenDescendants": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -1703,6 +1766,9 @@
                     "id",
                     "name",
                     "slug",
+                    "maxChildrenPerIssue",
+                    "maxDelegationDepth",
+                    "maxOpenDescendants",
                     "createdAt"
                   ],
                   "additionalProperties": false

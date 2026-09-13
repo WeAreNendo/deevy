@@ -1,9 +1,18 @@
-import { workflowState as workflowStateTable, type Db } from "@deevy/db";
+import {
+  workflowState as workflowStateTable,
+  workspace as workspaceTable,
+  type Db,
+} from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+import type { DelegationLimits } from "../src/issues.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, memberContext, testDb, type MemberContext } from "./helpers.ts";
+
+/** The router as one Member sees it, which is how every test here calls deevy. */
+const clientFor = (context: MemberContext) => createRouterClient(router, { context });
+type Client = ReturnType<typeof clientFor>;
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -15,11 +24,22 @@ afterEach(() => {
  * DEV-1 to be the parent, and `planner` and `builder` both granted it
  * (docs/plans/sub-issue-delegation.md).
  */
-async function workspaceWithTwoAgents() {
+async function workspaceWithTwoAgents(
+  /**
+   * The Workspace's ceilings, applied before the Agents' contexts are built. A
+   * context holds the Workspace it was made with, and a real request builds one
+   * per call — so a test that changed the row afterwards would be asking Agents
+   * that had never heard of the new numbers.
+   */
+  limits: Partial<DelegationLimits> = {},
+) {
   const { db, close } = testDb();
   closers.push(close);
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const asAdmin = createRouterClient(router, { context: admin });
+  if (Object.keys(limits).length > 0) {
+    await db.update(workspaceTable).set(limits).where(eq(workspaceTable.id, admin.workspace.id));
+  }
+  const asAdmin = clientFor(admin);
   const project = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
   await asAdmin.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
   const planner = await agentContext(db, {
@@ -32,6 +52,13 @@ async function workspaceWithTwoAgents() {
     sponsor: admin.member,
     grants: [project.id],
   });
+  // No Gates. What a Gate does to an Issue is four-eyes-gates.md's subject, and
+  // a fixture where nothing can be closed without two rulings turns every test
+  // below into a test about rulings.
+  await db
+    .update(workflowStateTable)
+    .set({ isGate: false })
+    .where(eq(workflowStateTable.projectId, project.id));
   return {
     db,
     admin,
@@ -39,8 +66,16 @@ async function workspaceWithTwoAgents() {
     project,
     planner,
     builder,
-    asPlanner: createRouterClient(router, { context: planner }),
+    asPlanner: clientFor(planner),
   };
+}
+
+/** Moves an Issue into its Project's `done` State, which is what closing one is. */
+async function closeIssue(client: Client, key: string) {
+  const project = await client.projects.get({ key: key.split("-")[0] as string });
+  const done = project.states.find((state) => state.category === "done");
+  if (!done) throw new Error(`${key}'s Project has no State that closes an Issue`);
+  return client.issues.move({ key, stateId: done.id });
 }
 
 /** Names the Agent a State's rule triggers, the way `workflow.update` does. */
@@ -130,7 +165,7 @@ describe("a child in another Project", () => {
     const { db, close } = testDb();
     closers.push(close);
     const admin = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAdmin = createRouterClient(router, { context: admin });
+    const asAdmin = clientFor(admin);
     const dev = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
     const ops = await asAdmin.projects.create({ key: "OPS", name: "Operations" });
     await asAdmin.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
@@ -152,8 +187,8 @@ describe("a child in another Project", () => {
       ops,
       planner,
       opsOnly,
-      asPlanner: createRouterClient(router, { context: planner }),
-      asOpsOnly: createRouterClient(router, { context: opsOnly }),
+      asPlanner: clientFor(planner),
+      asOpsOnly: clientFor(opsOnly),
     };
   }
 
@@ -249,5 +284,90 @@ describe("a child in another Project", () => {
     await expect(
       asPlanner.issues.update({ key: "DEV-1", parentKey: "OPS-1" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("a fan-out that has a bottom", () => {
+  it("refuses the child past the limit, and says which limit and how many", async () => {
+    const { asPlanner } = await workspaceWithTwoAgents({ maxChildrenPerIssue: 2 });
+
+    await asPlanner.issues.create({ projectKey: "DEV", title: "One", parentKey: "DEV-1" });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Two", parentKey: "DEV-1" });
+
+    await expect(
+      asPlanner.issues.create({ projectKey: "DEV", title: "Three", parentKey: "DEV-1" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // And nothing was created behind the refusal.
+    const parent = await asPlanner.issues.get({ key: "DEV-1" });
+    expect(parent.children).toHaveLength(2);
+  });
+
+  it("puts a refusal in the log, so the Sponsor knows a number shaped the work", async () => {
+    const { db, asPlanner, planner } = await workspaceWithTwoAgents({ maxChildrenPerIssue: 1 });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "One", parentKey: "DEV-1" });
+
+    await expect(
+      asPlanner.issues.create({ projectKey: "DEV", title: "Two", parentKey: "DEV-1" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const refused = await db.query.event.findMany({ where: { kind: "delegation.refused" } });
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.actorMemberId).toBe(planner.member.id);
+    expect(refused[0]?.payload).toMatchObject({ limit: "children", allowed: 1 });
+  });
+
+  it("does not bind a Human, who is not the failure mode this is for", async () => {
+    const { asAdmin, asPlanner } = await workspaceWithTwoAgents({ maxChildrenPerIssue: 1 });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "One", parentKey: "DEV-1" });
+
+    const mine = await asAdmin.issues.create({
+      projectKey: "DEV",
+      title: "And one of my own",
+      parentKey: "DEV-1",
+    });
+
+    expect(mine.parent?.key).toBe("DEV-1");
+  });
+
+  it("refuses a tree deeper than the Workspace allows", async () => {
+    const { asPlanner } = await workspaceWithTwoAgents({ maxDelegationDepth: 2 });
+
+    // DEV-1 is the root, so DEV-2 is depth 1 and DEV-3 is depth 2.
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Child", parentKey: "DEV-1" });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Grandchild", parentKey: "DEV-2" });
+
+    await expect(
+      asPlanner.issues.create({ projectKey: "DEV", title: "Too deep", parentKey: "DEV-3" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("counts what is open in the whole tree, and closing one makes room", async () => {
+    const { asAdmin, asPlanner } = await workspaceWithTwoAgents({ maxOpenDescendants: 2 });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "One", parentKey: "DEV-1" });
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Two", parentKey: "DEV-2" });
+
+    await expect(
+      asPlanner.issues.create({ projectKey: "DEV", title: "Three", parentKey: "DEV-1" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    // A closed Issue is not work anybody is doing, so it stops counting.
+    await closeIssue(asAdmin, "DEV-2");
+    const room = await asPlanner.issues.create({
+      projectKey: "DEV",
+      title: "Three",
+      parentKey: "DEV-1",
+    });
+    expect(room.parent?.key).toBe("DEV-1");
+  });
+
+  it("is an admin's to change, and refuses a ceiling of nothing", async () => {
+    const { asAdmin } = await workspaceWithTwoAgents();
+
+    const saved = await asAdmin.workspace.update({ maxChildrenPerIssue: 40 });
+    expect(saved.maxChildrenPerIssue).toBe(40);
+
+    await expect(asAdmin.workspace.update({ maxDelegationDepth: 0 })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
   });
 });

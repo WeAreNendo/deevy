@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SettingsPage } from "@/components/settings-page";
+import { SettingsPage, SettingsRow } from "@/components/settings-page";
 import { AllowlistRow } from "@/routes/settings/allowlist";
 import { InvitationsRow } from "@/routes/settings/invitations";
 import { useAutosave } from "@/lib/autosave";
@@ -32,6 +32,7 @@ export function WorkspacePage() {
         <div className="flex flex-col">
           <AllowlistRow />
           <InvitationsRow />
+          <DelegationRow />
         </div>
       ) : null}
     </SettingsPage>
@@ -250,5 +251,101 @@ function SetUp() {
         ))}
       </ul>
     </section>
+  );
+}
+
+/** One of the three numbers below: a label, a field, and a save on leaving it. */
+function Ceiling({
+  id,
+  label,
+  value,
+  onSave,
+  saving,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  onSave: (next: number) => void;
+  saving: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? String(value);
+  return (
+    <label htmlFor={id} className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+      {label}
+      <Input
+        id={id}
+        type="number"
+        min={1}
+        inputMode="numeric"
+        className="w-24"
+        disabled={saving}
+        value={shown}
+        onChange={(typed) => setDraft(typed.target.value)}
+        onBlur={() => {
+          const next = Number(shown);
+          setDraft(null);
+          if (Number.isInteger(next) && next >= 1 && next !== value) onSave(next);
+        }}
+      />
+    </label>
+  );
+}
+
+/**
+ * What an Agent may not go past when it cuts work into sub-issues
+ * (docs/plans/sub-issue-delegation.md). An Agent that decides a task has forty
+ * parts will open forty Issues and start forty Runs, and these are the numbers
+ * that say it may not. They are about Agents: a Human is never stopped by them.
+ */
+export function DelegationRow() {
+  const queryClient = useQueryClient();
+  const workspace = useQuery(orpc.workspace.get.queryOptions());
+  const update = useMutation(
+    orpc.workspace.update.mutationOptions({
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.workspace.key() }),
+    }),
+  );
+
+  return (
+    <SettingsRow
+      label="How far an Agent may split work"
+      hint="An Agent can open sub-issues and hand them to other Agents. These are the limits on that: past any of them it is refused, and the refusal is in the Workspace's log. They do not apply to you."
+    >
+      {workspace.isPending ? (
+        <Skeleton className="h-9 w-72" />
+      ) : workspace.isError ? (
+        <p className="text-sm text-destructive">{workspace.error.message}</p>
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          <Ceiling
+            id="max-children"
+            label="Sub-issues each"
+            value={workspace.data.maxChildrenPerIssue}
+            saving={update.isPending}
+            onSave={(maxChildrenPerIssue) => update.mutate({ maxChildrenPerIssue })}
+          />
+          <Ceiling
+            id="max-depth"
+            label="Levels deep"
+            value={workspace.data.maxDelegationDepth}
+            saving={update.isPending}
+            onSave={(maxDelegationDepth) => update.mutate({ maxDelegationDepth })}
+          />
+          <Ceiling
+            id="max-open"
+            label="Open in one tree"
+            value={workspace.data.maxOpenDescendants}
+            saving={update.isPending}
+            onSave={(maxOpenDescendants) => update.mutate({ maxOpenDescendants })}
+          />
+        </div>
+      )}
+      {update.error ? (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {update.error.message}
+        </p>
+      ) : null}
+    </SettingsRow>
   );
 }

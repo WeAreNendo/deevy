@@ -1,7 +1,14 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { issue as issueTable, type Db } from "@deevy/db";
-import { insertIssue, isSelfOrDescendant, issueKey, nextIssueNumber } from "../issues.ts";
+import {
+  delegationRefusalMessage,
+  insertIssue,
+  isSelfOrDescendant,
+  issueKey,
+  nextIssueNumber,
+  refusesDelegation,
+} from "../issues.ts";
 import { oneLabelPerScope, replaceIssueLabels } from "../labels.ts";
 import { resolveMentions } from "../mentions.ts";
 import { assertLeavable, enterState } from "../workflow.ts";
@@ -22,6 +29,37 @@ import {
   projectVisible,
   withKey,
 } from "./shared.ts";
+
+/**
+ * Whether there is room for one more Issue under this parent, for the callers
+ * the ceilings bind (docs/plans/sub-issue-delegation.md). A Human is not one of
+ * them: somebody opening two hundred Issues by hand is not the failure mode
+ * this exists for, and a limit that stops them is a support ticket.
+ *
+ * A refusal is an Event as well as an error, because the Agent will note it and
+ * carry on and the Sponsor is the one who needs to know a number shaped the
+ * work.
+ */
+async function assertRoomBelow(
+  context: ContextFor<"member">,
+  parentId: string,
+  parentKey: string,
+  projectId: string,
+): Promise<void> {
+  if (context.member.kind !== "agent") return;
+  const refusal = await refusesDelegation(context.db, parentId, context.workspace);
+  if (!refusal) return;
+  await appendEvent(context, {
+    kind: "delegation.refused",
+    subjectType: "issue",
+    subjectId: parentId,
+    projectId,
+    payload: { limit: refusal.limit, allowed: refusal.allowed, parentKey },
+  });
+  throw new ORPCError("BAD_REQUEST", {
+    message: delegationRefusalMessage(refusal, parentKey),
+  });
+}
 
 export const issues = {
   create: defineOperation({
@@ -67,6 +105,7 @@ export const issues = {
         const parent = await requireIssue(context, input.parentKey);
         parentId = parent.issue.id;
         parentKey = issueKey(parent.project.key, parent.issue.number);
+        await assertRoomBelow(context, parent.issue.id, parentKey, project.id);
       }
 
       const number = await nextIssueNumber(context.db, project.id);
@@ -400,6 +439,12 @@ export const issues = {
               message: "An Issue cannot be its own parent or a child of its own descendant",
             });
           }
+          await assertRoomBelow(
+            context,
+            parent.issue.id,
+            issueKey(parent.project.key, parent.issue.number),
+            found.projectId,
+          );
           parentId = parent.issue.id;
         }
       }
