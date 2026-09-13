@@ -7,6 +7,57 @@ A release is two Docker images and one `vX.Y.Z` tag — see [docs/OPERATIONS.md]
 
 <!-- Entries are inserted below this line by `vp run version`. -->
 
+## 0.7.0
+
+### Minor Changes
+
+- **core** — [#59](https://github.com/mattallty/deevy/pull/59) [`6d9a5b0`](https://github.com/mattallty/deevy/commit/6d9a5b0fea7866813837e6948158876c9815ee72) Thanks [@mattallty](https://github.com/mattallty)! - A sub-issue may now live in a different Project from its parent. Work has dependencies that run across
+  Projects — the piece that has to land in the API before the piece in the app can — and a parent link that
+  stopped at the boundary did not remove the dependency, it moved it onto somebody writing it down twice. An
+  Agent may open a child in any Project it was granted, and the child follows that Project's Workflow and its
+  Gates. A parent in a Project you cannot see is not shown to you, and an Issue whose parent is hidden that way
+  cannot be moved out of its tree.
+  This also fixes an Issue's parent and children being labelled with the wrong key. They were named after the
+  Project of the Issue you were looking at, which was invisible while a tree could not cross one.
+- **core** — [#59](https://github.com/mattallty/deevy/pull/59) [`6d9a5b0`](https://github.com/mattallty/deevy/commit/6d9a5b0fea7866813837e6948158876c9815ee72) Thanks [@mattallty](https://github.com/mattallty)! - Creating an Issue that is already assigned now tells the Assignee. It did not before — the assignment was
+  silent until somebody changed it — so an Issue opened for a Member never reached their inbox, and one opened
+  for an Agent never started its Run. Both do now, from the one call that created it. An Issue opened under a
+  parent also says so in the Activity, rather than leaving a reader to click through to find out.
+- **core, web** — [#59](https://github.com/mattallty/deevy/pull/59) [`6d9a5b0`](https://github.com/mattallty/deevy/commit/6d9a5b0fea7866813837e6948158876c9815ee72) Thanks [@mattallty](https://github.com/mattallty)! - An Agent that splits work into sub-issues can no longer split it forever. Your Workspace now carries three
+  limits — how many sub-issues one Issue may have, how many levels deep they may go, and how many may be open
+  in one tree at once — and an Agent that reaches any of them is refused, with a line in the log so you can see
+  that a number shaped the work rather than the Agent. They start at 20, 3 and 50, an admin changes them under
+  Settings › Workspace, and they never apply to a Human.
+- **core, web** — [#59](https://github.com/mattallty/deevy/pull/59) [`6d9a5b0`](https://github.com/mattallty/deevy/commit/6d9a5b0fea7866813837e6948158876c9815ee72) Thanks [@mattallty](https://github.com/mattallty)! - An Issue now shows what its sub-issues are doing: where each one has got to, which ones have an Agent working
+  them right now, and how many are still open. A Gate on an Issue whose sub-issues are unfinished says so where
+  the buttons are — it does not stop you ruling, it just stops you being the last to know.
+  And an Agent splitting work up no longer floods its Sponsor's inbox. Six sub-issues opened at once are one
+  line, not six, and there is a second line when the last of them is finished. A sub-issue assigned to a Human
+  still reaches that Human directly, because a rollup is for the wave and never for somebody's own work.
+  "Sub-issues" is a Notification kind of its own now, so you can turn it off or route it to Slack like any other.
+- **core** — [#59](https://github.com/mattallty/deevy/pull/59) [`6d9a5b0`](https://github.com/mattallty/deevy/commit/6d9a5b0fea7866813837e6948158876c9815ee72) Thanks [@mattallty](https://github.com/mattallty)! - An Agent that splits work into sub-issues no longer has to sit and wait for them. It finishes its Run, and
+  when the last sub-issue closes it gets a new one to pick the work back up from — reading what its sub-issues
+  concluded off the Issue, the way anybody else would. Where there is no Agent left to wake, because it was
+  suspended or lost the Project, the Issue still says its sub-issues are done, so the work is visibly somebody's
+  rather than silently nobody's. A sub-issue in another Project counts exactly the same: done is done wherever
+  it is.
+
+### Patch Changes
+
+- **core, db** — [#59](https://github.com/mattallty/deevy/pull/59) [`6d9a5b0`](https://github.com/mattallty/deevy/commit/6d9a5b0fea7866813837e6948158876c9815ee72) Thanks [@mattallty](https://github.com/mattallty)! - Two sub-issues of one parent finishing at the same moment no longer starts the parent's Agent twice. "At most
+  one open Run per Issue and Agent" was a rule every caller checked for itself, which only held while nothing
+  happened at once — and the ordinary ending of a fan-out is two things happening at once. The database keeps
+  the rule now. If your instance already has duplicate open Runs from before this, the migration closes the
+  later one and says so in its summary.
+  Opening a sub-issue also got cheaper: it was spending more statements than a Cloudflare D1 request allows on
+  the deepest tree the default limits permit, so on the Worker deployment it would have failed outright. Raising
+  the "Levels deep" limit no longer makes that write more expensive at all.
+- **db** — [#59](https://github.com/mattallty/deevy/pull/59) [`6d9a5b0`](https://github.com/mattallty/deevy/commit/6d9a5b0fea7866813837e6948158876c9815ee72) Thanks [@mattallty](https://github.com/mattallty)! - An Agent that splits work into sub-issues can no longer split it forever. Your Workspace now carries three
+  limits — how many sub-issues one Issue may have, how many levels deep they may go, and how many may be open
+  in one tree at once — and an Agent that reaches any of them is refused, with a line in the log so you can see
+  that a number shaped the work rather than the Agent. They start at 20, 3 and 50, an admin changes them under
+  Settings › Workspace, and they never apply to a Human.
+
 ## 0.6.0
 
 ### Minor Changes
