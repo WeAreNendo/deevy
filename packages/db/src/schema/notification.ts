@@ -18,6 +18,13 @@ export const humanNotificationKinds = [
   "run_awaiting_input",
   /** A Run ended, completed or failed. */
   "run_finished",
+  /**
+   * An Agent this Human sponsors split work into sub-issues, or finished all of
+   * them (docs/plans/sub-issue-delegation.md). One line per parent per wave
+   * rather than one per sub-issue: forty of them that make an inbox useless
+   * have cost more than they bought.
+   */
+  "delegation",
 ] as const;
 
 /**

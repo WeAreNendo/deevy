@@ -67,6 +67,13 @@ export const IssueSummarySchema = IssueSchema.extend({
   state: WorkflowStateSchema,
   assignee: MemberWithUserSchema.nullable(),
   labels: z.array(LabelSchema),
+  /**
+   * Whether an Agent is working this one right now. Only set where it was asked
+   * for — an Issue's children, which is the one list where it answers the
+   * question a reader actually has (docs/plans/sub-issue-delegation.md) — and
+   * left out everywhere a list would pay for it and nobody would read it.
+   */
+  hasOpenRun: z.boolean().optional(),
 });
 
 export const GateDecisionSchema = createSelectSchema(gateDecision).extend({

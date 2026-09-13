@@ -303,6 +303,25 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
   });
   if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Issue" });
   const key = found.project.key;
+  const shown = found.children.filter((child) => projectVisible(context, child.projectId));
+  /*
+   * Which children an Agent is working right now: one query for all of them,
+   * not one each, so reading an Issue costs the same whether it has one child
+   * or six (`budget.test.ts`).
+   */
+  const working = new Set(
+    shown.length === 0
+      ? []
+      : (
+          await context.db.query.run.findMany({
+            where: {
+              issueId: { in: shown.map((child) => child.id) },
+              status: { in: ["pending", "active", "awaiting_input"] },
+            },
+            columns: { issueId: true },
+          })
+        ).map((run) => run.issueId),
+  );
   // Only a Gate has a standing, and only a Gate pays for one: an Issue in Build
   // asks nothing (docs/plans/four-eyes-gates.md).
   const gate = found.state.isGate
@@ -320,9 +339,10 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
       found.parent && projectVisible(context, found.parent.projectId)
         ? withKey(found.parent, found.parent.project.key)
         : null,
-    children: found.children
-      .filter((child) => projectVisible(context, child.projectId))
-      .map((child) => withKey(child, child.project.key)),
+    children: shown.map((child) => ({
+      ...withKey(child, child.project.key),
+      hasOpenRun: working.has(child.id),
+    })),
     gateDecisions: found.gateDecisions.map((decision) => ({
       ...decision,
       documents: decision.documents.map((pinned) => ({

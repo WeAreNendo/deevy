@@ -513,3 +513,53 @@ describe("the parent waking when the last child closes", () => {
     expect(runs[0]).toMatchObject({ agentMemberId: planner.member.id, trigger: "children_done" });
   });
 });
+
+describe("an inbox that survives a fan-out", () => {
+  const inboxOf = async (db: Db, memberId: string) =>
+    db.query.notification.findMany({ where: { recipientMemberId: memberId } });
+
+  it("is one line for a wave of sub-issues, not one line each", async () => {
+    const { db, admin, asPlanner, builder } = await workspaceWithTwoAgents();
+
+    for (let one = 1; one <= 6; one++) {
+      await asPlanner.issues.create({
+        projectKey: "DEV",
+        title: `Part ${String(one)}`,
+        parentKey: "DEV-1",
+        assigneeMemberId: builder.member.id,
+      });
+    }
+
+    const rolled = (await inboxOf(db, admin.member.id)).filter((one) => one.kind === "delegation");
+    expect(rolled).toHaveLength(1);
+    expect(rolled[0]?.recipientMemberId).toBe(admin.member.id);
+  });
+
+  it("still tells a Human about their own work, because a rollup is for the wave", async () => {
+    const { db, admin, asPlanner } = await workspaceWithTwoAgents();
+    const grace = await memberContext(db, { name: "Grace", email: "grace@example.com" });
+
+    await asPlanner.issues.create({
+      projectKey: "DEV",
+      title: "One for a Human",
+      parentKey: "DEV-1",
+      assigneeMemberId: grace.member.id,
+    });
+
+    expect((await inboxOf(db, grace.member.id)).some((one) => one.kind === "assignment")).toBe(
+      true,
+    );
+    expect(admin.member.id).toBeTruthy();
+  });
+
+  it("says so when every sub-issue is finished", async () => {
+    const { db, admin, asAdmin, asPlanner } = await workspaceWithTwoAgents();
+    await asPlanner.issues.create({ projectKey: "DEV", title: "Only part", parentKey: "DEV-1" });
+
+    await closeIssue(asAdmin, "DEV-2");
+
+    const rolled = (await inboxOf(db, admin.member.id)).filter((one) => one.kind === "delegation");
+    // The wave, and the wave finishing.
+    expect(rolled).toHaveLength(2);
+  });
+});

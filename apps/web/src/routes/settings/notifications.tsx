@@ -21,6 +21,7 @@ const labels: Record<string, string> = {
   gate_awaiting: "Gate awaiting",
   run_awaiting_input: "Run awaiting input",
   run_finished: "Run finished",
+  delegation: "Sub-issues",
 };
 
 interface Preference {

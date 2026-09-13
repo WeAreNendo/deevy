@@ -97,34 +97,44 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
   });
   if (siblings.some((one) => one.state.category !== "done")) return [];
 
+  /*
+   * The Agent that opened them, and only where they agree on one: two Agents
+   * having each opened some of a parent's children is not a case this knows how
+   * to pick a winner in, and guessing would start a Run on work nobody asked
+   * that Agent for.
+   */
+  const openers = [...new Set(siblings.map((one) => one.createdBy))].filter(
+    (id): id is string => id !== null,
+  );
+  const [opener, ...rest] = await agentsAmong(db, openers, event.workspaceId);
+  const delegator = opener && rest.length === 0 ? opener : null;
+
   const events: EventInput[] = [
     {
       kind: "issue.children_closed",
       subjectType: "issue",
       subjectId: parent.id,
       projectId: parent.projectId,
-      payload: { children: siblings.length },
+      // Who split the work, suspended or not: their Sponsor is who this is
+      // addressed to, and a Sponsor whose Agent cannot pick the work back up is
+      // exactly the person who needs to hear that it is finished.
+      payload: { children: siblings.length, ...(delegator ? { openedBy: delegator } : {}) },
     },
   ];
 
   /*
-   * The Agent that opened them, and only where they agree on one: two Agents
-   * having each opened some of a parent's children is not a case this knows how
-   * to pick a winner in, and guessing would start a Run on work nobody asked
-   * that Agent for. The Event above still goes in, so the parent is visibly a
-   * Human's rather than silently nobody's — which is also the answer when the
-   * Agent was suspended or lost its grant while the work was being done.
+   * A suspended Agent, or one whose grant on this Project was withdrawn while
+   * the work was being done, wakes nothing. The Event above still goes in, so
+   * the parent is visibly a Human's rather than silently nobody's.
    */
-  const openers = [...new Set(siblings.map((one) => one.createdBy))].filter(
-    (id): id is string => id !== null,
-  );
-  const [opener, ...others] = await workingAgents(db, openers, event.workspaceId);
-  if (!opener || others.length > 0) return events;
-  if (!(await grantedProject(db, opener, parent.projectId))) return events;
+  if (!delegator) return events;
+  const [working] = await workingAgents(db, [delegator], event.workspaceId);
+  if (!working) return events;
+  if (!(await grantedProject(db, working, parent.projectId))) return events;
 
   const started = await startRun(db, {
     issueId: parent.id,
-    agentMemberId: opener,
+    agentMemberId: working,
     triggeredByMemberId: event.actorMemberId,
     trigger: "children_done",
   });
@@ -208,6 +218,16 @@ async function startRuns(
     if (started) events.push(runStartedEvent(started, event.projectId));
   }
   return events;
+}
+
+/** Of the Members named, those that are Agents at all, suspended or not. */
+async function agentsAmong(db: Db, memberIds: string[], workspaceId: string): Promise<string[]> {
+  if (memberIds.length === 0) return [];
+  const rows = await db.query.member.findMany({
+    where: { id: { in: memberIds }, workspaceId, kind: "agent" },
+    columns: { id: true },
+  });
+  return rows.map((row) => row.id);
 }
 
 /**

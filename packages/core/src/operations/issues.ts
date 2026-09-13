@@ -133,6 +133,13 @@ export const issues = {
           title: created.title,
           state: first.name,
           ...(parentKey ? { parentKey } : {}),
+          // An Agent opening an Issue under a parent is a delegation, and the
+          // Event says so rather than leaving the inbox to work it out: what a
+          // Notification is, is a pure function of the Event row, and it is
+          // read again hours later with no request around it (ADR-0003).
+          ...(parentId && context.member.kind === "agent"
+            ? { delegatedTo: parentId, delegatedBy: context.member.id }
+            : {}),
         },
       });
       /*

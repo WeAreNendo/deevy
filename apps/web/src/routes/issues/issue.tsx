@@ -107,6 +107,9 @@ export function IssuePage({
 
   const { id, key, title, description, state, assignee, parent, children, gateDecisions, labels } =
     issue.data;
+  // How much of this Issue is still somebody's work, which is what its Gate
+  // wants to say and what its sub-issue list is counted by.
+  const open = children.filter((child) => child.state.category !== "done").length;
   const badgeState = {
     name: state.name,
     isGate: state.isGate,
@@ -219,6 +222,8 @@ export function IssuePage({
             )}
           >
             <GateControls
+              openChildren={open}
+              childCount={children.length}
               issueKey={key}
               projectKey={issue.data.project.key}
               state={state}
@@ -286,12 +291,19 @@ export function IssuePage({
 
           {children.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <RailHeading>Children</RailHeading>
+              <RailHeading>
+                Sub-issues
+                {open > 0 ? (
+                  <span className="ml-1.5 font-normal text-muted-foreground">
+                    {open} of {children.length} open
+                  </span>
+                ) : null}
+              </RailHeading>
               <ul className="flex flex-col gap-1">
                 {children.map((child) => (
                   // One line each: a rail is narrow, and three Issues wrapping
                   // to two lines apiece reads as six things rather than three.
-                  <li key={child.id} className="flex min-w-0 text-sm">
+                  <li key={child.id} className="flex min-w-0 items-baseline text-sm">
                     <Link
                       to="/issues/$issueKey"
                       params={{ issueKey: child.key }}
@@ -303,6 +315,19 @@ export function IssuePage({
                       </span>
                       <span className="truncate">{child.title}</span>
                     </Link>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
+                      {/* An Agent is on it right now, which is the one thing a
+                          reader of this list wants and cannot get from the
+                          State (docs/plans/sub-issue-delegation.md). */}
+                      {child.hasOpenRun ? (
+                        <span
+                          aria-label="An Agent is working this"
+                          title="An Agent is working this"
+                          className="size-1.5 rounded-full bg-agent"
+                        />
+                      ) : null}
+                      <span className="text-xs text-muted-foreground">{child.state.name}</span>
+                    </span>
                   </li>
                 ))}
               </ul>

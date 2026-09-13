@@ -113,6 +113,28 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       if (!to) return say(`unassigned it${from ? ` (was ${from})` : ""}`);
       return say(`assigned it to ${to}${from ? ` (was ${from})` : ""}${by}`);
     }
+    case "delegation.refused": {
+      const allowed = typeof p.allowed === "number" ? p.allowed : null;
+      const which =
+        p.limit === "depth"
+          ? "sub-issues may not go deeper here"
+          : p.limit === "open"
+            ? "this tree already has as many open sub-issues as it may"
+            : "this Issue already has as many sub-issues as it may";
+      return say(
+        `could not open another sub-issue: ${which}${allowed === null ? "" : ` (${String(allowed)})`}`,
+        "muted",
+      );
+    }
+    case "issue.children_closed": {
+      const children = typeof p.children === "number" ? p.children : null;
+      return say(
+        children === null
+          ? "finished every sub-issue of this"
+          : `finished ${children === 1 ? "the sub-issue" : `all ${String(children)} sub-issues`} of this`,
+        "agent",
+      );
+    }
     case "issue.reparented": {
       const to = str(p.toKey);
       const from = str(p.fromKey);

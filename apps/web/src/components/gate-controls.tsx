@@ -81,6 +81,15 @@ interface GateControlsProps {
   }>;
   /** How far along the Gate is; absent for a State that is not one. */
   standing?: GateStanding | null;
+  /**
+   * How many of this Issue's sub-issues are still open, and how many there are.
+   * Said, not enforced: a Gate on a parent whose parts are unfinished is not
+   * blocked, because nothing an Agent proposes ships without a Human deciding
+   * it did and this informs that Human rather than overruling them
+   * (docs/plans/sub-issue-delegation.md).
+   */
+  openChildren?: number;
+  childCount?: number;
 }
 
 /**
@@ -94,6 +103,8 @@ export function GateControls({
   state,
   decisions,
   standing,
+  openChildren = 0,
+  childCount = 0,
   shortcutScope = PAGE_SCOPE,
 }: GateControlsProps) {
   const queryClient = useQueryClient();
@@ -171,6 +182,15 @@ export function GateControls({
                 }.`
               : `${issueKey} cannot leave it without a Human's decision.`}
           </p>
+
+          {openChildren > 0 ? (
+            // Said rather than enforced. The Human rules or does not; this is
+            // so they are not the last to know their Agent is still working.
+            <p role="status" className="text-sm text-muted-foreground">
+              {openChildren} of {childCount} sub-issues {openChildren === 1 ? "is" : "are"} still
+              open.
+            </p>
+          ) : null}
 
           {given > 0 ? (
             <ul aria-label="Approvals" className="flex flex-col gap-1 text-sm">

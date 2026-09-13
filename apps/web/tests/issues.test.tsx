@@ -44,6 +44,7 @@ const stub = vi.hoisted(() => {
     parentId: "i1",
     parent: epic,
     children: [],
+    hasOpenRun: true,
   };
   return {
     states,
@@ -170,6 +171,26 @@ describe("the Issue page", () => {
     await mountAt("/issues/DEV-2");
 
     expect(await screen.findByRole("link", { name: /DEV-1/ })).toBeTruthy();
+  });
+
+  it("says where each sub-issue has got to, and which one has an Agent on it", async () => {
+    await mountAt("/issues/DEV-1");
+
+    // The key alone says nothing about whether anybody is on it, which is the
+    // question somebody reading a parent actually has
+    // (docs/plans/sub-issue-delegation.md).
+    expect(await screen.findByRole("link", { name: /DEV-2/ })).toBeTruthy();
+    expect(screen.getAllByText("Build").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("An Agent is working this")).toBeTruthy();
+    expect(screen.getByText(/1 of 1 open/)).toBeTruthy();
+  });
+
+  it("tells the Human at the Gate that its sub-issues are unfinished, and rules anyway", async () => {
+    await mountAt("/issues/DEV-1");
+
+    // Said, not enforced: the buttons are still there.
+    expect(await screen.findByText(/1 of 1 sub-issues is still open/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
   });
 
   it("renders the timeline from the Event log", async () => {
