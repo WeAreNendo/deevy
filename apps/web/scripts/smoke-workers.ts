@@ -367,10 +367,18 @@ const sweptIssueKey = "SWP-1";
  */
 function seedSilentRuns(persistTo: string, count: number): Promise<void> {
   const silentFor = 31 * 60 * 1000;
+  // An Issue each, because one Agent cannot hold two open Runs on one Issue and
+  // the database says so (`packages/db/src/schema/run.ts`). The sweep does not
+  // care which Issue a silent Run is on; what it needs is `count` of them.
+  const issues = Array.from(
+    { length: count },
+    (_, at) =>
+      `('swept-issue-${String(at)}', 'swept-project', ${String(at + 1)}, 'Ship the thing', 'swept-state')`,
+  ).join(", ");
   const runs = Array.from(
     { length: count },
     (_, at) =>
-      `('swept-run-${String(at)}', 'swept-issue', 'swept-member', 'manual', 'active', ` +
+      `('swept-run-${String(at)}', 'swept-issue-${String(at)}', 'swept-member', 'manual', 'active', ` +
       `cast(unixepoch('subsecond') * 1000 as integer) - ${String(silentFor)})`,
   ).join(", ");
   return execute(
@@ -381,7 +389,7 @@ function seedSilentRuns(persistTo: string, count: number): Promise<void> {
       `INSERT INTO agent (member_id) VALUES ('swept-member')`,
       `INSERT INTO project (id, workspace_id, key, name) SELECT 'swept-project', id, 'SWP', 'Sweeping' FROM workspace LIMIT 1`,
       `INSERT INTO workflow_state (id, project_id, name, position, category) VALUES ('swept-state', 'swept-project', 'Doing', 1, 'active')`,
-      `INSERT INTO issue (id, project_id, number, title, state_id) VALUES ('swept-issue', 'swept-project', 1, 'Ship the thing', 'swept-state')`,
+      `INSERT INTO issue (id, project_id, number, title, state_id) VALUES ${issues}`,
       `INSERT INTO run (id, issue_id, agent_member_id, trigger, status, last_activity_at) VALUES ${runs}`,
     ].join("; "),
   );
