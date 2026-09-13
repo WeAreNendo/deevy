@@ -76,11 +76,51 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
+        },
+        "basis": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
         "issueKey",
         "name",
+        "body"
+      ]
+    }
+  },
+  {
+    "name": "documents_write_section",
+    "operation": "documents.writeSection",
+    "summary": "Rewrite one section of a Document, leaving the rest of it alone",
+    "readOnly": false,
+    "agents": true,
+    "agentsOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issueKey": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 100000
+        }
+      },
+      "required": [
+        "issueKey",
+        "name",
+        "section",
         "body"
       ]
     }

@@ -32,6 +32,8 @@ catalog:
   "@hocuspocus/provider": 4.7.0
   "@hocuspocus/common": 4.7.0
   "@tiptap/y-tiptap": 3.0.9
+  # A three-way merge, for an Agent writing into a Document somebody is typing in.
+  diff: ^9.0.0
   "@tiptap/extension-collaboration": 3.31.3
   "@tiptap/extension-collaboration-caret": 3.31.3
   # The websocket server Node has none of: the Worker gets its own from the

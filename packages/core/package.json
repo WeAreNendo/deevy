@@ -31,6 +31,7 @@
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
     "better-auth": "catalog:",
+    "diff": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "y-protocols": "catalog:",

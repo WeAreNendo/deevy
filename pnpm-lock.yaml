@@ -370,6 +370,9 @@ catalogs:
     date-fns:
       specifier: ^4.4.0
       version: 4.4.0
+    diff:
+      specifier: ^9.0.0
+      version: 9.0.0
     drizzle-kit:
       specifier: 1.0.0-rc.4
       version: 1.0.0-rc.4
@@ -831,6 +834,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.7.3(@cloudflare/workers-types@5.20260903.1)(drizzle-kit@1.0.0-rc.4)(drizzle-orm@1.0.0-rc.4(@cloudflare/workers-types@5.20260903.1)(zod@4.5.4))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11)
+      diff:
+        specifier: 'catalog:'
+        version: 9.0.0
       drizzle-orm:
         specifier: 'catalog:'
         version: 1.0.0-rc.4(@cloudflare/workers-types@5.20260903.1)(zod@4.5.4)
@@ -4110,6 +4116,10 @@ packages:
 
   diff@8.0.4:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
+    engines: {node: '>=0.3.1'}
+
+  diff@9.0.0:
+    resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
     engines: {node: '>=0.3.1'}
 
   dom-accessibility-api@0.5.16:
@@ -8924,6 +8934,8 @@ snapshots:
       dequal: 2.0.3
 
   diff@8.0.4: {}
+
+  diff@9.0.0: {}
 
   dom-accessibility-api@0.5.16: {}
 

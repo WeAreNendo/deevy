@@ -12,6 +12,7 @@ import {
 } from "@deevy/core";
 import type { WorkerBindings, WorkerEnv } from "./env.ts";
 export { DocumentRoom } from "./rooms.ts";
+import { workerLiveRooms } from "./rooms.ts";
 import { readWorkerEnv, workerAuthEnv } from "./env.ts";
 
 /**
@@ -91,6 +92,9 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // Live Documents need a Durable Object, which is a paid feature: without
       // the binding every editor stays exactly what it was (ADR-0021).
       liveDocuments: Boolean(bindings.ROOMS),
+      // And where to reach them, so an Agent's write lands in the room a Human
+      // has open rather than only in the row behind it.
+      ...(bindings.ROOMS ? { liveRooms: workerLiveRooms(bindings.ROOMS) } : {}),
       // Only when the account has Queues. Absent, `createApp` discards jobs
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).

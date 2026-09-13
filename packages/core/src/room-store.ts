@@ -6,12 +6,14 @@ import {
   issue as issueTable,
   roomState as roomStateTable,
   type Db,
+  type Document,
 } from "@deevy/db";
 import { loadMarkdown, markdownOf } from "@deevy/editor";
 import { and, desc, eq } from "drizzle-orm";
 import * as Y from "yjs";
 import { appendEvent, type EventSource } from "./events.ts";
 import { newId } from "./ids.ts";
+import type { LiveRooms } from "./live-rooms.ts";
 import type { OpenedRoom } from "./rooms.ts";
 
 /**
@@ -41,7 +43,7 @@ export function roomStateKey(room: OpenedRoom): string {
 export async function openRoom({ db, room, doc }: RoomWork): Promise<void> {
   const saved = await db.query.roomState.findFirst({ where: { room: roomStateKey(room) } });
   if (saved) {
-    Y.applyUpdate(doc, decode(saved.state));
+    Y.applyUpdate(doc, decodeState(saved.state));
     return;
   }
 
@@ -213,9 +215,64 @@ function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function decode(state: string): Uint8Array {
+export function decodeState(state: string): Uint8Array {
   const binary = atob(state);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+/**
+ * An Agent's write, into the room rather than around it. Where a room has
+ * state, the text goes into the Yjs document and a version is cut from it, so
+ * the next connection and the next quiet both see the Agent's words instead of
+ * overwriting them. Returns the version it wrote, or null when there is no room
+ * and the caller should write one the old way.
+ *
+ * A browser already connected is a beat behind: it holds its own copy of the
+ * room and hears about this when it next loads. Telling a live connection is
+ * the runtime's job, because only the runtime knows where the room is running
+ * — `liveRooms` on the app, wired in slice 4's second half.
+ */
+export async function applyToRoom(
+  db: Db,
+  document: Document,
+  body: string,
+  authorMemberId: string,
+  rooms?: LiveRooms,
+): Promise<number | null> {
+  const key = `document:${document.id}`;
+  const saved = await db.query.roomState.findFirst({ where: { room: key } });
+  // A room open for ten seconds has been stored nowhere yet — the state is
+  // written when the typing stops — so an open room counts even with no row.
+  const open = await rooms?.read(key);
+  if (!saved && (open === null || open === undefined)) return null;
+
+  const doc = new Y.Doc();
+  if (saved) Y.applyUpdate(doc, decodeState(saved.state));
+  else if (open !== null && open !== undefined) loadMarkdown(doc, open);
+  loadMarkdown(doc, body);
+  // And the room itself, where one is open: a browser holds its own copy, and
+  // a write it never hears about is a write its next quiet would undo.
+  await rooms?.apply(key, body);
+
+  const issue = await db.query.issue.findFirst({
+    where: { id: document.issueId },
+    with: { project: { columns: { key: true } } },
+  });
+  if (!issue) return null;
+  const issueKey = `${issue.project.key}-${String(issue.number)}`;
+  await storeRoom({
+    db,
+    room: {
+      room: { kind: "document", issueKey, document: document.name },
+      issue: { ...issue, key: issueKey },
+      document,
+    },
+    doc,
+    authors: [authorMemberId],
+    now: new Date(),
+  });
+  const written = await db.query.document.findFirst({ where: { id: document.id } });
+  return written?.currentVersion ?? null;
 }
 
 /** Only the amend window, for the hooks that have to wait it out. */

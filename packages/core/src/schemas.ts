@@ -125,6 +125,12 @@ export const DocumentAtVersionSchema = DocumentSchema.extend({
    * say when version 1 was written, not when the Document last changed.
    */
   writtenAt: z.date(),
+  /**
+   * What to echo back on a write, so the server can merge what you changed
+   * rather than paste what you sent (ADR-0021). Opaque, and null when there is
+   * nothing to write from — reading an older version is reading history.
+   */
+  basis: z.string().nullable(),
 });
 
 export const CommentSchema = createSelectSchema(comment);

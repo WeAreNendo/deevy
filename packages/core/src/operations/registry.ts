@@ -1,3 +1,4 @@
+import type { LiveRooms } from "../live-rooms.ts";
 import type { Db, Member, Workspace } from "@deevy/db";
 import type { AnySchema, InferSchemaInput, InferSchemaOutput } from "@orpc/contract";
 import { openapi } from "@orpc/openapi";
@@ -73,6 +74,8 @@ export interface AppContext {
   devSignIn?: boolean;
   /** Whether this deployment has rooms, so the SPA knows before it opens a socket (ADR-0021). */
   liveDocuments?: boolean;
+  /** The open rooms, for a write that has to reach the browsers in one (ADR-0021). */
+  liveRooms?: LiveRooms;
   /**
    * The sign-in providers this deployment configured, in the order the sign-in
    * page renders them. Only `health.ping` reads it, so a signed-out SPA knows

@@ -1,4 +1,5 @@
 import { createDb } from "@deevy/adapters/workers";
+import { loadMarkdown, markdownOf } from "@deevy/editor";
 import {
   buildContext,
   createAuth,
@@ -6,9 +7,9 @@ import {
   roomSocket,
   serveRoomSocket,
 } from "@deevy/core";
-import type { RuntimeSocket } from "@deevy/core";
+import type { LiveRooms, RuntimeSocket } from "@deevy/core";
 import type { Hocuspocus } from "@hocuspocus/server";
-import type { WorkerBindings } from "./env.ts";
+import type { DurableObjectBinding, WorkerBindings } from "./env.ts";
 import { readWorkerEnv, workerAuthEnv } from "./env.ts";
 
 /**
@@ -47,6 +48,22 @@ export class DocumentRoom {
   }
 
   async fetch(request: Request): Promise<Response> {
+    /*
+     * Two doors. A browser upgrades and joins; the Worker that served an
+     * Agent's `documents.write` knocks with markdown, because the room lives
+     * here and a write it never hears about is a write its next quiet would
+     * undo (ADR-0021, `LiveRooms`).
+     */
+    const url = new URL(request.url);
+    if (url.pathname === "/read" || url.pathname === "/apply") {
+      const name = url.searchParams.get("room") ?? "";
+      const open = this.#server().documents.get(name);
+      if (!open) return new Response(null, { status: 204 });
+      if (url.pathname === "/read") return new Response(markdownOf(open));
+      loadMarkdown(open, await request.text());
+      return new Response(null, { status: 204 });
+    }
+
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response("This endpoint is a WebSocket", { status: 426 });
     }
@@ -58,6 +75,31 @@ export class DocumentRoom {
     serveRoomSocket(this.#server(), roomSocket(server), request);
     return new Response(null, { status: 101, webSocket: client } as UpgradeInit);
   }
+}
+
+/*
+ * The rooms of this deployment, as `documents.write` needs them: one Durable
+ * Object per room, asked over its own fetch. A room nobody has open answers 204
+ * and the caller falls back to the stored state (ADR-0021).
+ */
+export function workerLiveRooms(rooms: DurableObjectBinding): LiveRooms {
+  const stub = (room: string) => rooms.get(rooms.idFromName(room));
+  return {
+    read: async (room) => {
+      const answer = await stub(room).fetch(
+        new Request(`https://room/read?room=${encodeURIComponent(room)}`),
+      );
+      return answer.status === 204 ? null : await answer.text();
+    },
+    apply: async (room, markdown) => {
+      await stub(room).fetch(
+        new Request(`https://room/apply?room=${encodeURIComponent(room)}`, {
+          method: "POST",
+          body: markdown,
+        }),
+      );
+    },
+  };
 }
 
 /*

@@ -2,6 +2,8 @@ import { Hocuspocus } from "@hocuspocus/server";
 import { ORPCError } from "@orpc/server";
 import type { Db } from "@deevy/db";
 import type { AppContext, ContextFor } from "./operations/registry.ts";
+import { loadMarkdown, markdownOf } from "@deevy/editor";
+import type { LiveRooms } from "./live-rooms.ts";
 import { openRoom, storeRoom } from "./room-store.ts";
 import { authorizeRoom, type OpenedRoom, type Room } from "./rooms.ts";
 
@@ -157,6 +159,30 @@ export interface RoomSocket {
   /** Called by the runtime for each frame the client sent. */
   deliver?: (data: Uint8Array) => void;
   onClientClose?: () => void;
+}
+
+/**
+ * The open rooms of this Hocuspocus instance, as `documents.write` needs them
+ * (`live-rooms.ts`). Only rooms that are actually open: a name nobody has
+ * connected to answers null, and the caller falls back to the stored state.
+ */
+export function liveRoomsOf(server: Hocuspocus): LiveRooms {
+  const openDocument = (room: string) => server.documents.get(room) ?? null;
+  return {
+    read: (room) => {
+      const document = openDocument(room);
+      return Promise.resolve(document ? markdownOf(document) : null);
+    },
+    apply: (room, markdown) => {
+      const document = openDocument(room);
+      if (!document) return Promise.resolve();
+      // Into the live document itself. Hocuspocus watches it, so every browser
+      // in the room sees the Agent's paragraphs arrive where they are rather
+      // than finding out when the page is next loaded.
+      loadMarkdown(document, markdown);
+      return Promise.resolve();
+    },
+  };
 }
 
 /** What a runtime's own socket looks like: the WHATWG interface, as far as it goes. */
