@@ -752,6 +752,32 @@ A Gate short of its threshold appends a `gate.approval` Event carrying how many 
 `gate.approved` is appended only when the last one lands and the Issue actually leaves. Webhook subscribers
 receive the new kind, and anything switching on kinds ignores it.
 
+## How far an Agent may split work up
+
+An Agent can open sub-issues and hand them to other Agents
+([ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md)). Left alone, an Agent that decides a
+task has forty parts will open forty Issues, each of which opens a Run. Three numbers on the Workspace decide
+how far it may go, under **Settings › Workspace**:
+
+| Setting              | Default | What it does                                              |
+| -------------------- | ------- | --------------------------------------------------------- |
+| **Sub-issues each**  | 20      | How many sub-issues one Issue may have                    |
+| **Levels deep**      | 3       | How far a tree of sub-issues may go below its root        |
+| **Open in one tree** | 50      | How many sub-issues of one tree may be unfinished at once |
+
+They bind Agents and never Humans: you are not stopped by them, and nor is anyone signing in with a browser.
+An Agent that reaches one is refused with a message naming the limit and the number, and the refusal appends a
+`delegation.refused` Event, so the Agent's Sponsor can see that the shape of the work was decided by a ceiling
+rather than by the Agent. Raise them if your Agents are hitting them for good reasons; the defaults are
+deliberately small, because twenty sub-issues is a large decomposition and three deep is a plan rather than a
+pyramid.
+
+Two things worth knowing before you raise them. A sub-issue may sit in any Project the Agent was granted, so
+these numbers bound a tree that may span Projects — what an Agent can reach across is its grants, and an admin
+who does not want an Agent opening work in the API Project simply does not grant it. And every sub-issue
+assigned to an Agent opens a Run, so these are also the numbers that bound what a single delegation costs to
+run.
+
 ## The reference agent runtime
 
 deevy never runs an agent (ADR-0003). `apps/agent` is the thing on the other side: a service that

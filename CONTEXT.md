@@ -47,6 +47,11 @@ _Avoid_: ticket, card, task, story, work item
 The Member, Human or Agent, responsible for moving an Issue forward. An Issue has at most one.
 _Avoid_: owner, delegate
 
+**Sub-issue**:
+An Issue opened under another, which is its parent. A piece of a larger piece of work, with its own State, its
+own Gates and its own Assignee; it may live in a different Project from its parent.
+_Avoid_: subtask, child ticket, epic
+
 **Label**:
 A classification on an Issue, either plain (`backend`) or scoped (`epic:Checkout rewrite`). An Issue carries at most one Label per scope. Defined at Workspace level.
 _Avoid_: tag, epic, category

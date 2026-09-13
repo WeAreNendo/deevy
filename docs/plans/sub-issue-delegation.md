@@ -170,6 +170,9 @@ that may cross a Project, or written twice.
 
 ## Slice 1: A child an Agent can actually hand over (S)
 
+**Built.** The predicted two-Run case was written first and passed before the change for the wrong reason — no
+assignment Event existed — then passed after it for the right one.
+
 **Goal.** One call opens a sub-issue, assigns it to another Agent, and starts that Agent's Run.
 
 **Core.**
@@ -202,6 +205,9 @@ notification. The same call with no assignee opens no Run at all.
 ---
 
 ## Slice 2: A child may live in another Project (M)
+
+**Built.** The key test went red twice: first because the child could not be created at all, then, with the
+refusal removed, the way this slice said it would — `DEV-1` coming back called `OPS-1`.
 
 **Goal.** An Agent granted two Projects can open a child in either of them, every Issue is called by its own
 name, and nothing about a Project a caller was not granted reaches them.
@@ -267,6 +273,9 @@ Issue cannot become its own ancestor through a Project boundary.
 
 ## Slice 3: A fan-out has a bottom (M)
 
+**Built.** One thing this found was about the tests rather than the code: a request context holds the
+Workspace it was built with, so ceilings set after an Agent's context existed were invisible to that Agent.
+
 **Goal.** An Agent cannot open more Issues than the Workspace allows, and the Workspace's admin can see and
 change what that is.
 
@@ -305,6 +314,10 @@ exactly, as that file does.
 ---
 
 ## Slice 4: The parent wakes when the last child closes (L)
+
+**Built.** All three loops were written red first. A fourth thing came out of it: `issue.children_closed` has
+to carry who split the work, because the Human who closed the last sub-issue is not the Sponsor it is
+addressed to.
 
 **Goal.** An Agent that delegated can stop. When the last child closes, the parent gets a new Run, and the
 Agent picks the work back up from what the tracker says.
@@ -356,6 +369,10 @@ Event is appended and no Run is started.
 
 ## Slice 5: A tree you can see, and an inbox that survives it (M)
 
+**Built.** The inbox was the real risk and it was worse than the plan said: `issue.created` derives a Gate
+Notification for every Human, so six sub-issues were six rows each for everybody rather than six for one
+Sponsor.
+
 **Goal.** A Human can see what their Agent decided to do, in one place, without it costing them their inbox.
 
 **Core.**
@@ -388,6 +405,9 @@ rather than as kind names. The web tests drive this through `stub-client.ts` as 
 
 ## Slice 6: Docs, the ADR, and the release (S)
 
+**Built**, as [ADR-0022](../adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md). `sub-issue` earned its
+line in CONTEXT.md after all: the thing needed a name that was not `epic` or `subtask`.
+
 - **ADR-0022**, "a parent finishes and the last child wakes it", recording what is expensive to reverse: that
   a Run is not held open across delegation, that the ceilings are counts and bind Agents only, that a child
   may live in any Project its Agent was granted and follows that Project's Workflow, that a parent a caller
@@ -406,21 +426,28 @@ rather than as kind names. The web tests drive this through `stub-client.ts` as 
   after delegating is the correct move rather than an abandonment.
 - Snapshots, the `agents.test.ts` capability list, a changeset.
 
-### What this is expected to find
+### What it found
 
-Written before the work, to be answered after it, as the last two plans did.
+Written before the work, answered after it.
 
-- Whether the wake-up Run has enough to go on. The Agent starts cold and reconstructs from the tracker; if
-  that turns out to need a summary the parent wrote before it stopped, then "finish and be woken" needs one
-  more piece and the plan should say so rather than the Agent guessing.
-- Whether twenty, three and fifty are anywhere near right. They are guesses. The first real decomposition
-  will say.
-- Whether one rolled-up notification per wave is the right grain, or whether a Sponsor wants the closes too.
-- Whether `delegation.refused` is read by anybody, or whether it is an Event written to be thorough. If
-  nobody looks at it in a month it should go.
-- Whether a tree spread over two Projects reads as one piece of work or as two. Its children sit on two
-  boards, in two Workflows, with two sets of Gates, and the only place it is whole is the parent's page. If
-  that turns out to be too thin, the answer is a view of the tree and not a retreat to one Project.
-- Whether hiding a parent while refusing the reparent is the right pair. It is the one place the "an
-  ungranted Project does not exist to you" rule is bent, and the first Agent to hit that refusal will say
-  whether the message helps or only confuses.
+- **Whether the wake-up Run has enough to go on** is still open, and honestly cannot be answered by tests. The
+  Agent reads its sub-issues, their Documents and their Runs' summaries; whether that is enough to carry on
+  from is something only a real decomposition will say. The shipped instructions hedge it by telling an Agent
+  to say in its summary what it split off and why, because that summary is what it will be reading.
+- **Whether 20, 3 and 50 are near right** is also still open, and they are guesses. What did become clear is
+  that the three numbers do different jobs: children-per-Issue catches a bad decomposition immediately, depth
+  catches a runaway, and open-descendants is the only one that bounds cost, since every open sub-issue
+  assigned to an Agent is a Run.
+- **One line per wave was not enough on its own.** The plan had `issue.children_closed` as a second line and
+  was right to: rolling it into the wave's line suppressed it entirely, because the wave's line is usually
+  still unread when the work finishes. They say different things and a Sponsor wants both.
+- **`delegation.refused` has no reader yet.** It is in the Event log and it renders as a sentence, and
+  nothing points a Sponsor at it. If nobody looks at one in a month it should either go or get a Notification
+  of its own.
+- **A tree over two Projects reads as one piece of work only on the parent's page**, which is what the plan
+  suspected. The child's key carries its Project, so nothing is ambiguous, but the two halves sit on two
+  boards with two sets of Gates. Nobody has asked for a view of the whole tree yet; when somebody does, that
+  is the answer rather than a retreat to one Project.
+- **Hiding a parent while refusing the reparent** survived the build without feeling wrong, but it is the one
+  bent rule here and it is written down in the ADR as such. The first Agent to hit that refusal will say
+  whether the message helps.
