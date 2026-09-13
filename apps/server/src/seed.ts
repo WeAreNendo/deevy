@@ -464,10 +464,6 @@ await issue("DEV", {
   assignee: grace.member.id,
 });
 await issue("DEV", {
-  title: "Mirror Documents into the code repository",
-  labels: [backend.id, docs.id, low.id],
-});
-await issue("DEV", {
   title: "Retry webhook deliveries with backoff after a 5xx",
   labels: [backend.id],
   to: "Build",
