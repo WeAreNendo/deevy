@@ -12,6 +12,7 @@ import { loadMarkdown, markdownOf } from "@deevy/editor";
 import { and, desc, eq } from "drizzle-orm";
 import * as Y from "yjs";
 import { appendEvent, type EventSource } from "./events.ts";
+import { clearApprovalsIfGated } from "./gate-freshness.ts";
 import { newId } from "./ids.ts";
 import type { LiveRooms } from "./live-rooms.ts";
 import type { OpenedRoom } from "./rooms.ts";
@@ -131,6 +132,9 @@ export async function storeRoom({ db, room, doc, authors, now, log }: StoreRoom)
     .set({ currentVersion: version, updatedAt: now })
     .where(eq(documentTable.id, document.id));
   await nameAuthors(db, id, authors);
+  // A Gate that wants two Humans must not collect approvals of two different
+  // texts, so a change under an open one starts the counting again (ADR-0021).
+  await clearApprovalsIfGated(db, log, room.issue, document.name);
   if (log) {
     await appendEvent(
       { db, ...log, member: authors[0] ? { id: authors[0] } : null },

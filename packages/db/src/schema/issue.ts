@@ -24,6 +24,13 @@ export const issue = sqliteTable(
       .notNull()
       .references(() => workflowState.id),
     stateEnteredAt: integer("state_entered_at", { mode: "timestamp_ms" }).default(now).notNull(),
+    /**
+     * When the approvals toward this Issue's Gate were last cleared, because a
+     * Document under them changed (ADR-0021). A column rather than a question
+     * for the Event log: every Issue page asks it, and D1 counts statements.
+     * Null is the ordinary case — nothing has been cleared.
+     */
+    approvalsClearedAt: integer("approvals_cleared_at", { mode: "timestamp_ms" }),
     assigneeMemberId: text("assignee_member_id").references(() => member.id, {
       onDelete: "set null",
     }),

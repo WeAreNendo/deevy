@@ -64,6 +64,7 @@ const stub = vi.hoisted(() => {
         approvals: [{ memberId: "m2", name: "Grace Hopper", note: "Looks right" }],
         mayApprove: true,
         refusedBecause: null,
+        clearedByAnEdit: 1,
       },
     },
     // The same Gate, to the Human who brought the Issue to it
@@ -217,6 +218,14 @@ describe("an Issue sitting in a Gate", () => {
 
     const decisions = await screen.findByRole("list", { name: "Gate decisions" });
     expect(within(decisions).getByText(/Needs rethinking/)).toBeTruthy();
+  });
+
+  it("says when an approval was cleared by an edit, where the buttons are", async () => {
+    await mountAt("/issues/DEV-3", { memberName: "Ada" });
+
+    const panel = await screen.findByRole("group", { name: /Intent Gate/i });
+    expect(within(panel).getByText(/An approval was cleared/)).toBeTruthy();
+    expect(within(panel).getByText(/asking again/)).toBeTruthy();
   });
 
   it("says which version of a Document was ruled on, and when it has moved on since", async () => {

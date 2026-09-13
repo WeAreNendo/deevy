@@ -89,6 +89,8 @@ export const GateStandingSchema = z.object({
   /** How many could give one: the approvers this Gate names, or every Human, less the suspended. */
   eligible: z.number().int(),
   excludeRequester: z.boolean(),
+  /** Approvals this Gate had until the Document under them changed (ADR-0021). */
+  clearedByAnEdit: z.number().int(),
   approvals: z.array(
     z.object({
       memberId: z.string(),

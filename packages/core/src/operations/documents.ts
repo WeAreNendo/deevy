@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { writeVersion } from "../documents.ts";
 import { decodeBasis, encodeBasis, liveMarkdown, replaceSection } from "../documents-live.ts";
+import { clearApprovalsIfGated } from "../gate-freshness.ts";
 import { mergeMarkdown } from "../merge.ts";
 import { applyToRoom } from "../room-store.ts";
 import { DocumentAtVersionSchema, DocumentSchema } from "../schemas.ts";
@@ -56,6 +57,9 @@ async function writeTo(
     context.liveRooms,
   );
   const version = applied ?? (await writeVersion(context.db, document, body, context.member.id));
+  // An Agent rewriting a Document under an open Gate starts its counting again,
+  // exactly as a Human typing in it does (ADR-0021).
+  await clearApprovalsIfGated(context.db, { workspace: context.workspace }, issue, document.name);
   await appendEvent(context, {
     kind: "document.updated",
     subjectType: "issue",

@@ -278,6 +278,23 @@ export async function approvalsThisVisit(
   return rows.map((row) => row.memberId);
 }
 
+/**
+ * The same, less the approvals a Document change has since cleared (ADR-0021).
+ * Separate from the pure rule above because it asks the log a question, and
+ * separate from the rule's own reset because a rejection and a rewrite are
+ * different things: one sends the Issue back, the other only starts the
+ * counting again.
+ */
+export async function approvalsStanding(
+  db: Db,
+  issue: Pick<Issue, "id" | "stateEnteredAt" | "approvalsClearedAt">,
+  stateId: string,
+): Promise<Array<{ memberId: string; note: string | null; at: Date }>> {
+  const rows = await approvalsWithNotes(db, issue, stateId);
+  const cleared = issue.approvalsClearedAt;
+  return cleared ? rows.filter((row) => row.at > cleared) : rows;
+}
+
 /** The same approvals, with what each Human said and when: the Issue page reads these. */
 export async function approvalsWithNotes(
   db: Db,
@@ -336,6 +353,12 @@ export interface GateStanding {
   mayApprove: boolean;
   /** Set when `mayApprove` is false, so a screen says why rather than only refusing. */
   refusedBecause: GateRefusal | null;
+  /**
+   * Approvals this Gate had, until the Document under them changed (ADR-0021).
+   * Zero is the ordinary case; anything else is worth a line on the card, so
+   * somebody who approved an hour ago is not left wondering where it went.
+   */
+  clearedByAnEdit: number;
 }
 
 /**
@@ -352,7 +375,7 @@ export async function gateStanding(
   db: Db,
   input: {
     workspaceId: string;
-    issue: Pick<Issue, "id" | "stateEnteredAt">;
+    issue: Pick<Issue, "id" | "stateEnteredAt" | "approvalsClearedAt">;
     state: Pick<WorkflowState, "id" | "approvalsRequired" | "excludeRequester">;
     memberId: string;
     /** This Issue's rulings, oldest first, when the caller has them already. */
@@ -367,12 +390,17 @@ export async function gateStanding(
 ): Promise<GateStanding> {
   const named = await gateApprovers(db, input.state.id);
   const eligible = await eligibleApprovers(db, { workspaceId: input.workspaceId, named });
-  const approved = input.decisions
+  // Approvals a Document change has cleared are history rather than a count
+  // (ADR-0021): the ruling stays in the log, and the Gate asks again. The
+  // boundary is on the Issue row this was called with, so it costs no query.
+  const cleared = input.issue.approvalsClearedAt;
+  const given = input.decisions
     ? approvalsFrom(
         input.decisions.filter((row) => row.stateId === input.state.id),
         input.issue.stateEnteredAt,
       )
     : await approvalsWithNotes(db, input.issue, input.state.id);
+  const approved = cleared ? given.filter((row) => row.at > cleared) : given;
   const requester = input.state.excludeRequester ? await requesterFor(db, input.issue) : null;
   const rows = approved.length
     ? await db.query.member.findMany({
@@ -409,6 +437,7 @@ export async function gateStanding(
     })),
     mayApprove: refusedBecause === null,
     refusedBecause,
+    clearedByAnEdit: given.length - approved.length,
   };
 }
 

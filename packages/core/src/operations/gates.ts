@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  approvalsThisVisit,
+  approvalsStanding,
   assertHuman,
   assertNamedApprover,
   enterState,
@@ -57,7 +57,9 @@ export const gates = {
 
       // A Gate may want more than one Human, and wants them distinct: approving
       // twice is one Human's opinion twice (docs/plans/four-eyes-gates.md).
-      const already = await approvalsThisVisit(context.db, issue, from.id);
+      const already = (await approvalsStanding(context.db, issue, from.id)).map(
+        (one) => one.memberId,
+      );
       const required = from.approvalsRequired;
       if (already.includes(context.member.id)) {
         const wanted = required - already.length;

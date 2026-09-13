@@ -53,6 +53,13 @@ export type EventKind =
    */
   | "gate.approval"
   | "gate.approved"
+  /**
+   * A Document changed while its Issue sat at a Gate that had approvals toward
+   * a threshold, so those approvals were cleared (ADR-0021). A Gate wanting two
+   * Humans exists to stop one text being approved by two people who read two
+   * different texts; nothing is deleted, and the count starts again.
+   */
+  | "gate.approvals_cleared"
   | "gate.rejected"
   | "workflow.updated"
   | "document.created"

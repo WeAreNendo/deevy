@@ -32,6 +32,8 @@ export interface GateStanding {
   approvals: Array<{ memberId: string; name: string | null; note: string | null }>;
   mayApprove: boolean;
   refusedBecause: "not_an_approver" | "requester" | "approved" | "too_few_humans" | null;
+  /** Approvals this Gate had until the Document under them changed. */
+  clearedByAnEdit: number;
 }
 
 /** What has been written since a ruling, as a sentence rather than a list. */
@@ -257,6 +259,17 @@ export function GateControls({
           </SelectContent>
         </Select>
       )}
+
+      {standing && standing.clearedByAnEdit > 0 ? (
+        // Somebody approved this an hour ago and their approval is gone. Saying
+        // why, where the buttons are, is the difference between a rule and a
+        // mystery (ADR-0021).
+        <p className="text-xs text-muted-foreground">
+          {standing.clearedByAnEdit === 1 ? "An approval was" : "Approvals were"} cleared: the
+          Document changed after {standing.clearedByAnEdit === 1 ? "it was" : "they were"} given, so
+          this Gate is asking again.
+        </p>
+      ) : null}
 
       {failed ? <p className="text-sm text-destructive">{failed.message}</p> : null}
 

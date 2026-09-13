@@ -8070,6 +8070,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -8444,6 +8456,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -8731,6 +8755,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -8781,6 +8806,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -9069,6 +9106,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -9174,6 +9212,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -9233,6 +9276,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -9253,6 +9297,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -9454,6 +9499,18 @@
                             "format": "date-time",
                             "x-native-type": "date"
                           },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "assigneeMemberId": {
                             "type": [
                               "string",
@@ -9741,6 +9798,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -9833,6 +9891,18 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "assigneeMemberId": {
                       "type": [
@@ -10208,6 +10278,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -10495,6 +10577,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -10545,6 +10628,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -10833,6 +10928,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -10938,6 +11034,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -10997,6 +11098,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -11017,6 +11119,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -11128,6 +11231,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -11502,6 +11617,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -11789,6 +11916,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -11839,6 +11967,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -12127,6 +12267,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -12232,6 +12373,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -12291,6 +12437,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -12311,6 +12458,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -12403,6 +12551,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -12777,6 +12937,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -13064,6 +13236,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -13114,6 +13287,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -13402,6 +13587,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -13507,6 +13693,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -13566,6 +13757,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -13586,6 +13778,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -13681,6 +13874,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -14055,6 +14260,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -14342,6 +14559,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -14392,6 +14610,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -14680,6 +14910,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -14785,6 +15016,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -14844,6 +15080,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -14864,6 +15101,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -14960,6 +15198,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -15334,6 +15584,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -15621,6 +15883,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -15671,6 +15934,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -15959,6 +16234,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -16064,6 +16340,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -16123,6 +16404,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -16143,6 +16425,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -16239,6 +16522,18 @@
                       "format": "date-time",
                       "x-native-type": "date"
                     },
+                    "approvalsClearedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "assigneeMemberId": {
                       "type": [
                         "string",
@@ -16613,6 +16908,18 @@
                               "format": "date-time",
                               "x-native-type": "date"
                             },
+                            "approvalsClearedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "assigneeMemberId": {
                               "type": [
                                 "string",
@@ -16900,6 +17207,7 @@
                             "description",
                             "stateId",
                             "stateEnteredAt",
+                            "approvalsClearedAt",
                             "assigneeMemberId",
                             "parentId",
                             "createdBy",
@@ -16950,6 +17258,18 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "approvalsClearedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "assigneeMemberId": {
                             "type": [
@@ -17238,6 +17558,7 @@
                           "description",
                           "stateId",
                           "stateEnteredAt",
+                          "approvalsClearedAt",
                           "assigneeMemberId",
                           "parentId",
                           "createdBy",
@@ -17343,6 +17664,11 @@
                             "excludeRequester": {
                               "type": "boolean"
                             },
+                            "clearedByAnEdit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
                             "approvals": {
                               "type": "array",
                               "items": {
@@ -17402,6 +17728,7 @@
                             "required",
                             "eligible",
                             "excludeRequester",
+                            "clearedByAnEdit",
                             "approvals",
                             "mayApprove",
                             "refusedBecause"
@@ -17422,6 +17749,7 @@
                     "description",
                     "stateId",
                     "stateEnteredAt",
+                    "approvalsClearedAt",
                     "assigneeMemberId",
                     "parentId",
                     "createdBy",
@@ -19751,6 +20079,18 @@
                                     "format": "date-time",
                                     "x-native-type": "date"
                                   },
+                                  "approvalsClearedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "x-native-type": "date"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
                                   "assigneeMemberId": {
                                     "type": [
                                       "string",
@@ -20038,6 +20378,7 @@
                                   "description",
                                   "stateId",
                                   "stateEnteredAt",
+                                  "approvalsClearedAt",
                                   "assigneeMemberId",
                                   "parentId",
                                   "createdBy",
