@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, dirname } from "node:path";
 
@@ -189,16 +189,38 @@ async function serveLocally(
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
+  // The backend may answer before it has read what it was sent — a push it
+  // refuses at the door, a request it wants no body for — and exit, at which
+  // point what is still being written into its stdin fails with EPIPE. That is
+  // not a failure of the request: its answer is on stdout and is relayed below.
+  // Left unhandled, the pipe's error is an uncaught exception, and the whole
+  // supervisor goes down because one CGI finished early.
+  backend.stdin.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code !== "EPIPE") console.error(`git http-backend stdin: ${error.message}`);
+  });
   backend.stdin.end(body);
-  await relayCgi(backend.stdout, response);
+  await relayCgi(backend, response);
 }
 
 /**
  * A CGI answer as an HTTP one: headers, then the body streamed rather than
  * held, because a clone's packfile is as big as the repository.
  */
-function relayCgi(stdout: NodeJS.ReadableStream, response: ServerResponse): Promise<void> {
+function relayCgi(backend: ChildProcess, response: ServerResponse): Promise<void> {
   return new Promise((resolve, reject) => {
+    const stdout = backend.stdout;
+    if (!stdout) {
+      reject(new Error("git http-backend has no stdout to answer on"));
+      return;
+    }
+    // A git that is not there, or cannot be started, is the request failing
+    // rather than the process: the caller turns this into a 502 that says so.
+    // Its stdout still ends, empty, a tick later, and must not answer again.
+    let settled = false;
+    backend.on("error", (error) => {
+      settled = true;
+      reject(error);
+    });
     let head = Buffer.alloc(0);
     let sending = false;
     stdout.on("data", (chunk: Buffer) => {
@@ -216,6 +238,8 @@ function relayCgi(stdout: NodeJS.ReadableStream, response: ServerResponse): Prom
       if (rest.length > 0) response.write(rest);
     });
     stdout.on("end", () => {
+      if (settled) return;
+      settled = true;
       if (!sending) response.writeHead(500, { "content-type": "text/plain" }).end("no answer");
       response.end();
       resolve();
