@@ -1,4 +1,7 @@
 .git
+# Whole checkouts of this repository live under .claude/worktrees, and sending
+# them to the daemon is the build context several times over.
+.claude
 **/node_modules
 **/dist
 **/.wrangler

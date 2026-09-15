@@ -177,12 +177,54 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # A Node to run the image smoke with, and nothing else: the script imports
+      # node: builtins only, so this job still pays for no install.
+      - name: Node
+        uses: voidzero-dev/setup-vp@v1.19.0
+        with:
+          node-version-file: .node-version
+          cache: false
+          run-install: false
+
       # Single-architecture and native, so minutes rather than the emulated
       # build's tens of them — but bounded, because a hung docker build that
       # only trips the job timeout wastes twenty minutes saying nothing.
       - name: Build deevy
         timeout-minutes: 10
         run: docker build -f apps/server/Dockerfile -t deevy:ci .
+
+      # Here rather than at the end of the job, so a CRITICAL fails before ten
+      # minutes of runtime builds nobody will look at.
+      #
+      # Three things it does not do, worth saying plainly. It reads OS packages
+      # out of the distroless base's /var/lib/dpkg/status.d — about a dozen, and
+      # that is the surface the base image choice is about. It does NOT see Node
+      # itself, which is a bare binary at /nodejs and not a dpkg package, so a
+      # Node CVE is answered by moving the pinned base digest and not by this.
+      # And it finds no JavaScript at all: `vp pack` inlines every dependency
+      # with no package.json beside it, so the JS supply chain is guarded by the
+      # lockfile. `ignore-unfixed` because a CVE with no fix available reds an
+      # unrelated pull request and teaches its author nothing.
+      #
+      # deevy:ci only. The runtime images are node:24-slim plus an npm-installed
+      # harness, which is a much larger surface and a separate decision.
+      - name: Scan deevy for known vulnerabilities
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: deevy:ci
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      # Everything this image is asked is asked by the script, so that the same
+      # questions can be asked on a laptop — a Dockerfile change used to be
+      # testable only by pushing. It brings its own container, volume and port,
+      # so it never collides with the long-lived deevy below.
+      - name: The deevy image runs deevy
+        run: node apps/server/scripts/smoke-image.ts
+        env:
+          DEEVY_IMAGE: deevy:ci
 
       # One image per harness (docs/harnesses.md). The build stage is shared
       # through the local layer cache, so the four differ by one npm or curl —
@@ -205,18 +247,26 @@ jobs:
             docker build -f apps/agent/Dockerfile --build-arg HARNESS=$harness -t deevy-agent:ci-$harness .
           done
 
-      - name: Smoke the deevy image
+      # The long-lived one the runtime images talk to, which is a second job for
+      # the same image and why the step above does not leave this behind.
+      # Readiness is the image's own HEALTHCHECK rather than a curl from the
+      # host, which makes this wait a test of the mechanism compose's
+      # `depends_on: condition: service_healthy` uses for the agent service.
+      - name: A deevy for the runtime images to talk to
         run: |
           docker network create deevy-ci
           docker run -d --name deevy --network deevy-ci -p 3000:3000 \
             -e BETTER_AUTH_SECRET=ci-secret-ci-secret-ci-secret-ci-secret \
             -e BETTER_AUTH_URL=http://localhost:3000 \
             -e DEEVY_DATABASE_PATH=/data/deevy.sqlite deevy:ci
-          for i in $(seq 1 30); do
-            if curl -fsS http://localhost:3000/healthz; then exit 0; fi
+          for i in $(seq 1 90); do
+            status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' deevy)
+            if [ "$status" = healthy ]; then exit 0; fi
+            if [ "$status" = unhealthy ]; then break; fi
             sleep 1
           done
           docker logs deevy
+          docker inspect -f '{{if .State.Health}}{{json .State.Health}}{{else}}no HEALTHCHECK{{end}}' deevy
           exit 1
 
       # A key nobody issued is refused, and the runtime says so and stops rather
