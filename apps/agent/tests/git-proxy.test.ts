@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -67,6 +67,26 @@ async function proxyFor(options: { upstream: string; token?: string }) {
   return proxy;
 }
 
+/**
+ * A `git` the proxy finds first on PATH, for as long as the test runs. The
+ * script is the whole of what it does; an empty string is a directory with no
+ * git in it at all.
+ */
+async function gitOnPath(script: string | null): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), "deevy-fake-git-"));
+  scratch.push(dir);
+  if (script !== null) {
+    await writeFile(join(dir, "git"), script);
+    await chmod(join(dir, "git"), 0o755);
+  }
+  const was = process.env.PATH;
+  process.env.PATH = script === null ? dir : `${dir}:${was ?? ""}`;
+  closers.push(() => {
+    process.env.PATH = was;
+    return Promise.resolve();
+  });
+}
+
 describe("git through the supervisor", () => {
   it("answers a client that has no credential of its own", async () => {
     const remote = await upstream();
@@ -108,5 +128,38 @@ describe("git through the supervisor", () => {
     // What the session is given is a loopback URL and nothing else: it holds no
     // credential, so there is none for a shell in it to find.
     expect(proxy.url).not.toContain("ghp_secret");
+  });
+
+  it("relays an answer the backend gave before it read what it was sent", async () => {
+    const remote = await upstream();
+    // A CGI that answers at once and never reads its stdin, the way http-backend
+    // does when it refuses a push at the door: its exit closes the pipe while
+    // the body is still being written into it, which is EPIPE on this side.
+    await gitOnPath(
+      "#!/bin/sh\nprintf 'Status: 403\\r\\nContent-Type: text/plain\\r\\n\\r\\nnot here'\n",
+    );
+    const proxy = await proxyFor({ upstream: remote });
+
+    const answered = await fetch(`${proxy.url}/git-receive-pack`, {
+      method: "POST",
+      headers: { "content-type": "application/x-git-receive-pack-request" },
+      // Larger than a pipe holds, so the write is still under way when the
+      // backend is gone rather than parked in the kernel's buffer.
+      body: new Uint8Array(4 * 1024 * 1024),
+    });
+
+    expect(answered.status).toBe(403);
+    expect(await answered.text()).toBe("not here");
+  });
+
+  it("says so when there is no git to serve the repository with", async () => {
+    const remote = await upstream();
+    await gitOnPath(null);
+    const proxy = await proxyFor({ upstream: remote });
+
+    const answered = await fetch(`${proxy.url}/info/refs?service=git-upload-pack`);
+
+    expect(answered.status).toBe(502);
+    expect(await answered.text()).toMatch(/could not be reached/);
   });
 });
