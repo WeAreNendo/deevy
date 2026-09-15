@@ -129,7 +129,7 @@ other way round, slice 3 covers three and slice 2 adds the fourth.
 
 ## Slice 1: A Gate can ask for more than one Human (M)
 
-**Built**, as [#51](https://github.com/mattallty/deevy/pull/51). The two things it found are folded into the
+**Built**, as [#51](https://github.com/WeAreNendo/deevy/pull/51). The two things it found are folded into the
 decisions above. The threshold has no UI until slice 3, and omitting `approvalsRequired` when saving a
 Workflow leaves each Gate's number alone, so the editor as it stands cannot widen a Gate by accident.
 
@@ -178,7 +178,7 @@ prove by not changing.
 
 ## Slice 2: The Human who asked cannot be the one who agrees (M)
 
-**Built**, as [#52](https://github.com/mattallty/deevy/pull/52). Two notes. Excluding the requester turns out
+**Built**, as [#52](https://github.com/WeAreNendo/deevy/pull/52). Two notes. Excluding the requester turns out
 to reserve a Human from _every_ count, threshold 1 included, because which Human it will be is not known
 until there is an Issue — so a Workspace of one refuses the setting outright, which is the solo-developer
 case this plan said would find the off-by-one. And `tests/budget.test.ts` caught the first version adding two
@@ -211,7 +211,7 @@ is today's behaviour and stays the default. The requester is not in the inbox ro
 
 ## Slice 3: Everyone can see where a Gate stands (M)
 
-**Built**, as [#53](https://github.com/mattallty/deevy/pull/53), and it took the Workflow editor with it —
+**Built**, as [#53](https://github.com/WeAreNendo/deevy/pull/53), and it took the Workflow editor with it —
 slice 1 and slice 2 were reachable only over the API until this, which is the right seam but worth saying.
 Two notes. `too_few_humans` is not a refusal like the other three: the operation still accepts that approval,
 because refusing it would be a rule this plan did not ask for and an admin lowering the threshold is the fix;
@@ -242,7 +242,7 @@ control is disabled for the requester with the reason visible; a Gate that canno
 
 ## Slice 4: Docs, the ADR, and the release (S)
 
-**Built**, as [#54](https://github.com/mattallty/deevy/pull/54). Docs only, so no changeset: the three code
+**Built**, as [#54](https://github.com/WeAreNendo/deevy/pull/54). Docs only, so no changeset: the three code
 slices carry the release notes between them. The acceptance walk was re-run and passes on both deployments,
 which is the claim that a Gate wanting one approval from anybody is untouched.
 

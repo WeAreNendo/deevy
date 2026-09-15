@@ -2,7 +2,7 @@
 # .env and fill it in, or set these in your own environment.
 services:
   deevy:
-    image: ghcr.io/mattallty/deevy:latest
+    image: ghcr.io/WeAreNendo/deevy:latest
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -58,7 +58,7 @@ services:
     # One image per harness: `latest` is Claude Code; `:opencode`, `:cursor` and
     # `:copilot` carry the others, each wanting its own credential in place of
     # ANTHROPIC_API_KEY (docs/harnesses.md).
-    image: ${DEEVY_AGENT_IMAGE:-ghcr.io/mattallty/deevy-agent:latest}
+    image: ${DEEVY_AGENT_IMAGE:-ghcr.io/WeAreNendo/deevy-agent:latest}
     restart: unless-stopped
     # The supervisor is root so it can run each session as another user, which
     # is what keeps the Agent's key and the git token out of a session's reach.

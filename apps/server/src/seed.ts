@@ -651,13 +651,13 @@ await builder.api.runs.postActivity({
 });
 await builder.api.links.add({
   issueKey: shipped.key,
-  url: "https://github.com/mattallty/deevy/pull/12",
+  url: "https://github.com/WeAreNendo/deevy/pull/12",
   title: "Sign the delivery id",
   runId: shippedRun.id,
 });
 await builder.api.links.add({
   issueKey: shipped.key,
-  url: "https://github.com/mattallty/deevy/tree/deevy/DEV-webhook-delivery-id",
+  url: "https://github.com/WeAreNendo/deevy/tree/deevy/DEV-webhook-delivery-id",
   runId: shippedRun.id,
 });
 await builder.api.runs.postActivity({
