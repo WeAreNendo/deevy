@@ -171,7 +171,7 @@ describe("the milestone", () => {
 
     await tool(app, key, "links_add", {
       issueKey: "DEV-1",
-      url: "https://github.com/mattallty/deevy/pull/12",
+      url: "https://github.com/WeAreNendo/deevy/pull/12",
       runId,
     });
     const finished = structured(

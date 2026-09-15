@@ -11,18 +11,20 @@ afterEach(() => {
 
 describe("parseLink", () => {
   it("recognises a GitHub pull request, commit and branch", () => {
-    expect(parseLink("https://github.com/mattallty/deevy/pull/12")).toMatchObject({
+    expect(parseLink("https://github.com/WeAreNendo/deevy/pull/12")).toMatchObject({
       kind: "pull_request",
       ref: "12",
     });
-    expect(parseLink("https://github.com/mattallty/deevy/commit/abc123def456")).toMatchObject({
+    expect(parseLink("https://github.com/WeAreNendo/deevy/commit/abc123def456")).toMatchObject({
       kind: "commit",
       ref: "abc123def456",
     });
-    expect(parseLink("https://github.com/mattallty/deevy/tree/feature/live-events")).toMatchObject({
-      kind: "branch",
-      ref: "feature/live-events",
-    });
+    expect(parseLink("https://github.com/WeAreNendo/deevy/tree/feature/live-events")).toMatchObject(
+      {
+        kind: "branch",
+        ref: "feature/live-events",
+      },
+    );
   });
 
   it("recognises a GitLab merge request as a pull request", () => {
@@ -78,7 +80,7 @@ describe("links.add", () => {
 
     const link = await client.links.add({
       issueKey: "DEV-1",
-      url: "https://github.com/mattallty/deevy/pull/12",
+      url: "https://github.com/WeAreNendo/deevy/pull/12",
     });
 
     expect(link).toMatchObject({
@@ -128,11 +130,11 @@ describe("links.remove", () => {
     const { admin, project } = await withIssue(db);
     const planner = await agentWithLink(db, admin, project.id, {
       name: "Planner",
-      url: "https://github.com/mattallty/deevy/pull/12",
+      url: "https://github.com/WeAreNendo/deevy/pull/12",
     });
     const builder = await agentWithLink(db, admin, project.id, {
       name: "Builder",
-      url: "https://github.com/mattallty/deevy/pull/13",
+      url: "https://github.com/WeAreNendo/deevy/pull/13",
     });
 
     await expect(builder.client.links.remove({ linkId: planner.link.id })).rejects.toMatchObject({
@@ -168,7 +170,7 @@ describe("links.remove", () => {
     const { admin, client, project } = await withIssue(db);
     const planner = await agentWithLink(db, admin, project.id, {
       name: "Planner",
-      url: "https://github.com/mattallty/deevy/pull/12",
+      url: "https://github.com/WeAreNendo/deevy/pull/12",
     });
 
     await planner.client.links.remove({ linkId: planner.link.id });

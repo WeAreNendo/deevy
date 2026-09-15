@@ -130,7 +130,7 @@ text and interpolating it into a shell would run it.
 ```json
 {
   "$schema": "https://unpkg.com/@changesets/config/schema.json",
-  "changelog": ["@changesets/changelog-github", { "repo": "mattallty/deevy" }],
+  "changelog": ["@changesets/changelog-github", { "repo": "WeAreNendo/deevy" }],
   "commit": false,
   "baseBranch": "main",
   "access": "restricted",

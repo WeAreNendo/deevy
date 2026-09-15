@@ -6,11 +6,11 @@ admin, and everyone else joins through the allowlist or an invitation.
 
 ## The image
 
-Published to `ghcr.io/mattallty/deevy` on every `v*` tag, for `linux/amd64` and `linux/arm64`. Tags are the
+Published to `ghcr.io/WeAreNendo/deevy` on every `v*` tag, for `linux/amd64` and `linux/arm64`. Tags are the
 version (`v0.4.0`) and `latest`. The image carries the bundled Node server, the migrations, and the built SPA;
 it runs the SPA and the API on one port, so there is no separate web container.
 
-The reference runtime is `ghcr.io/mattallty/deevy-agent`, one image per harness
+The reference runtime is `ghcr.io/WeAreNendo/deevy-agent`, one image per harness
 ([docs/harnesses.md](./harnesses.md)): `deevy-agent:claude-code`, `deevy-agent:opencode`,
 `deevy-agent:cursor` and `deevy-agent:copilot`, each also tagged `<version>-<harness>`. `deevy-agent:latest`
 and the bare version tags are Claude Code.
@@ -22,10 +22,10 @@ directly, with no account:
 
 ```bash
 img=deevy   # or deevy-agent
-token=$(curl -s "https://ghcr.io/token?scope=repository:mattallty/$img:pull" | jq -r .token)
+token=$(curl -s "https://ghcr.io/token?scope=repository:WeAreNendo/$img:pull" | jq -r .token)
 curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $token" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  "https://ghcr.io/v2/mattallty/$img/manifests/latest"   # 200 public, 403 private
+  "https://ghcr.io/v2/WeAreNendo/$img/manifests/latest"   # 200 public, 403 private
 ```
 
 Building from source needs no account either way and produces the same image — the release workflow runs
@@ -45,7 +45,7 @@ docker run -d --name deevy -p 3000:3000 -v deevy-data:/data \
   -e GITLAB_CLIENT_ID=... -e GITLAB_CLIENT_SECRET=... \
   -e GOOGLE_CLIENT_ID=... -e GOOGLE_CLIENT_SECRET=... \
   -e DEEVY_ADMIN_EMAIL=you@example.com \
-  deevy:local   # or ghcr.io/mattallty/deevy:latest
+  deevy:local   # or ghcr.io/WeAreNendo/deevy:latest
 ```
 
 ## Cutting a release
@@ -988,10 +988,14 @@ repository — step 3 of [Deploying to a free account](#deploying-to-a-free-acco
 ## Upgrading
 
 ```bash
-docker pull ghcr.io/mattallty/deevy:v0.1.4
+docker pull ghcr.io/WeAreNendo/deevy:v0.8.0
 docker stop deevy && docker rm deevy
-docker run -d --name deevy ... ghcr.io/mattallty/deevy:v0.1.4   # same -v deevy-data:/data
+docker run -d --name deevy ... ghcr.io/WeAreNendo/deevy:v0.8.0   # same -v deevy-data:/data
 ```
+
+Releases before v0.8.0 were published under `ghcr.io/mattallty/deevy`, deevy's home before it moved to the
+WeAreNendo organisation. Those tags stay where they are and nothing newer lands beside them, so an install
+still pulling from there is pinned to the last release made before the move until its image path changes.
 
 Take a backup first (below). Migrations only ever move forward: there is no down migration, so restoring a
 backup is how you go back.

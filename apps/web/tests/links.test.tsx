@@ -19,7 +19,7 @@ const stub = vi.hoisted(() => ({
     {
       id: "k1",
       kind: "pull_request",
-      url: "https://github.com/mattallty/deevy/pull/12",
+      url: "https://github.com/WeAreNendo/deevy/pull/12",
       title: null,
       ref: "12",
     },
@@ -68,7 +68,7 @@ describe("the Links section", () => {
     await mountAt("/issues/DEV-1", { memberName: "Ada" });
 
     fireEvent.change(await screen.findByLabelText("Add a link"), {
-      target: { value: "https://github.com/mattallty/deevy/pull/13" },
+      target: { value: "https://github.com/WeAreNendo/deevy/pull/13" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add link" }));
 
@@ -76,7 +76,7 @@ describe("the Links section", () => {
       expect(stub.added).toContainEqual(
         expect.objectContaining({
           issueKey: "DEV-1",
-          url: "https://github.com/mattallty/deevy/pull/13",
+          url: "https://github.com/WeAreNendo/deevy/pull/13",
         }),
       ),
     );

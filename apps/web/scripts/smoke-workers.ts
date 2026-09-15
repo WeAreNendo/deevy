@@ -902,7 +902,7 @@ async function theAgentLoopOnWorkerd(origin: string): Promise<void> {
   // It carries on, attaches the pull request it opened, and finishes.
   await tool(origin, key, "links_add", {
     issueKey,
-    url: "https://github.com/mattallty/deevy/pull/12",
+    url: "https://github.com/WeAreNendo/deevy/pull/12",
     runId,
   });
   const finished = structured(
