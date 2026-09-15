@@ -988,12 +988,12 @@ repository — step 3 of [Deploying to a free account](#deploying-to-a-free-acco
 ## Upgrading
 
 ```bash
-docker pull ghcr.io/WeAreNendo/deevy:v0.8.0
+docker pull ghcr.io/WeAreNendo/deevy:v0.7.1
 docker stop deevy && docker rm deevy
-docker run -d --name deevy ... ghcr.io/WeAreNendo/deevy:v0.8.0   # same -v deevy-data:/data
+docker run -d --name deevy ... ghcr.io/WeAreNendo/deevy:v0.7.1   # same -v deevy-data:/data
 ```
 
-Releases before v0.8.0 were published under `ghcr.io/mattallty/deevy`, deevy's home before it moved to the
+Releases before v0.7.1 were published under `ghcr.io/mattallty/deevy`, deevy's home before it moved to the
 WeAreNendo organisation. Those tags stay where they are and nothing newer lands beside them, so an install
 still pulling from there is pinned to the last release made before the move until its image path changes.
 
