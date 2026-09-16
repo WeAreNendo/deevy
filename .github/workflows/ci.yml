@@ -177,13 +177,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # A Node to run the image smoke with, and nothing else: the script imports
-      # node: builtins only, so this job still pays for no install.
+      # A Node to run the image smoke with: the script imports node: builtins
+      # only, so nothing is installed here.
       - name: Node
         uses: voidzero-dev/setup-vp@v1.19.0
         with:
           node-version-file: .node-version
-          cache: false
+          cache: true
           run-install: false
 
       # Single-architecture and native, so minutes rather than the emulated
@@ -209,7 +209,7 @@ jobs:
       # deevy:ci only. The runtime images are node:24-slim plus an npm-installed
       # harness, which is a much larger surface and a separate decision.
       - name: Scan deevy for known vulnerabilities
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: deevy:ci
           scanners: vuln
