@@ -10,7 +10,7 @@ The deevy image now runs as an unprivileged user on Google's distroless Node bas
 docker run --rm -v deevy-data:/data alpine chown -R 65532:65532 /data
 ```
 
-Do this **before** starting the new image, and do not take a running container as proof you did: deevy writes nothing at startup that it has not already written, so on a root-owned volume it starts, answers `/healthz`, reports `healthy`, and then fails on the first thing anyone tries to save. The command is idempotent; run it if you are unsure.
+If you forget, deevy tells you: it checks that it can write `/data` before it opens the database and stops with that exact command in the error. That check is new in this release and it matters more than it sounds — the migrations on an upgraded volume are already applied and nothing else writes at startup, so without it a root-owned volume would carry the container all the way to `healthy` and only fail at the first thing anyone tried to save. The command is idempotent; run it if you are unsure.
 
 A fresh install needs nothing — a new named volume takes its ownership from the image. A host directory you bind-mount does not, so `chown -R 65532:65532` that before the first start.
 

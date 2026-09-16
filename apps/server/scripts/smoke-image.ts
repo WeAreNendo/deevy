@@ -186,6 +186,8 @@ async function smoke(): Promise<void> {
     listing.output,
   );
 
+  await refusesAVolumeItCannotWrite();
+
   await docker("stop", container);
   await docker("start", container);
   check(
@@ -193,6 +195,58 @@ async function smoke(): Promise<void> {
     await healthy(`http://127.0.0.1:${String(await publishedPort())}`),
     await logs(),
   );
+}
+
+/**
+ * The shape an upgrade leaves behind: a volume every file of which belongs to
+ * root, because that is who earlier releases ran as.
+ *
+ * Before the preflight this was the worst case there is — deevy applied no
+ * migrations (they were applied already), bound its listener, answered /healthz
+ * and reported `healthy`, then failed on the first write anybody attempted. It
+ * must now refuse to start and say which command fixes it.
+ */
+async function refusesAVolumeItCannotWrite(): Promise<void> {
+  const stale = `${volume}-stale`;
+  await docker("volume", "create", stale);
+  try {
+    // Copy the database this run already made, as root, which is the whole point.
+    await attempt(
+      "run",
+      "--rm",
+      "-v",
+      `${volume}:/from`,
+      "-v",
+      `${stale}:/data`,
+      "busybox",
+      "sh",
+      "-c",
+      "cp /from/deevy.sqlite /data/ && chown -R 0:0 /data",
+    );
+    const refused = await attempt(
+      "run",
+      "--rm",
+      "-v",
+      `${stale}:/data`,
+      "-e",
+      "BETTER_AUTH_SECRET=smoke-secret-that-is-at-least-32-characters",
+      "-e",
+      "BETTER_AUTH_URL=http://localhost:3000",
+      image,
+    );
+    check(
+      "it refuses a volume it cannot write rather than looking well",
+      refused.code !== 0,
+      refused.output,
+    );
+    check(
+      "and names the command that fixes it",
+      /chown -R 65532:65532/.test(refused.output),
+      refused.output,
+    );
+  } finally {
+    await attempt("volume", "rm", "-f", stale);
+  }
 }
 
 async function health(template: string): Promise<string> {

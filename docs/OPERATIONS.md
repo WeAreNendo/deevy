@@ -965,7 +965,7 @@ writes `-wal` and `-shm` alongside it.
 deevy runs as uid 65532 and `/data` must belong to it. A **named volume created fresh** takes its ownership
 from the image and needs nothing. A **host directory** does not: `chown -R 65532:65532` it before the first
 start, or deevy will be able to read it and not write it. So will a volume written by a release before
-v0.9.0, which ran as root — see [Upgrading](#upgrading).
+v0.8.0, which ran as root — see [Upgrading](#upgrading).
 
 ## The schema, on either runtime
 
@@ -1016,10 +1016,11 @@ volume once, with the container stopped:
 docker run --rm -v deevy-data:/data alpine chown -R 65532:65532 /data
 ```
 
-**Do this before you start the new image, and do not take a running container as proof you did.** deevy
-reads the database at startup and writes nothing it has not already written, so on a root-owned volume it
-starts, listens, answers `/healthz`, and reports `healthy` — and then fails on the first thing anyone tries
-to save. The command above is idempotent; run it if you are unsure.
+If you forget, deevy says so and stops: it checks that it can write `/data` before it opens the database,
+and names that exact command in the error. It does not start and then fail later, which is what it would do
+if it only found out at the first write — the migrations are already applied and nothing else writes at
+startup, so a root-owned volume would otherwise carry it all the way to `healthy`. The command is
+idempotent; run it if you are unsure.
 
 Releases before v0.7.1 were published under `ghcr.io/mattallty/deevy`, deevy's home before it moved to the
 WeAreNendo organisation. Those tags stay where they are and nothing newer lands beside them, so an install
@@ -1059,8 +1060,9 @@ docker start deevy
 Deleting the `-wal` and `-shm` files matters: leaving a stale write-ahead log next to a restored database
 gives SQLite two disagreeing versions of the truth.
 
-The `chown` matters for the same reason the one in [Upgrading](#upgrading) does: the sidecar writes as root,
-deevy runs as uid 65532, and a database it can read but not write starts cleanly and reports `healthy`.
+The `chown` matters for the same reason the one in [Upgrading](#upgrading) does: the sidecar writes as root
+and deevy runs as uid 65532. Without it deevy refuses to start and names the command, which is better than
+the alternative but still a restore that does not come back up.
 
 ## Health
 
@@ -1069,5 +1071,6 @@ it a usable readiness probe. The image asks it of itself every 30 seconds, so `d
 with nothing configured; `docker inspect -f '{{json .State.Health}}' deevy` says what the last few answers
 were. It follows `DEEVY_PORT`, so moving the port keeps it working.
 
-It says the server is up, not that it can write — see [Upgrading](#upgrading) for the one case where those
-differ. `/api/docs` serves the API reference.
+If it answers at all the server can write its database: that is checked before the listener binds, so a
+volume deevy cannot write is a container that exited rather than a healthy one that cannot save anything.
+`/api/docs` serves the API reference.
