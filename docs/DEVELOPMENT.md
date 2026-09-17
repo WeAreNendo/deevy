@@ -434,6 +434,15 @@ docker build -f apps/server/Dockerfile -t deevy .
 docker run -p 3000:3000 -v deevy-data:/data --env-file .env -e BETTER_AUTH_URL=http://localhost:3000 deevy
 ```
 
+The runtime stage is distroless and runs as uid 65532, so there is no shell in it to debug with and `/data`
+has to belong to that user — a named volume created fresh does, a host directory you point at does not
+(docs/OPERATIONS.md, "The volume"). To ask the built image whether it still does all of that:
+
+```bash
+vp run server#test:image                        # builds deevy:smoke if it is absent
+DEEVY_IMAGE=deevy:ci vp run server#test:image   # one already built
+```
+
 ## Pinned pre-release dependencies
 
 Better Auth 1.7.2, Drizzle 1.0.0-rc.4, and oRPC 2.0.0-beta.32 are pinned exactly in `pnpm-workspace.yaml`

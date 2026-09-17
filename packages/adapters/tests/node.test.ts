@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { workspace } from "@deevy/db";
@@ -16,6 +16,43 @@ describe("node adapters", () => {
     const [pragma] = await db.all<{ foreign_keys: number }>("PRAGMA foreign_keys");
     expect(pragma?.foreign_keys).toBe(1);
     close();
+  });
+
+  /**
+   * A database it can read and not write is the shape an upgrade leaves behind:
+   * the image runs as uid 65532 and every file an earlier release wrote belongs
+   * to root. SQLite does not fail a `journal_mode` it cannot honour — it stays
+   * in `delete` and says nothing — so without this the server starts, answers
+   * /healthz, reports healthy, and fails on the first write anybody attempts.
+   *
+   * Both halves are here because they fail differently: a database that is not
+   * there yet cannot be created at all, and one that is there opens and lies.
+   */
+  it("refuses a directory it cannot create the database in", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "deevy-readonly-"));
+    await chmod(dir, 0o555);
+    try {
+      expect(() => openDatabase({ path: join(dir, "deevy.sqlite"), migrationsFolder })).toThrow(
+        /is not writable/,
+      );
+    } finally {
+      await chmod(dir, 0o755);
+    }
+  });
+
+  it("refuses a database it can read but not write, and says whose it must be", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "deevy-readonly-"));
+    const path = join(dir, "deevy.sqlite");
+    // Left behind by a run that could write, the way an upgrade finds it.
+    openDatabase({ path, migrationsFolder }).close();
+    await chmod(dir, 0o555);
+    try {
+      expect(() => openDatabase({ path, migrationsFolder })).toThrow(
+        new RegExp(`chown -R ${String(process.getuid?.())}`),
+      );
+    } finally {
+      await chmod(dir, 0o755);
+    }
   });
 
   it("serves files and falls back to index.html", async () => {

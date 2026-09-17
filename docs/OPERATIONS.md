@@ -10,6 +10,15 @@ Published to `ghcr.io/WeAreNendo/deevy` on every `v*` tag, for `linux/amd64` and
 version (`v0.4.0`) and `latest`. The image carries the bundled Node server, the migrations, and the built SPA;
 it runs the SPA and the API on one port, so there is no separate web container.
 
+It is built on Google's distroless Node base and carries nothing else: no shell, no package manager, no
+`apt`, no `curl`. There is no `docker exec ... sh` to be had, which is the point — anything that gets into
+the container finds no tools there. Work that needs a shell is done from a sidecar against the same volume,
+the way [Backup and restore](#backup-and-restore) does it. It runs as uid **65532**, so everything under
+`/data` has to belong to that user; see [The volume](#the-volume) and [Upgrading](#upgrading).
+
+The image also carries its own healthcheck, so `docker ps` shows `healthy` and Compose's
+`depends_on: condition: service_healthy` works with nothing configured.
+
 The reference runtime is `ghcr.io/WeAreNendo/deevy-agent`, one image per harness
 ([docs/harnesses.md](./harnesses.md)): `deevy-agent:claude-code`, `deevy-agent:opencode`,
 `deevy-agent:cursor` and `deevy-agent:copilot`, each also tagged `<version>-<harness>`. `deevy-agent:latest`
@@ -953,6 +962,11 @@ Everything is in one SQLite file under `/data`. Migrations are applied at startu
 volume upgrades itself. Mount a named volume or a host directory; do not mount the file itself, because SQLite
 writes `-wal` and `-shm` alongside it.
 
+deevy runs as uid 65532 and `/data` must belong to it. A **named volume created fresh** takes its ownership
+from the image and needs nothing. A **host directory** does not: `chown -R 65532:65532` it before the first
+start, or deevy will be able to read it and not write it. So will a volume written by a release before
+v0.8.0, which ran as root — see [Upgrading](#upgrading).
+
 ## The schema, on either runtime
 
 One schema, two appliers, two journals (ADR-0008). Nothing is shared between them, because nothing needs to
@@ -993,6 +1007,21 @@ docker stop deevy && docker rm deevy
 docker run -d --name deevy ... ghcr.io/WeAreNendo/deevy:v0.7.1   # same -v deevy-data:/data
 ```
 
+### Coming from a release before v0.8.0
+
+Those images ran as root, so everything on the volume belongs to root; v0.8.0 runs as uid 65532. Give it the
+volume once, with the container stopped:
+
+```bash
+docker run --rm -v deevy-data:/data alpine chown -R 65532:65532 /data
+```
+
+If you forget, deevy says so and stops: it checks that it can write `/data` before it opens the database,
+and names that exact command in the error. It does not start and then fail later, which is what it would do
+if it only found out at the first write — the migrations are already applied and nothing else writes at
+startup, so a root-owned volume would otherwise carry it all the way to `healthy`. The command is
+idempotent; run it if you are unsure.
+
 Releases before v0.7.1 were published under `ghcr.io/mattallty/deevy`, deevy's home before it moved to the
 WeAreNendo organisation. Those tags stay where they are and nothing newer lands beside them, so an install
 still pulling from there is pinned to the last release made before the move until its image path changes.
@@ -1010,7 +1039,8 @@ sessions carry on as if nothing were wrong.
 ## Backup and restore
 
 `sqlite3 .backup` takes a consistent copy of a live database, which copying the file does not. The runtime
-image is `node:24-slim` and has no `sqlite3` binary, so run it from a small sidecar against the same volume:
+image is distroless and has no `sqlite3` binary — no shell either — so run it from a small sidecar against
+the same volume:
 
 ```bash
 docker run --rm -v deevy-data:/data -v "$PWD:/out" alpine \
@@ -1022,14 +1052,25 @@ Restoring is the reverse, with the container stopped so nothing is mid-write:
 ```bash
 docker stop deevy
 docker run --rm -v deevy-data:/data -v "$PWD:/in" alpine \
-  sh -c 'rm -f /data/deevy.sqlite-wal /data/deevy.sqlite-shm && cp /in/deevy-2026-09-03.sqlite /data/deevy.sqlite'
+  sh -c 'rm -f /data/deevy.sqlite-wal /data/deevy.sqlite-shm && cp /in/deevy-2026-09-03.sqlite /data/deevy.sqlite \
+         && chown 65532:65532 /data/deevy.sqlite'
 docker start deevy
 ```
 
 Deleting the `-wal` and `-shm` files matters: leaving a stale write-ahead log next to a restored database
 gives SQLite two disagreeing versions of the truth.
 
+The `chown` matters for the same reason the one in [Upgrading](#upgrading) does: the sidecar writes as root
+and deevy runs as uid 65532. Without it deevy refuses to start and names the command, which is better than
+the alternative but still a restore that does not come back up.
+
 ## Health
 
 `/healthz` answers `{"ok":true}` as soon as the server is listening and the migrations have run, which makes
-it a usable container healthcheck and readiness probe. `/api/docs` serves the API reference.
+it a usable readiness probe. The image asks it of itself every 30 seconds, so `docker ps` reports `healthy`
+with nothing configured; `docker inspect -f '{{json .State.Health}}' deevy` says what the last few answers
+were. It follows `DEEVY_PORT`, so moving the port keeps it working.
+
+If it answers at all the server can write its database: that is checked before the listener binds, so a
+volume deevy cannot write is a container that exited rather than a healthy one that cannot save anything.
+`/api/docs` serves the API reference.
