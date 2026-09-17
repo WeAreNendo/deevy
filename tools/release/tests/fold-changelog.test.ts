@@ -21,6 +21,7 @@ const packages = [
   "apps/web",
   "apps/server",
   "apps/agent",
+  "apps/cli",
   "tools/release",
 ];
 
