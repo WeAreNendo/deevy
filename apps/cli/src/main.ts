@@ -94,7 +94,7 @@ export function program(): Command {
     });
 
   // Everything else: one command per operation, from the registry.
-  addGeneratedCommands(cli, (url) => ({ origin: originFrom(url) }));
+  addGeneratedCommands(cli, (url) => ({ origin: originFrom(url), cliVersion: CLI_VERSION }));
 
   return cli;
 }

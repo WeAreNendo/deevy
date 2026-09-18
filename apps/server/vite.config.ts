@@ -1,4 +1,7 @@
+import { createRequire } from "node:module";
 import { defineConfig } from "vite-plus";
+
+const { version } = createRequire(import.meta.url)("./package.json") as { version: string };
 
 export default defineConfig({
   run: {
@@ -22,6 +25,9 @@ export default defineConfig({
     // cannot resolve the workspace packages' `.ts` exports on its own, and the
     // pack already knows how (docs/DEVELOPMENT.md, "Running without an OAuth App").
     entry: ["src/index.ts", "src/seed.ts"],
+    // The instance's own version, for the API document a client discovers it
+    // through. Read here because the bundle has no package.json beside it.
+    define: { __DEEVY_VERSION__: JSON.stringify(version) },
     platform: "node",
     format: "esm",
     dts: false,

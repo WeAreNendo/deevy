@@ -29,6 +29,12 @@ export interface AppOptions {
   /** The public origin of this instance, for the MCP surface's RFC 9728 challenge. */
   baseURL?: string;
   /**
+   * What this deevy is, as a version string. It reaches the OpenAPI document a
+   * client discovers the instance through, so a CLI built from a newer tree can
+   * say which two versions disagree rather than only that they do.
+   */
+  version?: string;
+  /**
    * The instance secret. The MCP surface signs the `requestState` of a Gate
    * elicitation with it (mcp/elicitation.ts).
    */
@@ -120,6 +126,7 @@ export function createApp({
   auth,
   origin = [],
   baseURL,
+  version,
   secret,
   live,
   jobs = discardingJobQueue(),
@@ -228,7 +235,7 @@ export function createApp({
       new OpenAPIReferenceHandlerPlugin({
         docsPath: "/docs",
         specPath: "/spec.json",
-        spec: () => generateSpec(),
+        spec: () => generateSpec(version),
       }),
     ],
     interceptors: [onError(reportUnexpected)],

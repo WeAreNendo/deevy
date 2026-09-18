@@ -33,7 +33,7 @@ export interface TestDeevy {
   close: () => void;
 }
 
-export function testDeevy(): TestDeevy {
+export function testDeevy(options: { version?: string } = {}): TestDeevy {
   const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
   const auth = createAuth({
     db,
@@ -43,7 +43,12 @@ export function testDeevy(): TestDeevy {
       providers: { github: { clientId: "github-client", clientSecret: "github-secret" } },
     },
   });
-  const app = createApp({ db, auth, baseURL });
+  const app = createApp({
+    db,
+    auth,
+    baseURL,
+    ...(options.version ? { version: options.version } : {}),
+  });
   const asFetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(String(input), init);
     return Promise.resolve(app.request(request));

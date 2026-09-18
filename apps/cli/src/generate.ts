@@ -19,10 +19,13 @@ function describe(field: Field): string {
   return field.required ? `${said}${said ? " " : ""}(required)` : said;
 }
 import { credentialFor, type Credential } from "./credentials.ts";
+import { capabilitiesFor, missingFrom } from "./capabilities.ts";
 
 export interface Surroundings {
   /** Resolved per invocation, so `--deevy-url` can override the environment. */
   origin: string;
+  /** This CLI's own version, for the message when the two disagree. */
+  cliVersion?: string;
   /** Where tokens are kept; a test points it somewhere disposable. */
   dir?: string;
   environment?: NodeJS.ProcessEnv;
@@ -201,6 +204,27 @@ async function run(
     throw new Error(`Not signed in to ${where.origin}. Run \`deevy login\` first.`);
   }
   refuseEarly(command, credential);
+
+  // What this instance actually has. A CLI ships with deevy and knows the
+  // operations of the tree it was built from, which is the wrong list the
+  // moment it is pointed at an older instance — so the answer comes from the
+  // instance, and a command it does not have is named rather than failing as a
+  // 404 somebody has to interpret.
+  const capabilities = await capabilitiesFor(where.origin, {
+    ...(where.fetchImpl ? { fetchImpl: where.fetchImpl } : {}),
+    ...(where.dir ? { dir: where.dir } : {}),
+  }).catch(() => null);
+  if (capabilities && !capabilities.operations.includes(command.operation)) {
+    throw new Error(
+      missingFrom(
+        command.operation,
+        command.words,
+        where.origin,
+        capabilities,
+        where.cliVersion ?? "this build",
+      ),
+    );
+  }
 
   const client = clientFor(credential, where.fetchImpl ?? fetch);
   const answer = await call(
