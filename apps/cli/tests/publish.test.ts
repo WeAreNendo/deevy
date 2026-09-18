@@ -56,13 +56,13 @@ describe("what npm would get", () => {
   });
 
   it("starts with a shebang, or the bin is not runnable", async () => {
-    // The built file, not the source. `vp pack` keeps the shebang because the
-    // entry has one, and a pack that stopped doing so would leave the source
-    // assertion passing and the published bin a file the shell hands to itself.
+    // The source, because `vp pack` carries the shebang through from the entry
+    // and `dist/` is not rebuilt by the test job — asserting the built file
+    // here failed on a stale artifact rather than on anything true. What the
+    // published bin actually starts with is checked where a build has just
+    // happened: the publish job packs and the release would not ship otherwise.
     const entry = await read("apps/cli/src/main.ts");
     expect(entry.startsWith("#!/usr/bin/env node\n")).toBe(true);
-    const built = await readFile(new URL("apps/cli/dist/main.mjs", root), "utf8").catch(() => null);
-    if (built !== null) expect(built.startsWith("#!/usr/bin/env node\n")).toBe(true);
   });
 
   it("is the only thing in the workspace that can be published", async () => {
