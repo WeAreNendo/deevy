@@ -198,19 +198,21 @@ describe("a generated command against a real deevy", () => {
 
     // The Project comes from a generated command too, which is one more thing
     // nobody wrote working against the real thing.
-    await root.parseAsync(["projects", "create", "--key", "DEV", "--name", "Dev"], {
+    // `--json` because this asserts on the exact answer, which is what the
+    // flag is for; the shaped output is the default and is tested in render.
+    await root.parseAsync(["projects", "create", "--key", "DEV", "--name", "Dev", "--json"], {
       from: "user",
     });
 
     await root.parseAsync(
-      ["issues", "create", "--project-key", "DEV", "--title", "Something to do"],
+      ["issues", "create", "--project-key", "DEV", "--title", "Something to do", "--json"],
       { from: "user" },
     );
     const created = JSON.parse(said.at(-1) ?? "{}") as { key: string; title: string };
     expect(created.title).toBe("Something to do");
     expect(created.key).toMatch(/^DEV-\d+$/);
 
-    await root.parseAsync(["issues", "list", "--project-key", "DEV"], { from: "user" });
+    await root.parseAsync(["issues", "list", "--project-key", "DEV", "--json"], { from: "user" });
     const listed = JSON.parse(said.at(-1) ?? "{}") as { issues: { key: string }[] };
     expect(listed.issues.map((issue) => issue.key)).toContain(created.key);
   });
@@ -260,5 +262,38 @@ describe("a generated command against a real deevy", () => {
     await expect(
       root.parseAsync(["agents", "keys", "issue", "mem_1", "--name", "k"], { from: "user" }),
     ).rejects.toThrow(/DEEVY_API_KEY/);
+  });
+});
+
+describe("what a person sees by default", () => {
+  it("is the shaped answer, and --json is the exact one", async () => {
+    const deevy = testDeevy();
+    closers.push(deevy.close);
+    await humanMember(deevy.db);
+    const dir = await mkdtemp(join(tmpdir(), "deevy-cli-out-"));
+    scratch.push(dir);
+    await writeToken(baseURL, await apiToken(deevy, "u1"), dir);
+
+    const said: string[] = [];
+    const root = new Command().name("deevy").exitOverride();
+    addGeneratedCommands(root, () => ({
+      origin: baseURL,
+      dir,
+      environment: {},
+      fetchImpl: deevy.fetch,
+      out: (line) => said.push(line),
+    }));
+
+    await root.parseAsync(["projects", "create", "--key", "DEV", "--name", "Dev"], {
+      from: "user",
+    });
+    // Fields a person reads, not a JSON document they have to.
+    expect(said.at(-1)).toContain("DEV");
+    expect(said.at(-1)).not.toContain('"key":');
+
+    await root.parseAsync(["projects", "create", "--key", "OPS", "--name", "Ops", "--json"], {
+      from: "user",
+    });
+    expect(JSON.parse(said.at(-1) ?? "{}") as { key: string }).toMatchObject({ key: "OPS" });
   });
 });
