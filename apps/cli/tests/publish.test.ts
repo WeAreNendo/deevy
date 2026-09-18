@@ -15,6 +15,38 @@ interface Manifest {
   devDependencies?: Record<string, string>;
 }
 
+/**
+ * Every line the workflow actually runs: the bodies of its `run:` blocks, with
+ * comment lines and all the surrounding YAML left out.
+ *
+ * Worth the twenty lines because the alternative keeps failing the same way. An
+ * assertion over the whole file matches the prose in it — a `--provenance` that
+ * only ever appeared in a comment passed review, and both of the assertions
+ * written for this rule first matched an input description and a comment
+ * quoting the bug it forbids.
+ */
+function shellLines(workflow: string): string[] {
+  const lines = workflow.split("\n");
+  const out: string[] = [];
+  let blockIndent: number | null = null;
+  for (const line of lines) {
+    const indent = line.search(/\S/);
+    if (blockIndent !== null && line.trim() !== "" && indent <= blockIndent) blockIndent = null;
+    if (blockIndent !== null) {
+      if (line.trim() !== "" && !/^\s*#/.test(line)) out.push(line);
+      continue;
+    }
+    const block = /^(\s*)run: \|/.exec(line);
+    if (block) {
+      blockIndent = block[1]?.length ?? 0;
+      continue;
+    }
+    const inline = /^\s*run: (?!\|)(.+)$/.exec(line);
+    if (inline?.[1] !== undefined) out.push(inline[1]);
+  }
+  return out;
+}
+
 const manifest = async (): Promise<Manifest> =>
   JSON.parse(await read("apps/cli/package.json")) as Manifest;
 
@@ -165,10 +197,12 @@ describe("the release", () => {
     // `publish --dry-run` uploads nothing and so authenticates nothing: it
     // passes with a made-up token. Something else has to make a real request,
     // or the rehearsal proves the credential works when it does not.
-    // The assignment form specifically. `echo "as: $(npm whoami)"` is the same
-    // command and cannot fail: under `bash -e` a substitution in an argument
-    // does not set the status, so the step goes green on a dead token.
-    expect(workflow).toMatch(/who=\$\(npm whoami\)/);
+    // On its own line specifically. The same command inside an `echo` cannot
+    // fail: under `bash -e` a substitution in an argument does not set the
+    // status, so the step goes green on a dead token.
+    const commands = shellLines(workflow);
+    expect(commands.map((line) => line.trim())).toContain("vp pm whoami");
+    expect(commands.filter((line) => /\$\([^)]*whoami\)/.test(line))).toEqual([]);
     expect(workflow).toMatch(/vp pm publish [^\n]*--dry-run/);
   });
 
@@ -178,6 +212,39 @@ describe("the release", () => {
     // so without this it either exits green having done nothing or publishes
     // whatever apps/cli/package.json carries, off a branch, untagged.
     expect(await publishing()).toMatch(/if \[ -z "\$VERSION" \]; then/);
+  });
+
+  /**
+   * Found by the first rehearsal, which is the entire argument for having one:
+   * pnpm hands `whoami` to npm, and npm at the repository root exits
+   * EBADDEVENGINES before it opens a socket, because the root manifest pins
+   * devEngines.packageManager to pnpm. It reads as an auth failure and is not.
+   */
+  it("runs its commands where they can run, which is not the repository root", async () => {
+    // `.slice(1)` drops everything before the first step — the triggers and
+    // their descriptions, which talk about npm without running it.
+    const steps = (await publishing()).split(/\n {6}- name: /).slice(1);
+    const commanding = steps.filter((step) =>
+      step
+        .split("\n")
+        .filter((line) => !/^\s*#/.test(line))
+        .some((line) => /(?:^|[\s(])(?:npm|vp pm) \w/.test(line)),
+    );
+    expect(commanding.length).toBeGreaterThan(2);
+    for (const step of commanding) expect(step).toContain("working-directory: apps/cli");
+  });
+
+  /**
+   * The repository's rule, and the reason the first rehearsal broke: npm
+   * refuses to run anywhere the manifest pins devEngines.packageManager to
+   * pnpm, which the root one does. This file held the only bare npm commands
+   * in the repository, two of them older than the rehearsal.
+   */
+  it("uses pnpm, which is what everything else here uses", async () => {
+    const running = shellLines(await publishing()).filter((line) =>
+      /(?:^|[\s(])npm [a-z]/.test(line),
+    );
+    expect(running).toEqual([]);
   });
 
   it("can be rehearsed at all, which is the only way this job ever runs early", async () => {
