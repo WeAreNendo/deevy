@@ -8,6 +8,9 @@
  */
 import { createApp } from "@deevy/core/app";
 import type { Auth } from "@deevy/core/auth";
+import { API_PATH } from "@deevy/core";
+import type { StoredToken } from "../src/credentials.ts";
+import { authorizeUrl, discover, exchange, listen, pkce, register } from "../src/login.ts";
 import { createAuth } from "@deevy/core/auth";
 import { openDatabase } from "@deevy/adapters/node";
 import { member, user, workspace } from "@deevy/db";
@@ -104,4 +107,36 @@ export async function cookieHeaders(auth: Auth, userId: string): Promise<Headers
   return new Headers({
     cookie: `${context.authCookies.sessionToken.name}=${encodeURIComponent(value)}`,
   });
+}
+
+/**
+ * A token for the API resource, the way `deevy login` gets one — so a test of a
+ * generated command spends the credential a person would, through the same
+ * audience check (ADR-0023).
+ */
+export async function apiToken(deevy: TestDeevy, userId: string): Promise<StoredToken> {
+  const metadata = await discover(baseURL, deevy.fetch);
+  const loopback = await listen("s");
+  try {
+    const clientId = await register(metadata, baseURL, loopback.redirectUri, deevy.fetch);
+    const { verifier, challenge } = pkce();
+    const resource = `${baseURL}${API_PATH}`;
+    const url = authorizeUrl(metadata, {
+      clientId,
+      redirectUri: loopback.redirectUri,
+      challenge,
+      state: "s",
+      resource,
+    });
+    const cookie = await cookieHeaders(deevy.auth, userId);
+    const redirected = await deevy.fetch(url, { headers: cookie, redirect: "manual" });
+    const code = await consent(deevy, cookie, redirected.headers.get("location") ?? "");
+    return await exchange(
+      metadata,
+      { code, clientId, verifier, redirectUri: loopback.redirectUri, resource },
+      deevy.fetch,
+    );
+  } finally {
+    loopback.close();
+  }
 }
