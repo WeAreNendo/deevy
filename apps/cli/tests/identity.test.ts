@@ -11,7 +11,9 @@ import {
   writeToken,
 } from "../src/credentials.ts";
 import { authorizeUrl, discover, exchange, listen, pkce, register } from "../src/login.ts";
-import { whoAmI, type Reporter } from "../src/identity.ts";
+import { signIn, signOut, whoAmI, type Reporter } from "../src/identity.ts";
+import { explain } from "../src/client.ts";
+import { originFrom } from "../src/main.ts";
 import { baseURL, consent, cookieHeaders, humanMember, testDeevy } from "./helpers.ts";
 
 const scratch: string[] = [];
@@ -101,14 +103,6 @@ describe("which credential the CLI uses", () => {
 });
 
 describe("the loopback listener", () => {
-  it("takes the code, and refuses a callback carrying somebody else's state", async () => {
-    const loopback = await listen("the-state");
-    closers.push(loopback.close);
-    const refused = await fetch(`${loopback.redirectUri}?code=c&state=not-the-state`);
-    expect(refused.status).toBe(400);
-    await expect(loopback.code).rejects.toThrow(/wrong state/);
-  });
-
   it("carries an error back rather than hanging", async () => {
     const loopback = await listen("s");
     closers.push(loopback.close);
@@ -166,3 +160,125 @@ describe("signing in to a real deevy", () => {
     expect(said.lines.out.join("\n")).toContain("ada");
   });
 });
+
+describe("signing in, as the command does it", () => {
+  /**
+   * `signIn` itself, rather than its parts reassembled: that it registers,
+   * opens the right URL, takes the code, writes the file and closes the
+   * listener. The browser is the only stand-in — `openBrowser: false` prints
+   * the URL, and this follows it.
+   */
+  it("completes the flow and leaves a token only this user can read", async () => {
+    const deevy = testDeevy();
+    closers.push(deevy.close);
+    await humanMember(deevy.db);
+    const dir = await tempDir();
+    const said = collect();
+
+    const signingIn = signIn(baseURL, {
+      openBrowser: false,
+      report: said,
+      fetchImpl: deevy.fetch,
+      dir,
+    });
+
+    // The Human's half, driven from the URL the CLI printed.
+    const url = await waitFor(
+      () => /https?:\/\/\S+oauth2\/authorize\S*/.exec(said.lines.err.join("\n"))?.[0],
+    );
+    const cookie = await cookieHeaders(deevy.auth, "u1");
+    const redirected = await deevy.fetch(url, { headers: cookie, redirect: "manual" });
+    const code = await consent(deevy, cookie, redirected.headers.get("location") ?? "");
+    await fetch(
+      `${new URL(url).searchParams.get("redirect_uri") ?? ""}?code=${code}&state=${new URL(url).searchParams.get("state") ?? ""}`,
+    );
+
+    await signingIn;
+    const stored = await readToken(baseURL, dir);
+    expect(stored?.accessToken).toBeTruthy();
+    // No refresh token is asked for or kept: nothing refreshes, and one at rest
+    // is a larger thing to lose for no benefit.
+    expect(stored).not.toHaveProperty("refreshToken");
+    expect((await stat(join(dir, fileNameFor(baseURL)))).mode & 0o777).toBe(0o600);
+  });
+
+  it("gives up rather than waiting for a redirect that is not coming", async () => {
+    const loopback = await listen("s", 25);
+    closers.push(loopback.close);
+    await expect(loopback.code).rejects.toThrow(/not completed in time/);
+  });
+
+  it("keeps waiting when something else on this machine probes the callback", async () => {
+    const loopback = await listen("the-state");
+    closers.push(loopback.close);
+    // A scanner, or a browser asking for a favicon: answered and ignored, so
+    // the real redirect still arrives.
+    expect((await fetch(`${loopback.redirectUri}?code=c&state=wrong`)).status).toBe(400);
+    await fetch(`${loopback.redirectUri}?code=the-code&state=the-state`);
+    expect(await loopback.code).toBe("the-code");
+  });
+});
+
+describe("signing out", () => {
+  it("forgets the token and says what it did", async () => {
+    const dir = await tempDir();
+    await writeToken(baseURL, { accessToken: "t", expiresAt: null, resource: "r" }, dir);
+    const said = collect();
+    await signOut(baseURL, { report: said, dir });
+    expect(await readToken(baseURL, dir)).toBeNull();
+    // The consent outlives the file, and only deevy's own UI can revoke it.
+    expect(said.lines.err.join("\n")).toContain("still listed in deevy");
+  });
+});
+
+describe("what a refusal is explained as", () => {
+  it("names the key when a key is what is being refused", () => {
+    const asAgent = { kind: "key", token: "k", origin: baseURL } as const;
+    expect(explain({ code: "FORBIDDEN", message: "An Agent cannot do that" }, asAgent)).toContain(
+      "DEEVY_API_KEY",
+    );
+    expect(explain({ code: "UNAUTHORIZED" }, asAgent)).toContain("DEEVY_API_KEY");
+  });
+
+  it("tells a signed-in Human to sign in again", () => {
+    const asHuman = { kind: "token", token: "t", origin: baseURL, expiresAt: null } as const;
+    expect(explain({ code: "UNAUTHORIZED" }, asHuman)).toContain("deevy login");
+  });
+
+  it("never puts the credential in the message", () => {
+    const asAgent = { kind: "key", token: "deevy_sk_secret", origin: baseURL } as const;
+    for (const code of ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"]) {
+      expect(explain({ code, message: "no" }, asAgent)).not.toContain("deevy_sk_secret");
+    }
+  });
+});
+
+describe("which instance was named", () => {
+  it("takes the argument, then DEEVY_URL", () => {
+    expect(originFrom("https://a.example.com", {})).toBe("https://a.example.com");
+    expect(originFrom(undefined, { DEEVY_URL: "https://b.example.com" })).toBe(
+      "https://b.example.com",
+    );
+    expect(() => originFrom(undefined, {})).toThrow(/No deevy named/);
+  });
+
+  it("assumes https, except on loopback, where deevy's own dev instance is http", () => {
+    expect(originFrom("deevy.example.com", {})).toBe("https://deevy.example.com");
+    expect(originFrom("localhost:3000", {})).toBe("http://localhost:3000");
+    expect(originFrom("127.0.0.1:3000", {})).toBe("http://127.0.0.1:3000");
+  });
+
+  it("drops a trailing slash, which would double the one in /rpc", () => {
+    expect(originFrom("https://deevy.example.com/", {})).toBe("https://deevy.example.com");
+  });
+});
+
+/** Polls until the CLI has printed what the Human's browser would have opened. */
+async function waitFor(look: () => string | undefined): Promise<string> {
+  for (let i = 0; i < 100; i += 1) {
+    const found = look();
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("the CLI never printed an authorize URL");
+}

@@ -1,4 +1,7 @@
+import { createRequire } from "node:module";
 import { defineConfig } from "vite-plus";
+
+const { version } = createRequire(import.meta.url)("./package.json") as { version: string };
 
 export default defineConfig({
   run: {
@@ -19,6 +22,10 @@ export default defineConfig({
   },
   pack: {
     entry: ["src/main.ts"],
+    // `deevy --version` is this package's version, which is deevy's one number
+    // (docs/plans/commits-and-changelogs.md). Read here rather than at runtime
+    // because the published bundle has no package.json beside it.
+    define: { __DEEVY_CLI_VERSION__: JSON.stringify(version) },
     platform: "node",
     format: "esm",
     dts: false,

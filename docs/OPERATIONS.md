@@ -492,6 +492,31 @@ GitLab application each hold a list, so one of those can carry both. Move betwee
 and the callbacks together: either one alone leaves sign-in refused by the provider or the session cookie set
 for an origin nobody is on.
 
+## The CLI
+
+`deevy` is deevy from a terminal (`docs/plans/cli.md`). It signs in through the same OAuth server a browser
+uses and holds a token for the API resource, so what it may do is exactly what the Human signing in may do —
+including nothing a delegated credential may do, which is a Gate ruling
+([ADR-0010](./adr/0010-a-delegated-credential-cannot-decide-a-gate.md)).
+
+```bash
+deevy login https://deevy.example.com   # opens a browser; stores a token
+deevy whoami                            # says who this terminal is, and how
+deevy logout                            # forgets the token
+```
+
+| Variable          | Default     | What it does                                                                                                                                                     |
+| ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEEVY_URL`       | —           | The instance every command talks to, when one is not named as an argument.                                                                                       |
+| `DEEVY_API_KEY`   | —           | An Agent's API key. Set it and the CLI acts as that Agent for the run, which is what a script wants; it wins over a signed-in Human, and `deevy whoami` says so. |
+| `XDG_CONFIG_HOME` | `~/.config` | Where the token is kept: `<that>/deevy/<host>.json`, mode 0600.                                                                                                  |
+
+One file per instance, so signing into a second deevy does not sign you out of the first. `deevy logout`
+forgets the token on this machine; the consent it was issued under stays listed under Settings until a Human
+revokes it there, because revoking a consent wants a cookie session and a CLI has none.
+
+Each sign-in registers a new OAuth client, so a Human who signs in repeatedly accumulates rows in that list.
+
 ## Agents and MCP
 
 deevy never runs an agent (ADR-0003). It gives each Agent an identity and a key, tells it there is work, and

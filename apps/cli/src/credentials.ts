@@ -7,7 +7,7 @@
  * directory at 0700: the same care a shell gives an SSH key, for the same
  * reason.
  */
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -18,7 +18,6 @@ export type Credential =
 
 export interface StoredToken {
   accessToken: string;
-  refreshToken?: string;
   /** Epoch milliseconds, or null when the server did not say. */
   expiresAt: number | null;
   /** The resource the token was minted for, kept so a stale one is recognisable. */
@@ -57,11 +56,29 @@ export async function writeToken(
   dir: string = configDirectory(),
 ): Promise<string> {
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  // `mkdir` respects the umask, so the mode is set again rather than asked for.
-  await chmod(dir, 0o700).catch(() => {});
+  // `mkdir` respects the umask and accepts a directory that already exists, so
+  // the mode is set rather than asked for. A failure here is not swallowed: a
+  // directory this user cannot lock down is one a token should not go into.
+  await chmod(dir, 0o700);
+
   const path = join(dir, fileNameFor(origin));
-  await writeFile(path, `${JSON.stringify(token, null, 2)}\n`, { mode: 0o600 });
-  await chmod(path, 0o600).catch(() => {});
+  // Written to a fresh file and renamed over the target, which does three
+  // things at once. `wx` refuses to follow a symlink somebody left in the way,
+  // the mode applies because the file is new — `writeFile`'s mode is ignored
+  // for a file that already exists, so writing in place would leave an old
+  // 0644 file readable with a token in it — and the rename is atomic, so there
+  // is no moment where the token is half-written.
+  const temporary = `${path}.${String(process.pid)}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(token, null, 2)}\n`, {
+    mode: 0o600,
+    flag: "wx",
+  });
+  try {
+    await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
   return path;
 }
 
@@ -74,9 +91,6 @@ export async function forgetToken(
   await rm(path, { force: true });
   return existed;
 }
-
-/** Every deevy this machine has signed into, by origin file name. */
-export const apiKeyPrefix = "deevy_sk_";
 
 /**
  * What the CLI will authenticate with, and why.

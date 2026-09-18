@@ -5,8 +5,32 @@
  * out, and saying who you are. The ninety-four that are operations arrive in
  * the next slice, generated from the registry by `commandsFor`.
  */
+import { realpathSync } from "node:fs";
+import { argv } from "node:process";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { signIn, signOut, whoAmI } from "./identity.ts";
+
+/** Written by `vp pack` from package.json; see vite.config.ts. */
+declare const __DEEVY_CLI_VERSION__: string | undefined;
+const CLI_VERSION = typeof __DEEVY_CLI_VERSION__ === "string" ? __DEEVY_CLI_VERSION__ : "0.0.0-dev";
+
+/**
+ * Whether this module is the program being run.
+ *
+ * `import.meta.main` would say it in one word, but it needs Node 24.2 and this
+ * package declares 22.18 — where it is `undefined`, which would make a
+ * published CLI exit silently with status 0. Comparing paths works everywhere.
+ */
+function isEntry(): boolean {
+  const entry = argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
 
 /** Where this invocation is pointed, and how it was told. */
 export function originFrom(
@@ -20,7 +44,11 @@ export function originFrom(
         "  deevy login https://deevy.example.com",
     );
   }
-  const url = new URL(given.includes("://") ? given : `https://${given}`);
+  // A bare host gets https, except on loopback: deevy's own dev instance is
+  // http://localhost:3000, so the most likely first thing anybody types would
+  // otherwise fail with a TLS error.
+  const loopback = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(given);
+  const url = new URL(given.includes("://") ? given : `${loopback ? "http" : "https"}://${given}`);
   // A trailing slash makes `${origin}/rpc` into `${origin}//rpc`, which some
   // proxies answer and some do not.
   return url.origin;
@@ -32,9 +60,10 @@ export function program(): Command {
     .name("deevy")
     .description("deevy from a terminal")
     .showHelpAfterError()
-    // The version is the package's, which is deevy's: one number for the
-    // instance, the image and this (docs/plans/commits-and-changelogs.md).
-    .version(process.env.DEEVY_CLI_VERSION ?? "0.0.0-dev");
+    // Replaced at pack time with this package's version, which is deevy's: one
+    // number for the instance, the image and this
+    // (docs/plans/commits-and-changelogs.md).
+    .version(CLI_VERSION);
 
   cli
     .command("login")
@@ -65,7 +94,7 @@ export function program(): Command {
   return cli;
 }
 
-if (import.meta.main) {
+if (isEntry()) {
   try {
     await program().parseAsync(process.argv);
   } catch (error) {

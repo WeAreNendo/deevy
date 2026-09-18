@@ -49,9 +49,12 @@ export async function discover(origin: string, fetchImpl = fetch): Promise<Serve
 /**
  * A client of this instance, registered for the API resource.
  *
- * Registration is per instance and per machine, and the client id is kept
- * beside the token: re-registering on every sign-in would leave a trail of
- * identical clients in the Human's consent list.
+ * Every sign-in registers a new one, which leaves a row in the Human's consent
+ * list each time. Reusing one would want its client id kept beside the token —
+ * and a redirect URI to match, which a loopback client does not have, because
+ * RFC 8252 has it take whatever port the OS gives. Revoking the old ones is
+ * `oauthClients.revoke`, which wants a cookie session and so is deevy's own UI
+ * rather than this (ADR-0023).
  */
 export async function register(
   metadata: ServerMetadata,
@@ -66,7 +69,10 @@ export async function register(
     body: JSON.stringify({
       client_name: "deevy CLI",
       redirect_uris: [redirectUri],
-      grant_types: ["authorization_code", "refresh_token"],
+      // No refresh_token: nothing here refreshes, and a refresh token at rest
+      // is a larger thing to lose for a benefit nobody is taking yet. An
+      // expired token is answered by signing in again.
+      grant_types: ["authorization_code"],
       response_types: ["code"],
       // A public client: no secret to present, PKCE instead.
       token_endpoint_auth_method: "none",
@@ -95,7 +101,10 @@ export interface Loopback {
   close: () => void;
 }
 
-export function listen(state: string): Promise<Loopback> {
+/** Long enough to find the browser window, short enough not to be a hang. */
+const SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000;
+
+export function listen(state: string, timeoutMs = SIGN_IN_TIMEOUT_MS): Promise<Loopback> {
   return new Promise((resolveListening, rejectListening) => {
     let settle: (code: string) => void = () => {};
     let fail: (error: Error) => void = () => {};
@@ -108,6 +117,13 @@ export function listen(state: string): Promise<Loopback> {
     // is a warning printed over the message that explains what happened. One
     // observer here keeps it quiet; a real awaiter still sees the rejection.
     code.catch(() => {});
+    // Nobody ever arrives if the browser never opened, or was closed on the
+    // consent screen. Without this the CLI waits for a redirect that is not
+    // coming, with no output and no exit.
+    const expiry = setTimeout(() => {
+      fail(new Error("the sign-in was not completed in time. Run `deevy login` again."));
+    }, timeoutMs);
+    expiry.unref();
 
     const server: Server = createServer((request, response) => {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -118,10 +134,13 @@ export function listen(state: string): Promise<Loopback> {
       // A browser asks for /favicon.ico the moment it renders anything.
       if (url.pathname !== "/callback") return answer(404, "not here");
       // The state is the CSRF guard: a callback that does not carry the one
-      // this run generated is not this run's callback.
+      // this run generated is not this run's callback — so it is answered and
+      // ignored, and the listener keeps waiting for the real one. Failing here
+      // instead would let anything that probes 127.0.0.1 end somebody's sign-in
+      // before they reached the consent screen, which is the opposite of what
+      // the guard is for.
       if (url.searchParams.get("state") !== state) {
-        answer(400, "That sign-in did not come from this terminal.");
-        return fail(new Error("the redirect carried the wrong state"));
+        return answer(400, "That sign-in did not come from this terminal.");
       }
       const error = url.searchParams.get("error");
       if (error) {
@@ -150,6 +169,11 @@ export function listen(state: string): Promise<Loopback> {
         redirectUri: `http://127.0.0.1:${String(address.port)}/callback`,
         code,
         close: () => {
+          clearTimeout(expiry);
+          // `close` only stops new connections; a browser's keep-alive socket
+          // would hold the process open for Node's five-minute request timeout
+          // after the CLI has already said it was done.
+          server.closeAllConnections();
           server.close();
         },
       });
@@ -206,14 +230,9 @@ export async function exchange(
   });
   if (!res.ok)
     throw new Error(`the token exchange failed: ${String(res.status)} ${await res.text()}`);
-  const payload = (await res.json()) as {
-    access_token: string;
-    refresh_token?: string;
-    expires_in?: number;
-  };
+  const payload = (await res.json()) as { access_token: string; expires_in?: number };
   return {
     accessToken: payload.access_token,
-    ...(payload.refresh_token ? { refreshToken: payload.refresh_token } : {}),
     expiresAt: payload.expires_in ? Date.now() + payload.expires_in * 1000 : null,
     resource: params.resource,
   };

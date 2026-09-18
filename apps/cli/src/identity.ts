@@ -27,15 +27,22 @@ const console_: Reporter = {
   },
 };
 
-/** Best effort: a terminal on a server has no browser, and that is not an error. */
+/**
+ * Best effort: a terminal on a server has no browser, and that is not an error.
+ *
+ * The listener matters. `spawn` does not throw when the opener is missing — it
+ * returns, then emits `error` a tick later, and an unhandled `error` event is
+ * an uncaught exception that kills the process. That is every headless Linux
+ * box without `xdg-open`, and every Windows run, since `start` is a shell
+ * builtin rather than a program. The URL has already been printed by then, so
+ * the CLI should be waiting for the callback, not dying.
+ */
 function openInBrowser(url: string): void {
   const command =
     process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  try {
-    spawn(command, [url], { stdio: "ignore", detached: true }).unref();
-  } catch {
-    // Nothing to do: the URL was printed too.
-  }
+  const child = spawn(command, [url], { stdio: "ignore", detached: true });
+  child.on("error", () => {});
+  child.unref();
 }
 
 export async function signIn(
@@ -95,12 +102,20 @@ export async function signOut(
 /** What `whoami` answers with, and what `--json` prints verbatim. */
 export interface Identity {
   origin: string;
-  /** How this terminal is authenticated, which decides what it may do. */
-  authenticatedAs: "human" | "agent" | "nobody";
+  /**
+   * Who this terminal is to deevy, which decides what it may do.
+   *
+   * `stranger` and `nobody` are different answers and were one for a review
+   * round: a credential deevy accepts that belongs to no Member is not the same
+   * as no credential at all, and only the first is fixed by an invitation.
+   */
+  authenticatedAs: "human" | "agent" | "stranger" | "nobody";
   via: "token" | "key" | "none";
   memberId?: string;
-  handle?: string;
+  handle?: string | null;
   role?: string;
+  /** A suspended Member is refused everything, while looking like a Member. */
+  suspended?: boolean;
 }
 
 export async function whoAmI(
@@ -111,10 +126,11 @@ export async function whoAmI(
     fetchImpl?: typeof fetch;
     /** Where tokens are kept; a test points it somewhere disposable. */
     dir?: string;
+    environment?: NodeJS.ProcessEnv;
   } = {},
 ): Promise<Identity> {
   const report = options.report ?? console_;
-  const credential = await credentialFor(origin, process.env, options.dir);
+  const credential = await credentialFor(origin, options.environment ?? process.env, options.dir);
   if (!credential) {
     const identity: Identity = { origin, authenticatedAs: "nobody", via: "none" };
     say(
@@ -127,31 +143,44 @@ export async function whoAmI(
   }
 
   const client = clientFor(credential, options.fetchImpl ?? fetch);
+  // Typed by the router, not cast: the cast this replaced declared a handle as
+  // a string where the schema allows null, which hid a branch below.
   const me = await client.me.get({}).catch((error: unknown) => {
     throw new Error(explain(error, credential));
   });
-  const member = (
-    me as { member?: { id: string; handle: string; kind: string; role: string } | null }
-  ).member;
+  const member = me.member;
   const identity: Identity = {
     origin,
-    authenticatedAs: member?.kind === "agent" ? "agent" : member ? "human" : "nobody",
+    authenticatedAs: !member ? "stranger" : member.kind === "agent" ? "agent" : "human",
     via: credential.kind === "key" ? "key" : "token",
-    ...(member ? { memberId: member.id, handle: member.handle, role: member.role } : {}),
+    ...(member
+      ? {
+          memberId: member.id,
+          handle: member.handle,
+          role: member.role,
+          ...(member.suspendedAt ? { suspended: true } : {}),
+        }
+      : {}),
   };
   say(identity, options.json === true, report, humanLine(identity, credential));
   return identity;
 }
 
 function humanLine(identity: Identity, credential: Credential): string {
-  if (!identity.handle) {
-    return `Authenticated to ${identity.origin}, but no Member there yet. An admin has to invite you, or the allowlist has to match.`;
+  if (identity.authenticatedAs === "stranger") {
+    return `${identity.origin} knows that credential, but it belongs to no Member there. An admin has to invite you, or the allowlist has to match.`;
   }
   const how =
     credential.kind === "key"
       ? "an Agent's API key, from DEEVY_API_KEY"
       : "a token from `deevy login`";
-  return `${identity.handle} (${identity.role}) at ${identity.origin}, as ${identity.authenticatedAs}, via ${how}.`;
+  const who = identity.handle ?? identity.memberId ?? "somebody";
+  const line = `${who} (${identity.role ?? "member"}) at ${identity.origin}, as ${identity.authenticatedAs}, via ${how}.`;
+  // A suspended Member is refused every operation while looking like a Member,
+  // so the fact belongs in the answer rather than in the first refusal.
+  return identity.suspended
+    ? `${line}\nThat Member is suspended, so deevy will refuse everything.`
+    : line;
 }
 
 function say(identity: Identity, json: boolean, report: Reporter, line: string): void {
