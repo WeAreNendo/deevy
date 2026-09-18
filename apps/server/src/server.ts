@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { mountSpa, openDatabase } from "@deevy/adapters/node";
 import {
+  API_PATH,
   buildContext,
   createApp,
   createAuth,
@@ -56,7 +57,12 @@ export function buildServer(env: ServerEnv) {
   // it has open, and on Node they are simply in the same process (ADR-0021).
   const rooms = createRoomServer({
     db,
-    contextFrom: (request) => buildContext(db, auth, request.headers, env.baseURL),
+    // The room socket is the operations' live counterpart, so a bearer here is
+    // checked against the API resource. In practice a room is reached with a
+    // browser cookie and `roomAuthenticator` wants a Member, so this decides
+    // nothing today; it is said rather than defaulted because the day it does
+    // decide something, the default would have decided it quietly.
+    contextFrom: (request) => buildContext(db, auth, request.headers, env.baseURL, API_PATH),
   });
   const app = createApp({
     db,

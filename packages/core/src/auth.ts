@@ -386,6 +386,26 @@ export function apiKeyPlugins() {
 
 /** Where the MCP endpoint is mounted. RFC 8707 and RFC 9728 both build on it. */
 export const MCP_PATH = "/mcp";
+/**
+ * Where the operation API is mounted, and the second protected resource this
+ * server issues tokens for. `/api` and `/rpc` are two transports for one API,
+ * so they share one resource identifier: the resource names what a token may
+ * reach, not how it gets there.
+ *
+ * It is a separate resource from MCP rather than a widened one because that
+ * separation is the whole point of RFC 8707. A Human who consents to some MCP
+ * client is consenting to the tools deevy projects, not to the ninety-four
+ * operations behind them, and a token minted for one is refused at the other
+ * (principal.ts).
+ */
+export const API_PATH = "/api";
+
+/**
+ * Which protected resource a request is reaching, as a path under the issuer.
+ * A union rather than a string, so a surface cannot invent an audience by
+ * typo and quietly accept nothing.
+ */
+export type ResourcePath = typeof API_PATH | typeof MCP_PATH;
 
 /** Where Better Auth's own routes are mounted, and so where `/jwks` lives. */
 export const AUTH_BASE_PATH = "/api/auth";
@@ -423,6 +443,16 @@ export function oauthServerPlugins(env: AuthEnv) {
       // RFC 8707: every token this server mints is bound to this audience, and
       // one minted for anything else is refused at /mcp (principal.ts).
       resource: `${baseURL}${MCP_PATH}`,
+      // The API beside it. `mcp()` appends its own resource to this list, so
+      // the server issues for both.
+      resources: [`${baseURL}${API_PATH}`],
+      // Allowed, deliberately not default. `clientRegistrationDefaultResources`
+      // links a resource to every client that registers, which would have given
+      // the whole operation API to any MCP client that asked for nothing — the
+      // opposite of what the second resource is for. This way a client is
+      // linked to the API only if it names it in its registration, so an MCP
+      // client that does not ask holds a token for the tools and nothing else.
+      clientRegistrationAllowedResources: [`${baseURL}${API_PATH}`],
       // MCP 2026-07-28 prefers a Client ID Metadata Document and deprecates
       // dynamic registration, but the clients that only speak DCR are the ones
       // deevy cannot ask to change, so both stay open.

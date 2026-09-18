@@ -48,9 +48,11 @@ delegated it.
 > ADR-0010's text says `sessionOnly` is "carried by `gates.approve` and `gates.reject` and nothing else",
 > which the `oauthClients` pair has since made stale. Worth amending when somebody is next in that file.
 
-**An OAuth token is bound to `/mcp`.** `principal.ts` verifies `audience: ${issuer}${MCP_PATH}`, so a CLI
-presenting one at `/rpc` resolves as anonymous. Slice 1 is the riskiest for this reason, and Human sign-in
-does not work until it lands.
+**An OAuth token was bound to `/mcp`.** `principal.ts` verified `audience: ${issuer}${MCP_PATH}` and nothing
+else, so a CLI presenting one at `/rpc` resolved as anonymous. Slice 1 is where that changes, and it is the
+riskiest in the stack: Human sign-in does not work until it lands, and getting it wrong widens what a
+delegated credential reaches. The CLI registers by DCR naming the API resource — a client identified by CIMD
+is linked to MCP alone (ADR-0023).
 
 ## The slices
 
@@ -58,9 +60,11 @@ does not work until it lands.
 carrying the words a user types, the summary that becomes help text, which arguments are positional, the
 authority the operation wants, whether it streams, and the zod schemas. Nothing runnable.
 
-**1 — A token the API accepts.** `principal.ts` accepts either the MCP audience or a new API resource; the
-CLI asks for the latter via RFC 8707 `resource`. A token minted for one surface stays refused at the other,
-and a test says so. `version` joins `health.ping`'s output. New ADR.
+**1 — A token the API accepts.** The API becomes a second protected resource, and the expected audience
+becomes a property of the surface a request reached rather than a constant: `/api` and `/rpc` check against
+it, `/mcp` against MCP's, and a token minted for one is refused at the other in both directions. The resource
+is _allowed_ at client registration rather than defaulted onto every client, so an MCP client holds a token
+for the tools and nothing else. [ADR-0023](../adr/0023-the-api-is-its-own-protected-resource.md).
 
 **2 — Identity.** `deevy login` (authorization code, PKCE S256, loopback redirect), `logout`, `whoami`.
 Token at `~/.config/deevy/<origin>.json`, mode 0600. `DEEVY_API_KEY` overrides it and says it is acting as an
@@ -69,8 +73,9 @@ Agent.
 **3 — The commands.** One commander command per operation: positionals for path parameters, flags for the
 rest of the input object, `summary` as the description, zod for validation, `--json` on every one.
 
-**4 — What this instance can do.** The CLI intersects its commands with the `operationId`s in the instance's
-`/api/spec.json`, cached per origin and version. A command the server does not have is hidden from `--help`
+**4 — What this instance can do.** `version` joins `health.ping`'s output here, where it is first used. The
+CLI intersects its commands with the `operationId`s in the instance's `/api/spec.json`, cached per origin and
+version. A command the server does not have is hidden from `--help`
 and refused with both version numbers. This is what makes a newer CLI safe against an older instance.
 
 **5 — Output worth reading.** A human shape for the output schemas that carry most traffic; pretty JSON for

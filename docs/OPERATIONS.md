@@ -577,6 +577,31 @@ right after the host:
 be, since a resource identifier is an absolute URL and one guessed per request would bind tokens to whatever
 host the caller sent. The rest of deevy runs unchanged; only a Human's MCP client is refused.
 
+### Two resources, and why a token only works where it was meant to
+
+This instance issues access tokens for two protected resources (RFC 8707, [ADR-0023](./adr/0023-the-api-is-its-own-protected-resource.md)):
+
+| Resource                 | Reached at        | Held by                                                 |
+| ------------------------ | ----------------- | ------------------------------------------------------- |
+| `${BETTER_AUTH_URL}/mcp` | `/mcp`            | a Human's MCP client                                    |
+| `${BETTER_AUTH_URL}/api` | `/api` and `/rpc` | a Human's CLI, and anything else driving the operations |
+
+A token is checked against the resource it was minted for, in both directions: an MCP client's token is
+refused at the API, and an API client's is refused at MCP. That is the point — consenting to an MCP client
+grants it the tools deevy projects, not every operation behind them.
+
+A client is linked to the API resource only if it names it when it registers. An MCP client that registers
+without asking cannot obtain an API token at all, and one that asks anyway is refused with RFC 8707's
+`invalid_target` — so adding the second resource widened nothing for the clients that already existed.
+
+Only the MCP resource publishes RFC 9728 metadata. A client that wants the API resource reads
+`/.well-known/oauth-authorization-server` and names the resource in its authorization request; it does not
+need a 401 to find its way there, because it was given the instance URL to begin with.
+
+Gate rulings are outside all of this: `gates.approve` and `gates.reject` want a cookie session, so no
+delegated credential decides a Gate whatever it was minted for
+([ADR-0004](./adr/0004-agents-never-approve-gates.md), [ADR-0010](./adr/0010-a-delegated-credential-cannot-decide-a-gate.md)).
+
 ### Client registration, and what is known to be weak
 
 A client identifies itself in one of two ways, both enabled:

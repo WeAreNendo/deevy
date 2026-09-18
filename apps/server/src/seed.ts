@@ -15,6 +15,7 @@
  * It reads `.env` like the server does, and it needs DEEVY_ADMIN_EMAIL.
  */
 import { existsSync, unlinkSync } from "node:fs";
+import { API_PATH } from "@deevy/core";
 import { buildContext } from "@deevy/core/app";
 import { router } from "@deevy/core/router";
 import { discardingJobQueue, signInProviders, sweepStaleRuns } from "@deevy/core";
@@ -92,7 +93,9 @@ async function signIn(email: string): Promise<string> {
 
 /** The typed client an operation sees for whoever these headers authenticate. */
 async function caller(headers: HeadersInit) {
-  const context = await buildContext(db, auth, new Headers(headers), env.baseURL);
+  // Seeding signs in with a cookie, so the audience decides nothing; the API
+  // resource is what a cookie would be spending if it were a bearer.
+  const context = await buildContext(db, auth, new Headers(headers), env.baseURL, API_PATH);
   if (!context.member) throw new Error("that credential is not a Member");
   return {
     member: context.member,

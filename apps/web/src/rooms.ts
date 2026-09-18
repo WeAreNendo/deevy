@@ -1,6 +1,7 @@
 import { createDb } from "@deevy/adapters/workers";
 import { loadMarkdown, markdownOf } from "@deevy/editor";
 import {
+  API_PATH,
   buildContext,
   createAuth,
   createRoomServer,
@@ -43,7 +44,8 @@ export class DocumentRoom {
       db,
       // The session on the upgrade request, then the Member, then the same
       // authorization the Document's own operations apply.
-      contextFrom: (request) => buildContext(db, auth, request.headers, env.baseURL),
+      // The API resource, for the reason apps/server/src/server.ts gives.
+      contextFrom: (request) => buildContext(db, auth, request.headers, env.baseURL, API_PATH),
     });
     return this.#room;
   }
