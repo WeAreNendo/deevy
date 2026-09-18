@@ -65,6 +65,10 @@ catalog:
   auth: 1.7.3
   drizzle-orm: 1.0.0-rc.4
   drizzle-kit: 1.0.0-rc.4
+  # The CLI's argument parser (docs/plans/cli.md). A caret like the other stable
+  # tooling: the exact pins above are pre-release lines whose breakage is a
+  # runtime error, and this is a released major.
+  commander: ^15.0.0
   "@orpc/server": 2.0.0-beta.32
   "@orpc/client": 2.0.0-beta.32
   "@orpc/contract": 2.0.0-beta.32
