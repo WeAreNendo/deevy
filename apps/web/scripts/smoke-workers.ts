@@ -1454,10 +1454,28 @@ async function theWorkerServesDeevy(origin: string): Promise<void> {
 
   const spec = await fetch(`${origin}/api/spec.json`);
   const committed = await readFile(join(here, "../../../packages/core/openapi.json"), "utf8");
+  // Everything but the version, which is the one field a served document does
+  // not share with the committed one: an entry tells the app what it is and it
+  // reaches the document a client discovers the instance through, while the
+  // snapshot is generated without one so CI can diff it (ADR-0009, and
+  // apps/cli/src/capabilities.ts, which reads the served field). Comparing the
+  // rest is the invariant that matters — that what CI diffs is what a caller
+  // gets.
+  const withoutVersion = (document: string): string => {
+    const parsed = JSON.parse(document) as { info?: { version?: string } };
+    if (parsed.info) delete parsed.info.version;
+    return canonical(JSON.stringify(parsed));
+  };
+  const servedText = await spec.text();
   check(
-    "/api/spec.json is the committed OpenAPI document",
-    spec.status === 200 && canonical(await spec.text()) === canonical(committed),
+    "/api/spec.json is the committed OpenAPI document, but for the version",
+    spec.status === 200 && withoutVersion(servedText) === withoutVersion(committed),
     `status ${String(spec.status)}`,
+  );
+  check(
+    "and it says which deevy is serving it",
+    (JSON.parse(servedText) as { info?: { version?: string } }).info?.version !== "0.0.0",
+    `version ${(JSON.parse(servedText) as { info?: { version?: string } }).info?.version ?? "absent"}`,
   );
 
   // The pair run_worker_first gets wrong silently: both are 200, and only the

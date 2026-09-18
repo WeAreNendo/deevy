@@ -24,10 +24,15 @@ export interface StoredToken {
   resource: string;
 }
 
-/** `https://deevy.example.com:8443` becomes `deevy.example.com_8443`. */
+/** `https://deevy.example.com:8443` becomes `https_deevy.example.com_8443`. */
 export function fileNameFor(origin: string): string {
   const url = new URL(origin);
-  return `${url.host.replace(/:/g, "_")}.json`;
+  // The scheme is part of which instance this is. Without it `http://host` and
+  // `https://host` shared one file, which is the local-development shape
+  // exactly — a direct port and the same port behind a TLS proxy — and it
+  // would have handed a token minted for one origin to the other.
+  const scheme = url.protocol.replace(":", "");
+  return `${scheme}_${url.host.replace(/:/g, "_")}.json`;
 }
 
 export function configDirectory(): string {

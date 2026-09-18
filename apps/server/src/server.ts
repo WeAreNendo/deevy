@@ -12,6 +12,10 @@ import {
   type AuthEnv,
 } from "@deevy/core";
 import { fetchClientMetadataResource } from "./cimd.ts";
+
+/** Written by `vp pack` from package.json; see vite.config.ts. */
+declare const __DEEVY_VERSION__: string | undefined;
+const DEEVY_VERSION = typeof __DEEVY_VERSION__ === "string" ? __DEEVY_VERSION__ : undefined;
 import type { ServerEnv } from "./env.ts";
 
 /**
@@ -65,6 +69,10 @@ export function buildServer(env: ServerEnv) {
     contextFrom: (request) => buildContext(db, auth, request.headers, env.baseURL, API_PATH),
   });
   const app = createApp({
+    // What this instance calls itself, in the API document a client discovers
+    // it through, so a CLI can name the two versions that disagree rather than
+    // only that they do (apps/cli/src/capabilities.ts).
+    version: DEEVY_VERSION,
     db,
     auth,
     origin,
