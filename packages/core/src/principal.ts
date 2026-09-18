@@ -1,5 +1,6 @@
 import { verifyJwsAccessToken } from "better-auth/oauth2";
-import { AUTH_BASE_PATH, MCP_PATH, apiKeyPrefix, bearerToken } from "./auth.ts";
+import type { ResourcePath } from "./auth.ts";
+import { AUTH_BASE_PATH, apiKeyPrefix, bearerToken } from "./auth.ts";
 import type { Auth, Session } from "./auth.ts";
 import type { Principal } from "./operations/registry.ts";
 
@@ -25,10 +26,14 @@ export interface ResolvePrincipalOptions {
   /**
    * The surface being reached, as a path under `baseURL`: an access token is
    * audience-bound to one resource, and presenting an MCP token to the API or
-   * an API token to MCP is not a caller this instance knows (auth.ts). Defaults
-   * to MCP, which is where the only tokens before the CLI were spent.
+   * an API token to MCP is not a caller this instance knows (auth.ts).
+   *
+   * Required, and required of `buildContext` too. It had a default on both for
+   * one review round, and they disagreed — one defaulted to the API and the
+   * other to MCP — which is exactly the shape of bug that ends with a surface
+   * accepting the wrong audience because somebody left an argument off.
    */
-  resourcePath?: string;
+  resourcePath: ResourcePath;
   jwksFetch?: JwksFetch;
 }
 
@@ -49,7 +54,7 @@ export async function resolvePrincipal({
   auth,
   headers,
   baseURL,
-  resourcePath = MCP_PATH,
+  resourcePath,
   jwksFetch,
 }: ResolvePrincipalOptions): Promise<ResolvedPrincipal> {
   if (!auth) return anonymous;
@@ -133,7 +138,7 @@ async function fromAccessToken(
   auth: Auth,
   token: string,
   baseURL: string | undefined,
-  resourcePath: string,
+  resourcePath: ResourcePath,
   jwksFetch?: JwksFetch,
 ): Promise<ResolvedPrincipal> {
   const issuer = baseURL?.replace(/\/+$/, "");

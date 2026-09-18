@@ -400,6 +400,13 @@ export const MCP_PATH = "/mcp";
  */
 export const API_PATH = "/api";
 
+/**
+ * Which protected resource a request is reaching, as a path under the issuer.
+ * A union rather than a string, so a surface cannot invent an audience by
+ * typo and quietly accept nothing.
+ */
+export type ResourcePath = typeof API_PATH | typeof MCP_PATH;
+
 /** Where Better Auth's own routes are mounted, and so where `/jwks` lives. */
 export const AUTH_BASE_PATH = "/api/auth";
 
@@ -437,10 +444,15 @@ export function oauthServerPlugins(env: AuthEnv) {
       // one minted for anything else is refused at /mcp (principal.ts).
       resource: `${baseURL}${MCP_PATH}`,
       // The API beside it. `mcp()` appends its own resource to this list, so
-      // both are advertised, both can be asked for with RFC 8707 `resource`,
-      // and a client registered here may hold either.
+      // the server issues for both.
       resources: [`${baseURL}${API_PATH}`],
-      clientRegistrationDefaultResources: [`${baseURL}${API_PATH}`],
+      // Allowed, deliberately not default. `clientRegistrationDefaultResources`
+      // links a resource to every client that registers, which would have given
+      // the whole operation API to any MCP client that asked for nothing — the
+      // opposite of what the second resource is for. This way a client is
+      // linked to the API only if it names it in its registration, so an MCP
+      // client that does not ask holds a token for the tools and nothing else.
+      clientRegistrationAllowedResources: [`${baseURL}${API_PATH}`],
       // MCP 2026-07-28 prefers a Client ID Metadata Document and deprecates
       // dynamic registration, but the clients that only speak DCR are the ones
       // deevy cannot ask to change, so both stay open.

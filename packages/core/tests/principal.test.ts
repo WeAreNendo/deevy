@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Auth } from "../src/auth.ts";
 import { buildContext, createApp } from "../src/app.ts";
 import { createAuth } from "../src/auth.ts";
+import { API_PATH } from "../src/auth.ts";
 import { resolvePrincipal } from "../src/principal.ts";
 import { testDb } from "./helpers.ts";
 
@@ -50,7 +51,11 @@ async function cookieHeaders(auth: Auth, userId: string): Promise<Headers> {
 describe("resolvePrincipal", () => {
   it("is anonymous when the request carries no credential", async () => {
     const { auth } = testAuth();
-    const resolved = await resolvePrincipal({ auth, headers: new Headers() });
+    const resolved = await resolvePrincipal({
+      auth,
+      headers: new Headers(),
+      resourcePath: API_PATH,
+    });
     expect(resolved).toEqual({ principal: { kind: "anonymous" }, session: null });
   });
 
@@ -63,7 +68,7 @@ describe("resolvePrincipal", () => {
     expect(issued.key.startsWith("deevy_sk_")).toBe(true);
 
     const headers = new Headers({ authorization: `Bearer ${issued.key}` });
-    const resolved = await resolvePrincipal({ auth, headers });
+    const resolved = await resolvePrincipal({ auth, headers, resourcePath: API_PATH });
     expect(resolved.principal).toEqual({ kind: "api_key", keyId: issued.id });
     expect(resolved.session?.user.id).toBe("a1");
   });
@@ -79,7 +84,7 @@ describe("resolvePrincipal", () => {
     // The plugin's own default is ten requests a day, which would silently 429
     // a working Agent; deevy rate limits at the edge instead (docs/plans/m2.md).
     for (let call = 0; call < 12; call++) {
-      const resolved = await resolvePrincipal({ auth, headers });
+      const resolved = await resolvePrincipal({ auth, headers, resourcePath: API_PATH });
       expect(resolved.principal).toEqual({ kind: "api_key", keyId: issued.id });
     }
   });
@@ -89,7 +94,7 @@ describe("resolvePrincipal", () => {
     await db.insert(user).values({ id: "u1", name: "Ada", email: "ada@example.com" });
     const headers = await cookieHeaders(auth, "u1");
 
-    const resolved = await resolvePrincipal({ auth, headers });
+    const resolved = await resolvePrincipal({ auth, headers, resourcePath: API_PATH });
     expect(resolved.principal).toEqual({ kind: "cookie" });
     expect(resolved.session?.user.id).toBe("u1");
   });
@@ -103,11 +108,18 @@ describe("resolvePrincipal", () => {
     // this instance is an authorization server at all.
     const headers = await cookieHeaders(auth, "u1");
     headers.set("authorization", "Bearer not-a-deevy-key");
-    expect(await resolvePrincipal({ auth, headers })).toEqual({
+    expect(await resolvePrincipal({ auth, headers, resourcePath: API_PATH })).toEqual({
       principal: { kind: "anonymous" },
       session: null,
     });
-    expect(await resolvePrincipal({ auth, headers, baseURL: "http://localhost:3000" })).toEqual({
+    expect(
+      await resolvePrincipal({
+        auth,
+        headers,
+        baseURL: "http://localhost:3000",
+        resourcePath: API_PATH,
+      }),
+    ).toEqual({
       principal: { kind: "anonymous" },
       session: null,
     });
@@ -119,7 +131,7 @@ describe("resolvePrincipal", () => {
     const headers = await cookieHeaders(auth, "u1");
     headers.set("authorization", `Bearer deevy_sk_${"z".repeat(64)}`);
 
-    expect(await resolvePrincipal({ auth, headers })).toEqual({
+    expect(await resolvePrincipal({ auth, headers, resourcePath: API_PATH })).toEqual({
       principal: { kind: "anonymous" },
       session: null,
     });
@@ -160,7 +172,13 @@ describe("buildContext", () => {
     const { db, auth } = testAuth();
     const key = await agentWithKey(db, auth);
 
-    const context = await buildContext(db, auth, new Headers({ authorization: `Bearer ${key}` }));
+    const context = await buildContext(
+      db,
+      auth,
+      new Headers({ authorization: `Bearer ${key}` }),
+      undefined,
+      API_PATH,
+    );
     expect(context.principal?.kind).toBe("api_key");
     expect(context.member?.id).toBe("m1");
     expect(context.grantedProjectIds).toEqual(["p1"]);
@@ -174,7 +192,13 @@ describe("buildContext", () => {
       .insert(member)
       .values({ id: "m2", workspaceId: "w1", userId: "u1", role: "admin", kind: "human" });
 
-    const context = await buildContext(db, auth, await cookieHeaders(auth, "u1"));
+    const context = await buildContext(
+      db,
+      auth,
+      await cookieHeaders(auth, "u1"),
+      undefined,
+      API_PATH,
+    );
     expect(context.principal).toEqual({ kind: "cookie" });
     expect(context.member?.id).toBe("m2");
     expect(context.grantedProjectIds).toBeNull();

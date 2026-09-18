@@ -8,4 +8,6 @@ deevy now issues access tokens for two protected resources instead of one: the M
 
 This is what lets a Human sign in from something that is not a browser — the CLI being built on top of it — without that credential inheriting everything an MCP consent grants. Gate rulings are unaffected and still cannot be made by any delegated credential, whatever it is for.
 
-RFC 9728 protected-resource metadata is served for the MCP resource only. A client that needs the API resource reads `/.well-known/oauth-authorization-server` and names the resource in its authorization request (RFC 8707).
+**A client is linked to the API resource only if it asks for one at registration**, so an MCP client that registers without naming it cannot obtain an API token at all, and one that asks for it anyway is refused with `invalid_target`. A client that legitimately wants both names both, and then holds a token whose audience is both — which is RFC 8707 working as specified, and the reason "a token for one surface is refused at the other" is a statement about single-resource tokens.
+
+RFC 9728 protected-resource metadata is served for the MCP resource only. A client that needs the API resource reads `/.well-known/oauth-authorization-server` and names the resource in its authorization request (RFC 8707). A client identified by a Client ID Metadata Document has no requested resources, so it is linked to MCP alone.

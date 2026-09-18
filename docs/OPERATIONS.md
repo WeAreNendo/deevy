@@ -590,6 +590,10 @@ A token is checked against the resource it was minted for, in both directions: a
 refused at the API, and an API client's is refused at MCP. That is the point — consenting to an MCP client
 grants it the tools deevy projects, not every operation behind them.
 
+A client is linked to the API resource only if it names it when it registers. An MCP client that registers
+without asking cannot obtain an API token at all, and one that asks anyway is refused with RFC 8707's
+`invalid_target` — so adding the second resource widened nothing for the clients that already existed.
+
 Only the MCP resource publishes RFC 9728 metadata. A client that wants the API resource reads
 `/.well-known/oauth-authorization-server` and names the resource in its authorization request; it does not
 need a 401 to find its way there, because it was given the instance URL to begin with.

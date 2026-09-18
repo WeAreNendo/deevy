@@ -88,7 +88,13 @@ async function pkce(): Promise<{ verifier: string; challenge: string }> {
 }
 
 /** An MCP client that registered itself, the way Claude Code does over DCR. */
-async function registerClient(app: App): Promise<string> {
+/**
+ * `resources` is the DCR extension a client uses to say which protected
+ * resources it wants. Omitting it is what an MCP client does, and such a client
+ * is linked to the MCP resource alone — asking for the API is what a CLI does,
+ * and is the only way to be linked to it (auth.ts).
+ */
+async function registerClient(app: App, resources?: string[]): Promise<string> {
   const res = await app.request("/api/auth/oauth2/register", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -99,6 +105,7 @@ async function registerClient(app: App): Promise<string> {
       response_types: ["code"],
       token_endpoint_auth_method: "none",
       application_type: "native",
+      ...(resources ? { resources } : {}),
     }),
   });
   if (res.status !== 201) throw new Error(`register: ${res.status} ${await res.text()}`);
@@ -109,7 +116,7 @@ interface AuthorizeOptions {
   clientId: string;
   challenge?: string;
   challengeMethod?: string;
-  /** RFC 8707. Omitted deliberately by the test that asks for no resource at all. */
+  /** RFC 8707, and every caller in this file names one. */
   resource?: string;
 }
 
@@ -172,10 +179,14 @@ async function mintToken(
   userId: string,
   options: { resource?: string } = {},
 ): Promise<{ token: string; clientId: string }> {
-  const clientId = await registerClient(app);
+  const wanted = options.resource ?? resource;
+  // A client is registered for the resource it is about to ask for, which is
+  // what a real one does: the API resource is allowed at registration, not
+  // handed out by default, so a client that never names it cannot hold a token
+  // for it (auth.ts).
+  const clientId = await registerClient(app, wanted === resource ? undefined : [wanted]);
   const cookie = await cookieHeaders(auth, userId);
   const { verifier, challenge } = await pkce();
-  const wanted = options.resource ?? resource;
   const redirected = await authorize(app, cookie, { clientId, challenge, resource: wanted });
   const code = await consent(app, cookie, redirected.headers.get("location") ?? "");
   const res = await exchange(app, { code, clientId, verifier, resource: wanted });
@@ -287,6 +298,36 @@ describe("the two resources this server issues for", () => {
     expect(context.session).toBeNull();
   });
 
+  /**
+   * The finding that made this slice worth reviewing. Linking the API resource
+   * to every client at registration — which is what
+   * `clientRegistrationDefaultResources` does — would have let any MCP client
+   * mint a token for the whole operation API without ever asking for one, which
+   * is the opposite of what a second resource is for. It is allowed at
+   * registration instead, so this is the test that says a client gets the API
+   * only by naming it.
+   */
+  it("refuses the API to a client that registered without asking for it", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    // No `resources`: an MCP client, registering the way Claude Code does.
+    const clientId = await registerClient(app);
+    const cookie = await cookieHeaders(auth, "u1");
+    const { challenge } = await pkce();
+
+    const redirected = await authorize(app, cookie, {
+      clientId,
+      challenge,
+      resource: apiResource,
+    });
+    // The provider refuses the target rather than issuing a code for it.
+    // RFC 8707's own error for "you may not have that resource", rather than
+    // any refusal: a redirect carrying a code would mean the link was made.
+    const location = redirected.headers.get("location") ?? "";
+    expect(location).toContain("invalid_target");
+    expect(location).not.toContain("code=");
+  });
+
   it("refuses an API token at MCP", async () => {
     const { db, auth, app } = testApp();
     await humanMember(db);
@@ -316,6 +357,63 @@ describe("the two resources this server issues for", () => {
       MCP_PATH,
     );
     expect(context.principal).toMatchObject({ kind: "oauth" });
+  });
+
+  /**
+   * The wiring, not the check. Everything above drives `buildContext` directly
+   * and so proves only that `resolvePrincipal` honours the argument it is
+   * handed. These go through the routes, which is where the argument is chosen
+   * — without them, deleting `MCP_PATH` from mcp/server.ts or `API_PATH` from
+   * app.ts leaves every test in the repository passing while the surfaces start
+   * accepting each other's tokens.
+   */
+  it("spends an API token at /rpc, which is the transport a CLI uses", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    const { token } = await mintToken(app, auth, "u1", { resource: apiResource });
+
+    const res = await app.request(`${baseURL}/rpc/me/get`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ json: undefined }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { json: { member: { kind: string } | null } };
+    expect(body.json.member?.kind).toBe("human");
+  });
+
+  it("refuses an MCP token at /rpc", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    const { token } = await mintToken(app, auth, "u1");
+
+    const res = await app.request(`${baseURL}/rpc/me/get`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ json: undefined }),
+    });
+    // me.get wants a session, and this token is nobody here.
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses an API token at /mcp, which answers with the challenge", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    const { token } = await mintToken(app, auth, "u1", { resource: apiResource });
+
+    const res = await app.request(`${baseURL}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    expect(res.status).toBe(401);
+    // RFC 9728: the challenge names where the metadata is, which is what makes
+    // a client start the dance rather than simply fail.
+    expect(res.headers.get("www-authenticate") ?? "").toContain("resource_metadata");
   });
 
   /**
@@ -378,6 +476,7 @@ describe("RFC 8707 audience validation", () => {
       auth,
       headers: new Headers({ authorization: `Bearer ${token}` }),
       baseURL,
+      resourcePath: MCP_PATH,
     });
     expect(resolved).toEqual({ principal: { kind: "anonymous" }, session: null });
   });
@@ -423,6 +522,7 @@ describe("resolvePrincipal with an access token", () => {
       auth,
       new Headers({ authorization: `Bearer ${token}` }),
       baseURL,
+      API_PATH,
     );
     expect(context.principal).toEqual({
       kind: "oauth",
@@ -464,6 +564,7 @@ describe("Client ID Metadata Documents", () => {
       auth,
       headers: new Headers({ authorization: `Bearer ${token}` }),
       baseURL,
+      resourcePath: MCP_PATH,
     });
     expect(resolved.principal).toEqual({ kind: "oauth", clientId, scopes: ["openid", "profile"] });
   });
