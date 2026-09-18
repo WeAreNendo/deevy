@@ -1,0 +1,178 @@
+name: npm
+
+# The one package deevy publishes. Everything else in the workspace is part of
+# an instance; this is the part somebody installs, so it goes where somebody
+# would install it from.
+#
+# Two ways in, the same two release.yml has and for the same reason:
+#
+#  - `workflow_call`, from changesets.yml, once a Version PR has merged and the
+#    images are out.
+#  - `workflow_dispatch`, which defaults to a **rehearsal**: every step of a
+#    real publish except the upload. Unticking that repairs a release whose npm
+#    job alone failed, which is the state `v0.7.0` is in.
+#
+# There is no `verify` job here, and release.yml has one. The difference is what
+# each route can reach: this one publishes a version or refuses, and a version
+# means a tag, and a tag only ever names a commit on main — which ci.yml has
+# already run on, because it runs on every push there. release.yml can also be
+# entered by a `v*` tag pushed by hand at any commit, which is the case its
+# `verify` exists for and which this file has no equivalent of. That exists because nothing else can tell
+#    you this job works. A release runs it once, at the end, on the one commit
+#    where a mistake costs a version number — so the alternative to rehearsing
+#    is finding out then.
+#
+# What a rehearsal proves and what it does not, because the difference is the
+# whole point of having one:
+#
+#  - it proves the runner has `vp pm` at all, that setup-vp's .npmrc is
+#    somewhere pnpm reads, that NODE_AUTH_TOKEN reaches npm as a credential
+#    npm accepts, and that the tarball packs with the four files it should.
+#  - it cannot prove `--provenance`, which needs the OIDC exchange a real
+#    publish makes, and it cannot prove the token may write to `@deevy`, which
+#    only writing proves. Both fail loudly and neither burns the version: a
+#    publish that fails has published nothing, so the fix is a re-run.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version being released, without a leading v. Its tag must exist.
+        required: true
+        type: string
+      dry-run:
+        description: Rehearse rather than publish.
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      version:
+        description: A released version to publish, without a leading v. Empty rehearses this branch instead.
+        required: false
+        type: string
+      dry-run:
+        description: Rehearse rather than publish. Untick only to repair a release whose npm job failed.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    name: ${{ inputs.dry-run && 'Rehearse the publish' || 'Publish to npm' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Provenance: npm records which workflow, which commit and which
+      # repository built the tarball, and anybody can check it. It costs one
+      # permission and is the only thing that makes "this came from deevy" more
+      # than a claim in the README.
+      id-token: write
+    steps:
+      # From the tag, so what is published is what was tagged rather than
+      # whatever main has moved on to. A rehearsal is given no version and
+      # takes the branch it was dispatched on, which is the point of rehearsing
+      # a change to this file before it is the thing releasing.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref }}
+
+      - name: Install
+        uses: voidzero-dev/setup-vp@v1.19.0
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: true
+          # This is what actually authenticates the publish. NODE_AUTH_TOKEN on
+          # its own is inert: it is a convention that works only because
+          # something writes an .npmrc containing `_authToken=${NODE_AUTH_TOKEN}`,
+          # and nothing in this repository did. Without it the publish fails
+          # ENEEDAUTH, having sent no credential at all. This writes one in
+          # RUNNER_TEMP and points NPM_CONFIG_USERCONFIG at it, which pnpm
+          # reads as well as npm.
+          registry-url: https://registry.npmjs.org
+          scope: "@deevy"
+
+      - name: Build the bundle that ships
+        run: vp run cli#build
+
+      # The `bin` is this file and nothing makes it executable on the way in, so
+      # a bundler that dropped the banner would ship a package that installs and
+      # cannot run. Checked here rather than in a test because here is where a
+      # build has just happened.
+      - name: The bin starts with a shebang
+        run: head -1 apps/cli/dist/main.mjs | grep -qx '#!/usr/bin/env node'
+
+      # Separately from the dry run below, which proves nothing about the
+      # credential: `publish --dry-run` uploads nothing and therefore
+      # authenticates nothing, and passes just as happily with a made-up token.
+      # This is a real authenticated request, and it is the failure the rest of
+      # the rehearsal exists to catch.
+      - name: The credential reaches npm
+        if: inputs.dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Assigned rather than interpolated into the echo. Under `bash -e` a
+          # command substitution used as an *argument* does not set the
+          # command's status, so `echo "as: $(npm whoami)"` prints an empty name
+          # and exits 0 — this step would go green on exactly the expired or
+          # missing token it is here to catch. A bare assignment propagates.
+          who=$(npm whoami)
+          echo "Authenticated to npm as: $who"
+          # Whether the token may write to the scope, which whoami does not say.
+          # Tolerated rather than required: it answers awkwardly for a scope
+          # with nothing in it, which is every scope before its first publish.
+          npm access list packages @deevy 2>&1 || echo "(the scope lists nothing yet)"
+
+      - name: Rehearse
+        if: inputs.dry-run
+        working-directory: apps/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # --provenance is left off: it needs the OIDC exchange a real publish
+          # makes, and asking for it here fails on something a release would not.
+          vp pm publish --access public --no-git-checks --dry-run
+
+      # pnpm rather than npm, because the package's devDependencies name
+      # workspace packages with pnpm's `workspace:` protocol and npm does not
+      # know what that is. pnpm rewrites them as it publishes; there are none in
+      # `dependencies` to rewrite, because the bundle inlines everything. pnpm
+      # also packs the workspace LICENSE, which npm cannot reach from here.
+      #
+      # Through `vp pm`, because there is no bare pnpm on a GitHub runner —
+      # the image ships npm and yarn, and vp keeps its own pnpm where nothing
+      # else on PATH can see it.
+      - name: Publish
+        if: ${{ !inputs.dry-run }}
+        working-directory: apps/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          # A dispatch leaves this empty unless it is given one, and every way
+          # of continuing from there is wrong: `npm view "@deevy/cli@"` resolves
+          # to *latest* rather than erroring, so this would either report
+          # nothing to do and exit green having published nothing, or, before
+          # the first release, fall through and publish whatever version
+          # apps/cli/package.json happens to carry — from a branch, untagged.
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version. A publish needs one, and its tag must exist."
+            exit 1
+          fi
+          # Idempotent: re-running a release that already published must not
+          # fail it. `npm view` on a missing version exits 1 with E404, so this
+          # skips only what is genuinely there.
+          if npm view "@deevy/cli@$VERSION" version >/dev/null 2>&1; then
+            echo "@deevy/cli@$VERSION is already on npm; nothing to do."
+            exit 0
+          fi
+          # --provenance explicitly: pnpm documents the flag, and whether it
+          # reads NPM_CONFIG_PROVENANCE is not something to find out during a
+          # release. --no-git-checks because this is a detached checkout of the
+          # tag, which pnpm otherwise refuses to publish from.
+          vp pm publish --access public --provenance --no-git-checks

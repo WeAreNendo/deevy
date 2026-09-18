@@ -156,9 +156,10 @@ jobs:
           esac
           gh release create "v$VERSION" --title "v$VERSION" --notes-file /tmp/release-notes.md $prerelease
 
-  # The one package deevy publishes. Everything else in the workspace is part of
-  # an instance; this is the part somebody installs, so it goes where somebody
-  # would install it from.
+  # The one package deevy publishes, in its own file so that it can also be
+  # rehearsed — a real runner, the real credential, everything but the upload —
+  # rather than first running on the commit where a mistake costs a version
+  # number. `gh workflow run npm.yml` does that.
   #
   # Its own job rather than `changesets/action`'s `publish` input, for the same
   # reason `create-github-releases` and `push-git-tags` are off above: this
@@ -173,66 +174,13 @@ jobs:
     # back goes last rather than in parallel.
     needs: [version, publish]
     if: needs.version.outputs.release == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
     permissions:
       contents: read
-      # Provenance: npm records which workflow, which commit and which
-      # repository built the tarball, and anybody can check it. It costs one
-      # permission and is the only thing that makes "this came from deevy" more
-      # than a claim in the README.
       id-token: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: v${{ needs.version.outputs.version }}
-
-      - name: Install
-        uses: voidzero-dev/setup-vp@v1.19.0
-        with:
-          node-version-file: .node-version
-          cache: true
-          run-install: true
-          # This is what actually authenticates the publish. NODE_AUTH_TOKEN on
-          # its own is inert: it is a convention that works only because
-          # something writes an .npmrc containing `_authToken=${NODE_AUTH_TOKEN}`,
-          # and nothing in this repository did. Without it the publish fails
-          # ENEEDAUTH, having sent no credential at all.
-          registry-url: https://registry.npmjs.org
-          scope: "@deevy"
-
-      # From the tag, so what is published is what was tagged rather than
-      # whatever main has moved on to.
-      - name: Build the bundle that ships
-        run: vp run cli#build
-
-      # pnpm rather than npm, because the package's devDependencies name
-      # workspace packages with pnpm's `workspace:` protocol and npm does not
-      # know what that is. pnpm rewrites them as it publishes; there are none in
-      # `dependencies` to rewrite, because the bundle inlines everything. pnpm
-      # also packs the workspace LICENSE, which npm cannot reach from here.
-      #
-      # Through `vp pm`, because there is no bare pnpm on a GitHub runner —
-      # the image ships npm and yarn, and vp keeps its own pnpm where nothing
-      # else on PATH can see it.
-      - name: Publish
-        working-directory: apps/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          # Idempotent: re-running a release that already published must not
-          # fail it. `npm view` on a missing version exits 1 with E404, so this
-          # skips only what is genuinely there.
-          if npm view "@deevy/cli@$version" version >/dev/null 2>&1; then
-            echo "@deevy/cli@$version is already on npm; nothing to do."
-            exit 0
-          fi
-          # --provenance explicitly: pnpm documents the flag, and whether it
-          # reads NPM_CONFIG_PROVENANCE is not something to find out during a
-          # release. --no-git-checks because this is a detached checkout of the
-          # tag, which pnpm otherwise refuses to publish from.
-          vp pm publish --access public --provenance --no-git-checks
+    uses: ./.github/workflows/npm.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
 
   # Called rather than left to the tag push above, which GITHUB_TOKEN cannot
   # trigger. This re-runs the whole of CI before either image is pushed.
