@@ -1,14 +1,16 @@
 /**
  * The CLI's entry.
  *
- * Slice 2 carries the three verbs that are not operations — signing in, signing
- * out, and saying who you are. The ninety-four that are operations arrive in
- * the next slice, generated from the registry by `commandsFor`.
+ * Four verbs are written here because they are not operations — signing in,
+ * signing out, saying who you are, and opening a Gate in a browser. Everything
+ * else a user can type is generated from the registry (generate.ts), so an
+ * operation added to deevy is a command without anybody writing one.
  */
 import { realpathSync } from "node:fs";
 import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { addGeneratedCommands } from "./generate.ts";
 import { signIn, signOut, whoAmI } from "./identity.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
@@ -90,6 +92,9 @@ export function program(): Command {
     .action(async (url: string | undefined, options: { json?: boolean }) => {
       await whoAmI(originFrom(url), { json: options.json === true });
     });
+
+  // Everything else: one command per operation, from the registry.
+  addGeneratedCommands(cli, () => ({ origin: originFrom(undefined) }));
 
   return cli;
 }
