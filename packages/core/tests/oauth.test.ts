@@ -1,6 +1,7 @@
 import { member, oauthClientResource, oauthResource, user, workspace } from "@deevy/db";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { App } from "../src/app.ts";
+import { API_PATH, MCP_PATH } from "../src/auth.ts";
 import { buildContext, createApp } from "../src/app.ts";
 import type { Auth } from "../src/auth.ts";
 import { createAuth } from "../src/auth.ts";
@@ -16,6 +17,12 @@ afterEach(() => {
 const secret = "test-secret-that-is-at-least-32-characters";
 const baseURL = "https://deevy.example.com";
 const resource = `${baseURL}/mcp`;
+/**
+ * The other protected resource this server issues for: the operation API, which
+ * `/api` and `/rpc` are two transports for. A CLI asks for this one; an MCP
+ * client asks for the one above; neither token works where the other is spent.
+ */
+const apiResource = `${baseURL}/api`;
 const redirectUri = "http://127.0.0.1:8765/callback";
 
 /** The instance an MCP client would discover: a real Better Auth authorization server. */
@@ -255,6 +262,90 @@ describe("the authorization code flow", () => {
   });
 });
 
+describe("the two resources this server issues for", () => {
+  /**
+   * The separation the second resource exists to draw. A Human who consents to
+   * an MCP client is consenting to the tools deevy projects, not to the
+   * ninety-four operations behind them — and a CLI's token is the other way
+   * round. Both are signed by deevy, for the same Human, by the same flow;
+   * only the audience tells them apart, so both directions are asserted.
+   */
+  it("refuses an MCP token at the API", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    const { token } = await mintToken(app, auth, "u1");
+    expect(claimsOf(token).aud).toContain(resource);
+
+    const context = await buildContext(
+      db,
+      auth,
+      new Headers({ authorization: `Bearer ${token}` }),
+      baseURL,
+      API_PATH,
+    );
+    expect(context.principal).toEqual({ kind: "anonymous" });
+    expect(context.session).toBeNull();
+  });
+
+  it("refuses an API token at MCP", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    const { token } = await mintToken(app, auth, "u1", { resource: apiResource });
+    expect(claimsOf(token).aud).toContain(apiResource);
+
+    const context = await buildContext(
+      db,
+      auth,
+      new Headers({ authorization: `Bearer ${token}` }),
+      baseURL,
+      MCP_PATH,
+    );
+    expect(context.principal).toEqual({ kind: "anonymous" });
+  });
+
+  it("still lets an MCP token reach MCP, which is what everything before the CLI did", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    const { token } = await mintToken(app, auth, "u1");
+
+    const context = await buildContext(
+      db,
+      auth,
+      new Headers({ authorization: `Bearer ${token}` }),
+      baseURL,
+      MCP_PATH,
+    );
+    expect(context.principal).toMatchObject({ kind: "oauth" });
+  });
+
+  /**
+   * Better Auth's `mcp()` plugin is the resource server for its own resource
+   * and serves RFC 9728 metadata for that one alone; the API resource is
+   * configured on the same provider and issued for, but not advertised.
+   *
+   * That costs the CLI nothing — RFC 9728 exists so a client holding a 401 can
+   * find the authorization server, and a CLI is told the instance URL, so it
+   * reads `/.well-known/oauth-authorization-server` directly and asks for the
+   * API resource by name. This is written down as a test rather than left
+   * implicit, so the day the plugin advertises both, somebody notices.
+   */
+  it("advertises MCP's metadata, and the API resource is reached through the issuer", async () => {
+    const { app } = testApp();
+    const mcpMetadata = await app.request(`${baseURL}/.well-known/oauth-protected-resource/mcp`);
+    expect(mcpMetadata.status).toBe(200);
+    expect((await mcpMetadata.json()) as { resource: string }).toMatchObject({ resource });
+
+    const apiMetadata = await app.request(`${baseURL}/.well-known/oauth-protected-resource/api`);
+    expect(apiMetadata.status).toBe(404);
+
+    // What the CLI uses instead, and it is enough: the issuer names the
+    // endpoints, and the resource is asked for by name at the authorize step.
+    const server = await app.request(`${baseURL}/.well-known/oauth-authorization-server`);
+    expect(server.status).toBe(200);
+    expect((await server.json()) as { issuer: string }).toMatchObject({ issuer: baseURL });
+  });
+});
+
 describe("RFC 8707 audience validation", () => {
   it("refuses a token this authorization server minted for another resource", async () => {
     const { db, auth, app } = testApp();
@@ -296,7 +387,7 @@ describe("a real token and the sessionOnly rule", () => {
   it("carries the Human everywhere but a Gate decision", async () => {
     const { db, auth, app } = testApp();
     await humanMember(db);
-    const { token } = await mintToken(app, auth, "u1");
+    const { token } = await mintToken(app, auth, "u1", { resource: apiResource });
     const bearer = { authorization: `Bearer ${token}` };
 
     // The token is a working credential for that Human: this is not a test of
@@ -325,7 +416,7 @@ describe("resolvePrincipal with an access token", () => {
   it("resolves a valid token to that Human's Member as an oauth principal", async () => {
     const { db, auth, app } = testApp();
     await humanMember(db);
-    const { token, clientId } = await mintToken(app, auth, "u1");
+    const { token, clientId } = await mintToken(app, auth, "u1", { resource: apiResource });
 
     const context = await buildContext(
       db,
@@ -382,7 +473,7 @@ describe("oauthClients", () => {
   it("lists the Human's own consents and revokes one", async () => {
     const { db, auth, app } = testApp();
     await humanMember(db);
-    const { token, clientId } = await mintToken(app, auth, "u1");
+    const { token, clientId } = await mintToken(app, auth, "u1", { resource: apiResource });
     // Consents are managed in the browser. A client that could list and revoke
     // them would be able to cut off the Human's other clients, so the token
     // this very flow minted is refused here (ADR-0010).
@@ -434,7 +525,7 @@ describe("me.get", () => {
   it("says how the caller arrived", async () => {
     const { db, auth, app } = testApp();
     await humanMember(db);
-    const { token } = await mintToken(app, auth, "u1");
+    const { token } = await mintToken(app, auth, "u1", { resource: apiResource });
 
     const viaToken = await app.request("/api/me", {
       headers: { authorization: `Bearer ${token}` },

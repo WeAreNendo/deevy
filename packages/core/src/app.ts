@@ -14,6 +14,7 @@ import type { LiveOptions } from "./live.ts";
 import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
 import { betterAuthKeys } from "./keys.ts";
+import { API_PATH } from "./auth.ts";
 import { resolvePrincipal } from "./principal.ts";
 import { router } from "./operations/index.ts";
 import type { AppContext } from "./operations/registry.ts";
@@ -277,8 +278,11 @@ export async function buildContext(
   auth: Auth | undefined,
   headers: Headers,
   baseURL?: string,
+  /** Which surface this request reached, so an access token is checked against
+   * the resource it was minted for (auth.ts). */
+  resourcePath: string = API_PATH,
 ): Promise<AppContext> {
-  const { principal, session } = await resolvePrincipal({ auth, headers, baseURL });
+  const { principal, session } = await resolvePrincipal({ auth, headers, baseURL, resourcePath });
   // An instance without auth cannot mint keys; apiKeysOf turns that into a
   // NOT_IMPLEMENTED rather than a caller's mistake (keys.ts).
   const base = {

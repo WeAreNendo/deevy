@@ -9,6 +9,7 @@ import type { ServerContext } from "@modelcontextprotocol/server";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { call } from "@orpc/server";
 import type { Auth } from "../auth.ts";
+import { MCP_PATH } from "../auth.ts";
 import { buildContext } from "../app.ts";
 import type { JobQueue } from "../jobs.ts";
 import { router } from "../operations/index.ts";
@@ -100,7 +101,9 @@ export function createDeevyMcp({
     async fetch(request) {
       const origin = baseURL ?? new URL(request.url).origin;
       const context = {
-        ...(await buildContext(db, auth, request.headers, origin)),
+        // MCP_PATH, not the API's: a token a Human granted to an MCP client
+        // reaches the tools and not the ninety-four operations behind them.
+        ...(await buildContext(db, auth, request.headers, origin, MCP_PATH)),
         ...(webURL ? { webURL } : {}),
         ...(jobs ? { jobs } : {}),
       };
@@ -243,9 +246,6 @@ async function runTool(
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
-/** Where the MCP endpoint is mounted. RFC 9728 builds its metadata URL from it. */
-export const MCP_PATH = "/mcp";
 
 /**
  * RFC 9728: a 401 naming where the Protected Resource Metadata lives is what

@@ -386,6 +386,19 @@ export function apiKeyPlugins() {
 
 /** Where the MCP endpoint is mounted. RFC 8707 and RFC 9728 both build on it. */
 export const MCP_PATH = "/mcp";
+/**
+ * Where the operation API is mounted, and the second protected resource this
+ * server issues tokens for. `/api` and `/rpc` are two transports for one API,
+ * so they share one resource identifier: the resource names what a token may
+ * reach, not how it gets there.
+ *
+ * It is a separate resource from MCP rather than a widened one because that
+ * separation is the whole point of RFC 8707. A Human who consents to some MCP
+ * client is consenting to the tools deevy projects, not to the ninety-four
+ * operations behind them, and a token minted for one is refused at the other
+ * (principal.ts).
+ */
+export const API_PATH = "/api";
 
 /** Where Better Auth's own routes are mounted, and so where `/jwks` lives. */
 export const AUTH_BASE_PATH = "/api/auth";
@@ -423,6 +436,11 @@ export function oauthServerPlugins(env: AuthEnv) {
       // RFC 8707: every token this server mints is bound to this audience, and
       // one minted for anything else is refused at /mcp (principal.ts).
       resource: `${baseURL}${MCP_PATH}`,
+      // The API beside it. `mcp()` appends its own resource to this list, so
+      // both are advertised, both can be asked for with RFC 8707 `resource`,
+      // and a client registered here may hold either.
+      resources: [`${baseURL}${API_PATH}`],
+      clientRegistrationDefaultResources: [`${baseURL}${API_PATH}`],
       // MCP 2026-07-28 prefers a Client ID Metadata Document and deprecates
       // dynamic registration, but the clients that only speak DCR are the ones
       // deevy cannot ask to change, so both stay open.

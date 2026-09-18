@@ -22,6 +22,13 @@ export interface ResolvePrincipalOptions {
    * without it: there would be nothing to check the audience against.
    */
   baseURL?: string;
+  /**
+   * The surface being reached, as a path under `baseURL`: an access token is
+   * audience-bound to one resource, and presenting an MCP token to the API or
+   * an API token to MCP is not a caller this instance knows (auth.ts). Defaults
+   * to MCP, which is where the only tokens before the CLI were spent.
+   */
+  resourcePath?: string;
   jwksFetch?: JwksFetch;
 }
 
@@ -42,6 +49,7 @@ export async function resolvePrincipal({
   auth,
   headers,
   baseURL,
+  resourcePath = MCP_PATH,
   jwksFetch,
 }: ResolvePrincipalOptions): Promise<ResolvedPrincipal> {
   if (!auth) return anonymous;
@@ -53,7 +61,7 @@ export async function resolvePrincipal({
   if (bearer) {
     return bearer.startsWith(apiKeyPrefix)
       ? await fromApiKey(auth, bearer)
-      : await fromAccessToken(auth, bearer, baseURL, jwksFetch);
+      : await fromAccessToken(auth, bearer, baseURL, resourcePath, jwksFetch);
   }
 
   const session = await auth.api.getSession({ headers });
@@ -124,7 +132,8 @@ interface AccessTokenClaims {
 async function fromAccessToken(
   auth: Auth,
   token: string,
-  baseURL?: string,
+  baseURL: string | undefined,
+  resourcePath: string,
   jwksFetch?: JwksFetch,
 ): Promise<ResolvedPrincipal> {
   const issuer = baseURL?.replace(/\/+$/, "");
@@ -144,7 +153,7 @@ async function fromAccessToken(
         return response.ok ? ((await response.json()) as never) : undefined;
       },
       jwksCacheKey: cacheKey,
-      verifyOptions: { issuer, audience: `${issuer}${MCP_PATH}` },
+      verifyOptions: { issuer, audience: `${issuer}${resourcePath}` },
     })) as AccessTokenClaims;
   } catch {
     // A bad signature, a wrong audience, an expired token and something that
