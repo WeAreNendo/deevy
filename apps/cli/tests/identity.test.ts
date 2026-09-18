@@ -41,9 +41,17 @@ function collect(): Reporter & { lines: { out: string[]; err: string[] } } {
 
 describe("where a token is kept", () => {
   it("is one file per instance, so signing into a second does not sign out the first", () => {
-    expect(fileNameFor("https://deevy.example.com")).toBe("deevy.example.com.json");
+    expect(fileNameFor("https://deevy.example.com")).toBe("https_deevy.example.com.json");
     // A port is part of which instance this is, and a colon is not a file name.
-    expect(fileNameFor("http://localhost:3000")).toBe("localhost_3000.json");
+    expect(fileNameFor("http://localhost:3000")).toBe("http_localhost_3000.json");
+  });
+
+  it("counts the scheme, because http and https on one host are two instances", () => {
+    // The direct port and the same port behind a TLS proxy. Sharing a file
+    // would hand a token minted for one origin to the other.
+    expect(fileNameFor("http://host.example.com")).not.toBe(
+      fileNameFor("https://host.example.com"),
+    );
   });
 
   it("writes it where only this user can read it", async () => {

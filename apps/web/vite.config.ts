@@ -1,6 +1,7 @@
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { defineConfig, lazyPlugins } from "vite-plus";
 
@@ -25,7 +26,13 @@ const workers = process.env.DEEVY_TARGET === "workers";
 const apiOrigin =
   process.env.DEEVY_API_ORIGIN ?? `http://localhost:${process.env.DEEVY_PORT ?? "3000"}`;
 
+const { version } = createRequire(import.meta.url)("./package.json") as { version: string };
+
 export default defineConfig({
+  // What this instance calls itself, in the API document a client discovers it
+  // through — the same thing apps/server does, so the Workers deployment names
+  // a version rather than serving 0.0.0 (apps/cli/src/capabilities.ts).
+  define: { __DEEVY_VERSION__: JSON.stringify(version) },
   run: {
     // Cached, and per package: see packages/core/vite.config.ts.
     tasks: {

@@ -210,10 +210,22 @@ async function run(
   // moment it is pointed at an older instance — so the answer comes from the
   // instance, and a command it does not have is named rather than failing as a
   // 404 somebody has to interpret.
-  const capabilities = await capabilitiesFor(where.origin, {
+  const asking = {
     ...(where.fetchImpl ? { fetchImpl: where.fetchImpl } : {}),
     ...(where.dir ? { dir: where.dir } : {}),
-  }).catch(() => null);
+  };
+  // Not reachable, not a deevy, too slow: let the command through and let the
+  // real call fail with its own error. Failing closed on a question nobody
+  // asked would make this feature the thing that breaks the CLI.
+  let capabilities = await capabilitiesFor(where.origin, asking).catch(() => null);
+  if (capabilities && !capabilities.operations.includes(command.operation)) {
+    // The cached answer is up to a day old, so the first thing to rule out is
+    // that the instance gained the operation since. Otherwise upgrading an
+    // instance would be met by a CLI telling you to upgrade the instance.
+    capabilities = await capabilitiesFor(where.origin, { ...asking, refresh: true }).catch(
+      () => capabilities,
+    );
+  }
   if (capabilities && !capabilities.operations.includes(command.operation)) {
     throw new Error(
       missingFrom(
@@ -247,8 +259,8 @@ async function run(
 function refuseEarly(command: CommandDescriptor, credential: Credential): void {
   const asAgent = credential.kind === "key";
   // `public` short-circuits the server's own check before it looks at who is
-  // asking (registry.ts), so `health ping` is answered for anybody — including
-  // the version handshake a CLI holding only an Agent's key has to make.
+  // asking (registry.ts), so `health ping` is answered for anybody and the CLI
+  // must not invent a rule deevy does not have.
   if (asAgent && command.auth !== "public" && !command.agents) {
     throw new Error(
       `${command.words.join(" ")} is not something an Agent may do, and DEEVY_API_KEY is set, so the CLI is an Agent.\nUnset it to act as the Human you signed in as.`,

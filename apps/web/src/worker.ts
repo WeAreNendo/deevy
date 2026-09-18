@@ -15,6 +15,10 @@ export { DocumentRoom } from "./rooms.ts";
 import { workerLiveRooms } from "./rooms.ts";
 import { readWorkerEnv, workerAuthEnv } from "./env.ts";
 
+/** Written by the build from package.json; see vite.config.ts. */
+declare const __DEEVY_VERSION__: string | undefined;
+const DEEVY_VERSION = typeof __DEEVY_VERSION__ === "string" ? __DEEVY_VERSION__ : undefined;
+
 /**
  * One app per isolate, not one per request. `createApp` builds the oRPC
  * handlers, the OpenAPI document and the MCP server, none of which depend on
@@ -72,6 +76,7 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
   const auth = createAuth({ db, env: authEnv });
   const isolate: Isolate = {
     app: createApp({
+      version: DEEVY_VERSION,
       db,
       auth,
       origin,
