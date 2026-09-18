@@ -500,6 +500,7 @@ including nothing a delegated credential may do, which is a Gate ruling
 ([ADR-0010](./adr/0010-a-delegated-credential-cannot-decide-a-gate.md)).
 
 ```bash
+npm install -g @deevy/cli               # or npx @deevy/cli
 deevy login https://deevy.example.com   # opens a browser; stores a token
 deevy whoami                            # says who this terminal is, and how
 deevy logout                            # forgets the token

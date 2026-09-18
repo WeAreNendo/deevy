@@ -156,6 +156,67 @@ jobs:
           esac
           gh release create "v$VERSION" --title "v$VERSION" --notes-file /tmp/release-notes.md $prerelease
 
+  # The one package deevy publishes. Everything else in the workspace is part of
+  # an instance; this is the part somebody installs, so it goes where somebody
+  # would install it from.
+  #
+  # Its own job rather than `changesets/action`'s `publish` input, for the same
+  # reason `create-github-releases` and `push-git-tags` are off above: this
+  # workflow owns the tag and the Release so that they describe the folded
+  # changelog, and handing half of the release back to the action would put two
+  # things in charge of when a version is out.
+  npm:
+    name: The CLI on npm
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Provenance: npm records which workflow, which commit and which
+      # repository built the tarball, and anybody can check it. It costs one
+      # permission and is the only thing that makes "this came from deevy" more
+      # than a claim in the README.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.version.outputs.version }}
+
+      - name: Install
+        uses: voidzero-dev/setup-vp@v1.19.0
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: true
+
+      # From the tag, so what is published is what was tagged rather than
+      # whatever main has moved on to.
+      - name: Build the bundle that ships
+        run: vp run cli#build
+
+      # pnpm rather than npm, because the package's devDependencies name
+      # workspace packages with pnpm's `workspace:` protocol and npm does not
+      # know what that is. pnpm rewrites them as it publishes; there are none in
+      # `dependencies` to rewrite, because the bundle inlines everything.
+      - name: Publish
+        working-directory: apps/cli
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${{ needs.version.outputs.version }}"
+          # Idempotent: re-running a release that already published must not
+          # fail it, and this is the only way to ask without racing.
+          if npm view "@deevy/cli@$version" version >/dev/null 2>&1; then
+            echo "@deevy/cli@$version is already on npm; nothing to do."
+            exit 0
+          fi
+          # --no-git-checks: the tree is a detached checkout of the tag, which
+          # pnpm otherwise refuses to publish from.
+          pnpm publish --access public --no-git-checks
+
   # Called rather than left to the tag push above, which GITHUB_TOKEN cannot
   # trigger. This re-runs the whole of CI before either image is pushed.
   publish:

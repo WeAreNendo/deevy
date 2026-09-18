@@ -293,8 +293,14 @@ down in DEVELOPMENT.md and ADR-0017.
 - **No snapshot releases.** They are npm's way to install a branch, and their own documentation says the
   version commit must never be merged — the opposite of a Version PR flow. An image tagged by commit is the
   equivalent here and needs no changesets.
-- **Nothing published to npm.** `access` stays `restricted` and `changesets/action` is run without `publish`.
-  If a package is ever published, that is one line in the action and one package out of the `fixed` group.
+- **~~Nothing published to npm.~~** True until the CLI (`docs/plans/cli.md`). `@deevy/cli` is published and
+  everything else still is not — `access` stays `restricted` in the changesets configuration and the one
+  package that publishes says `publishConfig.access: "public"` for itself. It did **not** come out of the
+  `fixed` group: it is deevy, so it carries deevy's version, and `@deevy/cli@0.9.0` is the same number as the
+  image. Publishing is its own job in `changesets.yml` rather than `changesets/action`'s `publish` input, for
+  the same reason `create-github-releases` and `push-git-tags` are off there — this workflow owns the tag and
+  the Release so they describe the folded changelog, and handing half the release back to the action would
+  put two things in charge of when a version is out.
 
 ## Risks worth naming
 
