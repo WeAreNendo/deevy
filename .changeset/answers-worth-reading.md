@@ -2,7 +2,9 @@
 "@deevy/cli": minor
 ---
 
-Commands now answer with something a person can read. A list is a table with the columns you recognise a row by — `key`, `title`, `handle` — rather than a JSON document you have to scan; a single thing is its fields, aligned; and an operation whose whole answer is that it happened says so in a word.
+Commands now answer with something a person can read. A list is a table with the columns you recognise a row by — `key`, `title`, `handle`, and the State's name rather than its id — plus whatever time the row carries, so `deevy inbox list` shows you what is unread and `deevy members list` shows you who is suspended. A single thing is its fields, with nested shapes indented under their names. An operation whose whole answer is that it happened says so in a word, and one that counts says the count.
+
+Free prose stays out of the grid and long values are clipped, so one Issue with a long description no longer makes every other row that wide. Titles that are not ASCII line up, because a column is not a UTF-16 unit.
 
 `--json` is unchanged and exact, and is what a script should use.
 
