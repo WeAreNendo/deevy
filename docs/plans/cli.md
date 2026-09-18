@@ -85,9 +85,12 @@ the rest. Colour only when stdout is a TTY.
 and `deevy gates open` to put a ruling in front of a Human. The refusal that explains itself for the four
 `sessionOnly` operations shipped with slice 3, where the commands that carry it were generated.
 
-**7 — Shipping it.** A `bin`, `vp pack`, `"private": false` on this package alone, and `publish` added to
-the changesets action — deevy's first npm publish. It stays inside the `fixed` group, so `@deevy/cli`'s
-version is the same number as the image tag.
+**7 — Shipping it.** A `bin`, `vp pack`, and a publish job of its own in `changesets.yml` — not
+`changesets/action`'s `publish` input, because that workflow already owns the tag and the Release so both
+describe the folded changelog, and handing half the release back would put two things in charge of when a
+version is out. It stays inside the `fixed` group, so `@deevy/cli`'s version is the same number as the image
+tag. Publishing needs an `NPM_TOKEN` secret and the `@deevy` scope to exist; without them the release still
+tags, still writes its notes and still pushes both images.
 
 ## Conventions every slice follows
 
