@@ -113,20 +113,26 @@ jobs:
       # the rehearsal exists to catch.
       - name: The credential reaches npm
         if: inputs.dry-run
+        # Where the package is. pnpm hands `whoami` to npm, and npm refuses to
+        # run at the root of this repository at all — the root manifest pins
+        # `devEngines.packageManager` to pnpm, so npm exits EBADDEVENGINES
+        # before it opens a socket, which reads exactly like a dead token and is
+        # not one. It resolves the nearest manifest, and apps/cli's declares no
+        # engines. The first rehearsal found this; nothing else had, because
+        # everything else here already ran in this directory.
+        working-directory: apps/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Assigned rather than interpolated into the echo. Under `bash -e` a
-          # command substitution used as an *argument* does not set the
-          # command's status, so `echo "as: $(npm whoami)"` prints an empty name
-          # and exits 0 — this step would go green on exactly the expired or
-          # missing token it is here to catch. A bare assignment propagates.
-          who=$(npm whoami)
-          echo "Authenticated to npm as: $who"
-          # Whether the token may write to the scope, which whoami does not say.
-          # Tolerated rather than required: it answers awkwardly for a scope
-          # with nothing in it, which is every scope before its first publish.
-          npm access list packages @deevy 2>&1 || echo "(the scope lists nothing yet)"
+          # On its own line, and deliberately not inside an `echo`: under
+          # `bash -e` a command substitution used as an *argument* does not set
+          # the command's status, so `echo "as: $(... whoami)"` prints an empty
+          # name and exits 0 — green on exactly the expired or missing token
+          # this step is here to catch.
+          #
+          # Whether the token may then *write* to `@deevy` is a question pnpm
+          # has no command for and this cannot answer. Only publishing does.
+          vp pm whoami
 
       - name: Rehearse
         if: inputs.dry-run
@@ -167,7 +173,7 @@ jobs:
           # Idempotent: re-running a release that already published must not
           # fail it. `npm view` on a missing version exits 1 with E404, so this
           # skips only what is genuinely there.
-          if npm view "@deevy/cli@$VERSION" version >/dev/null 2>&1; then
+          if vp pm view "@deevy/cli@$VERSION" version >/dev/null 2>&1; then
             echo "@deevy/cli@$VERSION is already on npm; nothing to do."
             exit 0
           fi
