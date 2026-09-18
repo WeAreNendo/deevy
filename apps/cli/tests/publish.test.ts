@@ -29,7 +29,7 @@ const manifest = async (): Promise<Manifest> =>
 describe("what npm would get", () => {
   it("is publishable at all, which every other package in the workspace is not", async () => {
     const { private: isPrivate, publishConfig } = await manifest();
-    expect(isPrivate).toBe(false);
+    expect(isPrivate).toBeUndefined();
     // Scoped, so without this npm defaults to a paid private publish.
     expect(publishConfig?.access).toBe("public");
     // Provenance is what makes "this came from deevy" checkable rather than a
@@ -45,18 +45,44 @@ describe("what npm would get", () => {
     expect(dependencies).toEqual({});
   });
 
-  it("ships the bundle and the readme, and nothing else", async () => {
+  it("ships the bundle, the readme and the licence, and nothing else", async () => {
     const { files, bin } = await manifest();
-    expect(files).toEqual(["dist", "README.md"]);
+    // The licence is named rather than left to the packer. pnpm hoists the
+    // workspace one and npm cannot reach outside the package directory, so a
+    // package declaring AGPL-3.0-only shipped it only by which tool packed it.
+    expect(files).toEqual(["dist", "README.md", "LICENSE"]);
     // The name somebody types, pointed at the file with the shebang in it.
     expect(bin).toEqual({ deevy: "./dist/main.mjs" });
   });
 
   it("starts with a shebang, or the bin is not runnable", async () => {
-    // `vp pack` keeps it because the entry has it; a bin without one is a file
-    // the shell hands to itself.
+    // The built file, not the source. `vp pack` keeps the shebang because the
+    // entry has one, and a pack that stopped doing so would leave the source
+    // assertion passing and the published bin a file the shell hands to itself.
     const entry = await read("apps/cli/src/main.ts");
     expect(entry.startsWith("#!/usr/bin/env node\n")).toBe(true);
+    const built = await readFile(new URL("apps/cli/dist/main.mjs", root), "utf8").catch(() => null);
+    if (built !== null) expect(built.startsWith("#!/usr/bin/env node\n")).toBe(true);
+  });
+
+  it("is the only thing in the workspace that can be published", async () => {
+    // "Nothing else can be published by accident" is the claim; this is it.
+    const directories = [
+      "packages/core",
+      "packages/db",
+      "packages/adapters",
+      "packages/editor",
+      "apps/web",
+      "apps/server",
+      "apps/agent",
+      "tools/release",
+    ];
+    const publishable: string[] = [];
+    for (const directory of directories) {
+      const other = JSON.parse(await read(`${directory}/package.json`)) as Manifest;
+      if (other.private !== true) publishable.push(directory);
+    }
+    expect(publishable).toEqual([]);
   });
 
   it("moves with deevy, because it is deevy", async () => {
@@ -71,18 +97,46 @@ describe("what npm would get", () => {
   });
 });
 
+/**
+ * These read the workflow, which is spelling rather than behaviour — nobody can
+ * run this job until a real release does. They are here for the three things a
+ * review found wrong in it that all looked fine: the command was one the runner
+ * does not have, the credential was never sent, and it went out ahead of CI.
+ * Each assertion is the shape of one of those failures rather than a copy of
+ * the line that fixed it.
+ */
 describe("the release", () => {
-  it("publishes it from the tag, with provenance", async () => {
+  it("publishes with a package manager the runner actually has", async () => {
     const workflow = await read(".github/workflows/changesets.yml");
-    expect(workflow).toContain("pnpm publish --access public --no-git-checks");
-    // From the tag rather than from main, so what is published is what was
-    // released.
-    expect(workflow).toContain("ref: v${{ needs.version.outputs.version }}");
-    expect(workflow).toContain("id-token: write");
+    // A GitHub runner ships npm and yarn. vp keeps its own pnpm where nothing
+    // on PATH can see it, so a bare `pnpm` is a job that cannot start.
+    expect(workflow).toMatch(/vp pm publish/);
+    expect(workflow).not.toMatch(/^\s+pnpm publish/m);
   });
 
-  it("does not fail a release that was already published", async () => {
-    // A re-run must be able to finish; npm's own answer is the only way to ask.
-    expect(await read(".github/workflows/changesets.yml")).toContain("is already on npm");
+  it("sends a credential, rather than only holding one", async () => {
+    const workflow = await read(".github/workflows/changesets.yml");
+    // NODE_AUTH_TOKEN is inert on its own: it is a convention that works only
+    // because something writes an .npmrc naming it. setup-vp's registry-url is
+    // what does that here, and without it the publish fails having sent
+    // nothing at all.
+    expect(workflow).toContain("registry-url: https://registry.npmjs.org");
+    expect(workflow).toContain("NODE_AUTH_TOKEN");
+  });
+
+  it("goes out behind CI, because a version cannot be taken back", async () => {
+    const workflow = await read(".github/workflows/changesets.yml");
+    // The images re-run the whole of CI before they are pushed; running beside
+    // them rather than after would publish without it.
+    expect(workflow).toContain("needs: [version, publish]");
+  });
+
+  it("publishes what was tagged, with provenance, and only once", async () => {
+    const workflow = await read(".github/workflows/changesets.yml");
+    expect(workflow).toContain("ref: v${{ needs.version.outputs.version }}");
+    expect(workflow).toContain("--provenance");
+    expect(workflow).toContain("id-token: write");
+    // A re-run of a finished release must complete rather than fail.
+    expect(workflow).toContain("is already on npm");
   });
 });

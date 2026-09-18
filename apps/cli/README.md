@@ -7,8 +7,10 @@ deevy issues list --project-key DEV
 ```
 
 `deevy` talks to a [deevy](https://github.com/WeAreNendo/deevy) instance over its API, as the Human you
-signed in as. Almost every command is generated from deevy's own operation registry, so the CLI has the same
-surface the API and the MCP tools have, and an operation deevy gains is a command without a release of this.
+signed in as. Almost every command is generated from deevy's own operation registry rather than written by hand, so the
+CLI has the same surface the API and the MCP tools have and cannot drift from them. The generating happens
+when the CLI is built, so a new operation arrives here in the next release of this — and until then, a
+command this CLI has that your instance does not is refused by name rather than failing at it.
 
 ## Signing in
 

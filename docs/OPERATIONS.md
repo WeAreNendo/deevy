@@ -510,7 +510,9 @@ deevy logout                            # forgets the token
 | ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEEVY_URL`       | —           | The instance every command talks to, when one is not named as an argument.                                                                                       |
 | `DEEVY_API_KEY`   | —           | An Agent's API key. Set it and the CLI acts as that Agent for the run, which is what a script wants; it wins over a signed-in Human, and `deevy whoami` says so. |
-| `XDG_CONFIG_HOME` | `~/.config` | Where the token is kept: `<that>/deevy/<host>.json`, mode 0600.                                                                                                  |
+| `DEEVY_WEB_URL`   | `DEEVY_URL` | Where the SPA is, when that is not where the API is. Only `deevy gates open` uses it, and a link built on the wrong one opens a 404.                             |
+| `XDG_CONFIG_HOME` | `~/.config` | Where the token is kept: `<that>/deevy/<scheme>_<host>.json`, mode 0600.                                                                                         |
+| `NO_COLOR`        | —           | Turns colour off. It is off for a pipe either way.                                                                                                               |
 
 One file per instance, so signing into a second deevy does not sign you out of the first. `deevy logout`
 forgets the token on this machine; the consent it was issued under stays listed under Settings until a Human
