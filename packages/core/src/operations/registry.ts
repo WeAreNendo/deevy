@@ -124,6 +124,16 @@ export interface OperationMeta {
    */
   sessionOnly?: true;
   /**
+   * The handler returns an async generator rather than a value: the Event
+   * stream, and anything that joins it. Set by `defineStreamOperation` rather
+   * than by hand, because it describes the handler's shape and not a choice.
+   * A surface that awaits one of these as if it were a value waits forever, so
+   * every projection needs to be able to tell them apart without inspecting
+   * the output schema — which is an oRPC event iterator here and a zod schema
+   * everywhere else.
+   */
+  stream?: true;
+  /**
    * This operation is projected as an MCP tool. Independent of `agents`:
    * authorization is who may call it, this is which surface carries it. The
    * list stays curated because a seventy-tool list costs an agent its context
@@ -268,6 +278,7 @@ export function defineStreamOperation<TAuth extends AuthRule, TInput extends z.Z
     ...(def.agentsOnly ? { agentsOnly: def.agentsOnly } : {}),
     ...(def.sessionOnly ? { sessionOnly: def.sessionOnly } : {}),
     ...(def.mcp ? { mcp: def.mcp } : {}),
+    stream: true,
   };
   return base
     .use(authorize(meta))

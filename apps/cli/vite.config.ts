@@ -24,7 +24,10 @@ export default defineConfig({
     dts: false,
     // One self-contained file, like the server: the CLI is published to npm and
     // a `workspace:*` dependency cannot be resolved by anybody who installs it,
-    // so @deevy/core is inlined rather than depended on.
+    // so @deevy/core is inlined rather than depended on. The one exception is
+    // Better Auth's optional tracer peer, which it reaches through a dynamic
+    // import with a no-op fallback and which we do not install: bundling it is
+    // impossible, so it is named rather than left to fail the build.
     deps: { alwaysBundle: [/.*/], onlyBundle: false, neverBundle: ["@opentelemetry/api"] },
   },
   test: {

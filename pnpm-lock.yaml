@@ -531,6 +531,9 @@ importers:
       vite-plus:
         specifier: 'catalog:'
         version: 0.3.0(@types/node@26.4.1)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.0))(esbuild@0.28.1)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.4.0))(typescript@7.0.2)(yaml@2.9.0)
+      zod:
+        specifier: 'catalog:'
+        version: 4.5.4
 
   apps/server:
     dependencies:

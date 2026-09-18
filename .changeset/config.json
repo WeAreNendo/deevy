@@ -1,20 +1,12 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@4.0.0/schema.json",
-  "changelog": [
-    "@changesets/changelog-github",
-    {
-      "repo": "WeAreNendo/deevy"
-    }
-  ],
+  "changelog": ["@changesets/changelog-github", { "repo": "WeAreNendo/deevy" }],
   "commit": false,
   "format": false,
   "baseBranch": "main",
   "access": "restricted",
   "updateInternalDependencies": "patch",
-  "privatePackages": {
-    "version": true,
-    "tag": false
-  },
+  "privatePackages": { "version": true, "tag": false },
   "fixed": [
     [
       "@deevy/core",
