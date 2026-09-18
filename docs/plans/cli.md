@@ -95,8 +95,9 @@ M1's eight-step definition of done ([m1.md](./m1.md)) holds where a slice touche
 The CLI adds three:
 
 25. **No command is written by hand.** Anything a user types is derived from the registry, or it is a bug in
-    the derivation. The exceptions are the verbs that are not operations — `login`, `logout`, `whoami`,
-    `gates open` — and there are four of them.
+    the derivation. The exceptions are the verbs the registry has nothing to make — `login`, `logout`,
+    `whoami`, `gates open`, and `events watch`, which is an operation but a streaming one — and there are
+    five of them.
 26. **The command list is asserted against the OpenAPI snapshot**, which CI already keeps current. An
     operation that gains a command and an operation that loses one both fail a test rather than surprising
     somebody at a prompt.
