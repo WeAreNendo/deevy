@@ -17,7 +17,7 @@ import { addGeneratedCommands } from "./generate.ts";
 import { inkFor } from "./render.ts";
 import { openGate, signIn, signOut, whoAmI } from "./identity.ts";
 import { watch } from "./watch.ts";
-import { clientFor } from "./client.ts";
+import { clientFor, explain } from "./client.ts";
 import { credentialFor } from "./credentials.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
@@ -61,6 +61,22 @@ export function originFrom(
   // A trailing slash makes `${origin}/rpc` into `${origin}//rpc`, which some
   // proxies answer and some do not.
   return url.origin;
+}
+
+/**
+ * Where the SPA is, which is not always where the API is.
+ *
+ * deevy already knows they can differ — `webURL` on the app, `DEEVY_WEB_ORIGIN`
+ * on the instance — and its own link builder says a URL built on the API origin
+ * "404s" in the dev loop, where the API is on 3000 and the SPA on 5173. A Gate
+ * link that opens a 404 is worse than one that is not offered.
+ */
+export function webOriginFrom(
+  given: string | undefined,
+  apiUrl: string | undefined,
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  return originFrom(given ?? environment.DEEVY_WEB_URL ?? apiUrl, environment);
 }
 
 export function program(): Command {
@@ -108,9 +124,19 @@ export function program(): Command {
     .argument("[url]", "the deevy it is in; defaults to DEEVY_URL")
     .description("Open a Gate where it can actually be ruled: in a browser")
     .option("--no-browser", "print the URL instead of opening it")
-    .action(async (issueKey: string, url: string | undefined, options: { browser: boolean }) => {
-      await openGate(originFrom(url), issueKey, { openBrowser: options.browser });
-    });
+    .option("--web-url <origin>", "where the SPA is, if it is not where the API is")
+    .action(
+      (
+        issueKey: string,
+        url: string | undefined,
+        options: { browser: boolean; webUrl?: string },
+      ) => {
+        openGate(webOriginFrom(options.webUrl, url), issueKey, {
+          openBrowser: options.browser,
+        });
+        return Promise.resolve();
+      },
+    );
 
   cli
     .command("events")
@@ -127,15 +153,28 @@ export function program(): Command {
         options: { after?: string; projectId?: string; json?: boolean },
       ) => {
         const origin = originFrom(url);
+        // Checked here rather than sent: NaN reaches the server as a validation
+        // failure, and a validation failure used to be retried forever.
+        const after = options.after === undefined ? undefined : Number(options.after);
+        if (after !== undefined && !Number.isInteger(after)) {
+          throw new Error(
+            `--after wants an Event's number, and "${options.after ?? ""}" is not one.`,
+          );
+        }
         const credential = await credentialFor(origin);
         if (!credential) throw new Error(`Not signed in to ${origin}. Run \`deevy login\` first.`);
         // Ctrl-C ends the watch rather than the process mid-write.
         const stopping = new AbortController();
-        process.on("SIGINT", () => {
+        // `once`, so a second Ctrl-C gets Node's default behaviour back rather
+        // than finding the default still overridden by a handler that has
+        // already done its job.
+        process.once("SIGINT", () => {
           stopping.abort();
+          process.exitCode = 130;
         });
         await watch(clientFor(credential), {
-          ...(options.after ? { after: Number(options.after) } : {}),
+          ...(after === undefined ? {} : { after }),
+          explain: (error: unknown) => explain(error, credential),
           ...(options.projectId ? { projectId: options.projectId } : {}),
           json: options.json === true,
           ink: inkFor(),

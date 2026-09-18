@@ -39,17 +39,17 @@ export function gateUrl(webOrigin: string, issueKey: string): string {
   return `${webOrigin.replace(/\/+$/, "")}/issues/${encodeURIComponent(issueKey)}`;
 }
 
-export async function openGate(
+export function openGate(
   origin: string,
   issueKey: string,
   options: { openBrowser?: boolean; report?: Reporter } = {},
-): Promise<string> {
+): string {
   const report = options.report ?? console_;
   const url = gateUrl(origin, issueKey);
   report.err("A Gate is ruled in deevy, by a Human, in a browser.");
   report.out(url);
   if (options.openBrowser !== false) openInBrowser(url);
-  return Promise.resolve(url);
+  return url;
 }
 
 /**

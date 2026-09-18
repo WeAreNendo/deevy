@@ -14,8 +14,24 @@ function collect(): Reporter & { lines: { out: string[]; err: string[] } } {
   };
 }
 
+/**
+ * The shape the log actually stores. Written from `packages/db/src/schema/event.ts`
+ * rather than from memory: the first version of these fixtures carried an
+ * `issueKey` an Event has never had, and they passed anyway because the code
+ * cast its way past the difference.
+ */
 type Message =
-  | { type: "event"; event: { seq: number; kind: string; issueKey?: string } }
+  | {
+      type: "event";
+      event: {
+        seq: number;
+        kind: string;
+        subjectType?: string;
+        subjectId?: string;
+        payload?: unknown;
+        createdAt?: Date;
+      };
+    }
   | { type: "heartbeat"; cursor: number | null };
 
 /**
@@ -54,8 +70,8 @@ describe("following the Event log", () => {
    */
   it("picks the stream back up when it ends having said something", async () => {
     const { client, asked } = endingStreams([
-      [{ type: "event", event: { seq: 1, kind: "issue.created" } }],
-      [{ type: "event", event: { seq: 2, kind: "issue.moved" } }],
+      [{ type: "event", event: { seq: 1, kind: "issue.created", payload: { key: "DEV-1" } } }],
+      [{ type: "event", event: { seq: 2, kind: "issue.moved", payload: { key: "DEV-1" } } }],
     ]);
     const said: string[] = [];
     const reached = await watch(client, { out: (line) => said.push(line), limit: 2, idleMs: 1 });
@@ -99,19 +115,94 @@ describe("following the Event log", () => {
     expect(await reached).toBe(7);
   });
 
-  it("says when it is reconnecting, so a quiet watch is not mistaken for a working one", async () => {
+  it("says when it is reconnecting, on stderr, so --json's stream stays JSON", async () => {
     const client = {
-      events: {
-        subscribe: () => Promise.reject(new Error("the instance went away")),
-      },
+      events: { subscribe: () => Promise.reject(new Error("the instance went away")) },
     } as unknown as DeevyClient;
     const stopping = new AbortController();
     const said: string[] = [];
+    const noted: string[] = [];
     setTimeout(() => {
       stopping.abort();
     }, 30);
-    await watch(client, { out: (line) => said.push(line), signal: stopping.signal, idleMs: 5 });
-    expect(said.join("\n")).toContain("the instance went away");
+    await watch(client, {
+      out: (line) => said.push(line),
+      note: (line) => noted.push(line),
+      signal: stopping.signal,
+      idleMs: 5,
+    });
+    expect(noted.join("\n")).toContain("the instance went away");
+    // A script reading one Event per line must not find this among them.
+    expect(said).toEqual([]);
+  });
+
+  /**
+   * Convention 27 of docs/plans/cli.md — a credential the CLI cannot use is
+   * explained, not relayed — reaches this command too, and it is the one that
+   * does not go through the generated path where that already happened. An
+   * expired token used to print a dim line every two seconds, forever.
+   */
+  it("gives up on a refusal that retrying will never fix, and explains it", async () => {
+    for (const code of ["UNAUTHORIZED", "FORBIDDEN", "BAD_REQUEST", "NOT_FOUND"]) {
+      const client = {
+        events: { subscribe: () => Promise.reject(Object.assign(new Error("no"), { code })) },
+      } as unknown as DeevyClient;
+      await expect(
+        watch(client, {
+          out: () => {},
+          note: () => {},
+          idleMs: 1,
+          explain: () => "Run `deevy login` again.",
+        }),
+      ).rejects.toThrow(/deevy login/);
+    }
+  });
+
+  it("keeps retrying something that might be temporary", async () => {
+    let asked = 0;
+    const client = {
+      events: {
+        subscribe: () => {
+          asked += 1;
+          return Promise.reject(new Error("socket hang up"));
+        },
+      },
+    } as unknown as DeevyClient;
+    const stopping = new AbortController();
+    setTimeout(() => {
+      stopping.abort();
+    }, 40);
+    await watch(client, { out: () => {}, note: () => {}, signal: stopping.signal, idleMs: 5 });
+    expect(asked).toBeGreaterThan(1);
+  });
+
+  /**
+   * `subscribeToEvents` yields an opening heartbeat before its loop, so every
+   * stream that opens has said something — which made "said something" an
+   * unconditional reconnect and the pause below it unreachable. Against an
+   * instance whose streams end at once that was measured at thousands of
+   * requests a second from a process somebody left running.
+   */
+  it("does not spin when a stream opens, says its heartbeat and shuts", async () => {
+    let asked = 0;
+    const client = {
+      events: {
+        subscribe: () => {
+          asked += 1;
+          async function* stream(): AsyncGenerator<Message, void, undefined> {
+            yield { type: "heartbeat", cursor: null };
+          }
+          return Promise.resolve(stream());
+        },
+      },
+    } as unknown as DeevyClient;
+    const stopping = new AbortController();
+    setTimeout(() => {
+      stopping.abort();
+    }, 120);
+    await watch(client, { out: () => {}, note: () => {}, signal: stopping.signal, idleMs: 50 });
+    // Without the guard this was bounded only by how fast the machine is.
+    expect(asked).toBeLessThan(6);
   });
 });
 
@@ -121,7 +212,11 @@ describe("an Event as a line", () => {
       {
         seq: 42,
         kind: "issue.moved",
-        issueKey: "DEV-7",
+        subjectType: "issue",
+        subjectId: "iss_9dq8dybazb80",
+        // Where deevy's own renderer reads an Issue key from, because an Event
+        // has no column for one.
+        payload: { key: "DEV-7", title: "Ship it" },
         createdAt: new Date("2026-09-18T10:11:12Z"),
       },
       plain,
@@ -129,18 +224,25 @@ describe("an Event as a line", () => {
     expect(said).toContain("42");
     expect(said).toContain("issue.moved");
     expect(said).toContain("DEV-7");
-    expect(said).toContain("2026-09-18 10:11:12");
+    expect(said).toContain("2026-09-18 10:11:12Z");
   });
 
-  it("does not invent an Issue for an Event that is not about one", () => {
-    expect(eventLine({ seq: 1, kind: "member.joined" }, plain)).not.toContain("undefined");
+  it("falls back to the subject when the payload has no key", () => {
+    const said = eventLine({ seq: 1, kind: "member.joined", subjectId: "mem_1" }, plain);
+    expect(said).toContain("mem_1");
+  });
+
+  it("does not invent a subject for an Event that has none", () => {
+    const said = eventLine({ seq: 1, kind: "workspace.created" }, plain);
+    expect(said).not.toContain("undefined");
+    expect(said.trimEnd().endsWith("workspace.created")).toBe(true);
   });
 });
 
 describe("a Gate", () => {
-  it("is opened where it can be ruled, rather than refused where it cannot", async () => {
+  it("is opened where it can be ruled, rather than refused where it cannot", () => {
     const said = collect();
-    const url = await openGate("https://deevy.example.com", "DEV-42", {
+    const url = openGate("https://deevy.example.com", "DEV-42", {
       openBrowser: false,
       report: said,
     });
