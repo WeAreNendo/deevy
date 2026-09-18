@@ -143,8 +143,13 @@ describe("the release", () => {
     // tag is what gets checked out — not whatever main has moved on to.
     expect(release).toContain("version: ${{ needs.version.outputs.version }}");
     expect(workflow).toContain("format('v{0}', inputs.version)");
-    expect(workflow).toContain("--provenance");
+    // The command, not the three comments in this file that discuss the flag —
+    // deleting it from the real line left a `toContain` green.
+    expect(workflow).toMatch(/vp pm publish [^\n]*--provenance/);
+    // Both ends: a reusable workflow's token is capped by the CALLING job, so
+    // dropping this from changesets.yml costs provenance with nothing to say so.
     expect(workflow).toContain("id-token: write");
+    expect(release).toContain("id-token: write");
     // A re-run of a finished release must complete rather than fail.
     expect(workflow).toContain("is already on npm");
   });
@@ -160,14 +165,29 @@ describe("the release", () => {
     // `publish --dry-run` uploads nothing and so authenticates nothing: it
     // passes with a made-up token. Something else has to make a real request,
     // or the rehearsal proves the credential works when it does not.
-    expect(workflow).toContain("npm whoami");
+    // The assignment form specifically. `echo "as: $(npm whoami)"` is the same
+    // command and cannot fail: under `bash -e` a substitution in an argument
+    // does not set the status, so the step goes green on a dead token.
+    expect(workflow).toMatch(/who=\$\(npm whoami\)/);
     expect(workflow).toMatch(/vp pm publish [^\n]*--dry-run/);
+  });
+
+  it("refuses to publish without a version, rather than inventing one", async () => {
+    // A dispatch that is told to publish and given no version reaches the same
+    // script. `npm view "@deevy/cli@"` resolves to latest rather than failing,
+    // so without this it either exits green having done nothing or publishes
+    // whatever apps/cli/package.json carries, off a branch, untagged.
+    expect(await publishing()).toMatch(/if \[ -z "\$VERSION" \]; then/);
   });
 
   it("can be rehearsed at all, which is the only way this job ever runs early", async () => {
     const workflow = await publishing();
     expect(workflow).toContain("workflow_dispatch:");
-    // Defaulting the other way makes the dispatch entry a loaded gun.
-    expect(workflow).toMatch(/dry-run:[\s\S]*?default: true/);
+    // Anchored to each entry. Unanchored, this began at the `workflow_call`
+    // input and ran on to whichever `default:` came first, so swapping the two
+    // still matched — and that swap is both the loaded gun below and a release
+    // that rehearses instead of publishing while reporting success.
+    expect(workflow).toMatch(/workflow_dispatch:[\s\S]*?dry-run:[\s\S]*?default: true/);
+    expect(workflow).toMatch(/workflow_call:[\s\S]*?dry-run:[\s\S]*?default: false/);
   });
 });

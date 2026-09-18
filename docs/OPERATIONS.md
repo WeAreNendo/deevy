@@ -97,6 +97,24 @@ the GitHub Release already exist — which is what the `workflow_dispatch` input
 To release outside this flow, push a `v*` tag by hand; `release.yml` still publishes on one. That skips the
 changelog and the GitHub Release, so it is for recovering a botched release rather than for making one.
 
+**The CLI goes to npm last**, after the images and so after CI has re-run, because an image can be pushed
+again and an npm version cannot — seventy-two hours and the number is burned. **If that job is the one that
+failed**, run the npm workflow from the Actions tab with the version (without a leading `v`) and _dry run_
+unticked. A publish that failed published nothing, so the same number is still free; the job also skips a
+version already on npm, so running it twice is safe.
+
+Left as it is, that workflow **rehearses** instead: every step of a publish except the upload, on a real
+runner with the real credential. It is worth running after any change to how deevy is published, because
+otherwise that job runs for the first time during a release:
+
+```bash
+gh workflow run npm.yml --ref main
+```
+
+A rehearsal proves the runner can pack and that the credential authenticates. It cannot prove provenance,
+which needs the OIDC exchange only a real publish makes, nor that the token may write to `@deevy`. Both fail
+loudly and neither costs the version.
+
 ## The Worker
 
 The second deployment shape: the same codebase on Cloudflare, with D1 instead of the volume and a Cron

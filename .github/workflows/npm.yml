@@ -9,7 +9,15 @@ name: npm
 #  - `workflow_call`, from changesets.yml, once a Version PR has merged and the
 #    images are out.
 #  - `workflow_dispatch`, which defaults to a **rehearsal**: every step of a
-#    real publish except the upload. That exists because nothing else can tell
+#    real publish except the upload. Unticking that repairs a release whose npm
+#    job alone failed, which is the state `v0.7.0` is in.
+#
+# There is no `verify` job here, and release.yml has one. The difference is what
+# each route can reach: this one publishes a version or refuses, and a version
+# means a tag, and a tag only ever names a commit on main — which ci.yml has
+# already run on, because it runs on every push there. release.yml can also be
+# entered by a `v*` tag pushed by hand at any commit, which is the case its
+# `verify` exists for and which this file has no equivalent of. That exists because nothing else can tell
 #    you this job works. A release runs it once, at the end, on the one commit
 #    where a mistake costs a version number — so the alternative to rehearsing
 #    is finding out then.
@@ -108,7 +116,13 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "Authenticated to npm as: $(npm whoami)"
+          # Assigned rather than interpolated into the echo. Under `bash -e` a
+          # command substitution used as an *argument* does not set the
+          # command's status, so `echo "as: $(npm whoami)"` prints an empty name
+          # and exits 0 — this step would go green on exactly the expired or
+          # missing token it is here to catch. A bare assignment propagates.
+          who=$(npm whoami)
+          echo "Authenticated to npm as: $who"
           # Whether the token may write to the scope, which whoami does not say.
           # Tolerated rather than required: it answers awkwardly for a scope
           # with nothing in it, which is every scope before its first publish.
@@ -140,6 +154,16 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ inputs.version }}
         run: |
+          # A dispatch leaves this empty unless it is given one, and every way
+          # of continuing from there is wrong: `npm view "@deevy/cli@"` resolves
+          # to *latest* rather than erroring, so this would either report
+          # nothing to do and exit green having published nothing, or, before
+          # the first release, fall through and publish whatever version
+          # apps/cli/package.json happens to carry — from a branch, untagged.
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version. A publish needs one, and its tag must exist."
+            exit 1
+          fi
           # Idempotent: re-running a release that already published must not
           # fail it. `npm view` on a missing version exits 1 with E404, so this
           # skips only what is genuinely there.
