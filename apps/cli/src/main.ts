@@ -11,6 +11,7 @@ import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { addGeneratedCommands } from "./generate.ts";
+import { inkFor } from "./render.ts";
 import { signIn, signOut, whoAmI } from "./identity.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
@@ -94,7 +95,11 @@ export function program(): Command {
     });
 
   // Everything else: one command per operation, from the registry.
-  addGeneratedCommands(cli, (url) => ({ origin: originFrom(url), cliVersion: CLI_VERSION }));
+  addGeneratedCommands(cli, (url) => ({
+    origin: originFrom(url),
+    cliVersion: CLI_VERSION,
+    ink: inkFor(),
+  }));
 
   return cli;
 }

@@ -20,6 +20,7 @@ function describe(field: Field): string {
 }
 import { credentialFor, type Credential } from "./credentials.ts";
 import { capabilitiesFor, missingFrom } from "./capabilities.ts";
+import { plain, render, type Ink } from "./render.ts";
 
 export interface Surroundings {
   /** Resolved per invocation, so `--deevy-url` can override the environment. */
@@ -31,6 +32,8 @@ export interface Surroundings {
   environment?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   out?: (line: string) => void;
+  /** Colour, when somebody is looking at a terminal rather than a pipe. */
+  ink?: Ink;
 }
 
 /**
@@ -246,7 +249,9 @@ async function run(
   ).catch((error: unknown) => {
     throw new Error(explain(error, credential));
   });
-  out(JSON.stringify(answer, null, 2));
+  // `--json` is exact and is what a script reads; the shaped answer is for the
+  // other reader, and is what you get by default.
+  out(options.json === true ? JSON.stringify(answer, null, 2) : render(answer, where.ink ?? plain));
 }
 
 /**
