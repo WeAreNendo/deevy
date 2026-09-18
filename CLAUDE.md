@@ -37,7 +37,7 @@ format, so pnpm 11 is required and pinned twice over: `devEngines.packageManager
 the prompt to wipe `node_modules`, so if an install hangs with no output, check `pnpm --version` first.
 `vp dev`, `vp build`, `vp test`, `vp check` are built-ins that ignore package.json scripts; `vp run <script>`
 runs scripts, `-r` recursively, `pkg#script` for one package (package names are `web`, `server`, `core`, `db`,
-`adapters`, `agent`, `release`; `agent` has its own `apps/agent/README.md`, and
+`adapters`, `agent`, `cli`, `editor`, `release`; `agent` has its own `apps/agent/README.md`, and
 `release` is `tools/release`, which holds the changelog fold and the commit-message rules).
 
 - `vp check` (root): format, lint, typecheck the whole tree; `vp check --fix` applies formatting. Run it before

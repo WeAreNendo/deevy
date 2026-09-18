@@ -15,6 +15,7 @@
       "@deevy/web",
       "@deevy/server",
       "@deevy/agent",
+      "@deevy/cli",
       "@deevy/release"
     ]
   ],

@@ -42,6 +42,7 @@ export default defineConfig({
       {
         files: [
           "apps/agent/**",
+          "apps/cli/**",
           "apps/server/**",
           "apps/web/design-system/build.mjs",
           "apps/web/scripts/**",

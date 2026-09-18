@@ -75,7 +75,7 @@ jobs:
           - name: web
             filters: -F web
           - name: core
-            filters: -F core -F db -F adapters -F release
+            filters: -F core -F db -F adapters -F release -F cli
           - name: runtime and server
             filters: -F agent -F server
     steps:
