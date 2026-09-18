@@ -11,6 +11,7 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { RouterClient } from "@orpc/server";
 import type { Credential } from "./credentials.ts";
+import { flagNameFor } from "./flags.ts";
 
 export type DeevyClient = RouterClient<AppRouter>;
 
@@ -35,9 +36,29 @@ export function clientFor(credential: Credential, fetchImpl = fetch): DeevyClien
  * only Humans may call, and any delegated credential reaching a Gate.
  */
 export function explain(error: unknown, credential: Credential): string {
-  const failure = error as { code?: string; message?: string };
+  const failure = error as {
+    code?: string;
+    message?: string;
+    data?: { issues?: { path?: (string | number)[]; message?: string }[] };
+  };
   const code = failure.code ?? "";
   const message = failure.message ?? String(error);
+
+  // oRPC answers a validation failure with "Input validation failed" and puts
+  // what actually went wrong in `data.issues`. Without this the CLI says less
+  // than the browser does — and the decision not to coerce argv, which is what
+  // keeps an Issue titled "42" a title, only pays off if zod's own complaint is
+  // what arrives.
+  const issues = failure.data?.issues ?? [];
+  if (code === "BAD_REQUEST" && issues.length > 0) {
+    return issues
+      .map((issue) => {
+        const field = issue.path?.[0];
+        const where = typeof field === "string" ? `${flagNameFor(field)}: ` : "";
+        return `${where}${issue.message ?? "is not what this operation accepts"}`;
+      })
+      .join("\n");
+  }
   if (code === "UNAUTHORIZED") {
     return credential.kind === "key"
       ? "That key was refused. Check DEEVY_API_KEY, or unset it to use the Human you signed in as."

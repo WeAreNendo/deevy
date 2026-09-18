@@ -1,10 +1,10 @@
 /**
  * The CLI's entry.
  *
- * Four verbs are written here because they are not operations — signing in,
- * signing out, saying who you are, and opening a Gate in a browser. Everything
- * else a user can type is generated from the registry (generate.ts), so an
- * operation added to deevy is a command without anybody writing one.
+ * Three verbs are written here because they are not operations — signing in,
+ * signing out, and saying who you are. Everything else a user can type is
+ * generated from the registry (generate.ts), so an operation added to deevy is
+ * a command without anybody writing one.
  */
 import { realpathSync } from "node:fs";
 import { argv } from "node:process";
@@ -94,7 +94,7 @@ export function program(): Command {
     });
 
   // Everything else: one command per operation, from the registry.
-  addGeneratedCommands(cli, () => ({ origin: originFrom(undefined) }));
+  addGeneratedCommands(cli, (url) => ({ origin: originFrom(url) }));
 
   return cli;
 }

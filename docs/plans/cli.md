@@ -81,8 +81,9 @@ and refused with both version numbers. This is what makes a newer CLI safe again
 **5 — Output worth reading.** A human shape for the output schemas that carry most traffic; pretty JSON for
 the rest. Colour only when stdout is a TTY.
 
-**6 — The stream and the Gates.** `deevy events watch` over `events.subscribe`, the one streaming operation.
-`deevy gates open`, and the refusal that explains itself for the four `sessionOnly` operations.
+**6 — The stream and the Gates.** `deevy events watch` over `events.subscribe`, the one streaming operation,
+and `deevy gates open` to put a ruling in front of a Human. The refusal that explains itself for the four
+`sessionOnly` operations shipped with slice 3, where the commands that carry it were generated.
 
 **7 — Shipping it.** A `bin`, `vp pack`, `"private": false` on this package alone, and `publish` added to
 the changesets action — deevy's first npm publish. It stays inside the `fixed` group, so `@deevy/cli`'s

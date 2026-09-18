@@ -89,8 +89,14 @@ function kindOf(schema: unknown): { kind: FieldKind; choices?: string[]; element
       const values = def.values ?? [];
       return { kind: "enum", choices: values.map(String) };
     }
-    case "array":
-      return { kind: "array", element: kindOf(unwrap(def.element).inner).kind };
+    case "array": {
+      const element = kindOf(unwrap(def.element).inner);
+      return {
+        kind: "array",
+        element: element.kind,
+        ...(element.choices ? { choices: element.choices } : {}),
+      };
+    }
     case "pipe":
       // `z.stringbool()` and friends: what it accepts is the input side.
       return kindOf(unwrap(def.in).inner);
@@ -101,7 +107,12 @@ function kindOf(schema: unknown): { kind: FieldKind; choices?: string[]; element
       const kinds = (def.options ?? []).map((option) => kindOf(unwrap(option).inner));
       if (kinds.some((one) => one.kind === "boolean")) return { kind: "boolean" };
       const distinct = new Set(kinds.map((one) => one.kind));
-      if (distinct.size === 1 && kinds[0]) return kinds[0];
+      if (distinct.size === 1 && kinds[0]) {
+        // Every branch's members, not the first branch's: a union of literals
+        // that offered only one would have commander reject a value zod takes.
+        const choices = kinds.flatMap((one) => one.choices ?? []);
+        return { ...kinds[0], ...(choices.length > 0 ? { choices } : {}) };
+      }
       return { kind: "json" };
     }
     default:

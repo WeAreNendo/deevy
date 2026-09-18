@@ -40,21 +40,48 @@ describe("what the registry turns into", () => {
     const expected = commands
       .filter((command) => !command.streaming)
       .map((command) => command.words.join(" "));
-    // `help` is commander's own, on every group it makes.
-    expect(expected.filter((one) => !found.includes(one))).toEqual([]);
+    // Equality both ways: a subset check would pass an extra command nobody
+    // meant to generate as happily as the right set.
+    expect(found.filter((one) => one !== "help").sort()).toEqual([...expected].sort());
+    // And the stream is genuinely absent rather than merely unasserted.
+    expect(found).not.toContain("events subscribe");
   });
 
-  it("reads every input schema in the router, leaving nothing unexplained", () => {
-    // A field the flag generator cannot name is a command somebody cannot use,
-    // and the only one it may legitimately give up on is a free-form payload.
+  it("reads every input schema in the router, and names what it cannot explain", () => {
+    // A field the generator cannot name is one a user has to hand-write JSON
+    // for. Four do, and an array *of* json counts — the first version of this
+    // test looked only at the field's own kind and reported one.
     const opaque = commands
       .filter((command) => !command.streaming)
       .flatMap((command) =>
         fieldsOf(command.inputSchema)
-          .filter((field) => field.kind === "json")
+          .filter((field) => field.kind === "json" || field.element === "json")
           .map((field) => `${command.operation}.${field.name}`),
       );
-    expect(opaque).toEqual(["runs.postActivity.payload"]);
+    expect(opaque.sort()).toEqual([
+      "preferences.set.preferences",
+      "routing.set.rules",
+      "runs.postActivity.payload",
+      "workflow.update.states",
+    ]);
+  });
+
+  it("gives every flag a name that carries its value back", () => {
+    // The guard in optionFor, exercised over the whole router: commander
+    // camelCases a flag into a property name and inputFor reads the field name,
+    // so a disagreement is a value collected and then dropped.
+    expect(() => built()).not.toThrow();
+  });
+
+  it("lets a boolean be said either way", () => {
+    // `webhooks update --disabled false` is how a webhook is switched back on,
+    // and a bare switch could only ever have said true.
+    const update = built()
+      .commands.find((c) => c.name() === "webhooks")
+      ?.commands.find((c) => c.name() === "update");
+    const disabled = (update?.options ?? []).find((option) => option.long === "--disabled");
+    expect(disabled?.argChoices).toEqual(["true", "false"]);
+    expect(disabled?.required).toBe(false);
   });
 
   it("makes a flag out of every field that is not a positional", () => {
@@ -186,6 +213,35 @@ describe("a generated command against a real deevy", () => {
     await root.parseAsync(["issues", "list", "--project-key", "DEV"], { from: "user" });
     const listed = JSON.parse(said.at(-1) ?? "{}") as { issues: { key: string }[] };
     expect(listed.issues.map((issue) => issue.key)).toContain(created.key);
+  });
+
+  it("hands back what zod actually said, not 'Input validation failed'", async () => {
+    const deevy = testDeevy();
+    closers.push(deevy.close);
+    await humanMember(deevy.db);
+    const dir = await mkdtemp(join(tmpdir(), "deevy-cli-bad-"));
+    scratch.push(dir);
+    await writeToken(baseURL, await apiToken(deevy, "u1"), dir);
+
+    const root = new Command().name("deevy").exitOverride();
+    addGeneratedCommands(root, () => ({
+      origin: baseURL,
+      dir,
+      environment: {},
+      fetchImpl: deevy.fetch,
+      out: () => {},
+    }));
+
+    // A lowercase Project key. oRPC's own message is "Input validation failed";
+    // the sentence worth reading is the one the schema wrote, and it only
+    // arrives if `explain` digs it out of data.issues.
+    await expect(
+      root.parseAsync(["projects", "create", "--key", "dev", "--name", "Nope"], { from: "user" }),
+    ).rejects.toThrow(/uppercase letters/);
+    // And it names the flag the user typed, not the field the schema calls it.
+    await expect(
+      root.parseAsync(["projects", "create", "--key", "dev", "--name", "Nope"], { from: "user" }),
+    ).rejects.toThrow(/--key/);
   });
 
   it("refuses what an Agent may not do, and says the key is why", async () => {

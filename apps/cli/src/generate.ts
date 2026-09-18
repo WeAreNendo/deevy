@@ -12,9 +12,16 @@ import { router } from "@deevy/core/router";
 import { commandsFor, type CommandDescriptor } from "./commands.ts";
 import { clientFor, explain, type DeevyClient } from "./client.ts";
 import { coerce, fieldsOf, flagNameFor, type Field } from "./flags.ts";
+
+/** Required is not visible in commander's help unless the description says it. */
+function describe(field: Field): string {
+  const said = field.description ?? "";
+  return field.required ? `${said}${said ? " " : ""}(required)` : said;
+}
 import { credentialFor, type Credential } from "./credentials.ts";
 
 export interface Surroundings {
+  /** Resolved per invocation, so `--deevy-url` can override the environment. */
   origin: string;
   /** Where tokens are kept; a test points it somewhere disposable. */
   dir?: string;
@@ -32,21 +39,34 @@ export interface Surroundings {
  * which (ADR-0004, ADR-0010).
  */
 export function sessionOnlyRefusal(command: CommandDescriptor): string {
-  const gate = command.operation.startsWith("gates.");
-  return gate
-    ? `${command.words.join(" ")} is a Gate ruling, and a Gate is ruled by a Human in a browser — never by a CLI, an API key or an Agent, whatever it is signed in as (ADR-0004, ADR-0010).\nOpen the Issue in deevy and rule it there.`
-    : `${command.words.join(" ")} needs a Human signed in to deevy itself. A delegated credential cannot list or revoke the consents that delegated it, so this one lives in deevy's own Settings.`;
+  const said = command.words.join(" ");
+  if (command.operation.startsWith("gates.")) {
+    return `${said} is a Gate ruling, and a Gate is ruled by a Human in a browser — never by a CLI, an API key or an Agent, whatever it is signed in as (ADR-0004, ADR-0010).\nOpen the Issue in deevy and rule it there.`;
+  }
+  if (command.operation.startsWith("oauthClients.")) {
+    return `${said} needs a Human signed in to deevy itself. A delegated credential cannot list or revoke the consents that delegated it, so this one lives in deevy's own Settings.`;
+  }
+  // A third reason nobody has written down yet: say the rule rather than
+  // assert one of the two above and be confidently wrong.
+  return `${said} needs a Human signed in to deevy itself, in a browser. No CLI credential satisfies it.`;
 }
 
 /** The flag commander should carry for a field, or nothing for a positional. */
 function optionFor(field: Field, command: CommandDescriptor): Option | null {
   if (command.parameters.includes(field.name)) return null;
   const flag = flagNameFor(field.name);
-  const takesValue = field.kind !== "boolean";
+  // A boolean takes an optional value rather than being a bare switch. A bare
+  // one can only ever send true, and `webhooks update --disabled` is the
+  // operation whose whole point is that false switches a webhook back on.
   const placeholder =
-    field.kind === "array" ? `<${field.element ?? "value"}...>` : `<${field.kind}>`;
-  const option = new Option(takesValue ? `${flag} ${placeholder}` : flag, field.description ?? "");
+    field.kind === "array"
+      ? `<${field.element ?? "value"}...>`
+      : field.kind === "boolean"
+        ? "[boolean]"
+        : `<${field.kind}>`;
+  const option = new Option(`${flag} ${placeholder}`, describe(field));
   if (field.choices) option.choices(field.choices);
+  if (field.kind === "boolean") option.choices(["true", "false"]);
   // An array field is one flag given more than once, which is what every other
   // CLI does and what avoids inventing a separator that a value might contain.
   if (field.kind === "array") {
@@ -56,6 +76,19 @@ function optionFor(field: Field, command: CommandDescriptor): Option | null {
     ]);
   }
   if (field.required) option.makeOptionMandatory();
+  // commander camelCases a flag back into a property name, and `inputFor` reads
+  // the field name — so a name those two disagree about is a value collected
+  // from the user and then silently dropped. `webhookURL` is the shape that
+  // does it. Nothing in the router does today, and this is why it stays that way.
+  if (option.attributeName() !== field.name) {
+    throw new Error(
+      `commandsFor: --${option.attributeName()} would not carry "${field.name}" back; ` +
+        `the flag name and the field name have to agree`,
+    );
+  }
+  if (field.name === "json") {
+    throw new Error(`commandsFor: "${command.operation}" has a json field, which --json shadows`);
+  }
   return option;
 }
 
@@ -101,12 +134,15 @@ function groupFor(root: Command, words: string[]): Command {
   let node = root;
   for (const word of words.slice(0, -1)) {
     const found = node.commands.find((child) => child.name() === word);
-    node = found ?? node.command(word).description(`${word} operations`);
+    node = found ?? node.command(word).description(`Work with ${word}`);
   }
   return node;
 }
 
-export function addGeneratedCommands(root: Command, surroundings: () => Surroundings): Command {
+export function addGeneratedCommands(
+  root: Command,
+  surroundings: (url?: string) => Surroundings,
+): Command {
   for (const command of commandsFor(router)) {
     // The Event stream is a command in its own slice: awaiting an async
     // generator as if it were a value waits forever.
@@ -117,10 +153,14 @@ export function addGeneratedCommands(root: Command, surroundings: () => Surround
         `${command.words.at(-1) ?? ""} ${command.parameters.map((p) => `<${p}>`).join(" ")}`.trim(),
       )
       .description(command.summary)
+      // Every generated command can be pointed somewhere, because the error a
+      // command gives without one used to tell people to pass a URL it had no
+      // way to accept.
+      .addOption(new Option("--deevy-url <origin>", "the deevy to talk to; defaults to DEEVY_URL"))
       // Every command takes it, and today every command answers with it either
       // way: a shape worth reading is the slice after this one, and the flag is
       // the contract a script writes against in the meantime.
-      .addOption(new Option("--json", "print the answer as JSON").default(false));
+      .addOption(new Option("--json", "print the answer as JSON"));
 
     for (const field of fieldsOf(command.inputSchema)) {
       const option = optionFor(field, command);
@@ -134,7 +174,12 @@ export function addGeneratedCommands(root: Command, surroundings: () => Surround
       if (command.sessionOnly) throw new Error(sessionOnlyRefusal(command));
       const options = args[command.parameters.length] as Record<string, unknown>;
       const positionals = args.slice(0, command.parameters.length) as string[];
-      await run(command, positionals, options, surroundings());
+      await run(
+        command,
+        positionals,
+        options,
+        surroundings(options.deevyUrl as string | undefined),
+      );
     });
   }
   return root;
@@ -177,7 +222,10 @@ async function run(
  */
 function refuseEarly(command: CommandDescriptor, credential: Credential): void {
   const asAgent = credential.kind === "key";
-  if (asAgent && !command.agents) {
+  // `public` short-circuits the server's own check before it looks at who is
+  // asking (registry.ts), so `health ping` is answered for anybody — including
+  // the version handshake a CLI holding only an Agent's key has to make.
+  if (asAgent && command.auth !== "public" && !command.agents) {
     throw new Error(
       `${command.words.join(" ")} is not something an Agent may do, and DEEVY_API_KEY is set, so the CLI is an Agent.\nUnset it to act as the Human you signed in as.`,
     );

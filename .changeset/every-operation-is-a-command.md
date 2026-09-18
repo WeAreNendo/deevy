@@ -10,4 +10,8 @@ Four operations answer with an explanation instead of a request. `gates approve`
 
 It also refuses before asking when it already knows the answer: an operation an Agent may not call says that `DEEVY_API_KEY` is why, and one only an Agent may call says to set it.
 
+When deevy refuses input, you get the reason the schema wrote — "Two to six uppercase letters, as in DEV", against the flag you typed — rather than "Input validation failed".
+
+Point a command at an instance with `--deevy-url`, or set `DEEVY_URL` once.
+
 The Event stream is not a command yet.
