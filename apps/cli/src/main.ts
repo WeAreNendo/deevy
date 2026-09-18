@@ -1,10 +1,13 @@
 /**
  * The CLI's entry.
  *
- * Three verbs are written here because they are not operations — signing in,
- * signing out, and saying who you are. Everything else a user can type is
- * generated from the registry (generate.ts), so an operation added to deevy is
- * a command without anybody writing one.
+ * Five verbs are written here because the registry has nothing to generate them
+ * from: signing in, signing out, saying who you are, putting a Gate in front of
+ * a Human, and following the Event log. The last is an operation, but a
+ * streaming one — every generated command awaits a value, and awaiting an async
+ * generator as if it were one waits forever. Everything else a user can type is
+ * generated (generate.ts), so an operation added to deevy is a command without
+ * anybody writing one.
  */
 import { realpathSync } from "node:fs";
 import { argv } from "node:process";
@@ -12,7 +15,10 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { addGeneratedCommands } from "./generate.ts";
 import { inkFor } from "./render.ts";
-import { signIn, signOut, whoAmI } from "./identity.ts";
+import { openGate, signIn, signOut, whoAmI } from "./identity.ts";
+import { watch } from "./watch.ts";
+import { clientFor } from "./client.ts";
+import { credentialFor } from "./credentials.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
 declare const __DEEVY_CLI_VERSION__: string | undefined;
@@ -93,6 +99,50 @@ export function program(): Command {
     .action(async (url: string | undefined, options: { json?: boolean }) => {
       await whoAmI(originFrom(url), { json: options.json === true });
     });
+
+  cli
+    .command("gates")
+    .description("Work with gates")
+    .command("open")
+    .argument("<issue-key>", "the Issue whose Gate wants a ruling, as in DEV-42")
+    .argument("[url]", "the deevy it is in; defaults to DEEVY_URL")
+    .description("Open a Gate where it can actually be ruled: in a browser")
+    .option("--no-browser", "print the URL instead of opening it")
+    .action(async (issueKey: string, url: string | undefined, options: { browser: boolean }) => {
+      await openGate(originFrom(url), issueKey, { openBrowser: options.browser });
+    });
+
+  cli
+    .command("events")
+    .description("Work with events")
+    .command("watch")
+    .argument("[url]", "the deevy to follow; defaults to DEEVY_URL")
+    .description("Follow the Event log as it happens")
+    .option("--after <seq>", "resume from this Event")
+    .option("--project-id <id>", "only this Project's Events")
+    .option("--json", "print each Event as JSON")
+    .action(
+      async (
+        url: string | undefined,
+        options: { after?: string; projectId?: string; json?: boolean },
+      ) => {
+        const origin = originFrom(url);
+        const credential = await credentialFor(origin);
+        if (!credential) throw new Error(`Not signed in to ${origin}. Run \`deevy login\` first.`);
+        // Ctrl-C ends the watch rather than the process mid-write.
+        const stopping = new AbortController();
+        process.on("SIGINT", () => {
+          stopping.abort();
+        });
+        await watch(clientFor(credential), {
+          ...(options.after ? { after: Number(options.after) } : {}),
+          ...(options.projectId ? { projectId: options.projectId } : {}),
+          json: options.json === true,
+          ink: inkFor(),
+          signal: stopping.signal,
+        });
+      },
+    );
 
   // Everything else: one command per operation, from the registry.
   addGeneratedCommands(cli, (url) => ({
