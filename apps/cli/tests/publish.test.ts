@@ -98,16 +98,23 @@ describe("what npm would get", () => {
 });
 
 /**
- * These read the workflow, which is spelling rather than behaviour — nobody can
- * run this job until a real release does. They are here for the three things a
- * review found wrong in it that all looked fine: the command was one the runner
- * does not have, the credential was never sent, and it went out ahead of CI.
- * Each assertion is the shape of one of those failures rather than a copy of
- * the line that fixed it.
+ * These read the workflows, which is spelling rather than behaviour. They are
+ * here for the three things a review found wrong that all looked fine: the
+ * command was one the runner does not have, the credential was never sent, and
+ * it went out ahead of CI. Each assertion is the shape of one of those failures
+ * rather than a copy of the line that fixed it.
+ *
+ * What made them worth keeping is that the job itself could not be run: a
+ * release runs it once, at the end, on the commit where a mistake costs a
+ * version number. It can be rehearsed now — `gh workflow run npm.yml` — and
+ * these still guard the parts a rehearsal cannot reach.
  */
 describe("the release", () => {
+  const publishing = (): Promise<string> => read(".github/workflows/npm.yml");
+  const releasing = (): Promise<string> => read(".github/workflows/changesets.yml");
+
   it("publishes with a package manager the runner actually has", async () => {
-    const workflow = await read(".github/workflows/changesets.yml");
+    const workflow = await publishing();
     // A GitHub runner ships npm and yarn. vp keeps its own pnpm where nothing
     // on PATH can see it, so a bare `pnpm` is a job that cannot start.
     expect(workflow).toMatch(/vp pm publish/);
@@ -115,7 +122,7 @@ describe("the release", () => {
   });
 
   it("sends a credential, rather than only holding one", async () => {
-    const workflow = await read(".github/workflows/changesets.yml");
+    const workflow = await publishing();
     // NODE_AUTH_TOKEN is inert on its own: it is a convention that works only
     // because something writes an .npmrc naming it. setup-vp's registry-url is
     // what does that here, and without it the publish fails having sent
@@ -125,18 +132,42 @@ describe("the release", () => {
   });
 
   it("goes out behind CI, because a version cannot be taken back", async () => {
-    const workflow = await read(".github/workflows/changesets.yml");
     // The images re-run the whole of CI before they are pushed; running beside
     // them rather than after would publish without it.
-    expect(workflow).toContain("needs: [version, publish]");
+    expect(await releasing()).toContain("needs: [version, publish]");
   });
 
   it("publishes what was tagged, with provenance, and only once", async () => {
-    const workflow = await read(".github/workflows/changesets.yml");
-    expect(workflow).toContain("ref: v${{ needs.version.outputs.version }}");
+    const [workflow, release] = await Promise.all([publishing(), releasing()]);
+    // The version travels from the guard that decided there was one, and the
+    // tag is what gets checked out — not whatever main has moved on to.
+    expect(release).toContain("version: ${{ needs.version.outputs.version }}");
+    expect(workflow).toContain("format('v{0}', inputs.version)");
     expect(workflow).toContain("--provenance");
     expect(workflow).toContain("id-token: write");
     // A re-run of a finished release must complete rather than fail.
     expect(workflow).toContain("is already on npm");
+  });
+
+  /**
+   * A rehearsal is only worth having if it cannot publish and if it checks the
+   * one thing a dry run does not. Both are one `if:` away from being untrue.
+   */
+  it("rehearses without publishing, and checks the credential separately", async () => {
+    const workflow = await publishing();
+    // The upload is gated on not rehearsing.
+    expect(workflow).toMatch(/if: \$\{\{ !inputs\.dry-run \}\}\n\s+working-directory: apps\/cli/);
+    // `publish --dry-run` uploads nothing and so authenticates nothing: it
+    // passes with a made-up token. Something else has to make a real request,
+    // or the rehearsal proves the credential works when it does not.
+    expect(workflow).toContain("npm whoami");
+    expect(workflow).toMatch(/vp pm publish [^\n]*--dry-run/);
+  });
+
+  it("can be rehearsed at all, which is the only way this job ever runs early", async () => {
+    const workflow = await publishing();
+    expect(workflow).toContain("workflow_dispatch:");
+    // Defaulting the other way makes the dispatch entry a loaded gun.
+    expect(workflow).toMatch(/dry-run:[\s\S]*?default: true/);
   });
 });
