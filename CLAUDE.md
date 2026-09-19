@@ -25,8 +25,13 @@ Gate a number of distinct Humans it wants and a choice about whether the one who
 at the same time, with the Agent still reading and writing markdown (`docs/plans/collaborative-documents.md`,
 ADR-0021); and sub-issue delegation then let an Agent cut work up and hand the pieces to other Agents,
 finishing its own Run rather than waiting and being woken when the last piece closes, bounded by three counts
-an admin sets per Workspace (`docs/plans/sub-issue-delegation.md`, ADR-0022). v1 is complete; what comes next
-is PLAN.md's after-v1 list.
+an admin sets per Workspace (`docs/plans/sub-issue-delegation.md`, ADR-0022). v1 is complete. The current
+milestone is **Sockets** (`docs/plans/sockets.md`, ADR-0024 and ADR-0025): deevy stops being a tracker and
+becomes the glue between a team's existing tools and its Agents — an Issue is a projection of a record in
+a Socket (a GitHub App, a Linear app, a GitLab application, a Notion integration, a Slack app), a Project
+is a binding, a Gate is a request on a Run with a Proposal, and Documents, the Workflow, Labels, Teams,
+comments and the board go. CONTEXT.md already carries the new vocabulary and lists the retired words; until
+slice 0 lands the code is v1's, so the architecture notes below describe what is in the tree.
 
 ## Commands
 
@@ -132,6 +137,9 @@ design language, the keyboard model, and the accessible names the tests rely on 
 the vendored `shadcn` and `frontend-design` skills beside it are the component rules and the design process it
 leans on. To see the app without a GitHub OAuth App, run the `dev:stub` launch configuration and
 `DEEVY_DATABASE_PATH=./data/stub.sqlite vp run server#seed` (`docs/DEVELOPMENT.md`, "Running without an OAuth App").
+The Sockets plan removes the Documents tab, the Workflow editor, Labels, Teams and the board, and adds
+Sockets, bindings, Checkpoints, the Gate screen and a read-only Work list; the skill's test contracts are
+rewritten in that plan's last slice, and until then they describe the tree.
 
 ## Dependencies
 

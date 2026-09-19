@@ -24,6 +24,25 @@ Four things make it different from Plane, Linear, It's a Plan, Paperclip, and Vi
 Everything else is deliberately conventional so agents and humans already know how to use it: Issues with keys
 like `DEV-42`, Projects, Teams, Labels, a board, comments, links to pull requests.
 
+## What deevy became
+
+Decided 2026-09-19, after v1 was complete and used. Everything conventional in the sentence above is a
+thing a team already has somewhere else, and asking them to move it into deevy — or to keep two of
+everything — to get the four things that are different was a heavy layer nobody asked for. So the tracker
+comes out. A **Socket** is one connected external tool under one identity: a GitHub App, a Linear app, a
+GitLab application, a Notion integration, a Slack app. An Issue is a projection of a record in a tracker
+Socket, routed to an Agent by a label, a mention or a Project's default; a Project is a binding to the
+Sockets its work lives in; a Gate is a Run's request to pass a Checkpoint with a Proposal the Human rules
+on — in deevy, on the tracker, or in Slack. Documents, the Workflow, Labels, Teams, comments, the board and
+deevy's own keys go. The four differentiators stand, and the fourth gains a clause: deevy never runs
+agents, and never owns the tracker.
+
+The plan is [sockets.md](./plans/sockets.md), fifteen slices, and the choices that are expensive to
+reverse are [ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
+[ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md). The vocabulary in
+[CONTEXT.md](../CONTEXT.md) is already the new one. The sections below describe v1 as it was built and
+stand as its record until the plan's last slice rewrites them.
+
 ## Domain model in one paragraph
 
 A **Workspace** holds **Members** (Humans and Agents), **Teams**, **Projects**, Labels, and settings. A Team owns
@@ -267,8 +286,17 @@ sub-issues is one line in that Sponsor's inbox and not forty. Built in six slice
 [sub-issue-delegation.md](./plans/sub-issue-delegation.md), recorded in
 [ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md).
 
-**After v1**, in rough order: cost and time accounting per Run; the Slack app; email Channel; private
-Projects; Postgres adapter; a CLI.
+**Sockets.** The current milestone, and the first to remove more than it adds. deevy stops being a tracker
+and becomes the glue between a team's existing tools and its Agents: an Issue is a projection of a record
+in a Socket, a Project is a binding, a Gate is a request on a Run with a Proposal, and a Ruling may come
+from the tracker or from Slack as well as from deevy. GitHub first, then Linear, GitLab and Notion, with
+the Slack app after the rulings-from-outside slice. Fifteen slices in [sockets.md](./plans/sockets.md),
+recorded in [ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
+[ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md). A clean break: the first release of
+this shape starts from an empty database.
+
+**After Sockets**, in rough order: cost and time accounting per Run; per-Agent identities on a Socket
+where a provider makes them cheap; Jira and Asana; email Channel; private Projects; Postgres adapter.
 
 ## Risks worth naming
 
