@@ -97,6 +97,23 @@ jobs:
             platform: linux/arm64
             runner: ubuntu-24.04-arm
     steps:
+      # The commit being released, not whatever main has moved on to.
+      #
+      # On the tag-push route `github.ref` is already the tag. On the other two
+      # the caller's ref is a branch and the version arrives as an input, so
+      # without this a dispatch rebuilds main and publishes it under the tag's
+      # number — which is exactly what the dispatch is for, repairing a release
+      # whose images failed, and exactly when the two have already diverged.
+      # (`inputs.version` is empty on a push, and an empty string and null
+      # compare equal here — the same coercion the tag patterns below rely on.)
+      #
+      # `verify` is still the caller's ref: a reusable workflow checks out for
+      # itself and ci.yml takes no ref, so re-running CI against the tag would
+      # mean teaching it one. What goes *into* the image is pinned here.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref }}
+
       # GHCR rejects a mixed-case repository name outright. `github.repository`
       # carries the owner exactly as GitHub spells it, and that spelling is not
       # ours to rely on: it changed under this repository when the organisation
@@ -106,8 +123,6 @@ jobs:
       # does, so the name is computed once per job and used everywhere below.
       - name: The image name, which GHCR insists is lowercase
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-
-      - uses: actions/checkout@v7
 
       # No setup-qemu-action: every build here is native, which is the point.
       - uses: docker/setup-buildx-action@v4
