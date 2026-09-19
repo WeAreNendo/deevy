@@ -10,7 +10,8 @@ name: npm
 #    images are out.
 #  - `workflow_dispatch`, which defaults to a **rehearsal**: every step of a
 #    real publish except the upload. Unticking that repairs a release whose npm
-#    job alone failed, which is the state `v0.7.0` is in.
+#    job alone failed — which v0.8.0 spent an hour in, its images having failed
+#    and taken the publish with them.
 #
 # There is no `verify` job here, and release.yml has one. The difference is what
 # each route can reach: this one publishes a version or refuses, and a version
