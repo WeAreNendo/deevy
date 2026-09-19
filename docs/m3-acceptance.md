@@ -92,7 +92,7 @@ step that answers something else is where to stop.
    git tag v0.3.0 && git push origin v0.3.0
    ```
 
-   The Release workflow runs CI and then publishes `ghcr.io/WeAreNendo/deevy:v0.3.0` and `:latest` for both
+   The Release workflow runs CI and then publishes `ghcr.io/wearenendo/deevy:v0.3.0` and `:latest` for both
    architectures. Part 6 uses that image; the Worker is deployed by hand from the same tag, because nothing in
    CI holds a Cloudflare credential.
 
@@ -237,7 +237,7 @@ step that answers something else is where to stop.
       -e BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
       -e GITHUB_CLIENT_ID=... -e GITHUB_CLIENT_SECRET=... \
       -e DEEVY_ADMIN_EMAIL=you@example.com \
-      ghcr.io/WeAreNendo/deevy:v0.3.0
+      ghcr.io/wearenendo/deevy:v0.3.0
     ```
 
     Expected: `curl http://localhost:3000/healthz` answers `{"ok":true}` within a few seconds, the migrations

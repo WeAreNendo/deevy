@@ -97,6 +97,16 @@ jobs:
             platform: linux/arm64
             runner: ubuntu-24.04-arm
     steps:
+      # GHCR rejects a mixed-case repository name outright. `github.repository`
+      # carries the owner exactly as GitHub spells it, and that spelling is not
+      # ours to rely on: it changed under this repository when the organisation
+      # was renamed, and a release that had worked for months failed on
+      # `ghcr.io/WeAreNendo/deevy` having already tagged the version and written
+      # the GitHub Release. Actions expressions have no lowercase function; bash
+      # does, so the name is computed once per job and used everywhere below.
+      - name: The image name, which GHCR insists is lowercase
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v7
 
       # No setup-qemu-action: every build here is native, which is the point.
@@ -124,7 +134,7 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           build-args: ${{ matrix.image.build_args }}
           platforms: ${{ matrix.arch.platform }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }}${{ matrix.image.suffix }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.IMAGE }}${{ matrix.image.suffix }},push-by-digest=true,name-canonical=true,push=true
           # Scoped per image and architecture: one shared scope would have the
           # four jobs overwriting each other's cache on every release.
           cache-from: type=gha,scope=${{ matrix.image.key }}-${{ matrix.arch.key }}
@@ -179,6 +189,10 @@ jobs:
             harness: copilot
             primary: false
     steps:
+      # Lowercased for the same reason as in the build job above.
+      - name: The image name, which GHCR insists is lowercase
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
       - uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
@@ -198,7 +212,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}${{ matrix.image.suffix }}
+          images: ${{ env.IMAGE }}${{ matrix.image.suffix }}
           # The ref carries a version only on the tag-push route; on a call or a
           # dispatch it is a branch, so the caller passes the version instead.
           # Exactly one of these two pairs is enabled.
@@ -220,9 +234,9 @@ jobs:
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository }}${{ matrix.image.suffix }}@sha256:%s ' *)
+            $(printf "$IMAGE${{ matrix.image.suffix }}@sha256:%s " *)
 
       - name: Say what it points at
         run: |
           docker buildx imagetools inspect \
-            "ghcr.io/${{ github.repository }}${{ matrix.image.suffix }}:$(jq -cr '.tags[0]|split(":")[-1]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
+            "$IMAGE${{ matrix.image.suffix }}:$(jq -cr '.tags[0]|split(":")[-1]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
