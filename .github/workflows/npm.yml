@@ -18,21 +18,30 @@ name: npm
 # means a tag, and a tag only ever names a commit on main — which ci.yml has
 # already run on, because it runs on every push there. release.yml can also be
 # entered by a `v*` tag pushed by hand at any commit, which is the case its
-# `verify` exists for and which this file has no equivalent of. That exists because nothing else can tell
-#    you this job works. A release runs it once, at the end, on the one commit
-#    where a mistake costs a version number — so the alternative to rehearsing
-#    is finding out then.
+# `verify` exists for and which this file has no equivalent of.
 #
-# What a rehearsal proves and what it does not, because the difference is the
-# whole point of having one:
+# The rehearsal exists because nothing else can tell you this job works: a
+# release runs it once, at the end, on the one commit where a mistake costs a
+# version number, so the alternative to rehearsing is finding out then. It has
+# earned that twice already — once on npm refusing to run at this repository's
+# root, and once on a credential check that could not fail.
 #
-#  - it proves the runner has `vp pm` at all, that setup-vp's .npmrc is
-#    somewhere pnpm reads, that NODE_AUTH_TOKEN reaches npm as a credential
-#    npm accepts, and that the tarball packs with the four files it should.
-#  - it cannot prove `--provenance`, which needs the OIDC exchange a real
-#    publish makes, and it cannot prove the token may write to `@deevy`, which
-#    only writing proves. Both fail loudly and neither burns the version: a
-#    publish that fails has published nothing, so the fix is a re-run.
+# **There is no npm token.** npm mints a short-lived one per run from this
+# workflow's OIDC identity, which is why `id-token: write` below is the whole
+# credential and why the secret it replaced should be deleted rather than kept
+# as a fallback: with a token present pnpm falls back to it silently, and a
+# trusted publisher that has stopped working looks exactly like one that works.
+#
+# What a rehearsal proves and what it does not:
+#
+#  - it proves the runner has `vp pm`, that npm exchanges this workflow's
+#    identity for a publish token, and that the tarball packs with the four
+#    files it should.
+#  - it cannot prove that the token npm hands back may publish rather than only
+#    stage, which is a per-publisher setting and shows only at a real publish.
+#    That fails loudly and does not burn the version: a publish that fails has
+#    published nothing, so the fix is a re-run.
+
 on:
   workflow_call:
     inputs:
@@ -87,15 +96,12 @@ jobs:
           node-version-file: .node-version
           cache: true
           run-install: true
-          # This is what actually authenticates the publish. NODE_AUTH_TOKEN on
-          # its own is inert: it is a convention that works only because
-          # something writes an .npmrc containing `_authToken=${NODE_AUTH_TOKEN}`,
-          # and nothing in this repository did. Without it the publish fails
-          # ENEEDAUTH, having sent no credential at all. This writes one in
-          # RUNNER_TEMP and points NPM_CONFIG_USERCONFIG at it, which pnpm
-          # reads as well as npm.
-          registry-url: https://registry.npmjs.org
-          scope: "@deevy"
+          # No `registry-url` and no `scope`, which is the point of this file
+          # now. Those exist to write an .npmrc naming NODE_AUTH_TOKEN, and
+          # there is no longer a token to name: npm mints a short-lived one per
+          # run from the OIDC identity below. An .npmrc carrying an empty
+          # `_authToken` would be worse than none, since it sends an empty
+          # credential and is refused before the exchange is reached.
 
       - name: Build the bundle that ships
         run: vp run cli#build
@@ -107,43 +113,31 @@ jobs:
       - name: The bin starts with a shebang
         run: head -1 apps/cli/dist/main.mjs | grep -qx '#!/usr/bin/env node'
 
-      # Separately from the dry run below, which proves nothing about the
-      # credential: `publish --dry-run` uploads nothing and therefore
-      # authenticates nothing, and passes just as happily with a made-up token.
-      # This is a real authenticated request, and it is the failure the rest of
-      # the rehearsal exists to catch.
-      - name: The credential reaches npm
-        if: inputs.dry-run
-        # Where the package is. pnpm hands `whoami` to npm, and npm refuses to
-        # run at the root of this repository at all — the root manifest pins
-        # `devEngines.packageManager` to pnpm, so npm exits EBADDEVENGINES
-        # before it opens a socket, which reads exactly like a dead token and is
-        # not one. It resolves the nearest manifest, and apps/cli's declares no
-        # engines. The first rehearsal found this; nothing else had, because
-        # everything else here already ran in this directory.
-        working-directory: apps/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          # On its own line, and deliberately not inside an `echo`: under
-          # `bash -e` a command substitution used as an *argument* does not set
-          # the command's status, so `echo "as: $(... whoami)"` prints an empty
-          # name and exits 0 — green on exactly the expired or missing token
-          # this step is here to catch.
-          #
-          # Whether the token may then *write* to `@deevy` is a question pnpm
-          # has no command for and this cannot answer. Only publishing does.
-          vp pm whoami
-
-      - name: Rehearse
+      # The rehearsal's one real check, and it replaces `vp pm whoami`, which
+      # needed a token to ask about and now has none.
+      #
+      # It has to read the output rather than trust the exit code. pnpm treats
+      # a failed token exchange as a **warning** and carries on — with a token
+      # in the environment it would quietly fall back to it, and with none it
+      # gets as far as packing before the registry refuses it. Either way a
+      # misconfigured trusted publisher passes a dry run, which is the same
+      # trap `publish --dry-run` set by authenticating nothing at all.
+      - name: Rehearse, and insist the trusted publisher answered
         if: inputs.dry-run
         working-directory: apps/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # --provenance is left off: it needs the OIDC exchange a real publish
-          # makes, and asking for it here fails on something a release would not.
-          vp pm publish --access public --no-git-checks --dry-run
+          # --provenance is left off: npm attaches it on its own for an OIDC
+          # publish, and asking for it here fails on something a release would
+          # not.
+          set -o pipefail
+          vp pm publish --access public --no-git-checks --dry-run 2>&1 | tee rehearsal.log
+          if grep -q 'Skipped OIDC' rehearsal.log; then
+            echo "::error::npm did not exchange the OIDC identity for a publish token."
+            echo "Check the trusted publisher at npmjs.com: @deevy/cli -> Settings ->"
+            echo "Trusted publishing. It wants org WeAreNendo, repository deevy,"
+            echo "workflow npm.yml, and no environment."
+            exit 1
+          fi
 
       # pnpm rather than npm, because the package's devDependencies name
       # workspace packages with pnpm's `workspace:` protocol and npm does not
@@ -158,7 +152,6 @@ jobs:
         if: ${{ !inputs.dry-run }}
         working-directory: apps/cli
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ inputs.version }}
         run: |
           # A dispatch leaves this empty unless it is given one, and every way
@@ -178,8 +171,8 @@ jobs:
             echo "@deevy/cli@$VERSION is already on npm; nothing to do."
             exit 0
           fi
-          # --provenance explicitly: pnpm documents the flag, and whether it
-          # reads NPM_CONFIG_PROVENANCE is not something to find out during a
-          # release. --no-git-checks because this is a detached checkout of the
+          # No --provenance: npm generates and attaches it itself for an OIDC
+          # publish, and passing the flag is how you find out whether pnpm
+          # agrees. --no-git-checks because this is a detached checkout of the
           # tag, which pnpm otherwise refuses to publish from.
-          vp pm publish --access public --provenance --no-git-checks
+          vp pm publish --access public --no-git-checks
