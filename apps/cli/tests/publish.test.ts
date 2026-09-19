@@ -25,6 +25,10 @@ interface Manifest {
  * written for this rule first matched an input description and a comment
  * quoting the bug it forbids.
  */
+/** The workflow with its comment lines removed, for claims about YAML keys. */
+const configLines = (workflow: string): string[] =>
+  workflow.split("\n").filter((line) => !/^\s*#/.test(line));
+
 function shellLines(workflow: string): string[] {
   const lines = workflow.split("\n");
   const out: string[] = [];
@@ -153,14 +157,18 @@ describe("the release", () => {
     expect(workflow).not.toMatch(/^\s+pnpm publish/m);
   });
 
-  it("sends a credential, rather than only holding one", async () => {
+  it("carries no npm token, because npm mints one per run", async () => {
     const workflow = await publishing();
-    // NODE_AUTH_TOKEN is inert on its own: it is a convention that works only
-    // because something writes an .npmrc naming it. setup-vp's registry-url is
-    // what does that here, and without it the publish fails having sent
-    // nothing at all.
-    expect(workflow).toContain("registry-url: https://registry.npmjs.org");
-    expect(workflow).toContain("NODE_AUTH_TOKEN");
+    // Trusted publishing: the OIDC identity below is the whole credential. A
+    // token left in place is not a harmless fallback — pnpm falls back to it
+    // without saying so, and a trusted publisher that has stopped working then
+    // looks exactly like one that works.
+    const config = configLines(workflow);
+    expect(config.filter((line) => /NODE_AUTH_TOKEN|NPM_TOKEN/.test(line))).toEqual([]);
+    // And no .npmrc naming one. An empty `_authToken` is worse than no file:
+    // it sends an empty credential and is refused before the exchange.
+    expect(config.filter((line) => /registry-url:/.test(line))).toEqual([]);
+    expect(workflow).toContain("id-token: write");
   });
 
   it("goes out behind CI, because a version cannot be taken back", async () => {
@@ -175,11 +183,13 @@ describe("the release", () => {
     // tag is what gets checked out — not whatever main has moved on to.
     expect(release).toContain("version: ${{ needs.version.outputs.version }}");
     expect(workflow).toContain("format('v{0}', inputs.version)");
-    // The command, not the three comments in this file that discuss the flag —
-    // deleting it from the real line left a `toContain` green.
-    expect(workflow).toMatch(/vp pm publish [^\n]*--provenance/);
+    // No --provenance anywhere in a command: npm attaches provenance itself
+    // for an OIDC publish, and passing the flag is how you discover whether
+    // pnpm agrees. `publishConfig.provenance` above is the standing claim.
+    expect(shellLines(workflow).filter((line) => line.includes("--provenance"))).toEqual([]);
     // Both ends: a reusable workflow's token is capped by the CALLING job, so
-    // dropping this from changesets.yml costs provenance with nothing to say so.
+    // dropping this from changesets.yml costs the credential itself now, not
+    // just provenance.
     expect(workflow).toContain("id-token: write");
     expect(release).toContain("id-token: write");
     // A re-run of a finished release must complete rather than fail.
@@ -200,9 +210,13 @@ describe("the release", () => {
     // On its own line specifically. The same command inside an `echo` cannot
     // fail: under `bash -e` a substitution in an argument does not set the
     // status, so the step goes green on a dead token.
-    const commands = shellLines(workflow);
-    expect(commands.map((line) => line.trim())).toContain("vp pm whoami");
-    expect(commands.filter((line) => /\$\([^)]*whoami\)/.test(line))).toEqual([]);
+    // pnpm reports a failed token exchange as a *warning* and carries on, so
+    // the rehearsal has to read the output rather than trust the exit code —
+    // otherwise a trusted publisher that has stopped working passes it, which
+    // is the same trap `--dry-run` set by authenticating nothing at all.
+    const commands = shellLines(workflow).map((line) => line.trim());
+    expect(commands).toContain("set -o pipefail");
+    expect(commands.some((line) => /grep -q 'Skipped OIDC'/.test(line))).toBe(true);
     expect(workflow).toMatch(/vp pm publish [^\n]*--dry-run/);
   });
 
@@ -230,7 +244,7 @@ describe("the release", () => {
         .filter((line) => !/^\s*#/.test(line))
         .some((line) => /(?:^|[\s(])(?:npm|vp pm) \w/.test(line)),
     );
-    expect(commanding.length).toBeGreaterThan(2);
+    expect(commanding.length).toBeGreaterThanOrEqual(2);
     for (const step of commanding) expect(step).toContain("working-directory: apps/cli");
   });
 

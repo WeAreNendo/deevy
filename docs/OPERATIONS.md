@@ -111,9 +111,21 @@ otherwise that job runs for the first time during a release:
 gh workflow run npm.yml --ref main
 ```
 
-A rehearsal proves the runner can pack and that the credential authenticates. It cannot prove provenance,
-which needs the OIDC exchange only a real publish makes, nor that the token may write to `@deevy`. Both fail
-loudly and neither costs the version.
+A rehearsal proves the runner can pack and that npm exchanges the workflow's identity for a publish token.
+It cannot prove that the token npm hands back may publish rather than only stage, which is a per-publisher
+setting and shows only at a real publish. That fails loudly and does not cost the version: a publish that
+failed published nothing.
+
+**There is no npm token.** deevy publishes through npm's trusted publishing: npm mints a short-lived
+credential per run from the workflow's OIDC identity, which is what `id-token: write` in `npm.yml` is for,
+and provenance is attached automatically rather than asked for. The trusted publisher is configured on the
+package — _npmjs.com → @deevy/cli → Settings → Trusted publishing_ — against this repository and `npm.yml`,
+with **npm publish** among its allowed actions; without that it may only stage, and a release would wait for
+somebody to approve it with 2FA instead of going out.
+
+Nothing should be put back in `NPM_TOKEN` as a fallback. pnpm prefers a token when it finds one and reports
+a failed exchange as a warning, so a trusted publisher that has stopped working would look exactly like one
+that works. The rehearsal fails on that warning for the same reason.
 
 ## The Worker
 
