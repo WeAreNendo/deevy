@@ -22,8 +22,8 @@ const stub = vi.hoisted(() => ({
     grantedProjectIds: ["p-dev"],
   },
   projects: [
-    { id: "p-dev", key: "DEV", name: "deevy", description: null, teamId: null, archivedAt: null },
-    { id: "p-ops", key: "OPS", name: "ops", description: null, teamId: null, archivedAt: null },
+    { id: "p-dev", slug: "acme-deevy", name: "deevy", description: null, archivedAt: null },
+    { id: "p-ops", slug: "acme-ops", name: "ops", description: null, archivedAt: null },
   ],
   keys: [
     {
@@ -87,7 +87,7 @@ describe("an Agent's own page", () => {
     // that says who answers for the Agent rather than the page as a whole.
     expect(screen.getByText(/Sponsored by/).textContent).toContain("Ada Lovelace");
     const grants = await screen.findByRole("region", { name: /projects/i });
-    expect(within(grants).getByText(/DEV/)).toBeTruthy();
+    expect(within(grants).getByText(/acme-deevy/)).toBeTruthy();
   });
 
   it("shows an issued key exactly once, and says so", async () => {
@@ -114,7 +114,7 @@ describe("an Agent's own page", () => {
     // jsdom, the options are portalled, choosing one grants it.
     const picker = within(grants).getByLabelText(/grant a project/i);
     fireEvent.keyDown(picker, { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: /OPS/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /acme-ops/ }));
     fireEvent.keyDown(picker, { key: "Escape" });
     await waitFor(() => expect(calls.grantAdd).toHaveBeenCalledTimes(1));
     expect(calls.grantAdd.mock.calls[0]?.[0]).toMatchObject({
@@ -122,7 +122,7 @@ describe("an Agent's own page", () => {
       projectId: "p-ops",
     });
 
-    fireEvent.click(within(grants).getByRole("button", { name: /revoke DEV/i }));
+    fireEvent.click(within(grants).getByRole("button", { name: /revoke acme-deevy/i }));
     await waitFor(() => expect(calls.grantRemove).toHaveBeenCalledTimes(1));
   });
 });

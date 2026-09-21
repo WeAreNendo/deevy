@@ -24,13 +24,13 @@ const stub = vi.hoisted(() => {
     events: [
       {
         seq: 12,
-        kind: "gate.approved",
+        kind: "issue.assigned",
         actorMemberId: "m-ada",
         actor: ada,
         subjectType: "issue",
-        subjectId: "i1",
+        subjectId: "iss_000000001",
         projectId: "p1",
-        payload: { state: "Intent" },
+        payload: { to: "m-ada", byRouting: true },
         createdAt: new Date("2026-09-05T10:02:00Z"),
       },
       {
@@ -50,13 +50,11 @@ const stub = vi.hoisted(() => {
 
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
-  const { stubClient } = await import("./stub-client.ts");
+  const { stubClient, stubProject } = await import("./stub-client.ts");
   const client = stubClient({
     members: { list: async () => ({ members: [stub.ada] }) },
     projects: {
-      list: async () => ({
-        projects: [{ id: "p1", key: "DEV", name: "deevy", states: [], team: null }],
-      }),
+      list: async () => ({ projects: [stubProject("acme-deevy", "deevy", { id: "p1" })] }),
     },
     events: {
       // Filters by kind the way the server does, so the page need not.
@@ -89,7 +87,7 @@ describe("the Event log", () => {
     expect(await screen.findByRole("heading", { name: "Event log" })).toBeTruthy();
     const table = await screen.findByRole("table", { name: "Event log" });
     const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows[0]?.textContent).toContain("gate.approved");
+    expect(rows[0]?.textContent).toContain("issue.assigned");
     expect(rows[0]?.textContent).toContain("Ada Lovelace");
     expect(rows[1]?.textContent).toContain("run.started");
     expect(rows[1]?.textContent).toContain("deevy");
@@ -109,15 +107,15 @@ describe("the Event log", () => {
     await waitFor(() => expect(stub.listed.at(-1)).toMatchObject({ kindPrefix: "run" }));
     await waitFor(() => {
       const filtered = screen.getByRole("table", { name: "Event log" });
-      expect(within(filtered).queryByText("gate.approved")).toBeNull();
+      expect(within(filtered).queryByText("issue.assigned")).toBeNull();
       expect(within(filtered).getByText("run.started")).toBeTruthy();
     });
 
     await pickOption(screen.getByLabelText("Kind"), "Every kind");
     await waitFor(() => expect(stub.listed.at(-1)).not.toHaveProperty("kindPrefix"));
-    fireEvent.click(await screen.findByText("gate.approved"));
+    fireEvent.click(await screen.findByText("issue.assigned"));
     expect((await screen.findByLabelText("Payload of 12")).textContent).toContain(
-      '"state": "Intent"',
+      '"byRouting": true',
     );
   });
 

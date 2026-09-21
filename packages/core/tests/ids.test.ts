@@ -83,6 +83,7 @@ describe("the rows deevy creates", () => {
     expect(project.id).toMatch(/^proj_/);
     expect(issue.id).toMatch(/^iss_/);
     // The key is the tracker's, so it is not an id of deevy's kind (ADR-0024).
-    expect(issue.externalKey).toBe("acme/deevy#1");
+    expect(issue.externalKey).toMatch(/^acme\/deevy#/);
+    expect(issue.externalKey).not.toMatch(/^iss_/);
   });
 });

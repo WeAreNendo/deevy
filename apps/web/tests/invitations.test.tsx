@@ -236,6 +236,6 @@ describe("the token in the path", () => {
     expect(invitationInPath("/invite/%")).toBeNull();
     expect(invitationInPath("/invite/ab%zz")).toBeNull();
     expect(invitationInPath("/invite/")).toBeNull();
-    expect(invitationInPath("/issues/DEV-1")).toBeNull();
+    expect(invitationInPath("/settings/projects")).toBeNull();
   });
 });

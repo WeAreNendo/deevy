@@ -28,12 +28,24 @@ async function workspaceWithAgent() {
     grants: [seeded.project.id],
     handle: "planner",
   });
-  return { db, admin: context, asAdmin, project: seeded.project, record: seeded.record, issue, agent };
+  return {
+    db,
+    admin: context,
+    asAdmin,
+    project: seeded.project,
+    record: seeded.record,
+    issue,
+    agent,
+  };
 }
 
 /** What a delivery does when its routing label names an Agent. */
 async function route(
-  source: { db: Parameters<typeof routeIssueTo>[0]; workspace: { id: string }; member: { id: string } },
+  source: {
+    db: Parameters<typeof routeIssueTo>[0];
+    workspace: { id: string };
+    member: { id: string };
+  },
   issue: { id: string; projectId: string },
   memberId: string,
 ) {

@@ -218,7 +218,7 @@ describe("a tool call authenticated with an Agent's key", () => {
     });
     expect(read.result?.isError).toBeUndefined();
     expect(read.result?.structuredContent).toMatchObject({
-      externalKey: "acme/deevy#1",
+      externalKey: issue.externalKey,
       title: "Ship the MCP surface",
     });
 
@@ -299,7 +299,7 @@ describe("a tool deevy does not project", () => {
 
 describe("the tools/list filter", () => {
   it("is display only: a tool it leaves out is still refused by the middleware", async () => {
-    const { db, app, key, agent } = await workspaceWithAgent();
+    const { db, app, key, agent, issue } = await workspaceWithAgent();
     // A suspended Member keeps its row and its key, and is no Member as far as
     // the Workspace is concerned, so it is offered nothing at all.
     await db.update(member).set({ suspendedAt: new Date() }).where(eq(member.id, agent.member.id));
@@ -310,7 +310,7 @@ describe("the tools/list filter", () => {
     // the empty list is a courtesy, never the thing standing in the way.
     const answer = await mcp(app, key, "tools/call", {
       name: "issues_get",
-      arguments: { issue: "acme/deevy#1" },
+      arguments: { issue: issue.externalKey },
     });
 
     expect(answer.result?.isError).toBe(true);
@@ -349,7 +349,7 @@ async function legacyMcp(
 
 describe("a 2025-11-25 client", () => {
   it("still gets its handshake, its tool list and its answer", async () => {
-    const { app, key } = await workspaceWithAgent();
+    const { app, key, issue } = await workspaceWithAgent();
 
     const init = await legacyMcp(app, key, "initialize", {
       protocolVersion: "2025-11-25",
@@ -362,10 +362,10 @@ describe("a 2025-11-25 client", () => {
 
     const answer = await legacyMcp(app, key, "tools/call", {
       name: "issues_get",
-      arguments: { issue: "acme/deevy#1" },
+      arguments: { issue: issue.externalKey },
     });
     expect(answer.result?.isError).toBeUndefined();
-    expect(answer.result?.structuredContent).toMatchObject({ externalKey: "acme/deevy#1" });
+    expect(answer.result?.structuredContent).toMatchObject({ externalKey: issue.externalKey });
   });
 });
 
@@ -457,11 +457,11 @@ describe("a Human's own client", () => {
   });
 
   it("is refused a Run by the middleware when it names the tool anyway", async () => {
-    const { app, humanKey } = await workspaceWithHumanKey();
+    const { app, humanKey, issue } = await workspaceWithHumanKey();
 
     const answer = await mcp(app, humanKey, "tools/call", {
       name: "runs_start",
-      arguments: { issue: "acme/deevy#1" },
+      arguments: { issue: issue.externalKey },
     });
 
     expect(answer.result?.isError).toBe(true);

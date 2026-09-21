@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { bootstrapWorkspace } from "../src/auth.ts";
 import { appendEvent } from "../src/events.ts";
 import { router } from "../src/operations/index.ts";
-import { contextFor, memberContext, testDb } from "./helpers.ts";
+import { agentContext, contextFor, fakeSockets, memberContext, testDb } from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
 const closers: Array<() => void> = [];
@@ -163,18 +163,24 @@ describe("events.list by kind family", () => {
     const { db, close } = testDb();
     closers.push(close);
     const alice = await memberContext(db, { role: "admin", name: "Alice" });
-    const client = createRouterClient(router, { context: alice });
-    await client.projects.create({ name: "deevy", key: "DEV" });
-    const issue = await client.issues.create({ projectKey: "DEV", title: "Gated" });
-    await client.gates.approve({ key: issue.key });
+    const { sockets } = fakeSockets();
+    const client = createRouterClient(router, { context: { ...alice, sockets } });
+    const socket = await client.sockets.connect({ provider: "stub", name: "Example tracker" });
+    await client.projects.create({
+      slug: "deevy",
+      name: "deevy",
+      tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
+    });
+    await client.issues.create({ projectSlug: "deevy", title: "Ship it" });
 
-    const gates = await client.events.list({ kindPrefix: "gate" });
-    expect(gates.events.map((event) => event.kind)).toEqual(["gate.approved"]);
+    const connected = await client.events.list({ kindPrefix: "socket" });
+    expect(connected.events.map((event) => event.kind)).toEqual(["socket.connected"]);
     const issues = await client.events.list({ kindPrefix: "issue" });
     expect(issues.events.length).toBeGreaterThan(0);
     expect(issues.events.every((event) => event.kind.startsWith("issue."))).toBe(true);
-    // A family, not a free-text prefix: `gate.app` would need escaping and is refused.
-    await expect(client.events.list({ kindPrefix: "gate.app" })).rejects.toMatchObject({
+    // A family, not a free-text prefix: `socket.conn` would need escaping and
+    // is refused.
+    await expect(client.events.list({ kindPrefix: "socket.conn" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
     expect((await client.events.list({ kindPrefix: "nothing" })).events).toEqual([]);
@@ -319,40 +325,41 @@ describe("events.list access", () => {
 });
 
 describe("self-describing payloads", () => {
-  it("carries names and keys beside ids for Labels, the Assignee and the parent", async () => {
+  it("carries names and keys beside ids for the Agent routed to and the parent", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const alice = await memberContext(db, { role: "admin", name: "Alice" });
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const asAlice = createRouterClient(router, { context: alice });
-    await asAlice.projects.create({ name: "deevy", key: "DEV" });
-    const backend = await asAlice.labels.create({ name: "backend", color: "#333" });
-    const epic = await asAlice.labels.create({ scope: "epic", name: "Checkout", color: "#555" });
-    const parent = await asAlice.issues.create({ projectKey: "DEV", title: "Parent" });
-    const child = await asAlice.issues.create({ projectKey: "DEV", title: "Child" });
-
-    await asAlice.issues.setLabels({ key: child.key, labelIds: [backend.id, epic.id] });
-    await asAlice.issues.setLabels({ key: child.key, labelIds: [epic.id] });
-    await asAlice.issues.update({ key: child.key, assigneeMemberId: bob.member.id });
-    await asAlice.issues.update({ key: child.key, parentKey: parent.key });
+    const { sockets } = fakeSockets();
+    const asAlice = createRouterClient(router, { context: { ...alice, sockets } });
+    const socket = await asAlice.sockets.connect({ provider: "stub", name: "Example tracker" });
+    const project = await asAlice.projects.create({
+      slug: "deevy",
+      name: "deevy",
+      tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
+    });
+    const planner = await agentContext(db, {
+      sponsor: alice.member,
+      name: "Planner",
+      grants: [project.id],
+    });
+    const parent = await asAlice.issues.create({ projectSlug: "deevy", title: "Parent" });
+    const child = await asAlice.issues.create({
+      parent: parent.externalKey,
+      title: "Child",
+      assignAgent: planner.member.id,
+    });
 
     const { events } = await asAlice.events.list({ subjectType: "issue", subjectId: child.id });
     const payloads = events.map((event) => [event.kind, event.payload] as const);
+    // A reader of the log should not have to resolve an id to know what
+    // happened, so the key and the name travel with them.
     expect(payloads).toContainEqual([
-      "issue.labels_changed",
-      expect.objectContaining({ addedNames: ["backend", "epic: Checkout"], removedNames: [] }),
-    ]);
-    expect(payloads).toContainEqual([
-      "issue.labels_changed",
-      expect.objectContaining({ addedNames: [], removedNames: ["backend"] }),
+      "issue.created",
+      expect.objectContaining({ key: child.externalKey, parentKey: parent.externalKey }),
     ]);
     expect(payloads).toContainEqual([
       "issue.assigned",
-      expect.objectContaining({ fromName: null, toName: "Bob" }),
-    ]);
-    expect(payloads).toContainEqual([
-      "issue.reparented",
-      expect.objectContaining({ fromKey: null, toKey: parent.key }),
+      expect.objectContaining({ from: null, toName: "Planner" }),
     ]);
   });
 });

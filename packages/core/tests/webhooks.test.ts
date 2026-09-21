@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { appendEvent } from "../src/events.ts";
 import { deliverDueWebhooks, deliverWebhook, sweepSchedules } from "../src/work.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
 import { signPayload, verifySignature } from "../src/webhooks.ts";
 import { newId } from "../src/ids.ts";
 
@@ -71,13 +71,17 @@ interface SubscriptionSeed {
   disabledAt?: Date | null;
 }
 
-/** An admin, a Project, and whatever subscriptions a test wants, straight into the table. */
+/**
+ * An admin, a Project bound to a tracker Socket, and whatever subscriptions a
+ * test wants, straight into the table.
+ */
 async function workspace() {
   const { db, close } = testDb();
   closers.push(close);
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const asAdmin = createRouterClient(router, { context: admin });
-  const project = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
+  const { sockets } = fakeSockets();
+  const asAdmin = createRouterClient(router, { context: { ...admin, sockets } });
+  const { project } = await seedProject(db, admin.workspace.id);
 
   async function subscribe(seed: SubscriptionSeed = {}) {
     const id = newId("webhook");
@@ -109,7 +113,7 @@ describe("what an Event owes a subscriber", () => {
     const { db, asAdmin, project, subscribe } = await workspace();
     const subscriptionId = await subscribe({ kinds: ["issue.created"], projectId: project.id });
 
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
 
     const owed = await webhookDeliveries(db);
     expect(owed).toHaveLength(1);
@@ -130,14 +134,18 @@ describe("what an Event owes a subscriber", () => {
   });
 
   it("passes over an Event a subscription did not ask for, and one from another Project", async () => {
-    const { db, admin, asAdmin, project, subscribe } = await workspace();
+    const { db, admin, asAdmin, project, subscribe, workspaceId } = await workspace();
     // What an Agent's runtime usually wants: its own Runs, nothing else.
     await subscribe({ kinds: ["run.*"] });
-    const other = await asAdmin.projects.create({ key: "WEB", name: "website" });
-    await subscribe({ kinds: null, projectId: other.id });
-    const issue = await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    const other = await seedProject(db, workspaceId, {
+      slug: "website",
+      scopeKey: "acme/website",
+    });
+    await subscribe({ kinds: null, projectId: other.project.id });
 
-    await asAdmin.issues.update({ key: issue.key, title: "Ship the other thing" });
+    // An `issue.created` in the first Project: the wrong kind for one
+    // subscription and the wrong Project for the other.
+    const issue = await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
 
     expect(await webhookDeliveries(db)).toHaveLength(0);
 
@@ -160,7 +168,7 @@ describe("what an Event owes a subscriber", () => {
     const { db, asAdmin, subscribe } = await workspace();
     await subscribe({ disabledAt: new Date() });
 
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
 
     expect(await webhookDeliveries(db)).toHaveLength(0);
   });
@@ -193,7 +201,7 @@ describe("delivering what is owed to a URL", () => {
   it("POSTs the Event itself, signed, and marks the delivery done", async () => {
     const { db, asAdmin, subscribe } = await workspace();
     await subscribe({ kinds: ["issue.created"] });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    const issue = await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
     const [owed] = await webhookDeliveries(db);
     const receiver = stubFetch(ok);
     const now = new Date();
@@ -223,7 +231,7 @@ describe("delivering what is owed to a URL", () => {
       seq: created?.seq,
       kind: "issue.created",
       subjectType: "issue",
-      payload: { key: "DEV-1", title: "Ship the thing" },
+      payload: { key: issue.externalKey, title: "Ship the thing" },
     });
     const [row] = await webhookDeliveries(db);
     expect(row).toMatchObject({ attempts: 1, lastStatus: 200, lastError: null });
@@ -233,7 +241,7 @@ describe("delivering what is owed to a URL", () => {
   it("waits about ten seconds after a refusal, and twice as long after each one after it", async () => {
     const { db, workspaceId, asAdmin, subscribe } = await workspace();
     await subscribe({ kinds: ["issue.created"] });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
     const receiver = stubFetch(() => new Response("nope", { status: 500 }));
 
     let now = new Date();
@@ -265,7 +273,7 @@ describe("delivering what is owed to a URL", () => {
   it("gives up after the eighth refusal, says so in the log, and never tries again", async () => {
     const { db, workspaceId, asAdmin, subscribe } = await workspace();
     const subscriptionId = await subscribe({ kinds: ["issue.created"] });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
     const receiver = stubFetch(() => new Response("gone", { status: 410 }));
 
     // Each pass runs at the moment the row says it is next due, so the backoff
@@ -382,7 +390,7 @@ describe("subscribing a URL", () => {
 
     const off = await asAdmin.webhooks.update({ subscriptionId: created.id, disabled: true });
     expect(off.disabledAt).not.toBeNull();
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
     // Switched off, it is owed nothing more, not even the switching off.
     expect(await webhookDeliveries(db)).toHaveLength(1);
 
@@ -395,7 +403,7 @@ describe("subscribing a URL", () => {
   it("shows what it was owed lately, and owes a delivery again on request", async () => {
     const { db, workspaceId, asAdmin } = await workspace();
     const created = await asAdmin.webhooks.create({ url, secret, kinds: ["issue.created"] });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
     const receiver = stubFetch(ok);
     await deliverDueWebhooks({ db, workspaceId, fetch: receiver.fetch });
 
@@ -435,17 +443,23 @@ describe("what a receiver actually gets", () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAda = createRouterClient(router, { context: ada });
-    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const { project } = await seedProject(db, ada.workspace.id);
     const agent = await agentContext(db, { sponsor: ada.member, grants: [project.id] });
     const asAgent = createRouterClient(router, { context: agent });
 
     const secret = "whsec_the_receiver_holds_this_one";
     await asAda.webhooks.create({ url: "https://runner.example/deevy", secret, kinds: ["run.*"] });
 
-    await asAda.issues.create({ projectKey: "DEV", title: "Nightly" });
-    await asAda.issues.update({ key: "DEV-1", assigneeMemberId: agent.member.id });
-    const opened = await asAgent.runs.list({ issueKey: "DEV-1" });
+    // Routing is what hands a record to an Agent now, and it is stated by
+    // opening the record with the Agent's label on it (ADR-0024).
+    const issue = await asAda.issues.create({
+      projectSlug: "deevy",
+      title: "Nightly",
+      assignAgent: agent.member.id,
+    });
+    const opened = await asAgent.runs.list({ issue: issue.externalKey });
     await asAgent.runs.finish({
       runId: opened.runs[0]?.id ?? "",
       status: "completed",

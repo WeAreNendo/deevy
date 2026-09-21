@@ -39,7 +39,7 @@ async function workspaceWithAgent() {
 
 describe("the Run lifecycle", () => {
   it("starts pending, so a triggered Run exists before the Agent says anything", async () => {
-    const { asAgent, issue, record } = await workspaceWithAgent();
+    const { asAgent, issue } = await workspaceWithAgent();
 
     const run = await asAgent.runs.start({ issue: issue.url });
 
@@ -135,7 +135,7 @@ describe("the Run lifecycle", () => {
   });
 
   it("lists Runs by Issue and by Agent, newest first", async () => {
-    const { db, asAdmin, agent, asAgent, issue, record } = await workspaceWithAgent();
+    const { db, agent, asAgent, issue, record } = await workspaceWithAgent();
     const second = await record({ externalId: "2", title: "Second thing" });
     const older = await asAgent.runs.start({ issue: issue.url });
     const newer = await asAgent.runs.start({ issue: second.url });
@@ -158,7 +158,7 @@ describe("the Run lifecycle", () => {
   });
 
   it("gives one Run with its Activities in the order they happened", async () => {
-    const { db, asAdmin, asAgent, issue, record } = await workspaceWithAgent();
+    const { db, asAdmin, asAgent, issue } = await workspaceWithAgent();
     const started = await asAgent.runs.start({ issue: issue.url });
     const thought = await asAgent.runs.postActivity({
       runId: started.id,
@@ -230,7 +230,7 @@ describe("the Run lifecycle", () => {
   });
 
   it("attributes evidence to the Run that found it", async () => {
-    const { asAdmin, asAgent, issue, record } = await workspaceWithAgent();
+    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
     const started = await asAgent.runs.start({ issue: issue.url });
 
     const link = await asAgent.links.add({
@@ -273,7 +273,7 @@ describe("the Run lifecycle", () => {
   });
 
   it("pages Runs from a cursor, showing each one once", async () => {
-    const { db, asAdmin, agent, asAgent, issue, record } = await workspaceWithAgent();
+    const { db, agent, asAgent, issue, record } = await workspaceWithAgent();
     const second = await record({ externalId: "2", title: "Second thing" });
     const older = await asAgent.runs.start({ issue: issue.url });
     const newer = await asAgent.runs.start({ issue: second.url });

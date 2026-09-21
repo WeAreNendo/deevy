@@ -26,19 +26,16 @@ vi.mock("../src/lib/orpc.ts", async () => {
     issues: { list: async () => ({ issues: [], nextCursor: null }) },
     projects: { list: async () => ({ projects: [] }) },
     members: { list: async () => ({ members: [] }) },
-    teams: { list: async () => ({ teams: [] }) },
     allowlist: { list: async () => ({ rules: [] }) },
     invitations: { list: async () => ({ invitations: [] }) },
-    workflow: { get: async () => ({ states: [] }) },
+    sockets: { list: async () => ({ sockets: [] }) },
     // Namespaces the hook only ever names a key of; nothing here is called.
     comments: {},
-    documents: {},
     links: {},
     inbox: {},
     // stillChanging tells a Run's detail from its list by key, so both need a shape.
     runs: { get: async () => ({}), list: async () => ({ runs: [] }) },
     agents: {},
-    labels: {},
     channels: {},
     routing: {},
     webhooks: {},
@@ -149,7 +146,7 @@ describe("useLiveEvents", () => {
       },
       {
         type: "event",
-        event: { seq: 10, kind: "issue.updated", subjectType: "issue", projectId: "p1" },
+        event: { seq: 10, kind: "issue.synced", subjectType: "issue", projectId: "p1" },
       },
     ];
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -207,12 +204,12 @@ describe("stillChanging", () => {
       queryClient.setQueryData(key as never, data as never);
     seed(finished, { id: "run-done", finishedAt: new Date(), activities: [] });
     seed(working, { id: "run-busy", finishedAt: null, activities: [] });
-    seed(orpc.runs.list.queryKey({ input: { issueKey: "DEV-1" } }), { runs: [] });
+    seed(orpc.runs.list.queryKey({ input: { issue: "acme/deevy#1" } }), { runs: [] });
 
     const cache = queryClient.getQueryCache();
     const verdict = (key: unknown) => stillChanging(cache.find({ queryKey: key as never })!);
     expect(verdict(finished)).toBe(false);
     expect(verdict(working)).toBe(true);
-    expect(verdict(orpc.runs.list.queryKey({ input: { issueKey: "DEV-1" } }))).toBe(true);
+    expect(verdict(orpc.runs.list.queryKey({ input: { issue: "acme/deevy#1" } }))).toBe(true);
   });
 });

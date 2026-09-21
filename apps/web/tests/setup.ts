@@ -37,39 +37,9 @@ window.scrollTo = (() => {}) as typeof window.scrollTo;
 
 // cmdk scrolls the selected item into view as the palette opens; jsdom has no
 // layout and no scrollIntoView. A default that does nothing, which a test that
-// cares (gates.test.tsx) replaces with a spy of its own.
+// cares about the scrolling replaces with a spy of its own.
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
-}
-
-// ProseMirror measures the document as it mounts: ranges, client rects,
-// elementFromPoint. jsdom has no layout, so every measurement is zero and the
-// editor is content to mount, type and serialize — which is all a test asks.
-const zeroRect = () =>
-  ({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    toJSON: () => ({}),
-  }) as DOMRect;
-if (!Range.prototype.getClientRects) {
-  Range.prototype.getClientRects = () =>
-    ({
-      length: 0,
-      item: () => null,
-      [Symbol.iterator]: [][Symbol.iterator],
-    }) as unknown as DOMRectList;
-}
-if (!Range.prototype.getBoundingClientRect) {
-  Range.prototype.getBoundingClientRect = zeroRect;
-}
-if (!document.elementFromPoint) {
-  document.elementFromPoint = () => null;
 }
 
 /**
