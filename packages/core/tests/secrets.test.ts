@@ -4,7 +4,7 @@ import { createAuth } from "../src/auth.ts";
 import { openSecret, requireSealingSecret, sealSecret } from "../src/secrets.ts";
 import { betterAuthKeys } from "../src/keys.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, fakeSockets, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, testDb, testSealingSecret } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -19,6 +19,9 @@ afterEach(() => {
 const sentinels = {
   webhookSecret: "whsec_SENTINEL_webhook_signing_secret",
   slackUrl: "https://hooks.slack.test/SENTINEL_incoming_webhook",
+  /** What a Socket authenticates as, which is the newest kind of secret here. */
+  socketCredential: "ghs_SENTINEL_installation_token",
+  socketWebhook: "whsec_SENTINEL_what_the_tracker_signs_with",
 };
 
 /**
@@ -44,9 +47,22 @@ describe("the read surface", () => {
     // real rather than refusing and quietly passing this test.
     const { sockets } = fakeSockets();
     const asAda = createRouterClient(router, {
-      context: { ...ada, sockets, apiKeys: betterAuthKeys(auth, db) },
+      context: {
+        ...ada,
+        sockets,
+        socketSecret: testSealingSecret,
+        apiKeys: betterAuthKeys(auth, db),
+      },
     });
-    const socket = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+    const socket = await asAda.sockets.connect({
+      provider: "stub",
+      name: "Example tracker",
+      credentials: { token: sentinels.socketCredential },
+      webhookSecret: sentinels.socketWebhook,
+    });
+    // The envelopes themselves, read straight from the columns: a response that
+    // carried one would pass a grep for the plaintext and still be a leak.
+    const sealed = await db.query.socket.findFirst({ where: { id: socket.id } });
     const project = await asAda.projects.create({
       slug: "deevy",
       name: "deevy",
@@ -91,6 +107,8 @@ describe("the read surface", () => {
       // A Socket is a credential by definition (ADR-0024), so its read is the
       // one this ratchet most has to cover.
       "sockets.list": await asAda.sockets.list({}),
+      "sockets.inbound": await asAda.sockets.inbound({ socketId: socket.id }),
+      "sockets.containers": await asAda.sockets.containers({ socketId: socket.id }),
       "issues.list": await asAda.issues.list({ projectSlug: "deevy" }),
       "issues.get": await asAda.issues.get({ issue: issue.externalKey }),
       "events.list": await asAda.events.list({}),
@@ -105,7 +123,15 @@ describe("the read surface", () => {
       "oauthClients.list": await asAda.oauthClients.list({}),
     };
 
-    const secret = [issued.key, sentinels.webhookSecret, sentinels.slackUrl];
+    const secret = [
+      issued.key,
+      sentinels.webhookSecret,
+      sentinels.slackUrl,
+      sentinels.socketCredential,
+      sentinels.socketWebhook,
+      sealed?.credentials ?? "",
+      sealed?.webhookSecret ?? "",
+    ].filter((value) => value.length > 0);
     const leaks: string[] = [];
     for (const [name, answer] of Object.entries(reads)) {
       const serialised = JSON.stringify(answer);

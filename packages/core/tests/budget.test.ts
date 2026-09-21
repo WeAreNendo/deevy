@@ -2,8 +2,18 @@ import { member as memberTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+import { createApp } from "../src/app.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, countingDb, memberContext, fakeSockets, seedProject } from "./helpers.ts";
+import type { InboundEvent } from "../src/sockets/port.ts";
+import {
+  agentContext,
+  countingDb,
+  externalIssue,
+  memberContext,
+  fakeSockets,
+  seedProject,
+  testSealingSecret,
+} from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -231,5 +241,60 @@ describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(del
     // raise, and raising it used to multiply the statements on this write until
     // the Worker deployment refused it.
     expect(statements.length).toBeLessThan(d1StatementsPerInvocation);
+  });
+});
+
+/**
+ * What one delivery costs, which is the number a Worker lives or dies by.
+ *
+ * An inbound delivery is a write like any other and is counted like one: the
+ * Socket read, the replay claim, the projection, `appendEvent`'s whole tail
+ * twice over — `issue.created` and then `issue.assigned`, which opens the Run —
+ * and the two rows the route closes with. A burst of records is many
+ * invocations and never one, because the page is what bounds a poll and the
+ * provider is what bounds a hook.
+ */
+const delivery = 23;
+
+describe(`the D1 request budget: one delivery that opens a Run costs ${String(delivery)}`, () => {
+  it("is under D1's cap for the record a routing label names an Agent on", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const secret = "a-secret-the-tracker-and-deevy-share";
+    const seeded = await seedProject(db, ada.workspace.id, { webhookSecret: secret });
+    await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const { sockets } = fakeSockets();
+    const app = createApp({ db, sockets, socketSecret: testSealingSecret });
+    const events: InboundEvent[] = [
+      {
+        kind: "issue",
+        scopeKey: "acme/deevy",
+        issue: externalIssue({ externalId: "42", labels: ["agent:planner"] }),
+        actor: { login: "ada-on-github", id: "gh-1", isBot: false },
+      },
+    ];
+    const body = JSON.stringify({ events });
+
+    statements.length = 0;
+    const response = await app.request(`/hooks/${seeded.socketId}`, {
+      method: "POST",
+      headers: {
+        "x-test-event": "events",
+        "x-test-delivery": "delivery-1",
+        "x-test-signature": `${secret}:${String(body.length)}`,
+      },
+      body,
+    });
+
+    expect(await response.json()).toMatchObject({ status: "applied" });
+    expect(statements.length).toBe(delivery);
+    expect(delivery).toBeLessThan(d1StatementsPerInvocation);
   });
 });

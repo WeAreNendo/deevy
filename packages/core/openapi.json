@@ -4926,6 +4926,18 @@
                               "runs"
                             ]
                           },
+                          "lastPolledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -4960,6 +4972,7 @@
                           "defaultAgentMemberId",
                           "routing",
                           "mirror",
+                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -5177,6 +5190,18 @@
                               "runs"
                             ]
                           },
+                          "lastPolledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -5211,6 +5236,7 @@
                           "defaultAgentMemberId",
                           "routing",
                           "mirror",
+                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -5430,6 +5456,18 @@
                               "runs"
                             ]
                           },
+                          "lastPolledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -5464,6 +5502,7 @@
                           "defaultAgentMemberId",
                           "routing",
                           "mirror",
+                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -7569,6 +7608,18 @@
                               "runs"
                             ]
                           },
+                          "lastPolledAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -7603,6 +7654,7 @@
                           "defaultAgentMemberId",
                           "routing",
                           "mirror",
+                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -7887,6 +7939,18 @@
                         "runs"
                       ]
                     },
+                    "lastPolledAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -7921,6 +7985,7 @@
                     "defaultAgentMemberId",
                     "routing",
                     "mirror",
+                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -8111,6 +8176,18 @@
                         "runs"
                       ]
                     },
+                    "lastPolledAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -8145,6 +8222,7 @@
                     "defaultAgentMemberId",
                     "routing",
                     "mirror",
+                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -8374,6 +8452,18 @@
                         "runs"
                       ]
                     },
+                    "lastPolledAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -8408,6 +8498,7 @@
                     "defaultAgentMemberId",
                     "routing",
                     "mirror",
+                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -8608,6 +8699,18 @@
                         "runs"
                       ]
                     },
+                    "lastPolledAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -8642,6 +8745,7 @@
                     "defaultAgentMemberId",
                     "routing",
                     "mirror",
+                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -9137,6 +9241,18 @@
                             "runs"
                           ]
                         },
+                        "lastPolledAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "x-native-type": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "createdAt": {
                           "type": "string",
                           "format": "date-time",
@@ -9171,6 +9287,7 @@
                         "defaultAgentMemberId",
                         "routing",
                         "mirror",
+                        "lastPolledAt",
                         "createdAt",
                         "archivedAt"
                       ],
@@ -10712,6 +10829,18 @@
                             "runs"
                           ]
                         },
+                        "lastPolledAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "x-native-type": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "createdAt": {
                           "type": "string",
                           "format": "date-time",
@@ -10746,6 +10875,7 @@
                         "defaultAgentMemberId",
                         "routing",
                         "mirror",
+                        "lastPolledAt",
                         "createdAt",
                         "archivedAt"
                       ],
