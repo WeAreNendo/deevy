@@ -53,6 +53,12 @@ export const project = sqliteTable(
       .notNull()
       .default(sql`'{"labelPrefix":"agent:","mention":true}'`),
     mirror: text("mirror", { enum: projectMirrors }).notNull().default("gates"),
+    /**
+     * When deevy last asked this Project's tracker what changed. Polling is
+     * what keeps an instance no tool can reach working, and this is what makes
+     * one pass ask about one Project rather than all of them (work.ts).
+     */
+    lastPolledAt: integer("last_polled_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
     archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
   },
@@ -61,5 +67,7 @@ export const project = sqliteTable(
     /** One container is one Project, and the inbound route's lookup. */
     uniqueIndex("project_tracker_uidx").on(table.trackerSocketId, table.trackerScopeKey),
     index("project_workspaceId_idx").on(table.workspaceId),
+    /** The poll's own scan: the Project that has gone longest without asking. */
+    index("project_lastPolledAt_idx").on(table.lastPolledAt),
   ],
 );

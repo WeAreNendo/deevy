@@ -97,6 +97,9 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // where the entry says it may be, which is never in production.
       // A Worker is never the deployment a stub belongs in.
       sockets: socketModules(),
+      // What their credentials are sealed with. A Worker without it can serve
+      // a Socket that holds none and refuses to connect one that does.
+      ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
       // Only when the account has Queues. Absent, `createApp` discards jobs
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).
@@ -132,7 +135,15 @@ interface ScheduledContext {
  * the platform (docs/plans/m3.md). Twenty is also the chunk `work.ts` writes
  * Events in, so a full pass is one SELECT, one UPDATE and one INSERT.
  */
-const cronLimits: DueWorkLimits = { maxPasses: 1, sweepLimit: 20, deliveryLimit: 10 };
+const cronLimits: DueWorkLimits = {
+  maxPasses: 1,
+  sweepLimit: 20,
+  deliveryLimit: 10,
+  // A poll applies whole records, and applying one costs several statements
+  // against the same per-invocation cap the sweeps are counted against, so a
+  // page here is small and `more` brings the platform back a minute later.
+  socketPageLimit: 5,
+};
 
 export default {
   async fetch(request: Request, bindings: WorkerBindings): Promise<Response> {
@@ -162,12 +173,19 @@ export default {
             ...cronLimits,
             silenceMs: isolate.env.runStaleMinutes * 60_000,
             gateSilenceMs: isolate.env.gateReminderHours * 3_600_000,
+            ...(isolate.env.socketCatchupMinutes
+              ? { catchupMs: isolate.env.socketCatchupMinutes * 60_000 }
+              : {}),
           },
           // As in the request path: a link a Human clicks is built on the
           // SPA's origin when it has one (docs/plans/sign-in.md).
           ...((isolate.env.webOrigin ?? isolate.env.baseURL)
             ? { baseUrl: isolate.env.webOrigin ?? isolate.env.baseURL }
             : {}),
+          // And the tools this build can speak, so a Workspace whose tracker
+          // cannot reach this Worker is still asked (ADR-0024).
+          sockets: socketModules(),
+          ...(isolate.env.socketSecret ? { socketSecret: isolate.env.socketSecret } : {}),
         }),
       ),
     );

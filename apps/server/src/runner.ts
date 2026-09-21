@@ -1,4 +1,4 @@
-import { runDueWork, type Cron, type DueWorkLimits } from "@deevy/core";
+import { runDueWork, type Cron, type DueWorkLimits, type SocketModules } from "@deevy/core";
 import type { Db } from "@deevy/db";
 
 /**
@@ -36,6 +36,15 @@ export interface RunnerOptions {
   baseUrl?: string;
   /** Messages to a Channel one delivery pass may send. */
   deliveryLimit?: number;
+  /**
+   * The tools this build can speak, so the pass can ask one what changed
+   * (ADR-0024). This is what keeps an instance no tool can reach working.
+   */
+  sockets?: SocketModules;
+  /** What a Socket's credentials are sealed with. */
+  socketSecret?: string;
+  /** Silence after which a Socket is asked rather than waited on. */
+  socketCatchupMinutes?: number;
 }
 
 export interface Runner {
@@ -53,6 +62,9 @@ export function startRunner({
   maxPassesPerTick = 5,
   baseUrl,
   deliveryLimit,
+  sockets,
+  socketSecret,
+  socketCatchupMinutes,
 }: RunnerOptions): Runner {
   const limits: DueWorkLimits = {
     silenceMs: staleMinutes * 60_000,
@@ -60,6 +72,7 @@ export function startRunner({
     maxPasses: maxPassesPerTick,
     ...(sweepLimit === undefined ? {} : { sweepLimit }),
     ...(deliveryLimit === undefined ? {} : { deliveryLimit }),
+    ...(socketCatchupMinutes === undefined ? {} : { catchupMs: socketCatchupMinutes * 60_000 }),
   };
 
   let inFlight: Promise<unknown> = Promise.resolve();
@@ -67,7 +80,14 @@ export function startRunner({
     // A long-lived process drains: it goes again while a pass says there is
     // more, up to `maxPasses`. The Worker asks for one pass instead, because
     // the thing that comes back there is the platform (docs/plans/m3.md).
-    inFlight = runDueWork({ db, limits, signal, ...(baseUrl ? { baseUrl } : {}) });
+    inFlight = runDueWork({
+      db,
+      limits,
+      signal,
+      ...(baseUrl ? { baseUrl } : {}),
+      ...(sockets ? { sockets } : {}),
+      ...(socketSecret ? { socketSecret } : {}),
+    });
     await inFlight;
   });
 

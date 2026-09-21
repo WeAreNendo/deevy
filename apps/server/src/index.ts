@@ -1,6 +1,7 @@
 import { createTimerCron } from "@deevy/adapters/node";
 import { serve } from "@hono/node-server";
 import { readEnv } from "./env.ts";
+import { socketModules } from "@deevy/sockets";
 import { startRunner } from "./runner.ts";
 import { buildServer } from "./server.ts";
 
@@ -36,6 +37,11 @@ const runner = startRunner({
   // The origin a Slack message's link is built on: the SPA's when it has one
   // of its own, else this instance's (docs/plans/sign-in.md).
   ...((env.webOrigin ?? env.baseURL) ? { baseUrl: env.webOrigin ?? env.baseURL } : {}),
+  // The same registry the app was built with, so the pass can ask a tool what
+  // changed on an instance no tool can reach (ADR-0024).
+  sockets: socketModules({ devStub: env.devStubOAuth }),
+  ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
+  socketCatchupMinutes: env.socketCatchupMinutes,
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

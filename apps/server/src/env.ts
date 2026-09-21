@@ -6,6 +6,16 @@ export interface ServerEnv {
   migrationsFolder: string;
   baseURL?: string;
   secret?: string;
+  /**
+   * What a Socket's credentials are sealed with (`DEEVY_SECRET`, secrets.ts).
+   * Separate from Better Auth's on purpose: rotating that one signs everybody
+   * out, which an operator may do, and it must not also mean reconnecting
+   * every tool. Losing this one does mean that, so it is backed up with the
+   * volume (docs/OPERATIONS.md).
+   */
+  socketSecret?: string;
+  /** Silence after which deevy asks a Socket rather than waiting to be told. */
+  socketCatchupMinutes: number;
   webOrigin?: string;
   /**
    * The sign-in providers this instance offers, one optional entry each. A
@@ -133,6 +143,8 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     migrationsFolder: env.DEEVY_MIGRATIONS_DIR ?? new URL("./drizzle", import.meta.url).pathname,
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
+    socketSecret: env.DEEVY_SECRET,
+    socketCatchupMinutes: positive(env.DEEVY_SOCKET_CATCHUP_MINUTES, 30),
     webOrigin: env.DEEVY_WEB_ORIGIN,
     // Under the flag every provider is the stub, including the ones this
     // environment configured no pair for: a developer with no OAuth App has

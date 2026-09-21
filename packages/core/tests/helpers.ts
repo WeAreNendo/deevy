@@ -249,7 +249,20 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
         if (!found) throw new Error(`no record ${ref.externalId}`);
         return Promise.resolve(found);
       },
-      listIssues: () => Promise.resolve({ issues: [...records.values()], nextCursor: null }),
+      listIssues: (_scope, query) => {
+        // A real tracker answers a window, and the poll's whole shape depends
+        // on that: what changed since, in order, one page at a time.
+        const all = [...records.values()]
+          .filter((issue) => !query.updatedSince || issue.updatedAt > query.updatedSince)
+          .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+        const from = query.cursor ? Number(query.cursor) : 0;
+        const page = all.slice(from, from + query.limit);
+        const next = from + page.length;
+        return Promise.resolve({
+          issues: page,
+          nextCursor: next < all.length ? String(next) : null,
+        });
+      },
       listComments: () => Promise.resolve([]),
       createIssue: (scope, draft) => {
         opened += 1;

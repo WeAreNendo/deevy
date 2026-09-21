@@ -53,6 +53,9 @@ export interface WorkerBindings {
   BETTER_AUTH_URL?: string;
   BETTER_AUTH_SECRET?: string;
   DEEVY_WEB_ORIGIN?: string;
+  /** What a Socket's credentials are sealed with (`wrangler secret put`). */
+  DEEVY_SECRET?: string;
+  DEEVY_SOCKET_CATCHUP_MINUTES?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
@@ -82,6 +85,14 @@ export interface WorkerBindings {
 export interface WorkerEnv {
   baseURL?: string;
   secret?: string;
+  /**
+   * What a Socket's credentials are sealed with (secrets.ts). Deliberately not
+   * Better Auth's: rotating that one signs everybody out, and must not also
+   * mean every connected tool has to be connected again.
+   */
+  socketSecret?: string;
+  /** Silence after which deevy asks a Socket rather than waiting to be told. */
+  socketCatchupMinutes?: number;
   webOrigin?: string;
   /**
    * The sign-in providers this instance offers, one optional entry each, read
@@ -117,6 +128,10 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
   return {
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
+    socketSecret: env.DEEVY_SECRET,
+    ...(env.DEEVY_SOCKET_CATCHUP_MINUTES
+      ? { socketCatchupMinutes: Number(env.DEEVY_SOCKET_CATCHUP_MINUTES) }
+      : {}),
     webOrigin: env.DEEVY_WEB_ORIGIN,
     providers: {
       github: {
