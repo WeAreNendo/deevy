@@ -13,6 +13,7 @@ import {
   CheckpointPolicySchema,
   policyFor,
   requesterFor,
+  rulingRefusal,
   type CheckpointPolicy,
 } from "./checkpoints.ts";
 import { appendEvent, type EventSource } from "./events.ts";
@@ -252,6 +253,16 @@ export const GateRequestSchema = z.object({
   /** Approvals so far, which with the policy is the whole arithmetic. */
   approvals: z.number().int(),
   run: z.object({ id: z.string(), issueKey: z.string() }),
+  /**
+   * Where the Human reading this stands: whether they may rule, whether they
+   * already have, and why not when they may not — decided by the same rules
+   * that would refuse the Ruling itself (checkpoints.ts).
+   */
+  you: z.object({
+    mayRule: z.boolean(),
+    hasRuled: z.boolean(),
+    why: z.string().nullable(),
+  }),
 });
 
 export type GateRequestView = z.infer<typeof GateRequestSchema>;
@@ -267,6 +278,10 @@ export interface GateViewInput {
   decisions: GateDecisionRow[];
   issueKey: string;
   origin: string;
+  /** Who is reading, so the view can say where they stand. */
+  viewer: { id: string; kind: "human" | "agent" };
+  /** The Human this Run is for, read off the Run (`requesterFor`). */
+  requesterId: string | null;
 }
 
 export function gateView({
@@ -275,7 +290,17 @@ export function gateView({
   decisions,
   issueKey,
   origin,
+  viewer,
+  requesterId,
 }: GateViewInput): GateRequestView {
+  const hasRuled = decisions.some((row) => row.memberId === viewer.id);
+  const why = rulingRefusal(policy, {
+    viewerId: viewer.id,
+    viewerKind: viewer.kind,
+    requesterId,
+    hasRuled,
+    status: request.status,
+  });
   return {
     id: request.id,
     runId: request.runId,
@@ -304,5 +329,6 @@ export function gateView({
     })),
     approvals: decisions.filter((row) => row.decision === "approved").length,
     run: { id: request.runId, issueKey },
+    you: { mayRule: why === null, hasRuled, why },
   };
 }

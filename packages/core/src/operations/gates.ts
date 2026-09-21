@@ -3,7 +3,6 @@ import {
   gateRequest as gateRequestTable,
   issue as issueTable,
   project as projectTable,
-  type GateDecision,
   type GateRequest,
 } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
@@ -15,10 +14,17 @@ import {
   defaultPolicy,
   policyFor,
   policyOf,
+  requesterFor,
   setCheckpoints,
   type CheckpointPolicy,
 } from "../checkpoints.ts";
-import { GateLinkSchema, GateRequestSchema, gateView, recordRuling } from "../gates.ts";
+import {
+  GateLinkSchema,
+  GateRequestSchema,
+  gateView,
+  recordRuling,
+  type GateDecisionRow,
+} from "../gates.ts";
 import { newId } from "../ids.ts";
 import { isOpen, setRunStatus, statusAfterActivity } from "../runs.ts";
 import { defineOperation } from "./registry.ts";
@@ -51,6 +57,7 @@ async function gateFor(context: ContextFor<"member">, requestId: string) {
     with: {
       decisions: { with: { socket: true } },
       issue: true,
+      run: true,
       checkpointPolicy: { with: { approvers: true } },
     },
   });
@@ -64,7 +71,16 @@ async function gateFor(context: ContextFor<"member">, requestId: string) {
         found.checkpointPolicy.approvers.map((row) => row.memberId),
       )
     : await policyFor(context.db, found.projectId, found.checkpoint);
-  return { request: found, policy, decisions: found.decisions, issueKey: found.issue.externalKey };
+  // Only where it can change the answer: a Checkpoint that excludes nobody
+  // needs no lookup of who the Run is for.
+  const requesterId = policy.excludeRequester ? await requesterFor(context.db, found.run) : null;
+  return {
+    request: found,
+    policy,
+    decisions: found.decisions,
+    issueKey: found.issue.externalKey,
+    requesterId,
+  };
 }
 
 function viewOf(
@@ -72,11 +88,17 @@ function viewOf(
   parts: {
     request: GateRequest;
     policy: CheckpointPolicy;
-    decisions: GateDecision[];
+    decisions: GateDecisionRow[];
     issueKey: string;
+    requesterId?: string | null;
   },
 ) {
-  return gateView({ ...parts, origin: linkOrigin(context) });
+  return gateView({
+    ...parts,
+    requesterId: parts.requesterId ?? null,
+    origin: linkOrigin(context),
+    viewer: { id: context.member.id, kind: context.member.kind },
+  });
 }
 
 export const gates = {
@@ -243,6 +265,10 @@ export const gates = {
     input: z.object({
       /** Only the ones this Human could rule on right now. */
       mine: z.union([z.boolean(), z.stringbool()]).optional(),
+      /** Every Gate one Run has asked for, which is what a Run's page shows. */
+      runId: z.string().optional(),
+      /** Every Gate ever asked on one record, which is what a Work item shows. */
+      issueId: z.string().optional(),
       status: z.enum(["open", "approved", "rejected", "superseded"]).optional(),
       projectSlug: ProjectSlugLookup.optional(),
       limit: z.number().int().min(1).max(100).default(50),
@@ -267,6 +293,8 @@ export const gates = {
             eq(projectTable.workspaceId, context.workspace.id),
             granted ? inArray(gateRequestTable.projectId, granted) : undefined,
             project ? eq(gateRequestTable.projectId, project.id) : undefined,
+            input.runId === undefined ? undefined : eq(gateRequestTable.runId, input.runId),
+            input.issueId === undefined ? undefined : eq(gateRequestTable.issueId, input.issueId),
             input.mine ? eq(gateRequestTable.status, "open") : undefined,
             input.status === undefined ? undefined : eq(gateRequestTable.status, input.status),
           ),
@@ -280,6 +308,8 @@ export const gates = {
         where: { gateRequestId: { in: ids } },
         with: { socket: true },
       });
+      // Only the Projects on this page, and only when a policy there excludes
+      // the requester: otherwise the Runs behind the page are never read.
       const configured = await context.db.query.checkpoint.findMany({
         where: { projectId: { in: [...new Set(rows.map((row) => row.gate.projectId))] } },
         with: { approvers: true },
@@ -294,25 +324,38 @@ export const gates = {
         ]),
       );
 
+      // The Runs behind the page, for the Checkpoints that exclude the Human
+      // the work is for: one query, and none at all where no policy asks.
+      const excluding = rows.filter(
+        ({ gate }) =>
+          policies.get(`${gate.projectId}:${gate.checkpoint}`)?.excludeRequester === true,
+      );
+      const requesters = new Map<string, string | null>();
+      if (excluding.length > 0) {
+        const runs = await context.db.query.run.findMany({
+          where: { id: { in: excluding.map(({ gate }) => gate.runId) } },
+          columns: { id: true, triggeredByMemberId: true, agentMemberId: true },
+        });
+        for (const one of runs) requesters.set(one.id, await requesterFor(context.db, one));
+      }
+
       const gatesOut = [];
       for (const { gate, externalKey } of rows) {
         const policy =
           policies.get(`${gate.projectId}:${gate.checkpoint}`) ?? defaultPolicy(gate.checkpoint);
         const ruled = decisions.filter((one) => one.gateRequestId === gate.id);
-        // "Waiting on me" is the whole question a home page asks: a Gate this
-        // Human may still rule on, and has not.
-        if (input.mine) {
-          if (context.member.kind !== "human") continue;
-          if (
-            policy.approverMemberIds.length > 0 &&
-            !policy.approverMemberIds.includes(context.member.id)
-          )
-            continue;
-          if (ruled.some((one) => one.memberId === context.member.id)) continue;
-        }
-        gatesOut.push(
-          viewOf(context, { request: gate, policy, decisions: ruled, issueKey: externalKey }),
-        );
+        const view = viewOf(context, {
+          request: gate,
+          policy,
+          decisions: ruled,
+          issueKey: externalKey,
+          requesterId: requesters.get(gate.runId) ?? null,
+        });
+        // "Waiting on me" is the whole question a home page asks, and it is
+        // the same question the ruling screen answers: a Gate this Human may
+        // rule on right now.
+        if (input.mine && !view.you.mayRule) continue;
+        gatesOut.push(view);
       }
       return { gates: gatesOut };
     },
