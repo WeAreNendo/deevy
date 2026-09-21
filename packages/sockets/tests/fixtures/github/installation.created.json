@@ -1,0 +1,21 @@
+{
+  "action": "created",
+  "installation": {
+    "id": 61892041,
+    "account": { "login": "acme", "id": 4471902, "type": "Organization" },
+    "repository_selection": "selected",
+    "app_id": 1284461,
+    "app_slug": "deevy",
+    "created_at": "2026-09-21T07:00:00Z"
+  },
+  "repositories": [
+    {
+      "id": 856789542,
+      "node_id": "R_kgDOMxK7Zg",
+      "name": "deevy",
+      "full_name": "acme/deevy",
+      "private": true
+    }
+  ],
+  "sender": { "login": "ada-on-github", "id": 5829301, "type": "User" }
+}

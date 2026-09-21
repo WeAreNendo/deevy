@@ -18,11 +18,13 @@ export const socketProviders = ["github", "linear", "gitlab", "notion", "slack",
 export const socketCapabilities = ["tracker", "forge", "docs", "chat"] as const;
 
 /**
- * Removed rather than deleted: the projections and Runs under a Socket keep
- * reading after somebody disconnects it, and a row that is gone takes an Issue's
- * history with it.
+ * `pending` is a Socket that exists before it has a credential: connecting a
+ * GitHub App sends the operator to GitHub and back, and the row is what they
+ * come back to (ADR-0024). `removed` rather than deleted, because the
+ * projections and Runs under a Socket keep reading after somebody disconnects
+ * it, and a row that is gone takes an Issue's history with it.
  */
-export const socketStatuses = ["active", "paused", "removed"] as const;
+export const socketStatuses = ["pending", "active", "paused", "removed"] as const;
 
 /** One connected external tool under one identity (CONTEXT.md, ADR-0024). */
 export const socket = sqliteTable(

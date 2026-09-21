@@ -72,6 +72,9 @@ describe("what the registry turns into", () => {
       "projects.create.tracker",
       "routing.set.rules",
       "runs.postActivity.payload",
+      // The configuration a provider's own flow needs before there is a
+      // credential to go with it: a shape that provider decides (ADR-0024).
+      "sockets.begin.config",
       "sockets.connect.config",
       "sockets.connect.credentials",
     ]);

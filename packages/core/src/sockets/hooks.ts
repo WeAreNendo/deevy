@@ -1,8 +1,9 @@
 import { inboundDelivery, socket as socketTable, type Db, type Socket } from "@deevy/db";
 import { eq, inArray } from "drizzle-orm";
+import { appendEvent } from "../events.ts";
 import { newId } from "../ids.ts";
 import type { JobQueue } from "../jobs.ts";
-import { openSecret } from "../secrets.ts";
+import { openSecret, requireSealingSecret, sealSecret, verifyState } from "../secrets.ts";
 import { applyInbound } from "./apply.ts";
 import type { SocketModules } from "./port.ts";
 import { socketModuleFor } from "./registry.ts";
@@ -60,10 +61,11 @@ export async function handleInbound(request: Request, options: InboundOptions): 
   if (!socket || socket.status === "removed") {
     return json({ error: "No such Socket" }, 404);
   }
-  if (socket.status === "paused") {
+  if (socket.status === "paused" || socket.status === "pending") {
     // Deliberately not a refusal: an operator resting a tool should not end up
-    // with the provider deciding the hook is broken (`sockets.update`).
-    return json({ status: "paused" }, 200);
+    // with the provider deciding the hook is broken (`sockets.update`), and a
+    // Socket still being connected may hear from the tool before it is ready.
+    return json({ status: socket.status }, 200);
   }
 
   const module = await socketModuleFor(options, socket);
@@ -176,6 +178,133 @@ function json(body: unknown, status: number): Response {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+export interface SetupOptions extends InboundOptions {
+  /** What this instance signs a redirect's `state` with (`BETTER_AUTH_SECRET`). */
+  secret?: string;
+  /** This instance's own origin, for the redirect back into deevy. */
+  baseURL?: string;
+  /** Where a Human's browser finds deevy, when that is somewhere else. */
+  webURL?: string;
+}
+
+/**
+ * `GET|POST /hooks/:socketId/setup` — where a provider's own flow lands.
+ *
+ * Connecting a GitHub App is two redirects rather than a paste: the operator
+ * makes the App from a manifest, GitHub sends them back here with a one-use
+ * code, and deevy trades it for the App's credentials. What the provider hands
+ * back is sealed exactly as a pasted credential is, because it is one.
+ *
+ * The `state` is what proves the round trip started here — it left deevy's
+ * hands entirely, through GitHub and a browser — and it is required wherever
+ * the redirect carries a credential to spend. The install callback carries no
+ * state and needs none: what it carries is an id, and the provider checks that
+ * with the tool itself before deevy writes it down.
+ */
+export async function handleSetup(request: Request, options: SetupOptions): Promise<Response> {
+  const { db, socketId, now = () => new Date() } = options;
+  const url = new URL(request.url);
+  const params = Object.fromEntries(url.searchParams);
+  if (request.method === "POST") {
+    const posted = await request.text();
+    for (const [key, value] of new URLSearchParams(posted)) params[key] = value;
+  }
+
+  const socket = await db.query.socket.findFirst({ where: { id: socketId } });
+  if (!socket || socket.status === "removed") {
+    return json({ error: "No such Socket" }, 404);
+  }
+
+  // Spending a credential needs the state; adding to the configuration does not.
+  if (params.code) {
+    const signed = options.secret
+      ? await verifyState(options.secret, socket.id, params.state ?? "", now())
+      : false;
+    if (!signed) {
+      return json({ error: "That redirect did not start here, or it took too long" }, 401);
+    }
+  }
+
+  const module = await socketModuleFor(options, socket);
+  if (!module.setup) {
+    return json({ error: `A ${socket.provider} Socket has nothing to finish here` }, 404);
+  }
+
+  const source = {
+    db,
+    workspace: { id: socket.workspaceId },
+    member: null,
+    ...(options.jobs ? { jobs: options.jobs } : {}),
+  };
+  let result;
+  try {
+    result = await module.setup({ params });
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    return json({ error: why }, 400);
+  }
+
+  const sealing =
+    result.credentials || result.webhookSecret ? requireSealingSecret(options.socketSecret) : null;
+  const merged = { ...socket.config, ...result.config };
+  await db
+    .update(socketTable)
+    .set({
+      config: merged,
+      ...(result.identity ? { identity: result.identity } : {}),
+      ...(result.credentials && sealing
+        ? {
+            credentials: await sealSecret(
+              sealing,
+              JSON.stringify({
+                ...(await openCredentialsOf(socket.credentials, options.socketSecret)),
+                ...result.credentials,
+              }),
+            ),
+          }
+        : {}),
+      ...(result.webhookSecret && sealing
+        ? { webhookSecret: await sealSecret(sealing, result.webhookSecret) }
+        : {}),
+      // A credential is what a pending Socket was waiting for, and what makes
+      // it a working one. Anything else leaves the status alone.
+      ...(result.credentials && socket.status === "pending" ? { status: "active" as const } : {}),
+      updatedAt: now(),
+    })
+    .where(eq(socketTable.id, socket.id));
+
+  await appendEvent(source, {
+    kind: result.credentials && socket.status === "pending" ? "socket.connected" : "socket.updated",
+    subjectType: "socket",
+    subjectId: socket.id,
+    payload: {
+      provider: socket.provider,
+      name: socket.name,
+      ...(result.summary ? { summary: result.summary } : {}),
+      ...(result.identity ? { login: result.identity.login } : {}),
+    },
+  });
+
+  // Back to where an operator can see what they just connected.
+  const origin = (options.webURL ?? options.baseURL ?? "").replace(/\/+$/, "");
+  const back = result.redirectTo ?? `/settings/sockets/${socket.id}`;
+  return new Response(null, { status: 302, headers: { location: `${origin}${back}` } });
+}
+
+/** The credentials a Socket already holds, so a second flow adds to them. */
+async function openCredentialsOf(
+  sealed: string | null,
+  secret: string | undefined,
+): Promise<Record<string, string>> {
+  if (!sealed || !secret) return {};
+  try {
+    const opened: unknown = JSON.parse(await openSecret(secret, sealed));
+    return opened && typeof opened === "object" ? (opened as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Deliveries are kept for a month, which is longer than any provider retries. */

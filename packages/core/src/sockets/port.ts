@@ -185,11 +185,46 @@ export interface SocketIdentity {
   mentionHandle: string;
 }
 
+/**
+ * What a provider's own redirect left deevy with, at `/hooks/:socketId/setup`.
+ *
+ * Everything is optional because the two flows behind it are different shapes:
+ * GitHub's manifest conversion hands back a whole App — credentials, a webhook
+ * secret and an identity — while an installation callback adds one line to the
+ * configuration and nothing else (ADR-0024).
+ */
+export interface SetupResult {
+  /** Merged into the Socket's configuration. Never a secret. */
+  config?: Record<string, unknown>;
+  /** Sealed and merged into the Socket's credentials (secrets.ts). */
+  credentials?: Record<string, string>;
+  /** Sealed as the Socket's webhook secret, where the provider minted one. */
+  webhookSecret?: string;
+  /** Who deevy turned out to be there, where the flow settled it. */
+  identity?: SocketIdentity;
+  /** Where to send the operator's browser next, relative to deevy's own origin. */
+  redirectTo?: string;
+  /** What the log should say happened. */
+  summary?: string;
+}
+
+export interface SetupInput {
+  /** The query the provider redirected with, as strings. */
+  params: Record<string, string>;
+}
+
 export interface SocketModule {
   provider: SocketProvider;
   capabilities: ReadonlySet<SocketCapability>;
   /** Proves the credential at connect, and is what `sockets.test` re-asks. */
   identity(): Promise<SocketIdentity>;
+  /**
+   * Takes the provider's own redirect, where connecting one takes more than a
+   * paste: GitHub's App manifest conversion and its installation callback are
+   * both this. A provider without such a flow leaves it out and the route
+   * answers that it has nothing to finish.
+   */
+  setup?(input: SetupInput): Promise<SetupResult>;
   tracker?: TrackerSocket;
   forge?: ForgeSocket;
   docs?: DocsSocket;

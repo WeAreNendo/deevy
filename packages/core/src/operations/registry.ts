@@ -84,6 +84,13 @@ export interface AppContext {
    */
   socketSecret?: string;
   /**
+   * This instance's own secret (`BETTER_AUTH_SECRET`). Nothing is sealed with
+   * it; what it signs is short-lived and public-facing — the `state` a
+   * provider echoes back on a redirect, and the MCP elicitation's
+   * `requestState` — so rotating it ends those in flight and nothing else.
+   */
+  secret?: string;
+  /**
    * The sign-in providers this deployment configured, in the order the sign-in
    * page renders them. Only `health.ping` reads it, so a signed-out SPA knows
    * which buttons to draw; absent means this instance offers none
