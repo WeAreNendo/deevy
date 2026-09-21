@@ -1,5 +1,6 @@
 import type { Db, Socket } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
+import { openSecret } from "../secrets.ts";
 import type { ForgeSocket, Scope, SocketModule, SocketModules, TrackerSocket } from "./port.ts";
 
 /**
@@ -14,6 +15,8 @@ import type { ForgeSocket, Scope, SocketModule, SocketModules, TrackerSocket } f
 export interface SocketFor {
   db: Db;
   sockets?: SocketModules;
+  /** What this deployment seals credentials with, so a module can be given them. */
+  socketSecret?: string;
   now?: () => Date;
   fetch?: typeof fetch;
 }
@@ -22,11 +25,14 @@ export interface SocketFor {
  * Builds the module for one Socket. Takes what it actually reads rather than
  * the whole row, so `sockets.connect` can prove a credential before there is a
  * row to prove it against.
+ *
+ * Asynchronous because opening the credentials is: they are sealed in the
+ * column, and the only way to a provider's API is through them (secrets.ts).
  */
-export function socketModuleFor(
+export async function socketModuleFor(
   context: SocketFor,
-  row: Pick<Socket, "provider" | "config">,
-): SocketModule {
+  row: Pick<Socket, "provider" | "config"> & { credentials?: string | null },
+): Promise<SocketModule> {
   const make = context.sockets?.[row.provider];
   if (!make) {
     throw new ORPCError("NOT_IMPLEMENTED", {
@@ -35,10 +41,37 @@ export function socketModuleFor(
   }
   return make({
     config: row.config,
-    credentials: {},
+    credentials: await openCredentials(row.credentials, context.socketSecret),
     fetch: context.fetch ?? globalThis.fetch,
     now: context.now ?? (() => new Date()),
   });
+}
+
+/**
+ * The credentials a module is built with. A Socket that holds none — the stub,
+ * or a provider whose whole credential is its webhook secret — gets an empty
+ * record rather than a refusal.
+ */
+export async function openCredentials(
+  sealed: string | null | undefined,
+  secret: string | undefined,
+): Promise<Record<string, string>> {
+  if (!sealed) return {};
+  if (!secret) {
+    throw new ORPCError("NOT_IMPLEMENTED", {
+      message:
+        "This deevy has no secret to open a Socket's credentials with, so it cannot use one. Set one on the server and restart.",
+    });
+  }
+  try {
+    const opened: unknown = JSON.parse(await openSecret(secret, sealed));
+    return opened && typeof opened === "object" ? (opened as Record<string, string>) : {};
+  } catch {
+    throw new ORPCError("CONFLICT", {
+      message:
+        "deevy cannot open this Socket's credentials. Its secret changed, so connect the tool again.",
+    });
+  }
 }
 
 /** The Socket row a Project's tracker binding names, refusing a paused one. */

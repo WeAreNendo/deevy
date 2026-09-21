@@ -50,7 +50,7 @@ export const sockets = {
     handler: async ({ input, context }) => {
       // Built before the row exists, so a credential that does not work is a
       // refusal rather than a Socket nobody can use.
-      const module = socketModuleFor(context, {
+      const module = await socketModuleFor(context, {
         provider: input.provider,
         config: input.config,
       });

@@ -184,7 +184,7 @@ export const projects = {
       }
 
       const socket = await requireSocket(context, input.tracker.socketId);
-      const module = socketModuleFor(context, socket);
+      const module = await socketModuleFor(context, socket);
       if (!module.tracker) {
         throw new ORPCError("BAD_REQUEST", {
           message: `The ${socket.name} Socket is not a tracker`,

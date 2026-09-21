@@ -11,6 +11,7 @@ export const idPrefixes = {
   workspace: "ws",
   member: "mem",
   socket: "sock",
+  inboundDelivery: "inb",
   project: "proj",
   issue: "iss",
   link: "lnk",

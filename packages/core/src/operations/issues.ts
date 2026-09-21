@@ -113,7 +113,7 @@ export const issues = {
       }
 
       const row = await requireSocket(context, project.trackerSocketId);
-      const tracker = requireTracker(socketModuleFor(context, row));
+      const tracker = requireTracker(await socketModuleFor(context, row));
       const label = assignee?.handle ? `${project.routing.labelPrefix}${assignee.handle}` : null;
       const external = await tracker.createIssue(project.trackerScope, {
         title: input.title,

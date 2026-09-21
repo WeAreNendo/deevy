@@ -35,7 +35,7 @@ export const comments = {
     handler: async ({ input, context }) => {
       const { issue, project } = await resolveIssueRef(context, input.issue);
       const row = await requireSocket(context, project.trackerSocketId);
-      const tracker = requireTracker(socketModuleFor(context, row));
+      const tracker = requireTracker(await socketModuleFor(context, row));
 
       const signature = `— ${context.member.handle ?? context.member.id} · via deevy`;
       const ref = await tracker.createComment(
