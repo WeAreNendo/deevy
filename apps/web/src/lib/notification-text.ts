@@ -66,10 +66,16 @@ export function describeNotification(row: DescribableNotification): Notification
       return row.event.kind === "issue.children_closed"
         ? { verb: "finished every sub-issue of this", excerpt: null, tone: "agent" }
         : { verb: "opened sub-issues under this", excerpt: text(payload.title), tone: "agent" };
-    case "gate_awaiting":
-      // No producer until a Gate is a request on a Run and says which
-      // Checkpoint it is (docs/plans/sockets.md, slice 2).
-      return { verb: "wants your ruling", excerpt: null, tone: "gate" };
+    case "gate_awaiting": {
+      // A Gate is a request on a Run, and what a Human needs first is which
+      // Checkpoint it stopped at and what it is proposing (ADR-0024).
+      const checkpoint = text(payload.checkpoint);
+      return {
+        verb: checkpoint ? `wants your ruling at ${checkpoint}` : "wants your ruling",
+        excerpt: text(payload.question),
+        tone: "gate",
+      };
+    }
     case "run_awaiting_input":
       return { verb: "asks a question", excerpt: text(payload.question), tone: "agent" };
     case "run_finished":

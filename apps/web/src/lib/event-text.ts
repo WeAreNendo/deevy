@@ -227,6 +227,45 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     }
     case "project.archived":
       return say(`archived ${str(p.slug) ?? "the Project"}`, null, "destructive");
+    case "gate.requested": {
+      const checkpoint = str(p.checkpoint) ?? "a Checkpoint";
+      const visit = typeof p.visit === "number" ? p.visit : 1;
+      return say(
+        visit > 1
+          ? `asked again to pass ${checkpoint}, visit ${String(visit)}`
+          : `asked to pass ${checkpoint}`,
+        null,
+        agentTone,
+      );
+    }
+    case "gate.superseded":
+      return say(
+        `changed what it was asking at ${str(p.checkpoint) ?? "a Checkpoint"}`,
+        null,
+        "muted",
+        true,
+      );
+    case "gate.approval": {
+      // The arithmetic four-eyes is about, said out loud: one of two is not a
+      // decision, and a reader should never have to count the rows themselves.
+      const of = typeof p.required === "number" ? p.required : null;
+      const so = typeof p.approvals === "number" ? p.approvals : null;
+      return say(
+        so !== null && of !== null
+          ? `approved ${str(p.checkpoint) ?? "it"}, ${String(so)} of ${String(of)}`
+          : `approved ${str(p.checkpoint) ?? "it"}`,
+        str(p.note),
+        byActor,
+      );
+    }
+    case "gate.approved":
+      return say(`let it past ${str(p.checkpoint) ?? "the Checkpoint"}`, str(p.note), byActor);
+    case "gate.rejected":
+      return say(
+        `sent it back from ${str(p.checkpoint) ?? "the Checkpoint"}`,
+        str(p.note),
+        "destructive",
+      );
     case "socket.connected": {
       const provider = str(p.provider);
       const named = str(p.name) ?? "a Socket";

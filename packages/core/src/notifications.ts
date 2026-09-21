@@ -7,6 +7,7 @@ import {
   type HumanNotificationKind,
   type Notification,
 } from "@deevy/db";
+import { gateApprovers, policyFor, requesterFor } from "./checkpoints.ts";
 import { newId } from "./ids.ts";
 
 /**
@@ -187,7 +188,8 @@ export function issueOf(event: Event): string | null {
   const under = delegatedUnder(event);
   if (under) return under;
   if (event.subjectType === "issue") return event.subjectId;
-  if (!event.kind.startsWith("run.")) return null;
+  // A Run and a Gate both happen on an Issue without being one, and both carry
+  // it, so the inbox needs no second query for either (ADR-0024).
   const carried = (event.payload as { issueId?: unknown } | null)?.issueId;
   return typeof carried === "string" ? carried : null;
 }
@@ -205,6 +207,21 @@ const runNotificationKinds: Partial<Record<Event["kind"], Notification["kind"]>>
   "run.completed": "run_finished",
   "run.failed": "run_finished",
 };
+
+/**
+ * The Gate a waiting Run stopped at, when that is why it is waiting.
+ *
+ * `run.awaiting_input` is the one Event that asks, whether the Agent asked a
+ * question or asked to pass a Checkpoint, so the reminder and the Slack rules
+ * work unchanged (docs/plans/sockets.md). What tells the two apart is this
+ * field, and it is read from the row rather than looked up, because the
+ * delivery path asks hours later and must stay a pure function of the Event.
+ */
+function gateRequestIdOf(event: Event): string | null {
+  if (event.kind !== "run.awaiting_input") return null;
+  const carried = (event.payload as { gateRequestId?: unknown } | null)?.gateRequestId;
+  return typeof carried === "string" ? carried : null;
+}
 
 /**
  * The one Event whose Notification is owed to the Agent rather than to a Human.
@@ -227,6 +244,7 @@ const AGENT_ANSWERED: Event["kind"] = "run.answered";
  */
 export function notificationKindOf(event: Event): Notification["kind"] | null {
   if (event.kind === "issue.assigned") return "assignment";
+  if (gateRequestIdOf(event)) return "gate_awaiting";
   if (event.kind === "comment.created") return "mention";
   // A wave of sub-issues is its Sponsor's business and not everybody's, and
   // forty of them are one line (docs/plans/sub-issue-delegation.md).
@@ -288,6 +306,11 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
     }));
   }
 
+  // A Gate asks whoever may rule on it, which is not the same question as who
+  // the Run belongs to: the Checkpoint names them, or every active Human does.
+  const gateRequestId = gateRequestIdOf(event);
+  if (gateRequestId) return gateRecipients(db, event, gateRequestId);
+
   // A Run belongs to the Human behind it: the Member that triggered it, or the
   // Sponsor accountable for the Agent when an Agent triggered its own work
   // (docs/plans/m2.md). One Human, so a finished Run is told once.
@@ -305,6 +328,30 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
   }
 
   return [];
+}
+
+/**
+ * Who is asked to rule on a Gate: the Humans the Checkpoint names, or every
+ * active Human where it names nobody, less the one the policy excludes.
+ *
+ * Read live rather than carried in the payload, so an approver named after the
+ * ask is owed a row the next time the reminder re-derives this — which is what
+ * the reminder is for (work.ts).
+ */
+async function gateRecipients(db: Db, event: Event, requestId: string): Promise<Recipient[]> {
+  const request = await db.query.gateRequest.findFirst({
+    where: { id: requestId },
+    with: { run: true },
+  });
+  if (!request) return [];
+  const policy = await policyFor(db, request.projectId, request.checkpoint);
+  const asked = await gateApprovers(db, event.workspaceId, policy);
+  // Asking the Human this Run is for, at a Checkpoint that will refuse them,
+  // is an inbox row about something they cannot do.
+  const excluded = policy.excludeRequester ? await requesterFor(db, request.run) : null;
+  return asked
+    .filter((memberId) => memberId !== excluded && memberId !== event.actorMemberId)
+    .map((memberId) => ({ memberId, kind: "gate_awaiting" as const }));
 }
 
 /**

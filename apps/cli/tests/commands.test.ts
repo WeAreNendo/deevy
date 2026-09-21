@@ -138,7 +138,15 @@ describe("what the CLI cannot do", () => {
     const sessionOnly = commands
       .filter((command) => command.sessionOnly)
       .map((command) => command.operation);
-    expect(sessionOnly).toEqual(["oauthClients.list", "oauthClients.revoke"]);
+    expect(sessionOnly).toEqual([
+      // Ruling on a Gate is the decision ADR-0010 will not take from a
+      // delegated credential, so it is not a command either: a Human rules in
+      // deevy, from the link the CLI hands them.
+      "gates.approve",
+      "gates.reject",
+      "oauthClients.list",
+      "oauthClients.revoke",
+    ]);
   });
 
   it("marks the operations only an Agent may call", () => {

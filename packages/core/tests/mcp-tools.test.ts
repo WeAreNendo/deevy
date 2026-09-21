@@ -36,18 +36,22 @@ describe("the committed tool manifest", () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
     /*
-     * Fifteen. The plan predicted thirteen and was counting the runtime's own
-     * allowlist (docs/plans/sockets.md, slice 8), which is a different list:
-     * `links_list` and `links_remove` are tools an Agent may call and are not
-     * in the thirteen the supervisor grants a session. Out with the tracker
-     * went `documents_*`, `issues_move`, `issues_set_labels`, `issues_update`
-     * and `labels_*`; `runs_request_approval` comes back as `gates_request`
-     * when a Gate is a request on a Run.
+     * Seventeen, now that a Gate is a request on a Run: `runs_request_approval`
+     * came back as `gates_request`, and `gates_get` beside it is the polling
+     * half for a client that cannot take an elicitation, which is every client
+     * today (mcp/elicitation.ts). The other fifteen are what the Sockets cut
+     * left — the plan predicted thirteen and was counting the runtime's own
+     * allowlist (docs/plans/sockets.md, slice 8), which is a different list.
      */
     expect(names).toEqual([
       // Socket-backed: it says something on the record where the record lives,
       // and what deevy keeps is the Event, because a mention is a trigger.
       "comments_create",
+      // What an Agent asks when it reaches a Checkpoint, carrying the Proposal
+      // a Human rules on, and how it reads the ruling when its client cannot
+      // be handed a URL to open (ADR-0020, ADR-0024).
+      "gates_get",
+      "gates_request",
       "inbox_list",
       // Opens the record in the tracker the Project is bound to, which is how
       // an Agent cuts work up (ADR-0022, ADR-0024).

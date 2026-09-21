@@ -26,6 +26,77 @@
     }
   },
   {
+    "name": "gates_get",
+    "operation": "gates.get",
+    "summary": "What has been ruled on a Gate, for an Agent waiting or a Human reading",
+    "readOnly": true,
+    "agents": true,
+    "agentsOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "requestId"
+      ]
+    }
+  },
+  {
+    "name": "gates_request",
+    "operation": "gates.request",
+    "summary": "Ask the Humans to let this Run past a Checkpoint, with what you intend to do",
+    "readOnly": false,
+    "agents": true,
+    "agentsOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "checkpoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "proposal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "links": {
+          "default": [],
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "url",
+              "title"
+            ]
+          }
+        }
+      },
+      "required": [
+        "runId",
+        "checkpoint",
+        "proposal"
+      ]
+    }
+  },
+  {
     "name": "inbox_list",
     "operation": "inbox.list",
     "summary": "The Notifications waiting for you, newest first",

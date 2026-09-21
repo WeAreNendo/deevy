@@ -61,6 +61,11 @@ describe("what the registry turns into", () => {
           .map((field) => `${command.operation}.${field.name}`),
       );
     expect(opaque.sort()).toEqual([
+      // A Project's whole policy in one argument, and the evidence a Proposal
+      // points at: both are lists of objects, and flattening either into flags
+      // would be guessing at a shape a team decides (ADR-0020).
+      "checkpoints.set.checkpoints",
+      "gates.request.links",
       "preferences.set.preferences",
       "projects.create.docs",
       "projects.create.forge",

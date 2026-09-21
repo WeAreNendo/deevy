@@ -298,3 +298,50 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
     expect(delivery).toBeLessThan(d1StatementsPerInvocation);
   });
 });
+
+/**
+ * What asking to pass a Checkpoint costs, and what ruling on it costs.
+ *
+ * Both are ordinary writes with `appendEvent`'s tail on them, and both are on
+ * the path a Worker serves: the ask is an MCP tool call and the ruling is a
+ * click. The ask pays for the request row, the elicitation Activity, the Run's
+ * move and two Events; the ruling pays for the policy, the decision row, the
+ * Event and the Run resuming with a third.
+ */
+const asking = 17;
+const ruling = 17;
+
+describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
+  it("stays well under D1's cap on both halves", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+    const asBob = createRouterClient(router, { context: bob });
+    const run = await asPlanner.runs.start({ issue: issue.url });
+
+    statements.length = 0;
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Rewrite the totals, behind a flag.",
+    });
+    expect(statements.length).toBe(asking);
+
+    statements.length = 0;
+    await asBob.gates.approve({ requestId: asked.id, note: "Reads right" });
+
+    expect(statements.length).toBe(ruling);
+    expect(ruling).toBeLessThan(d1StatementsPerInvocation);
+  });
+});
