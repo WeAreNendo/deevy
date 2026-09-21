@@ -199,25 +199,45 @@ describe("a generated command against a real deevy", () => {
       out: (line) => said.push(line),
     }));
 
-    // The Project comes from a generated command too, which is one more thing
-    // nobody wrote working against the real thing.
+    // The Socket and the Project bound to it come from generated commands too,
+    // which is two more things nobody wrote working against the real thing.
     // `--json` because this asserts on the exact answer, which is what the
     // flag is for; the shaped output is the default and is tested in render.
-    await root.parseAsync(["projects", "create", "--key", "DEV", "--name", "Dev", "--json"], {
-      from: "user",
-    });
-
     await root.parseAsync(
-      ["issues", "create", "--project-key", "DEV", "--title", "Something to do", "--json"],
+      ["sockets", "connect", "--provider", "stub", "--name", "Example tracker", "--json"],
       { from: "user" },
     );
-    const created = JSON.parse(said.at(-1) ?? "{}") as { key: string; title: string };
-    expect(created.title).toBe("Something to do");
-    expect(created.key).toMatch(/^DEV-\d+$/);
+    const socket = JSON.parse(said.at(-1) ?? "{}") as { id: string };
 
-    await root.parseAsync(["issues", "list", "--project-key", "DEV", "--json"], { from: "user" });
-    const listed = JSON.parse(said.at(-1) ?? "{}") as { issues: { key: string }[] };
-    expect(listed.issues.map((issue) => issue.key)).toContain(created.key);
+    await root.parseAsync(
+      [
+        "projects",
+        "create",
+        "--slug",
+        "acme-deevy",
+        "--name",
+        "Dev",
+        "--tracker",
+        JSON.stringify({ socketId: socket.id, scope: { scopeKey: "acme/deevy" } }),
+        "--json",
+      ],
+      { from: "user" },
+    );
+
+    await root.parseAsync(
+      ["issues", "create", "--project-slug", "acme-deevy", "--title", "Something to do", "--json"],
+      { from: "user" },
+    );
+    const created = JSON.parse(said.at(-1) ?? "{}") as { externalKey: string; title: string };
+    expect(created.title).toBe("Something to do");
+    // The key is the tracker's, and it is the only one there is (ADR-0024).
+    expect(created.externalKey).toMatch(/^acme\/deevy#\d+$/);
+
+    await root.parseAsync(["issues", "list", "--project-slug", "acme-deevy", "--json"], {
+      from: "user",
+    });
+    const listed = JSON.parse(said.at(-1) ?? "{}") as { issues: { externalKey: string }[] };
+    expect(listed.issues.map((issue) => issue.externalKey)).toContain(created.externalKey);
   });
 
   it("hands back what zod actually said, not 'Input validation failed'", async () => {
@@ -237,16 +257,22 @@ describe("a generated command against a real deevy", () => {
       out: () => {},
     }));
 
-    // A lowercase Project key. oRPC's own message is "Input validation failed";
-    // the sentence worth reading is the one the schema wrote, and it only
-    // arrives if `explain` digs it out of data.issues.
-    await expect(
-      root.parseAsync(["projects", "create", "--key", "dev", "--name", "Nope"], { from: "user" }),
-    ).rejects.toThrow(/uppercase letters/);
+    // An uppercase Project slug. oRPC's own message is "Input validation
+    // failed"; the sentence worth reading is the one the schema wrote, and it
+    // only arrives if `explain` digs it out of data.issues.
+    const badSlug = [
+      "projects",
+      "create",
+      "--slug",
+      "DEV",
+      "--name",
+      "Nope",
+      "--tracker",
+      JSON.stringify({ socketId: "sock_000000000", scope: { scopeKey: "acme/deevy" } }),
+    ];
+    await expect(root.parseAsync(badSlug, { from: "user" })).rejects.toThrow(/Lowercase letters/);
     // And it names the flag the user typed, not the field the schema calls it.
-    await expect(
-      root.parseAsync(["projects", "create", "--key", "dev", "--name", "Nope"], { from: "user" }),
-    ).rejects.toThrow(/--key/);
+    await expect(root.parseAsync(badSlug, { from: "user" })).rejects.toThrow(/--slug/);
   });
 
   it("refuses what an Agent may not do, and says the key is why", async () => {
@@ -287,16 +313,30 @@ describe("what a person sees by default", () => {
       out: (line) => said.push(line),
     }));
 
-    await root.parseAsync(["projects", "create", "--key", "DEV", "--name", "Dev"], {
-      from: "user",
-    });
-    // Fields a person reads, not a JSON document they have to.
-    expect(said.at(-1)).toContain("DEV");
-    expect(said.at(-1)).not.toContain('"key":');
+    await root.parseAsync(
+      ["sockets", "connect", "--provider", "stub", "--name", "Example tracker", "--json"],
+      { from: "user" },
+    );
+    const socket = JSON.parse(said.at(-1) ?? "{}") as { id: string };
+    const bound = (slug: string, scopeKey: string) => [
+      "projects",
+      "create",
+      "--slug",
+      slug,
+      "--name",
+      slug,
+      "--tracker",
+      JSON.stringify({ socketId: socket.id, scope: { scopeKey } }),
+    ];
 
-    await root.parseAsync(["projects", "create", "--key", "OPS", "--name", "Ops", "--json"], {
-      from: "user",
+    await root.parseAsync(bound("acme-deevy", "acme/deevy"), { from: "user" });
+    // Fields a person reads, not a JSON document they have to.
+    expect(said.at(-1)).toContain("acme-deevy");
+    expect(said.at(-1)).not.toContain('"slug":');
+
+    await root.parseAsync([...bound("acme-ops", "acme/ops"), "--json"], { from: "user" });
+    expect(JSON.parse(said.at(-1) ?? "{}") as { slug: string }).toMatchObject({
+      slug: "acme-ops",
     });
-    expect(JSON.parse(said.at(-1) ?? "{}") as { key: string }).toMatchObject({ key: "OPS" });
   });
 });

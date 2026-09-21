@@ -219,7 +219,19 @@ describe("a command this instance does not have", () => {
     }));
 
     await expect(
-      root.parseAsync(["projects", "create", "--key", "DEV", "--name", "Dev"], { from: "user" }),
+      root.parseAsync(
+        [
+          "projects",
+          "create",
+          "--slug",
+          "acme-deevy",
+          "--name",
+          "Dev",
+          "--tracker",
+          JSON.stringify({ socketId: "sock_000000000", scope: { scopeKey: "acme/deevy" } }),
+        ],
+        { from: "user" },
+      ),
     ).rejects.toThrow(/has no `projects.create`/);
 
     // And one it does have reaches the instance, so the filter is narrowing
