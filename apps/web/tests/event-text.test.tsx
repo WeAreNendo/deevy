@@ -159,3 +159,74 @@ describe("describeEvent on a delegation", () => {
     });
   });
 });
+
+describe("the Events a Socket causes", () => {
+  it("says what a record arriving from a tracker means", () => {
+    expect(describeEvent({ kind: "issue.created", payload: { key: "acme/deevy#42" } })?.text).toBe(
+      "opened acme/deevy#42",
+    );
+    expect(
+      describeEvent({ kind: "issue.synced", payload: { changed: ["title", "labels"] } })?.text,
+    ).toBe("synced it from the tracker: title, labels");
+    // Nothing worth naming still says something happened.
+    expect(describeEvent({ kind: "issue.synced", payload: {} })?.text).toBe(
+      "synced it from the tracker",
+    );
+    expect(describeEvent({ kind: "issue.closed", payload: {} })?.text).toBe(
+      "closed it in the tracker",
+    );
+    expect(describeEvent({ kind: "issue.reopened", payload: {} })?.text).toBe(
+      "reopened it in the tracker",
+    );
+  });
+
+  it("names the tool a Socket connects, and what it is there", () => {
+    expect(
+      describeEvent({
+        kind: "socket.connected",
+        payload: { provider: "github", name: "Acme", login: "deevy" },
+      })?.text,
+    ).toBe("connected Acme, a github Socket, as @deevy");
+    expect(describeEvent({ kind: "socket.removed", payload: { name: "Acme" } })?.text).toBe(
+      "disconnected Acme",
+    );
+  });
+
+  it("says a record was routed rather than assigned by hand", () => {
+    expect(
+      describeEvent({
+        kind: "issue.assigned",
+        payload: { from: null, to: "m-bob", toName: "Builder", byRouting: true },
+      })?.text,
+    ).toBe("routed it to Builder");
+  });
+
+  it("names the Project an Agent was granted by its slug", () => {
+    expect(
+      describeEvent({ kind: "agent.project_granted", payload: { projectSlug: "acme-deevy" } })
+        ?.text,
+    ).toBe("granted acme-deevy");
+  });
+});
+
+/**
+ * Convention 5 of docs/plans/sockets.md: a new EventKind has four consumers,
+ * and this is the one that is checkable. The kinds are read out of the core's
+ * own union rather than listed here, so a kind added there and forgotten here
+ * fails rather than printing its dotted name at somebody in the Event log.
+ */
+describe("every EventKind the core can append", () => {
+  it("has a sentence, rather than falling through to its raw name", async () => {
+    // Read as text by the bundler, so this needs no filesystem and no node types.
+    const source = (await import("../../../packages/core/src/events.ts?raw")).default;
+    const union = source.slice(
+      source.indexOf("export type EventKind ="),
+      source.indexOf("export type EventPayload"),
+    );
+    const kinds = [...union.matchAll(/\| "([a-z_]+\.[a-z_]+)"/g)].map((match) => match[1] ?? "");
+    expect(kinds.length).toBeGreaterThan(20);
+
+    const raw = kinds.filter((kind) => describeEvent({ kind, payload: {} })?.text === kind);
+    expect(raw).toEqual([]);
+  });
+});
