@@ -283,6 +283,8 @@ export interface SeededProject {
   project: Project;
   /** Projects one record and hands back the row, as a delivery would. */
   record: (over: Partial<ExternalIssue> & { externalId: string }) => Promise<Issue>;
+  /** Who gets a record no label and no mention named (ADR-0024). */
+  setDefaultAgent: (memberId: string | null) => Promise<void>;
 }
 
 /**
@@ -326,6 +328,12 @@ export async function seedProject(
   return {
     socketId,
     project: row,
+    setDefaultAgent: async (memberId) => {
+      await db
+        .update(project)
+        .set({ defaultAgentMemberId: memberId })
+        .where(eq(project.id, row.id));
+    },
     record: async (over) => {
       const { issue } = await upsertProjection(db, {
         projectId: row.id,

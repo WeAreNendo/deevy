@@ -237,6 +237,20 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     }
     case "socket.updated":
       return say(`changed ${str(p.name) ?? "a Socket"}`);
+    case "socket.installation_added": {
+      // One App serves every place somebody installs it, so this is the tool
+      // telling deevy where it now is rather than anybody in deevy acting.
+      const accounts = list(p.accounts);
+      const named = str(p.name) ?? "a Socket";
+      return say(
+        accounts.length > 0
+          ? `${named} was installed on ${join(accounts)}`
+          : `${named} was installed somewhere new`,
+        null,
+        "muted",
+        true,
+      );
+    }
     case "socket.removed":
       return say(`disconnected ${str(p.name) ?? "a Socket"}`, null, "destructive");
     case "allowlist.rule_added":

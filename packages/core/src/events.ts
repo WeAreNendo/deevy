@@ -73,6 +73,12 @@ export type EventKind =
   | "socket.connected"
   | "socket.updated"
   | "socket.removed"
+  /**
+   * A tool told deevy where else it was installed. One App serves every
+   * repository somebody installs it on, so the installations are a list that
+   * grows after the connecting, and a delivery is how deevy hears about it.
+   */
+  | "socket.installation_added"
   | "agent.created"
   | "agent.updated"
   | "agent.key_issued"

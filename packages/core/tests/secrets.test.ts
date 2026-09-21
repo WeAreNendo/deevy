@@ -1,6 +1,7 @@
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createAuth } from "../src/auth.ts";
+import { openSecret, requireSealingSecret, sealSecret } from "../src/secrets.ts";
 import { betterAuthKeys } from "../src/keys.ts";
 import { router } from "../src/operations/index.ts";
 import { agentContext, fakeSockets, memberContext, testDb } from "./helpers.ts";
@@ -118,5 +119,58 @@ describe("the read surface", () => {
     // does, so an empty result above is the surface being clean rather than
     // the grep being broken.
     expect(JSON.stringify(issued).includes(issued.key)).toBe(true);
+  });
+});
+
+/**
+ * What a Socket's credentials are wrapped in at rest (ADR-0024).
+ *
+ * The property that matters is not that the bytes look scrambled: it is that a
+ * changed byte and a changed key both fail to open rather than opening into
+ * something plausible, because what comes out of here is handed to a provider
+ * as a credential.
+ */
+describe("sealing a credential", () => {
+  const key = "a-secret-that-is-at-least-32-characters-long";
+
+  it("opens what it sealed, and says which version sealed it", async () => {
+    const sealed = await sealSecret(key, "ghs_the_installation_token");
+
+    expect(sealed.startsWith("v1.")).toBe(true);
+    expect(sealed).not.toContain("ghs_the_installation_token");
+    expect(await openSecret(key, sealed)).toBe("ghs_the_installation_token");
+  });
+
+  it("seals the same value differently every time", async () => {
+    const once = await sealSecret(key, "the same plaintext");
+    const twice = await sealSecret(key, "the same plaintext");
+
+    // A repeated envelope would tell a reader of the column that two Sockets
+    // hold one credential, which is the one thing the column may not say.
+    expect(once).not.toBe(twice);
+    expect(await openSecret(key, twice)).toBe("the same plaintext");
+  });
+
+  it("refuses another key, a changed byte, and a shape it did not write", async () => {
+    const sealed = await sealSecret(key, "ghs_the_installation_token");
+    const tampered = `${sealed.slice(0, -2)}${sealed.endsWith("aa") ? "bb" : "aa"}`;
+
+    await expect(openSecret("a-different-secret-of-at-least-32-chars", sealed)).rejects.toThrow();
+    await expect(openSecret(key, tampered)).rejects.toThrow();
+    await expect(openSecret(key, "not-an-envelope")).rejects.toThrow();
+    await expect(openSecret(key, "v2.aaaa.bbbb")).rejects.toThrow();
+  });
+
+  it("holds a credential that is JSON, which is what a Socket stores", async () => {
+    const credentials = { appId: "12345", privateKey: "-----BEGIN RSA PRIVATE KEY-----" };
+    const sealed = await sealSecret(key, JSON.stringify(credentials));
+
+    expect(JSON.parse(await openSecret(key, sealed))).toEqual(credentials);
+  });
+
+  it("says a deployment with no secret cannot connect a tool", () => {
+    expect(() => requireSealingSecret(undefined)).toThrow(/secret/i);
+    expect(() => requireSealingSecret("short")).toThrow(/32/);
+    expect(requireSealingSecret(key)).toBe(key);
   });
 });
