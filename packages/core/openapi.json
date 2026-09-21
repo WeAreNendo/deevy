@@ -9251,6 +9251,29 @@
                         "issueKey"
                       ],
                       "additionalProperties": false
+                    },
+                    "you": {
+                      "type": "object",
+                      "properties": {
+                        "mayRule": {
+                          "type": "boolean"
+                        },
+                        "hasRuled": {
+                          "type": "boolean"
+                        },
+                        "why": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mayRule",
+                        "hasRuled",
+                        "why"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -9270,7 +9293,8 @@
                     "policy",
                     "decisions",
                     "approvals",
-                    "run"
+                    "run",
+                    "you"
                   ],
                   "additionalProperties": false
                 }
@@ -9509,6 +9533,29 @@
                         "issueKey"
                       ],
                       "additionalProperties": false
+                    },
+                    "you": {
+                      "type": "object",
+                      "properties": {
+                        "mayRule": {
+                          "type": "boolean"
+                        },
+                        "hasRuled": {
+                          "type": "boolean"
+                        },
+                        "why": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mayRule",
+                        "hasRuled",
+                        "why"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -9528,7 +9575,8 @@
                     "policy",
                     "decisions",
                     "approvals",
-                    "run"
+                    "run",
+                    "you"
                   ],
                   "additionalProperties": false
                 }
@@ -9556,6 +9604,24 @@
             "allowReserved": true,
             "style": "deepObject",
             "explode": true
+          },
+          {
+            "in": "query",
+            "name": "runId",
+            "schema": {
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "issueId",
+            "schema": {
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
           },
           {
             "in": "query",
@@ -9815,6 +9881,29 @@
                               "issueKey"
                             ],
                             "additionalProperties": false
+                          },
+                          "you": {
+                            "type": "object",
+                            "properties": {
+                              "mayRule": {
+                                "type": "boolean"
+                              },
+                              "hasRuled": {
+                                "type": "boolean"
+                              },
+                              "why": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "mayRule",
+                              "hasRuled",
+                              "why"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -9834,7 +9923,8 @@
                           "policy",
                           "decisions",
                           "approvals",
-                          "run"
+                          "run",
+                          "you"
                         ],
                         "additionalProperties": false
                       }
@@ -10095,6 +10185,29 @@
                         "issueKey"
                       ],
                       "additionalProperties": false
+                    },
+                    "you": {
+                      "type": "object",
+                      "properties": {
+                        "mayRule": {
+                          "type": "boolean"
+                        },
+                        "hasRuled": {
+                          "type": "boolean"
+                        },
+                        "why": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mayRule",
+                        "hasRuled",
+                        "why"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -10114,7 +10227,8 @@
                     "policy",
                     "decisions",
                     "approvals",
-                    "run"
+                    "run",
+                    "you"
                   ],
                   "additionalProperties": false
                 }
@@ -10368,6 +10482,29 @@
                         "issueKey"
                       ],
                       "additionalProperties": false
+                    },
+                    "you": {
+                      "type": "object",
+                      "properties": {
+                        "mayRule": {
+                          "type": "boolean"
+                        },
+                        "hasRuled": {
+                          "type": "boolean"
+                        },
+                        "why": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mayRule",
+                        "hasRuled",
+                        "why"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -10387,7 +10524,8 @@
                     "policy",
                     "decisions",
                     "approvals",
-                    "run"
+                    "run",
+                    "you"
                   ],
                   "additionalProperties": false
                 }

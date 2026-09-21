@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { addGeneratedCommands } from "./generate.ts";
 import { inkFor } from "./render.ts";
+import { openGate } from "./gates.ts";
 import { signIn, signOut, whoAmI } from "./identity.ts";
 import { watch } from "./watch.ts";
 import { clientFor, explain } from "./client.ts";
@@ -116,11 +117,26 @@ export function program(): Command {
       await whoAmI(originFrom(url), { json: options.json === true });
     });
 
-  // `gates open` is not here for one slice. It put a Gate in front of a Human
-  // by opening the Issue it was waiting in, and a Gate is not a place an Issue
-  // sits any more: it is a request on a Run, with a screen of its own at
-  // `/gates/<requestId>` (ADR-0024). The verb comes back pointed at that, taking
-  // a request id or a key, in slice 3 of docs/plans/sockets.md.
+  // Ruling happens in deevy's own browser and nowhere else (ADR-0004,
+  // ADR-0010), so the only verb here is `open`: the CLI's job is to find the
+  // Gate and hand it over.
+  cli
+    .command("gates")
+    .description("Work with Gates")
+    .command("open")
+    .argument("<gate>", "a Gate's id, or the tracker's key for the record waiting at one")
+    .argument("[url]", "the deevy to open it on; defaults to DEEVY_URL")
+    .description("Open a Gate's ruling screen in a browser")
+    .option("--no-browser", "print the URL instead of opening it")
+    .action(async (gate: string, url: string | undefined, options: { browser?: boolean }) => {
+      const origin = originFrom(url);
+      const credential = await credentialFor(origin);
+      if (!credential) throw new Error(`Not signed in to ${origin}. Run \`deevy login\` first.`);
+      await openGate(origin, gate, {
+        client: clientFor(credential),
+        openBrowser: options.browser,
+      });
+    });
 
   cli
     .command("events")

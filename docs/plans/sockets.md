@@ -840,6 +840,18 @@ and half of D1's cap. `budget.test.ts` asserts it exactly.
   unchanged, and what decides between `gate_awaiting` and `run_awaiting_input` is one field read off the
   row. `gate.requested` stays as the log's record that the Agent asked.
 
+**Slice 3, as built.** The screens needed three things from the server that the plan had left to the page,
+and each of them is the same argument: a rule the API enforces must not be re-implemented in a browser.
+`gates.get` says where the Human reading it stands and why not, in the words `recordRuling` would refuse
+them with; a Ruling carries the Socket it came through, so "via GitHub" needs no read of the Socket list,
+which is an admin's alone; and `runs.list` says which Gate each Run waits at, in one query for the page.
+`runs.list` also stopped refusing a Human who named nobody: a feed is a Workspace-wide question, and it
+rides `(created_at, id)` rather than fanning out.
+
+The Work item has no side peek and no keyboard row yet — `/work` opens a page rather than a panel. The peek
+was the Issue page's shape, and what it framed is gone; whether a read-only record wants one is a question
+for the screens that come after the providers.
+
 The tool set is **seventeen**: `gates_request` is `runs_request_approval` come back, and `gates_get` beside
 it is the polling half for a client that cannot take an elicitation, which is every client today. Asking
 costs **17 statements** and ruling **17**, both a third of D1's cap.
