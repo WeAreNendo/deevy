@@ -38,6 +38,20 @@ export function crumbsFor(pathname: string, names: CrumbNames): Crumb[] {
   // neither ever asks for a crumb (ADR-0024).
   if (parts.length === 0) return [{ label: "Home" }];
   if (head === "inbox") return [{ label: "Inbox" }];
+  // A Gate is the link an Agent hands a Human: they did not come from a list,
+  // so a trail above it would name a page they have never seen.
+  if (head === "gates") return [{ label: "Gate" }];
+  // The two lists deevy still keeps, and one row of each. A Run and a record
+  // have no name a trail can use — the record's key is on the page itself —
+  // so the id is what the last crumb says.
+  for (const [segment, label, to] of [
+    ["runs", "Runs", "/runs"],
+    ["work", "Work", "/work"],
+  ] as const) {
+    if (head !== segment) continue;
+    const tail = parts[1];
+    return tail ? [{ label, to }, { label: tail }] : [{ label }];
+  }
   if (head === "settings") {
     const settings: Crumb = { label: "Settings", to: "/settings/workspace" };
     const pages = settingsNav.flatMap((group) => group.pages);

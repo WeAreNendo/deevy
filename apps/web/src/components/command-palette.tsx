@@ -1,5 +1,13 @@
 import { useNavigate } from "@tanstack/react-router";
-import { FolderKanban, Inbox, Keyboard, Settings } from "lucide-react";
+import {
+  BellRing,
+  ClipboardList,
+  FolderKanban,
+  Inbox,
+  Keyboard,
+  PlayCircle,
+  Settings,
+} from "lucide-react";
 import {
   Command,
   CommandDialog,
@@ -54,10 +62,24 @@ export function CommandPalette({
         <CommandList>
           <CommandEmpty>Nothing matches.</CommandEmpty>
           <CommandGroup heading="Go to">
+            <CommandItem onSelect={() => goTo("/")}>
+              <BellRing />
+              Needs me
+            </CommandItem>
             <CommandItem onSelect={() => goTo("/inbox")}>
               <Inbox />
               Inbox
               <CommandShortcut>g i</CommandShortcut>
+            </CommandItem>
+            <CommandItem onSelect={() => goTo("/runs")}>
+              <PlayCircle />
+              Runs
+              <CommandShortcut>g r</CommandShortcut>
+            </CommandItem>
+            <CommandItem onSelect={() => goTo("/work")}>
+              <ClipboardList />
+              Work
+              <CommandShortcut>g w</CommandShortcut>
             </CommandItem>
             <CommandItem onSelect={() => goTo("/settings/projects")}>
               <FolderKanban />
