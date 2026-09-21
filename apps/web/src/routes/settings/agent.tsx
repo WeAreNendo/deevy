@@ -236,6 +236,10 @@ function Grants({ memberId, onChanged }: { memberId: string; onChanged: () => Pr
   const ungranted = (projects.data?.projects ?? []).filter(
     (project) => !mine.some((row) => row.id === project.id),
   );
+  // Until both answers are in, an empty list means "not yet", not "none left":
+  // the picker stays live rather than telling the reader something untrue.
+  const loading = projects.isPending || granted.isPending;
+  const everyOneGranted = !loading && ungranted.length === 0;
 
   return (
     <SettingsSection aria-label="Projects" title="Projects">
@@ -280,12 +284,12 @@ function Grants({ memberId, onChanged }: { memberId: string; onChanged: () => Pr
           isItemEqualToValue={(a: (typeof ungranted)[number], b: (typeof ungranted)[number]) =>
             a.id === b.id
           }
-          disabled={add.isPending || ungranted.length === 0}
+          disabled={add.isPending || everyOneGranted}
         >
           <ComboboxInput
             id="grant-project"
             className="w-72"
-            placeholder={ungranted.length === 0 ? "Every Project is granted" : "Choose a Project…"}
+            placeholder={everyOneGranted ? "Every Project is granted" : "Choose a Project…"}
           />
           <ComboboxContent>
             <ComboboxEmpty>No Project matches.</ComboboxEmpty>
