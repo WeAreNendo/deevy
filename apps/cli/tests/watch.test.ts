@@ -59,8 +59,18 @@ describe("following the Event log", () => {
    */
   it("picks the stream back up when it ends having said something", async () => {
     const { client, asked } = endingStreams([
-      [{ type: "event", event: { seq: 1, kind: "issue.created", payload: { key: "acme/deevy#1" } } }],
-      [{ type: "event", event: { seq: 2, kind: "issue.synced", payload: { key: "acme/deevy#1" } } }],
+      [
+        {
+          type: "event",
+          event: { seq: 1, kind: "issue.created", payload: { key: "acme/deevy#1" } },
+        },
+      ],
+      [
+        {
+          type: "event",
+          event: { seq: 2, kind: "issue.synced", payload: { key: "acme/deevy#1" } },
+        },
+      ],
     ]);
     const said: string[] = [];
     const reached = await watch(client, { out: (line) => said.push(line), limit: 2, idleMs: 1 });

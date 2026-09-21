@@ -171,17 +171,24 @@ async function takeUpInbox(deevy: Deevy): Promise<{ takenUp: string[]; answered:
       continue;
     }
     if (notification.kind !== "assignment" || !notification.issue) continue;
-    const issueKey = notification.issue.key;
+    /*
+     * Two handles for one record, on purpose (ADR-0024). deevy is asked by URL,
+     * which is canonical and cannot be ambiguous across two Sockets; what is
+     * reported back is the tracker's key, because that is what somebody reading
+     * this runtime's log is looking at in their tracker.
+     */
+    const handle = notification.issue.url;
+    const issueKey = notification.issue.externalKey;
     // Ask before opening one. The trigger that wrote this Notification already
     // opened a Run in the same Event, so starting one here would collide every
     // single time — a request that is known to fail on the happy path, and an
     // error in deevy's log on nothing going wrong.
-    if ((await deevy.runsOn(issueKey)).some(isOpen)) {
+    if ((await deevy.runsOn(handle)).some(isOpen)) {
       clear.push(notification.id);
       continue;
     }
     try {
-      await deevy.startRun(issueKey);
+      await deevy.startRun(handle);
       takenUp.push(issueKey);
     } catch (error) {
       // Still caught, and now it means what it says: another host opened one

@@ -51,7 +51,7 @@ export function testDeevy(options: { version?: string } = {}): TestDeevy {
     sockets: fakeSockets(),
     ...(options.version ? { version: options.version } : {}),
   });
-  const asFetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const asFetch = ((input: Request | string | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(String(input), init);
     return Promise.resolve(app.request(request));
   }) as typeof fetch;
