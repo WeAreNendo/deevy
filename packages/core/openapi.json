@@ -746,6 +746,20 @@
           },
           {
             "in": "query",
+            "name": "mine",
+            "schema": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "in": "query",
             "name": "status",
             "schema": {
               "type": "string",
@@ -932,6 +946,12 @@
                             "type": "integer",
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
+                          },
+                          "openGateRequestId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -947,7 +967,8 @@
                           "finishedAt",
                           "createdAt",
                           "lastActivities",
-                          "activityCount"
+                          "activityCount",
+                          "openGateRequestId"
                         ],
                         "additionalProperties": false
                       }
@@ -9165,6 +9186,33 @@
                               "slack"
                             ]
                           },
+                          "socket": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "provider",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -9177,6 +9225,7 @@
                           "decision",
                           "note",
                           "via",
+                          "socket",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -9395,6 +9444,33 @@
                               "slack"
                             ]
                           },
+                          "socket": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "provider",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -9407,6 +9483,7 @@
                           "decision",
                           "note",
                           "via",
+                          "socket",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -9673,6 +9750,33 @@
                                     "slack"
                                   ]
                                 },
+                                "socket": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "provider": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "provider",
+                                        "name"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
                                 "createdAt": {
                                   "type": "string",
                                   "format": "date-time",
@@ -9685,6 +9789,7 @@
                                 "decision",
                                 "note",
                                 "via",
+                                "socket",
                                 "createdAt"
                               ],
                               "additionalProperties": false
@@ -9925,6 +10030,33 @@
                               "slack"
                             ]
                           },
+                          "socket": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "provider",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -9937,6 +10069,7 @@
                           "decision",
                           "note",
                           "via",
+                          "socket",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -10170,6 +10303,33 @@
                               "slack"
                             ]
                           },
+                          "socket": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "provider",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -10182,6 +10342,7 @@
                           "decision",
                           "note",
                           "via",
+                          "socket",
                           "createdAt"
                         ],
                         "additionalProperties": false

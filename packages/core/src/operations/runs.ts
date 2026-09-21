@@ -6,7 +6,8 @@ import {
   run as runTable,
   runStatuses,
 } from "@deevy/db";
-import { issue as issueTable, project as projectTable } from "@deevy/db";
+import { issue as issueTable, member as memberTable, project as projectTable } from "@deevy/db";
+import { alias } from "drizzle-orm/sqlite-core";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import {
@@ -21,7 +22,17 @@ import {
 } from "../runs.ts";
 import { defineOperation } from "./registry.ts";
 import type { Activity, Run } from "@deevy/db";
-import { assertOwnRun, parseRunCursor, resolveIssueRef, requireRun, runView } from "./shared.ts";
+import {
+  assertOwnRun,
+  parseRunCursor,
+  QueryFlag,
+  resolveIssueRef,
+  requireRun,
+  runView,
+} from "./shared.ts";
+
+/** The Agent working a Run, joined so "mine" can ask who sponsors it. */
+const agentMember = alias(memberTable, "agent_member");
 import { newId } from "../ids.ts";
 
 export const runs = {
@@ -237,6 +248,11 @@ export const runs = {
       /** Only this record's Runs, by id, URL or the tracker's key. */
       issue: z.string().trim().min(1).optional(),
       agentMemberId: z.string().optional(),
+      /**
+       * Only the Runs this Human is behind: the ones they triggered, and the
+       * ones their Agents are working. What Home means by "my Agents' Runs".
+       */
+      mine: QueryFlag.optional(),
       status: z.enum(runStatuses).optional(),
       /** Return Runs older than this position. Pass back the previous page's nextCursor. */
       before: z.string().optional(),
@@ -253,6 +269,11 @@ export const runs = {
           lastActivities: z.array(ActivitySchema),
           /** How many Activities the Run has in all, so a card knows there are more. */
           activityCount: z.number().int(),
+          /**
+           * The Gate this Run is waiting at, when it is. A feed says "waiting
+           * on a ruling" and links to it without a query per row.
+           */
+          openGateRequestId: z.string().nullable(),
         }),
       ),
       /** The position of the last Run returned, or null when the page is empty. */
@@ -267,11 +288,10 @@ export const runs = {
       // because it has no way to learn its own Member id (ADR-0003).
       const agentMemberId =
         input.agentMemberId ?? (context.member.kind === "agent" ? context.member.id : undefined);
-      if (!input.issue && !agentMemberId) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: "Say whose Runs you want: an Issue key or an Agent",
-        });
-      }
+      // A Human asking for nothing in particular means the Workspace's Runs,
+      // which is the feed `/runs` draws: one page off `(created_at, id)`, never
+      // a fan-out. An Agent still means its own, because it cannot name itself.
+      const mine = input.mine === true && context.member.kind === "human";
       const onIssue = input.issue ? await resolveIssueRef(context, input.issue) : null;
       const cursor = input.before ? parseRunCursor(input.before) : null;
       const granted = context.grantedProjectIds;
@@ -281,12 +301,22 @@ export const runs = {
         .from(runTable)
         .innerJoin(issueTable, eq(runTable.issueId, issueTable.id))
         .innerJoin(projectTable, eq(issueTable.projectId, projectTable.id))
+        .innerJoin(agentMember, eq(runTable.agentMemberId, agentMember.id))
         .where(
           and(
             eq(projectTable.workspaceId, context.workspace.id),
             granted ? inArray(issueTable.projectId, granted) : undefined,
             onIssue ? eq(runTable.issueId, onIssue.issue.id) : undefined,
             agentMemberId === undefined ? undefined : eq(runTable.agentMemberId, agentMemberId),
+            // The Human behind a Run is who triggered it, or the Sponsor of the
+            // Agent working it (PLAN.md). Both in one clause, so "mine" is one
+            // query rather than a list of my Agents and then their Runs.
+            mine
+              ? or(
+                  eq(runTable.triggeredByMemberId, context.member.id),
+                  eq(agentMember.sponsorId, context.member.id),
+                )
+              : undefined,
             input.status === undefined ? undefined : eq(runTable.status, input.status),
             cursor
               ? or(
@@ -304,11 +334,22 @@ export const runs = {
         context.db,
         rows.map((row) => row.run.id),
       );
+      // One query for the page rather than one per Run: a Gate is what a
+      // waiting Run is waiting on, and a feed says so on every row.
+      const waiting =
+        rows.length === 0
+          ? []
+          : await context.db.query.gateRequest.findMany({
+              where: { runId: { in: rows.map((row) => row.run.id) }, status: "open" },
+              columns: { id: true, runId: true },
+            });
+      const gateOf = new Map(waiting.map((row) => [row.runId, row.id]));
       return {
         runs: rows.map((row) => ({
           ...runView(row.run, row.externalKey),
           lastActivities: trailing.get(row.run.id)?.rows ?? [],
           activityCount: trailing.get(row.run.id)?.total ?? 0,
+          openGateRequestId: gateOf.get(row.run.id) ?? null,
         })),
         nextCursor: last ? `${last.run.createdAt.getTime()}:${last.run.id}` : null,
       };

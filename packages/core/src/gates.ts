@@ -220,6 +220,12 @@ export const GateDecisionSchema = z.object({
   decision: z.enum(["approved", "rejected"]),
   note: z.string().nullable(),
   via: z.enum(["web", "socket", "slack"]),
+  /**
+   * The tool it came through, where it came through one. A screen says "via
+   * GitHub" from this rather than from the Socket list, which is an admin's
+   * (ADR-0025).
+   */
+  socket: z.object({ id: z.string(), provider: z.string(), name: z.string() }).nullable(),
   createdAt: z.date(),
 });
 
@@ -250,10 +256,15 @@ export const GateRequestSchema = z.object({
 
 export type GateRequestView = z.infer<typeof GateRequestSchema>;
 
+/** A Ruling, with the tool it came through where it came through one. */
+export type GateDecisionRow = GateDecision & {
+  socket?: { id: string; provider: string; name: string } | null;
+};
+
 export interface GateViewInput {
   request: GateRequest;
   policy: CheckpointPolicy;
-  decisions: GateDecision[];
+  decisions: GateDecisionRow[];
   issueKey: string;
   origin: string;
 }
@@ -286,6 +297,9 @@ export function gateView({
       decision: row.decision,
       note: row.note,
       via: row.via,
+      socket: row.socket
+        ? { id: row.socket.id, provider: row.socket.provider, name: row.socket.name }
+        : null,
       createdAt: row.createdAt,
     })),
     approvals: decisions.filter((row) => row.decision === "approved").length,

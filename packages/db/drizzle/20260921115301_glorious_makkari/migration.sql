@@ -1,0 +1,1 @@
+CREATE INDEX `run_createdAt_idx` ON `run` (`created_at`,`id`);

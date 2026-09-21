@@ -351,3 +351,63 @@ describe("a Run, seen from a Human", () => {
     });
   });
 });
+
+/**
+ * What the Runs feed answers a Human (docs/plans/sockets.md, slice 3).
+ *
+ * The old list refused a Human who named nobody, because every query had to
+ * ride an index and a Workspace-wide scan was not on offer. A screen that says
+ * "what is happening" is exactly that question, so the list answers it — off
+ * `created_at`, one page at a time — and keeps refusing to fan out.
+ */
+describe("the Runs a Human reads", () => {
+  it("answers the whole Workspace when nobody is named, and only mine when I say so", async () => {
+    const { db, asAdmin, asAgent, admin, issue, record } = await workspaceWithAgent();
+    const second = await record({ externalId: "2", title: "Another" });
+    await asAgent.runs.start({ issue: issue.url });
+
+    // A second Agent, sponsored by somebody else: its Runs are not mine.
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    const { sockets } = fakeSockets();
+    const other = await agentContext(db, {
+      name: "Builder",
+      email: "builder@example.com",
+      sponsor: bob.member,
+      grants: [],
+    });
+    await db.insert(run).values({
+      id: "run_otherstub00",
+      issueId: second.id,
+      agentMemberId: other.member.id,
+      triggeredByMemberId: bob.member.id,
+      trigger: "manual",
+    });
+
+    const everything = await asAdmin.runs.list({});
+    expect(everything.runs).toHaveLength(2);
+
+    // "Mine" is the Human behind the Run: the one who triggered it, or the
+    // Sponsor of the Agent that is working it (PLAN.md's accountability rule).
+    const mine = await asAdmin.runs.list({ mine: true });
+    expect(mine.runs.map((row) => row.agentMemberId)).toEqual([
+      (await db.query.run.findFirst({ where: { issueId: issue.id } }))?.agentMemberId,
+    ]);
+    expect(admin.member.id).toBeTruthy();
+    expect(sockets).toBeTruthy();
+  });
+
+  it("says which Gate a waiting Run stopped at, so a feed can link to it", async () => {
+    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
+    const started = await asAgent.runs.start({ issue: issue.url });
+    const asked = await asAgent.gates.request({
+      runId: started.id,
+      checkpoint: "plan",
+      proposal: "The plan",
+    });
+
+    const [listed] = (await asAdmin.runs.list({})).runs;
+
+    expect(listed?.openGateRequestId).toBe(asked.id);
+    expect(listed?.status).toBe("awaiting_input");
+  });
+});

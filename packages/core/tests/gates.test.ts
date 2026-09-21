@@ -324,7 +324,16 @@ describe("a ruling that came from somewhere else", () => {
       externalRef: { commentId: "c1" },
       decision: "approved",
     });
-    expect((await asPlanner.gates.get({ requestId: asked.id })).status).toBe("approved");
+
+    const ruled = await asPlanner.gates.get({ requestId: asked.id });
+    expect(ruled.status).toBe("approved");
+    // Which tool it came through, in the answer: a screen says "via GitHub"
+    // and a Human who reads it never has to ask where a decision was made,
+    // which is the whole of what `via` is for (ADR-0025).
+    expect(ruled.decisions[0]).toMatchObject({
+      via: "socket",
+      socket: { provider: "stub", name: "Example tracker" },
+    });
   });
 });
 

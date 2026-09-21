@@ -58,6 +58,11 @@ export const run = sqliteTable(
   },
   (table) => [
     index("run_issueId_idx").on(table.issueId, table.createdAt),
+    /**
+     * The Workspace-wide feed `/runs` draws, newest first. The pair is the
+     * cursor: two Runs can share a millisecond (operations/runs.ts).
+     */
+    index("run_createdAt_idx").on(table.createdAt, table.id),
     index("run_agent_status_idx").on(table.agentMemberId, table.status),
     /** The sweep's one indexed scan: open Runs ordered by silence. */
     index("run_status_lastActivityAt_idx").on(table.status, table.lastActivityAt),

@@ -48,7 +48,11 @@ import {
 async function gateFor(context: ContextFor<"member">, requestId: string) {
   const found = await context.db.query.gateRequest.findFirst({
     where: { id: requestId },
-    with: { decisions: true, issue: true, checkpointPolicy: { with: { approvers: true } } },
+    with: {
+      decisions: { with: { socket: true } },
+      issue: true,
+      checkpointPolicy: { with: { approvers: true } },
+    },
   });
   if (!found || found.issue.projectId !== found.projectId) {
     throw new ORPCError("NOT_FOUND", { message: "No such Gate" });
@@ -274,6 +278,7 @@ export const gates = {
       const ids = rows.map((row) => row.gate.id);
       const decisions = await context.db.query.gateDecision.findMany({
         where: { gateRequestId: { in: ids } },
+        with: { socket: true },
       });
       const configured = await context.db.query.checkpoint.findMany({
         where: { projectId: { in: [...new Set(rows.map((row) => row.gate.projectId))] } },
