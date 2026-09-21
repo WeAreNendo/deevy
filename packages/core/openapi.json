@@ -6277,6 +6277,12 @@
                             "type": "string",
                             "format": "date-time",
                             "x-native-type": "date"
+                          },
+                          "hasCredentials": {
+                            "type": "boolean"
+                          },
+                          "hasWebhookSecret": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -6292,7 +6298,9 @@
                           "lastInboundAt",
                           "pollMinutes",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "hasCredentials",
+                          "hasWebhookSecret"
                         ],
                         "additionalProperties": false
                       }
@@ -6341,6 +6349,25 @@
                       "type": "string"
                     },
                     "additionalProperties": {}
+                  },
+                  "credentials": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "webhookSecret": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 500
+                  },
+                  "pollMinutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440
                   }
                 },
                 "required": [
@@ -6481,6 +6508,21 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "hasCredentials": {
+                      "type": "boolean"
+                    },
+                    "hasWebhookSecret": {
+                      "type": "boolean"
+                    },
+                    "inboundUrl": {
+                      "type": "string"
+                    },
+                    "webhookSecret": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -6496,7 +6538,652 @@
                     "lastInboundAt",
                     "pollMinutes",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "hasCredentials",
+                    "hasWebhookSecret",
+                    "inboundUrl",
+                    "webhookSecret"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/{socketId}": {
+      "post": {
+        "operationId": "sockets.update",
+        "summary": "Rename a tool, rest it, or ask it on a schedule",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused"
+                    ]
+                  },
+                  "pollMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1440
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "workspaceId": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "github",
+                        "linear",
+                        "gitlab",
+                        "notion",
+                        "slack",
+                        "stub"
+                      ]
+                    },
+                    "capabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "tracker",
+                          "forge",
+                          "docs",
+                          "chat"
+                        ]
+                      }
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "identity": {
+                      "type": "object",
+                      "properties": {
+                        "login": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "mentionHandle": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "login",
+                        "id",
+                        "mentionHandle"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "array",
+                          "items": {}
+                        }
+                      ]
+                    },
+                    "installedBy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "paused",
+                        "removed"
+                      ]
+                    },
+                    "lastInboundAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "pollMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "hasCredentials": {
+                      "type": "boolean"
+                    },
+                    "hasWebhookSecret": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workspaceId",
+                    "provider",
+                    "capabilities",
+                    "name",
+                    "identity",
+                    "config",
+                    "installedBy",
+                    "status",
+                    "lastInboundAt",
+                    "pollMinutes",
+                    "createdAt",
+                    "updatedAt",
+                    "hasCredentials",
+                    "hasWebhookSecret"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/{socketId}/rotate": {
+      "post": {
+        "operationId": "sockets.rotate",
+        "summary": "Mint a new webhook secret for a tool, and say it once",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "socket": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "workspaceId": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "github",
+                            "linear",
+                            "gitlab",
+                            "notion",
+                            "slack",
+                            "stub"
+                          ]
+                        },
+                        "capabilities": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "tracker",
+                              "forge",
+                              "docs",
+                              "chat"
+                            ]
+                          }
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "identity": {
+                          "type": "object",
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "mentionHandle": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "login",
+                            "id",
+                            "mentionHandle"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "config": {
+                          "anyOf": [
+                            {
+                              "type": [
+                                "string",
+                                "number",
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            {
+                              "type": "array",
+                              "items": {}
+                            }
+                          ]
+                        },
+                        "installedBy": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "removed"
+                          ]
+                        },
+                        "lastInboundAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "x-native-type": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "pollMinutes": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        "hasCredentials": {
+                          "type": "boolean"
+                        },
+                        "hasWebhookSecret": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "workspaceId",
+                        "provider",
+                        "capabilities",
+                        "name",
+                        "identity",
+                        "config",
+                        "installedBy",
+                        "status",
+                        "lastInboundAt",
+                        "pollMinutes",
+                        "createdAt",
+                        "updatedAt",
+                        "hasCredentials",
+                        "hasWebhookSecret"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "webhookSecret": {
+                      "type": "string"
+                    },
+                    "inboundUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "socket",
+                    "webhookSecret",
+                    "inboundUrl"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/{socketId}/containers": {
+      "get": {
+        "operationId": "sockets.containers",
+        "summary": "What a Project could be bound to inside this tool",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "containers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "scope": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "scopeKey": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "scope",
+                          "scopeKey",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "containers"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/{socketId}/test": {
+      "post": {
+        "operationId": "sockets.test",
+        "summary": "Ask the tool who deevy is there, which proves the credential still works",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "identity": {
+                      "type": "object",
+                      "properties": {
+                        "login": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "mentionHandle": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "login",
+                        "id",
+                        "mentionHandle"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "identity"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/{socketId}/inbound": {
+      "get": {
+        "operationId": "sockets.inbound",
+        "summary": "What this tool has said lately, and what deevy made of it",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deliveries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "socketId": {
+                            "type": "string"
+                          },
+                          "deliveryId": {
+                            "type": "string"
+                          },
+                          "eventName": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "received",
+                              "applied",
+                              "skipped",
+                              "failed"
+                            ]
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-native-type": "date"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "socketId",
+                          "deliveryId",
+                          "eventName",
+                          "status",
+                          "error",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "deliveries"
                   ],
                   "additionalProperties": false
                 }
@@ -6660,6 +7347,12 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "hasCredentials": {
+                      "type": "boolean"
+                    },
+                    "hasWebhookSecret": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -6675,7 +7368,9 @@
                     "lastInboundAt",
                     "pollMinutes",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "hasCredentials",
+                    "hasWebhookSecret"
                   ],
                   "additionalProperties": false
                 }
