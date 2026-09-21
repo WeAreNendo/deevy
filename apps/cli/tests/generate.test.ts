@@ -49,8 +49,10 @@ describe("what the registry turns into", () => {
 
   it("reads every input schema in the router, and names what it cannot explain", () => {
     // A field the generator cannot name is one a user has to hand-write JSON
-    // for. Four do, and an array *of* json counts — the first version of this
-    // test looked only at the field's own kind and reported one.
+    // for, and an array *of* json counts — the first version of this test
+    // looked only at the field's own kind and reported one. A binding and a
+    // Socket's configuration are both shapes a provider decides, so they are
+    // written down here rather than flattened into flags nobody could guess.
     const opaque = commands
       .filter((command) => !command.streaming)
       .flatMap((command) =>
@@ -60,9 +62,12 @@ describe("what the registry turns into", () => {
       );
     expect(opaque.sort()).toEqual([
       "preferences.set.preferences",
+      "projects.create.docs",
+      "projects.create.forge",
+      "projects.create.tracker",
       "routing.set.rules",
       "runs.postActivity.payload",
-      "workflow.update.states",
+      "sockets.connect.config",
     ]);
   });
 
@@ -89,17 +94,17 @@ describe("what the registry turns into", () => {
       .commands.find((c) => c.name() === "issues")
       ?.commands.find((c) => c.name() === "create");
     const flags = (create?.options ?? []).map((option) => option.long);
-    expect(flags).toContain("--project-key");
-    expect(flags).toContain("--assignee-member-id");
+    expect(flags).toContain("--project-slug");
+    expect(flags).toContain("--assign-agent");
     expect(flags).toContain("--json");
   });
 
   it("takes the path parameters as positionals, not as flags", () => {
-    const move = built()
+    const get = built()
       .commands.find((c) => c.name() === "issues")
-      ?.commands.find((c) => c.name() === "move");
-    expect(move?.usage()).toContain("<key>");
-    expect((move?.options ?? []).map((o) => o.long)).not.toContain("--key");
+      ?.commands.find((c) => c.name() === "get");
+    expect(get?.usage()).toContain("<issue>");
+    expect((get?.options ?? []).map((o) => o.long)).not.toContain("--issue");
   });
 
   it("offers an enum's members, so --help says what is accepted", () => {
@@ -142,11 +147,13 @@ describe("a flag's name and its value", () => {
 
 describe("the input an operation is called with", () => {
   it("puts positionals under the names the path gave them", () => {
-    const move = byOperation.get("issues.move");
-    expect(move).toBeDefined();
-    expect(inputFor(move!, ["DEV-42"], { stateId: "st_1" })).toEqual({
-      key: "DEV-42",
-      stateId: "st_1",
+    const comment = byOperation.get("comments.create");
+    expect(comment).toBeDefined();
+    // The record is named by one string, which is an id, a URL or the key the
+    // tracker wrote (ADR-0024).
+    expect(inputFor(comment!, ["acme/deevy#42"], { body: "Looks right" })).toEqual({
+      issue: "acme/deevy#42",
+      body: "Looks right",
     });
   });
 
@@ -156,15 +163,11 @@ describe("the input an operation is called with", () => {
   });
 });
 
-describe("the four the CLI cannot do", () => {
-  it("says a Gate is a Human's, and which ADRs say so", () => {
-    const approve = byOperation.get("gates.approve");
-    const said = sessionOnlyRefusal(approve!);
-    expect(said).toContain("ruled by a Human in a browser");
-    expect(said).toContain("ADR-0010");
-  });
-
-  it("gives the other pair their own reason, which is not the Gate one", () => {
+describe("the ones the CLI cannot do", () => {
+  // Ruling on a Gate is the other reason a command is refused before it is
+  // sent, and it has no operation to be refused on until a Gate is a request
+  // on a Run (docs/plans/sockets.md, slice 2).
+  it("gives the consents their own reason, which is not the Gate one", () => {
     const revoke = byOperation.get("oauthClients.revoke");
     const said = sessionOnlyRefusal(revoke!);
     expect(said).toContain("cannot list or revoke the consents that delegated it");

@@ -2,13 +2,12 @@
 /**
  * The CLI's entry.
  *
- * Five verbs are written here because the registry has nothing to generate them
- * from: signing in, signing out, saying who you are, putting a Gate in front of
- * a Human, and following the Event log. The last is an operation, but a
- * streaming one — every generated command awaits a value, and awaiting an async
- * generator as if it were one waits forever. Everything else a user can type is
- * generated (generate.ts), so an operation added to deevy is a command without
- * anybody writing one.
+ * Four verbs are written here because the registry has nothing to generate them
+ * from: signing in, signing out, saying who you are, and following the Event
+ * log. The last is an operation, but a streaming one — every generated command
+ * awaits a value, and awaiting an async generator as if it were one waits
+ * forever. Everything else a user can type is generated (generate.ts), so an
+ * operation added to deevy is a command without anybody writing one.
  */
 import { realpathSync } from "node:fs";
 import { argv } from "node:process";
@@ -16,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { addGeneratedCommands } from "./generate.ts";
 import { inkFor } from "./render.ts";
-import { openGate, signIn, signOut, whoAmI } from "./identity.ts";
+import { signIn, signOut, whoAmI } from "./identity.ts";
 import { watch } from "./watch.ts";
 import { clientFor, explain } from "./client.ts";
 import { credentialFor } from "./credentials.ts";
@@ -117,27 +116,11 @@ export function program(): Command {
       await whoAmI(originFrom(url), { json: options.json === true });
     });
 
-  cli
-    .command("gates")
-    .description("Work with gates")
-    .command("open")
-    .argument("<issue-key>", "the Issue whose Gate wants a ruling, as in DEV-42")
-    .argument("[url]", "the deevy it is in; defaults to DEEVY_URL")
-    .description("Open a Gate where it can actually be ruled: in a browser")
-    .option("--no-browser", "print the URL instead of opening it")
-    .option("--web-url <origin>", "where the SPA is, if it is not where the API is")
-    .action(
-      (
-        issueKey: string,
-        url: string | undefined,
-        options: { browser: boolean; webUrl?: string },
-      ) => {
-        openGate(webOriginFrom(options.webUrl, url), issueKey, {
-          openBrowser: options.browser,
-        });
-        return Promise.resolve();
-      },
-    );
+  // `gates open` is not here for one slice. It put a Gate in front of a Human
+  // by opening the Issue it was waiting in, and a Gate is not a place an Issue
+  // sits any more: it is a request on a Run, with a screen of its own at
+  // `/gates/<requestId>` (ADR-0024). The verb comes back pointed at that, taking
+  // a request id or a key, in slice 3 of docs/plans/sockets.md.
 
   cli
     .command("events")

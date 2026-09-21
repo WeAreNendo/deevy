@@ -18,7 +18,7 @@ const packages = [
   "packages/core",
   "packages/db",
   "packages/adapters",
-  "packages/editor",
+  "packages/sockets",
   "apps/web",
   "apps/server",
   "apps/agent",

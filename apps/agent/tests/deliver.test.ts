@@ -205,7 +205,13 @@ describe("what a Run delivers", () => {
       const workspace = await openWorkspace({ runId, repo });
       scratch.push(workspace.cwd);
       await writeFile(join(workspace.cwd, `${runId}.txt`), "work\n");
-      const delivered = await deliver({ workspace, forge: null, issueKey: "acme/deevy#1", runId, author });
+      const delivered = await deliver({
+        workspace,
+        forge: null,
+        issueKey: "acme/deevy#1",
+        runId,
+        author,
+      });
       branches.push(delivered?.branch ?? "");
     }
 
