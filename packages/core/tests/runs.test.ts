@@ -3,45 +3,57 @@ import { eq } from "drizzle-orm";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
   for (const close of closers.splice(0)) close();
 });
 
-/** An admin, a Project, one Issue in it, and an Agent granted that Project. */
+/**
+ * An admin, a Project bound to a tracker, one projected record, and an Agent
+ * granted that Project. A Run is one Agent's attempt on one record, so there is
+ * no arrangement smaller than this (ADR-0016, ADR-0024).
+ */
 async function workspaceWithAgent() {
   const { db, close } = testDb();
   closers.push(close);
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const asAdmin = createRouterClient(router, { context: admin });
-  const project = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
-  await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
-  const agent = await agentContext(db, { sponsor: admin.member, grants: [project.id] });
+  const { sockets } = fakeSockets();
+  const context = { ...admin, sockets };
+  const asAdmin = createRouterClient(router, { context });
+  const seeded = await seedProject(db, admin.workspace.id);
+  const issue = await seeded.record({ externalId: "1", title: "Ship the thing" });
+  const agent = await agentContext(db, { sponsor: admin.member, grants: [seeded.project.id] });
   return {
     db,
-    admin,
+    admin: context,
     asAdmin,
-    project,
+    project: seeded.project,
+    record: seeded.record,
+    issue,
     agent,
-    asAgent: createRouterClient(router, { context: agent }),
+    asAgent: createRouterClient(router, { context: { ...agent, sockets } }),
   };
 }
 
 describe("the Run lifecycle", () => {
   it("starts pending, so a triggered Run exists before the Agent says anything", async () => {
-    const { asAgent } = await workspaceWithAgent();
+    const { asAgent, issue, record } = await workspaceWithAgent();
 
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const run = await asAgent.runs.start({ issue: issue.url });
 
-    expect(run).toMatchObject({ issueKey: "DEV-1", status: "pending", trigger: "manual" });
+    expect(run).toMatchObject({
+      issueKey: issue.externalKey,
+      status: "pending",
+      trigger: "manual",
+    });
     expect(run.startedAt).toBeNull();
   });
 
   it("goes active on the first Activity, which is when the Agent actually started", async () => {
-    const { asAgent } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAgent, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
 
     const posted = await asAgent.runs.postActivity({
       runId: run.id,
@@ -55,8 +67,8 @@ describe("the Run lifecycle", () => {
   });
 
   it("waits on an elicitation, and tells the Human behind the Run that it waits", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
 
     const posted = await asAgent.runs.postActivity({
       runId: run.id,
@@ -69,15 +81,15 @@ describe("the Run lifecycle", () => {
     const { notifications } = await asAdmin.inbox.list({});
     const waiting = notifications.filter((row) => row.kind === "run_awaiting_input");
     expect(waiting).toHaveLength(1);
-    expect(waiting[0]?.issue?.key).toBe("DEV-1");
+    expect(waiting[0]?.issue?.externalKey).toBe(issue.externalKey);
     // Never the actor: the Agent asked the question, it does not need telling.
     const forTheAgent = await asAgent.inbox.list({});
     expect(forTheAgent.notifications).toHaveLength(0);
   });
 
   it("comes back to active when a Human answers, with the answer where the Agent reads", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
     await asAgent.runs.postActivity({
       runId: run.id,
       kind: "elicitation",
@@ -91,8 +103,8 @@ describe("the Run lifecycle", () => {
   });
 
   it("finishes with a summary, and tells the Human behind it once", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
     await asAgent.runs.postActivity({ runId: run.id, kind: "thought", body: "Working" });
 
     const finished = await asAgent.runs.finish({
@@ -108,8 +120,8 @@ describe("the Run lifecycle", () => {
   });
 
   it("refuses an Agent posting into another Agent's Run", async () => {
-    const { db, admin, project, asAgent } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { db, admin, project, asAgent, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
     const other = await agentContext(db, {
       sponsor: admin.member,
       grants: [project.id],
@@ -123,10 +135,10 @@ describe("the Run lifecycle", () => {
   });
 
   it("lists Runs by Issue and by Agent, newest first", async () => {
-    const { db, asAdmin, agent, asAgent } = await workspaceWithAgent();
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Second thing" });
-    const older = await asAgent.runs.start({ issueKey: "DEV-1" });
-    const newer = await asAgent.runs.start({ issueKey: "DEV-2" });
+    const { db, asAdmin, agent, asAgent, issue, record } = await workspaceWithAgent();
+    const second = await record({ externalId: "2", title: "Second thing" });
+    const older = await asAgent.runs.start({ issue: issue.url });
+    const newer = await asAgent.runs.start({ issue: second.url });
     // Two Runs a millisecond apart order by whatever the clock did; an hour
     // apart says what "newest first" means.
     await db
@@ -134,17 +146,20 @@ describe("the Run lifecycle", () => {
       .set({ createdAt: new Date(Date.now() - 3_600_000) })
       .where(eq(run.id, older.id));
 
-    const onTheIssue = await asAgent.runs.list({ issueKey: "DEV-1" });
+    const onTheIssue = await asAgent.runs.list({ issue: issue.url });
     const byTheAgent = await asAgent.runs.list({ agentMemberId: agent.member.id });
 
     expect(onTheIssue.runs.map((row) => row.id)).toEqual([older.id]);
     expect(byTheAgent.runs.map((row) => row.id)).toEqual([newer.id, older.id]);
-    expect(byTheAgent.runs.map((row) => row.issueKey)).toEqual(["DEV-2", "DEV-1"]);
+    expect(byTheAgent.runs.map((row) => row.issueKey)).toEqual([
+      second.externalKey,
+      issue.externalKey,
+    ]);
   });
 
   it("gives one Run with its Activities in the order they happened", async () => {
-    const { db, asAdmin, asAgent } = await workspaceWithAgent();
-    const started = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { db, asAdmin, asAgent, issue, record } = await workspaceWithAgent();
+    const started = await asAgent.runs.start({ issue: issue.url });
     const thought = await asAgent.runs.postActivity({
       runId: started.id,
       kind: "thought",
@@ -168,7 +183,11 @@ describe("the Run lifecycle", () => {
 
     const detail = await asAdmin.runs.get({ runId: started.id });
 
-    expect(detail).toMatchObject({ id: started.id, issueKey: "DEV-1", status: "active" });
+    expect(detail).toMatchObject({
+      id: started.id,
+      issueKey: issue.externalKey,
+      status: "active",
+    });
     expect(detail.activities.map((row) => [row.kind, row.body])).toEqual([
       ["thought", "Reading the Issue"],
       ["elicitation", "Postgres or SQLite?"],
@@ -177,10 +196,10 @@ describe("the Run lifecycle", () => {
   });
 
   it("carries each Run's last three Activities and their count in the list", async () => {
-    const { db, asAdmin, asAgent } = await workspaceWithAgent();
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Second thing" });
-    const busy = await asAgent.runs.start({ issueKey: "DEV-1" });
-    const quiet = await asAgent.runs.start({ issueKey: "DEV-2" });
+    const { db, asAdmin, asAgent, issue, record } = await workspaceWithAgent();
+    const second = await record({ externalId: "2", title: "Second thing" });
+    const busy = await asAgent.runs.start({ issue: issue.url });
+    const quiet = await asAgent.runs.start({ issue: second.url });
     const posted: string[] = [];
     for (const body of ["one", "two", "three", "four", "five"]) {
       const { activity: row } = await asAgent.runs.postActivity({
@@ -198,50 +217,50 @@ describe("the Run lifecycle", () => {
         .where(eq(activity.id, id));
     }
 
-    const page = await asAdmin.runs.list({ issueKey: "DEV-1" });
+    const page = await asAdmin.runs.list({ issue: issue.url });
     expect(page.runs).toHaveLength(1);
     expect(page.runs[0]?.activityCount).toBe(5);
     expect(page.runs[0]?.lastActivities.map((row) => row.body)).toEqual(["three", "four", "five"]);
     expect(page.runs[0]?.lastActivities[0]?.createdAt).toBeInstanceOf(Date);
 
-    const empty = await asAdmin.runs.list({ issueKey: "DEV-2" });
+    const empty = await asAdmin.runs.list({ issue: second.url });
     expect(empty.runs.map((row) => [row.id, row.activityCount, row.lastActivities])).toEqual([
       [quiet.id, 0, []],
     ]);
   });
 
   it("attributes evidence to the Run that found it", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    const started = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAdmin, asAgent, issue, record } = await workspaceWithAgent();
+    const started = await asAgent.runs.start({ issue: issue.url });
 
     const link = await asAgent.links.add({
-      issueKey: "DEV-1",
+      issue: issue.url,
       url: "https://github.com/deevy/deevy/pull/7",
       runId: started.id,
     });
 
     expect(link.runId).toBe(started.id);
-    const { links } = await asAdmin.links.list({ issueKey: "DEV-1" });
+    const { links } = await asAdmin.links.list({ issue: issue.url });
     expect(links.map((row) => row.runId)).toEqual([started.id]);
   });
 
   it("keeps at most one open Run per Issue and Agent", async () => {
-    const { asAgent } = await workspaceWithAgent();
-    const first = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAgent, issue } = await workspaceWithAgent();
+    const first = await asAgent.runs.start({ issue: issue.url });
 
-    await expect(asAgent.runs.start({ issueKey: "DEV-1" })).rejects.toMatchObject({
+    await expect(asAgent.runs.start({ issue: issue.url })).rejects.toMatchObject({
       code: "CONFLICT",
     });
 
     // Finished, the Issue is free for another attempt.
     await asAgent.runs.finish({ runId: first.id, status: "failed", summary: "Out of my depth" });
-    const second = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const second = await asAgent.runs.start({ issue: issue.url });
     expect(second.status).toBe("pending");
   });
 
   it("refuses an Agent answering an elicitation, because the question is for a Human", async () => {
-    const { asAgent } = await workspaceWithAgent();
-    const started = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAgent, issue } = await workspaceWithAgent();
+    const started = await asAgent.runs.start({ issue: issue.url });
     await asAgent.runs.postActivity({
       runId: started.id,
       kind: "elicitation",
@@ -254,10 +273,10 @@ describe("the Run lifecycle", () => {
   });
 
   it("pages Runs from a cursor, showing each one once", async () => {
-    const { db, asAdmin, agent, asAgent } = await workspaceWithAgent();
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Second thing" });
-    const older = await asAgent.runs.start({ issueKey: "DEV-1" });
-    const newer = await asAgent.runs.start({ issueKey: "DEV-2" });
+    const { db, asAdmin, agent, asAgent, issue, record } = await workspaceWithAgent();
+    const second = await record({ externalId: "2", title: "Second thing" });
+    const older = await asAgent.runs.start({ issue: issue.url });
+    const newer = await asAgent.runs.start({ issue: second.url });
     await db
       .update(run)
       .set({ createdAt: new Date(Date.now() - 3_600_000) })
@@ -276,8 +295,8 @@ describe("the Run lifecycle", () => {
   });
 
   it("has started once it has spoken, even when its first word is a question", async () => {
-    const { asAgent } = await workspaceWithAgent();
-    const started = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAgent, issue } = await workspaceWithAgent();
+    const started = await asAgent.runs.start({ issue: issue.url });
 
     const posted = await asAgent.runs.postActivity({
       runId: started.id,
@@ -292,8 +311,8 @@ describe("the Run lifecycle", () => {
 
 describe("what a Human says into a Run", () => {
   it("is a prompt, not the Agent's own response, so a ported agent can tell them apart", async () => {
-    const { asAgent, asAdmin } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAgent, asAdmin, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
     await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which repo?" });
 
     await asAdmin.runs.answer({ runId: run.id, body: "the deevy one" });
@@ -304,8 +323,8 @@ describe("what a Human says into a Run", () => {
   });
 
   it("is a word only a Human may use", async () => {
-    const { asAgent } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
+    const { asAgent, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
 
     // TypeScript already refuses this, which is why the cast is here: the
     // callers that are not typechecked are the ones that matter, an MCP tool
@@ -320,251 +339,13 @@ describe("what a Human says into a Run", () => {
   });
 });
 
-describe("runs.requestApproval", () => {
-  it("waits on the Gate the Issue is in, with the deevy URL a Human clicks", async () => {
-    const { asAdmin, asAgent, project } = await workspaceWithAgent();
-    // Intent and Spec approved, so DEV-1 sits in the Plan Gate.
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.postActivity({ runId: run.id, kind: "action", body: "Wrote the plan" });
-    const plan = project.states.find((state) => state.name === "Plan")!;
-
-    const asked = await asAgent.runs.requestApproval({ runId: run.id });
-
-    expect(asked).toMatchObject({ status: "awaiting", stateId: plan.id, stateName: "Plan" });
-    expect(asked.url).toBe(`https://deevy.test/issues/DEV-1?gate=${plan.id}`);
-    expect(asked.run.status).toBe("awaiting_input");
-
-    const feed = await asAgent.runs.get({ runId: run.id });
-    const elicitation = feed.activities.findLast((row) => row.kind === "elicitation");
-    expect(elicitation?.payload).toMatchObject({ gateStateId: plan.id, url: asked.url });
-  });
-
-  /**
-   * The link is for a Human's browser, which is not always where the API
-   * answers: in the `dev` loop and on a split-origin deployment the SPA is a
-   * second port, and a Gate link built on the API's own origin lands on a
-   * server that serves no page (docs/plans/sign-in.md).
-   */
-  it("builds that URL on the SPA's origin when this deployment gives it one", async () => {
-    const { db, asAdmin, agent, project } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const split = createRouterClient(router, {
-      context: { ...agent, webURL: "https://app.deevy.test/" },
-    });
-    const run = await split.runs.start({ issueKey: "DEV-1" });
-    await split.runs.postActivity({ runId: run.id, kind: "action", body: "Wrote the plan" });
-    const plan = project.states.find((state) => state.name === "Plan")!;
-
-    const asked = await split.runs.requestApproval({ runId: run.id });
-
-    // The trailing slash is the operator's, not the link's.
-    expect(asked.url).toBe(`https://app.deevy.test/issues/DEV-1?gate=${plan.id}`);
-    const activities = await db.query.activity.findMany({ where: { runId: run.id } });
-    expect(activities.find((row) => row.kind === "elicitation")?.payload).toMatchObject({
-      url: asked.url,
-    });
-  });
-
-  it("says a Gate that names nobody is any Human's to decide, not nobody's", async () => {
-    const { db, asAdmin, asAgent } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-
-    const asked = await asAgent.runs.requestApproval({ runId: run.id });
-
-    // The answer says the rule rather than leaving it to be inferred from an
-    // empty list. An Agent reading one saw "nobody was asked" and reported
-    // that the request would sit there for ever; every active Human was in
-    // fact notified (docs/plans/m3.md).
-    expect(asked.approvers).toEqual({ kind: "any_human" });
-    const told = await db.query.notification.findMany({ where: { kind: "gate_awaiting" } });
-    expect(told.length).toBeGreaterThan(0);
-  });
-
-  it("tells the Agent when its Gate is decided, so its inbox is worth polling", async () => {
-    const { db, asAdmin, asAgent, agent } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-
-    await asAdmin.gates.approve({ key: "DEV-1", note: "Go on then" });
-
-    // ADR-0003 says an Agent without a webhook polls its inbox. Until now the
-    // one thing it waits for never landed there: the inbox carried assignment
-    // and mention, and a Gate ruling reached it only if it thought to call
-    // runs.list again (docs/plans/m3.md).
-    const inbox = await asAgent.inbox.list({});
-    const answered = inbox.notifications.filter((row) => row.kind === "run_answered");
-    expect(answered).toHaveLength(1);
-    expect(answered[0]?.recipientMemberId).toBe(agent.member.id);
-
-    // And the Run is live again, which is what the Agent acts on.
-    const resumed = await asAgent.runs.get({ runId: run.id });
-    expect(resumed.status).toBe("active");
-
-    // The Human who decided it is not told about their own decision.
-    const told = await db.query.notification.findMany({ where: { kind: "run_answered" } });
-    expect(told.map((row) => row.recipientMemberId)).toEqual([agent.member.id]);
-  });
-
-  it("says which Gate it waits on, and what was ruled, in the Events it appends", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-    await asAdmin.gates.approve({ key: "DEV-1", note: "Go on then" });
-
-    // The inbox and the log render these without reading the Gate again, so
-    // the Event names the State and, once decided, says which way.
-    const { events } = await asAdmin.events.list({ subjectType: "run", subjectId: run.id });
-    expect(events.find((event) => event.kind === "run.awaiting_input")?.payload).toMatchObject({
-      issueId: expect.any(String),
-      state: "Plan",
-    });
-    expect(events.find((event) => event.kind === "run.answered")?.payload).toMatchObject({
-      ruling: "approved",
-      state: "Plan",
-      note: "Go on then",
-    });
-  });
-
-  it("carries a rejection the same way, and a plain answer carries no ruling", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-    await asAdmin.gates.reject({ key: "DEV-1" });
-
-    const { events } = await asAdmin.events.list({ subjectType: "run", subjectId: run.id });
-    expect(events.find((event) => event.kind === "run.answered")?.payload).toEqual({
-      issueId: expect.any(String),
-      gateStateId: expect.any(String),
-      ruling: "rejected",
-      state: "Plan",
-      note: null,
-    });
-
-    // Back in Spec now; the Agent asks a question instead, and a Human answers it.
-    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which DB?" });
-    await asAdmin.runs.answer({ runId: run.id, body: "SQLite" });
-    const answers = (await asAdmin.events.list({ subjectType: "run", subjectId: run.id })).events
-      .filter((event) => event.kind === "run.answered")
-      .map((event) => event.payload);
-    expect(answers).toHaveLength(2);
-    expect(answers[1]).not.toHaveProperty("ruling");
-    expect(answers[1]).not.toHaveProperty("state");
-    expect(answers[1]).not.toHaveProperty("note");
-  });
-
-  it("asks the Humans the Gate names, and not the Sponsor behind the Run", async () => {
-    const { db, admin, asAdmin, asAgent } = await workspaceWithAgent();
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const states = (await asAdmin.workflow.get({ projectKey: "DEV" })).states;
-    await asAdmin.workflow.update({
-      projectKey: "DEV",
-      states: states.map((current) => ({
-        id: current.id,
-        name: current.name,
-        isGate: current.isGate,
-        category: current.category,
-        approverMemberIds: current.name === "Plan" ? [bob.member.id] : [],
-      })),
-    });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-
-    const asked = await asAgent.runs.requestApproval({ runId: run.id });
-
-    expect(asked.approvers).toEqual({ kind: "named", memberIds: [bob.member.id] });
-    const told = await db.query.notification.findMany({ where: { kind: "gate_awaiting" } });
-    // Ada is the Agent's Sponsor and an admin, and is still not asked: the Gate
-    // names Bob, and a Gate decides who decides it (ADR-0004).
-    expect(told.map((row) => row.recipientMemberId)).toContain(bob.member.id);
-    expect(told.map((row) => row.recipientMemberId)).not.toContain(admin.member.id);
-    expect(await db.query.notification.findMany({ where: { kind: "run_awaiting_input" } })).toEqual(
-      [],
-    );
-  });
-
-  it("carries on once a Human decides, and is told who decided and what they said", async () => {
-    const { asAdmin, asAgent, admin } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-
-    const moved = await asAdmin.gates.approve({ key: "DEV-1", note: "Looks right" });
-    expect(moved.state.name).toBe("Build");
-
-    const answered = await asAgent.runs.requestApproval({ runId: run.id });
-    expect(answered).toMatchObject({
-      status: "approved",
-      stateName: "Plan",
-      decidedByMemberId: admin.member.id,
-      note: "Looks right",
-    });
-    expect(answered.run.status).toBe("active");
-  });
-
-  it("hears a rejection too, and the Issue going back a State does not lose it", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-
-    const sentBack = await asAdmin.gates.reject({ key: "DEV-1", note: "Thin on tests" });
-    expect(sentBack.state.name).toBe("Spec");
-
-    const answered = await asAgent.runs.requestApproval({ runId: run.id });
-    expect(answered).toMatchObject({
-      status: "rejected",
-      stateName: "Plan",
-      note: "Thin on tests",
-    });
-    expect(answered.run.status).toBe("active");
-  });
-
-  it("asks afresh about the next Gate once it has been told about the last one", async () => {
-    const { asAdmin, asAgent } = await workspaceWithAgent();
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    await asAdmin.gates.approve({ key: "DEV-1" });
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-    await asAdmin.gates.reject({ key: "DEV-1", note: "Thin on tests" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-
-    // Told, and back at work in the Spec Gate: asking again is a new question
-    // about where the Issue is now, not the old ruling repeated.
-    const next = await asAgent.runs.requestApproval({ runId: run.id });
-
-    expect(next).toMatchObject({ status: "awaiting", stateName: "Spec" });
-    expect(next.run.status).toBe("awaiting_input");
-    const feed = await asAgent.runs.get({ runId: run.id });
-    expect(feed.activities.map((row) => row.kind)).toEqual([
-      "elicitation",
-      "prompt",
-      "elicitation",
-    ]);
-    expect(feed.activities[1]?.body).toContain("Plan Gate on DEV-1 was rejected: Thin on tests");
-  });
-});
-
 describe("a Run, seen from a Human", () => {
   it("is an Agent's alone: the registry refuses a Human before the handler runs", async () => {
-    const { asAdmin } = await workspaceWithAgent();
+    const { asAdmin, issue } = await workspaceWithAgent();
 
     // The mirror of "An Agent cannot do that" (ADR-0011): one middleware, one
     // message, no per-handler check to forget (ADR-0016).
-    await expect(asAdmin.runs.start({ issueKey: "DEV-1" })).rejects.toMatchObject({
+    await expect(asAdmin.runs.start({ issue: issue.url })).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Only an Agent can do that",
     });

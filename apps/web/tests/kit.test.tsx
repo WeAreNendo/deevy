@@ -3,13 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { Shortcut, keyLabel } from "../src/components/kbd-hint.tsx";
 import { MemberChip } from "../src/components/member-chip.tsx";
 import { RunStatus } from "../src/components/run-status.tsx";
-import { StateBadge } from "../src/components/state-badge.tsx";
 import { activeScope, useShortcut, useShortcutScope } from "../src/lib/shortcuts.ts";
 
 /**
  * The leaf components every screen is built from (docs/plans/ui-redesign.md).
- * A restyle that drops the word "Gate" (a screen reader's, since the diamond is
- * the eye's) or a Member's name fails here before it fails on the Board.
+ * A restyle that drops a Member's name, or the word a Run's status is read by,
+ * fails here before it fails on a screen.
  */
 describe("MemberChip", () => {
   it("shows the name and says which kind of Member it is", () => {
@@ -33,22 +32,8 @@ describe("MemberChip", () => {
   });
 });
 
-describe("StateBadge", () => {
-  it("names a Gate, for a screen reader", () => {
-    render(<StateBadge state={{ name: "Intent", isGate: true, category: "backlog" }} />);
-    expect(screen.getByText("Intent")).toBeTruthy();
-    expect(screen.getByText("Gate")).toBeTruthy();
-  });
-
-  it("keeps quiet about a plain State", () => {
-    render(<StateBadge state={{ name: "Build", isGate: false, category: "active" }} />);
-    expect(screen.getByText("Build")).toBeTruthy();
-    expect(screen.queryByText("Gate")).toBeNull();
-  });
-});
-
 describe("RunStatus", () => {
-  it("uses the words the Issue page always used", () => {
+  it("uses the words a Run is read by", () => {
     render(<RunStatus status="awaiting_input" />);
     expect(screen.getByText("Waiting for input")).toBeTruthy();
     render(<RunStatus status="stale" />);

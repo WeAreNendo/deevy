@@ -86,10 +86,12 @@ export const issue = sqliteTable(
     index("issue_assignee_idx").on(table.assigneeMemberId),
     index("issue_parentId_idx").on(table.parentId),
     /**
-     * The Workspace-wide feed orders every visible Project's Issues by
-     * `updated_at`; without this it sorts a scan of the table on a temporary
-     * b-tree, on every Issue Event that re-runs it.
+     * The feed is ordered by when the *record* last changed, not by when deevy
+     * last synced it: a catch-up poll touches a hundred rows in one second and
+     * a reader who asked for "newest change first" did not mean that. Without
+     * the index it sorts a scan of the table on a temporary b-tree, on every
+     * Issue Event that re-runs it.
      */
-    index("issue_updatedAt_idx").on(table.updatedAt),
+    index("issue_externalUpdatedAt_idx").on(table.externalUpdatedAt),
   ],
 );

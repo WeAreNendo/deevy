@@ -144,9 +144,18 @@ export const issues = {
           url: issue.url,
           title: issue.title,
           ...(parent ? { parentKey: parent.issue.externalKey } : {}),
-          // What the Sponsor's rolled-up line is derived from: who handed what
-          // to whom (docs/plans/sub-issue-delegation.md).
-          ...(assignee ? { delegatedTo: assignee.id, delegatedBy: context.member.id } : {}),
+          /*
+           * The parent, not the Agent: a wave of sub-issues is one line about
+           * the parent, and `issueOf` points that line there because the parent
+           * is the only place the work is whole. Only an Agent's fan-out is
+           * rolled up, so what the Notification is stays a pure function of the
+           * Event row, read again hours later with no request around it
+           * (docs/plans/sub-issue-delegation.md, ADR-0003).
+           */
+          ...(parent && context.member.kind === "agent"
+            ? { delegatedTo: parent.issue.id, delegatedBy: context.member.id }
+            : {}),
+          ...(assignee ? { assignedTo: assignee.id } : {}),
           ...(external.parentLinked ? {} : { parentLinked: false }),
         },
       });
@@ -220,7 +229,7 @@ export const issues = {
       if (input.cursor !== undefined) {
         const { at, id } = parseIssueCursor(input.cursor);
         clauses.push({
-          RAW: (table) => sql`(${table.updatedAt}, ${table.id}) < (${at.getTime()}, ${id})`,
+          RAW: (table) => sql`(${table.externalUpdatedAt}, ${table.id}) < (${at.getTime()}, ${id})`,
         });
       }
       if (input.q !== undefined) clauses.push(searchClause(input.q));
@@ -245,10 +254,11 @@ export const issues = {
           ...(clauses.length > 0 ? { AND: clauses } : {}),
         },
         with: issueWith,
-        // A feed, so the newest change is first. Two changes in one millisecond
-        // would otherwise land in scan order, so the id breaks the tie the same
-        // way every time and the cursor can name both.
-        orderBy: { updatedAt: "desc", id: "desc" },
+        // A feed, so the newest change is first — the record's own change, not
+        // the moment deevy last synced it. Two changes in one millisecond would
+        // otherwise land in scan order, so the id breaks the tie the same way
+        // every time and the cursor names both.
+        orderBy: { externalUpdatedAt: "desc", id: "desc" },
         // One past the page, so `hasMore` costs no second query.
         limit: input.limit + 1,
       });
@@ -256,7 +266,7 @@ export const issues = {
       const last = rows.at(-1);
       return {
         issues: rows,
-        nextCursor: last ? `${String(last.updatedAt.getTime())}:${last.id}` : null,
+        nextCursor: last ? `${String(last.externalUpdatedAt.getTime())}:${last.id}` : null,
         hasMore: page.length > input.limit,
       };
     },

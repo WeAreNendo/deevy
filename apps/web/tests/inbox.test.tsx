@@ -1,97 +1,86 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+/** A record as a Notification carries one: the tracker's key, title and URL (ADR-0024). */
+const shipIt = {
+  id: "iss_000000001",
+  externalKey: "acme/deevy#1",
+  title: "Ship it",
+  url: "https://example.com/acme/deevy/issues/1",
+};
+const decide = {
+  id: "iss_000000002",
+  externalKey: "acme/deevy#2",
+  title: "Needs a decision",
+  url: "https://example.com/acme/deevy/issues/2",
+};
+
 const stub = vi.hoisted(() => ({
-  notifications: [
-    {
-      id: "n1",
-      kind: "assignment",
-      readAt: null,
-      createdAt: new Date(),
-      eventId: 9,
-      issue: { id: "i1", key: "DEV-1", title: "Ship it", state: { name: "Build", isGate: false } },
-      event: { kind: "issue.assigned", payload: { from: null, to: "me" }, actorMemberId: "m-ada" },
-      actor: { id: "m-ada", kind: "human", handle: "ada", user: { name: "Ada", image: null } },
-      comment: null,
-    },
-    {
-      id: "n2",
-      kind: "mention",
-      readAt: new Date(),
-      createdAt: new Date(),
-      eventId: 8,
-      issue: { id: "i1", key: "DEV-1", title: "Ship it", state: { name: "Build", isGate: false } },
-      event: { kind: "comment.created", payload: { commentId: "c1" }, actorMemberId: "m-grace" },
-      actor: {
-        id: "m-grace",
-        kind: "human",
-        handle: "grace",
-        user: { name: "Grace", image: null },
-      },
-      comment: { id: "c1", body: "Look at this before Friday, @ada" },
-    },
-    {
-      id: "n3",
-      kind: "gate_awaiting",
-      readAt: null,
-      createdAt: new Date(),
-      eventId: 7,
-      issue: {
-        id: "i2",
-        key: "DEV-2",
-        title: "Needs a decision",
-        state: { name: "Intent", isGate: true },
-      },
-      event: {
-        kind: "gate.rejected",
-        payload: { state: "Spec", to: "Intent", note: "Not yet: the ledger write is missing." },
-        actorMemberId: "m-grace",
-      },
-      actor: {
-        id: "m-grace",
-        kind: "human",
-        handle: "grace",
-        user: { name: "Grace", image: null },
-      },
-      comment: null,
-    },
-  ],
+  notifications: [] as Record<string, unknown>[],
   read: [] as unknown[],
   allRead: 0,
   /** When set, a markRead also flips readAt, as the server's list would show it. */
   persistReads: false,
 }));
 
+stub.notifications = [
+  {
+    id: "n1",
+    kind: "assignment",
+    readAt: null,
+    createdAt: new Date(),
+    eventId: 9,
+    issue: shipIt,
+    event: {
+      kind: "issue.assigned",
+      payload: { from: null, to: "me", byRouting: true },
+      actorMemberId: "m-ada",
+    },
+    actor: { id: "m-ada", kind: "human", handle: "ada", user: { name: "Ada", image: null } },
+    comment: null,
+  },
+  {
+    id: "n2",
+    kind: "mention",
+    readAt: new Date(),
+    createdAt: new Date(),
+    eventId: 8,
+    issue: shipIt,
+    event: { kind: "comment.created", payload: { commentId: "c1" }, actorMemberId: "m-grace" },
+    actor: {
+      id: "m-grace",
+      kind: "human",
+      handle: "grace",
+      user: { name: "Grace", image: null },
+    },
+    comment: { id: "c1", body: "Look at this before Friday, @ada" },
+  },
+  {
+    id: "n3",
+    kind: "gate_awaiting",
+    readAt: null,
+    createdAt: new Date(),
+    eventId: 7,
+    issue: decide,
+    event: {
+      kind: "run.awaiting_input",
+      payload: {},
+      actorMemberId: "m-planner",
+    },
+    actor: {
+      id: "m-planner",
+      kind: "agent",
+      handle: "planner",
+      user: { name: "Planner", image: null },
+    },
+    comment: null,
+  },
+];
+
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
   const { stubClient } = await import("./stub-client.ts");
-  const gateState = { id: "s1", name: "Intent", position: 0, isGate: true, category: "backlog" };
   const client = stubClient({
-    // The Issue a Gate Notification opens: in a Gate, so the ruling card shows.
-    issues: {
-      get: async ({ key }: { key: string }) => ({
-        id: key === "DEV-2" ? "i2" : "i1",
-        key,
-        number: key === "DEV-2" ? 2 : 1,
-        title: key === "DEV-2" ? "Needs a decision" : "Ship it",
-        description: null,
-        state:
-          key === "DEV-2"
-            ? gateState
-            : { ...gateState, id: "s4", name: "Build", isGate: false, category: "active" },
-        assignee: null,
-        assigneeMemberId: null,
-        parent: null,
-        parentId: null,
-        children: [],
-        gateDecisions: [],
-        labels: [],
-        closedAt: null,
-        updatedAt: new Date(),
-        createdAt: new Date(),
-        project: { id: "p1", key: "DEV", name: "deevy" },
-      }),
-    },
     inbox: {
       // Fresh rows each time: a row marked read in place would look unchanged
       // to the query's structural sharing, and the list would not re-render.
@@ -104,7 +93,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
         stub.read.push(input);
         if (stub.persistReads) {
           for (const row of stub.notifications) {
-            if (input.ids.includes(row.id)) row.readAt = new Date();
+            if (input.ids.includes(row.id as string)) row.readAt = new Date();
           }
         }
         return { read: 1 };
@@ -121,17 +110,18 @@ vi.mock("../src/lib/orpc.ts", async () => {
 const { mountAt } = await import("./mount.tsx");
 
 describe("the inbox", () => {
-  it("says who did what on which Issue, and quotes what they wrote", async () => {
+  it("says who did what on which record, and quotes what they wrote", async () => {
     await mountAt("/inbox", { memberName: "Ada" });
 
     const list = await screen.findByRole("list", { name: "Notifications" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(list).getByText("rejected the Spec Gate")).toBeTruthy();
-    expect(within(list).getByText(/the ledger write is missing/)).toBeTruthy();
+    expect(within(list).getByText("wants your ruling")).toBeTruthy();
     expect(within(list).getByText("mentioned you")).toBeTruthy();
     expect(within(list).getByText(/Look at this before Friday/)).toBeTruthy();
-    expect(within(list).getByText("assigned it to you")).toBeTruthy();
-    expect(within(list).getAllByText("Grace")).toHaveLength(2);
+    expect(within(list).getByText("routed it to you")).toBeTruthy();
+    // The key is the tracker's, and it is what names the record on every row.
+    expect(within(list).getAllByText("acme/deevy#1")).toHaveLength(2);
+    expect(within(list).getByText("acme/deevy#2")).toBeTruthy();
   });
 
   it("offers Mark read only on the ones still unread", async () => {
@@ -149,8 +139,8 @@ describe("the inbox", () => {
     await mountAt("/inbox", { memberName: "Ada" });
 
     await screen.findByRole("list", { name: "Notifications" });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select assigned it to you" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select rejected the Spec Gate" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select routed it to you" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select wants your ruling" }));
     const bar = screen.getByRole("toolbar", { name: "Selection" });
     expect(within(bar).getByText("2 selected")).toBeTruthy();
 
@@ -166,18 +156,17 @@ describe("the inbox", () => {
     await waitFor(() => expect(stub.allRead).toBeGreaterThan(0));
   });
 
-  it("opens the Issue a Notification is about beside the list, marks it read, and puts the Gate in front", async () => {
+  it("marks a row read when it is opened, and keeps the right pane waiting", async () => {
     await mountAt("/inbox", { memberName: "Ada" });
 
     const list = await screen.findByRole("list", { name: "Notifications" });
-    fireEvent.click(within(list).getByText("rejected the Spec Gate"));
+    fireEvent.click(within(list).getByText("wants your ruling"));
 
     // Reading is what was owed, so opening marks it read.
     await waitFor(() => expect(stub.read).toContainEqual({ ids: ["n3"] }));
-    // The Issue, with the ruling card and the banner a Gate Notification earns.
-    expect(await screen.findByRole("button", { name: "Approve" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
-    expect(await screen.findByText(/Waiting on your ruling/)).toBeTruthy();
+    // Nothing is rendered beside the list: the ruling screen arrives with the
+    // Gate as a request on a Run (docs/plans/sockets.md, slices 2 and 3).
+    expect(screen.getByText("Pick a Notification")).toBeTruthy();
   });
 
   it("shows only what is unread when asked", async () => {
@@ -201,7 +190,7 @@ describe("the inbox", () => {
       expect(within(list).getAllByRole("listitem")).toHaveLength(3);
 
       const reads = stub.read.length;
-      fireEvent.click(within(list).getByText("rejected the Spec Gate"));
+      fireEvent.click(within(list).getByText("wants your ruling"));
       await waitFor(() => expect(stub.read).toHaveLength(reads + 1));
       // Read now, so gone from the filtered list.
       await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2));

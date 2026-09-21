@@ -1,70 +1,35 @@
 import { describe, expect, it } from "vite-plus/test";
 import { describeNotification } from "../src/lib/notification-text.ts";
 
-const issue = { state: { name: "Intent" } };
+/** The record a row is about, as the tracker writes it (ADR-0024). */
+const issue = { externalKey: "acme/deevy#42", title: "Refunds go back to the card" };
 
 describe("describeNotification", () => {
-  it("names the Gate and quotes the note on a ruling", () => {
+  it("says whether a Human named you or deevy's routing did", () => {
     expect(
       describeNotification({
-        kind: "gate_awaiting",
+        kind: "assignment",
         issue,
-        event: {
-          kind: "gate.rejected",
-          payload: { state: "Spec", to: "Intent", note: "Not yet." },
-        },
+        event: { kind: "issue.assigned", payload: { to: "m", byRouting: true } },
       }),
-    ).toEqual({ verb: "rejected the Spec Gate", excerpt: "Not yet.", tone: "gate" });
+    ).toEqual({ verb: "routed it to you", excerpt: null, tone: "human" });
     expect(
       describeNotification({
-        kind: "gate_awaiting",
+        kind: "assignment",
         issue,
-        event: { kind: "gate.approved", payload: { state: "Intent", to: "Spec", note: null } },
+        event: { kind: "issue.assigned", payload: { to: "m" } },
       }).verb,
-    ).toBe("approved the Intent Gate → Spec");
+    ).toBe("assigned it to you");
   });
 
-  it("says which Gate an Issue arrived in", () => {
+  it("says a Gate wants a ruling", () => {
     expect(
       describeNotification({
         kind: "gate_awaiting",
         issue,
-        event: { kind: "issue.moved", payload: { from: "Build", to: "Review" } },
-      }).verb,
-    ).toBe("moved it into the Review Gate");
-    expect(
-      describeNotification({
-        kind: "gate_awaiting",
-        issue,
-        event: { kind: "issue.created", payload: {} },
-      }).verb,
-    ).toBe("created it in the Intent Gate");
-  });
-
-  it("names the Gate from the Event, not from where the Issue is now", () => {
-    // The Issue has moved on to Intent; the Event remembers where it was created.
-    expect(
-      describeNotification({
-        kind: "gate_awaiting",
-        issue,
-        event: { kind: "issue.created", payload: { key: "DEV-9", state: "Triage" } },
-      }).verb,
-    ).toBe("created it in the Triage Gate");
-    expect(
-      describeNotification({
-        kind: "gate_awaiting",
-        issue,
-        event: { kind: "run.awaiting_input", payload: { gateStateId: "s2", state: "Review" } },
+        event: { kind: "run.awaiting_input", payload: {} },
       }),
-    ).toEqual({ verb: "is waiting at the Review Gate", excerpt: null, tone: "gate" });
-    // Without the name, the Issue's current State is the best there is.
-    expect(
-      describeNotification({
-        kind: "gate_awaiting",
-        issue,
-        event: { kind: "run.awaiting_input", payload: { gateStateId: "s2" } },
-      }).verb,
-    ).toBe("is waiting at the Intent Gate");
+    ).toEqual({ verb: "wants your ruling", excerpt: null, tone: "gate" });
   });
 
   it("tells an Agent's Sponsor what was answered: a ruling by name, or a plain answer", () => {
@@ -72,13 +37,10 @@ describe("describeNotification", () => {
       describeNotification({
         kind: "run_answered",
         issue,
-        event: {
-          kind: "run.answered",
-          payload: { gateStateId: "s1", ruling: "rejected", state: "Spec", note: "Not yet." },
-        },
+        event: { kind: "run.answered", payload: { ruling: "rejected", note: "Not yet." } },
       }),
     ).toEqual({
-      verb: "rejected the Spec Gate your Agent asked about",
+      verb: "rejected the Gate your Agent asked about",
       excerpt: "Not yet.",
       tone: "muted",
     });
@@ -86,10 +48,10 @@ describe("describeNotification", () => {
       describeNotification({
         kind: "run_answered",
         issue,
-        event: { kind: "run.answered", payload: { ruling: "approved", state: "Spec" } },
+        event: { kind: "run.answered", payload: { ruling: "approved" } },
       }).verb,
-    ).toBe("approved the Spec Gate your Agent asked about");
-    // A question answered is not a Gate decided.
+    ).toBe("approved the Gate your Agent asked about");
+    // A question answered is not a Gate ruled on.
     expect(
       describeNotification({
         kind: "run_answered",
@@ -130,16 +92,6 @@ describe("describeNotification", () => {
         comment: { id: "c1", body: null },
       }).excerpt,
     ).toBe("(the comment was withdrawn)");
-  });
-
-  it("says when a State rule did the assigning", () => {
-    expect(
-      describeNotification({
-        kind: "assignment",
-        issue,
-        event: { kind: "issue.assigned", payload: { to: "m", byStateRule: true } },
-      }).verb,
-    ).toBe("assigned it to you, entering Intent");
   });
 });
 

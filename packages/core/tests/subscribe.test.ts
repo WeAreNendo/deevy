@@ -237,7 +237,7 @@ describe("a stream that has to end", () => {
     const during = new Promise<{ seq: number }>((resolve, reject) => {
       setTimeout(() => {
         appendEvent(context, {
-          kind: "issue.updated",
+          kind: "issue.synced",
           subjectType: "issue",
           subjectId: newId("issue"),
         }).then(resolve, reject);
@@ -253,7 +253,7 @@ describe("a stream that has to end", () => {
 
     const second = await during;
     const third = await appendEvent(context, {
-      kind: "issue.moved",
+      kind: "issue.closed",
       subjectType: "issue",
       subjectId: newId("issue"),
     });

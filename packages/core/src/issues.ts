@@ -103,8 +103,10 @@ export async function upsertProjection(db: Db, input: ProjectionInput): Promise<
         lastSyncedAt: values.lastSyncedAt,
         updatedAt: values.updatedAt,
         // `closedAt` is reconciled with the state rather than stamped again, so
-        // a record that was already closed keeps the moment it closed.
-        closedAt: sql`case when ${issueTable.state} = 'closed' then ${issueTable.closedAt} else ${closedAt} end`,
+        // a record that was already closed keeps the moment it closed. Bound as
+        // a number: a `Date` inside a raw fragment is not something SQLite's
+        // driver will take, and the column is a `timestamp_ms` either way.
+        closedAt: sql`case when ${issueTable.state} = 'closed' then ${issueTable.closedAt} else ${closedAt === null ? null : closedAt.getTime()} end`,
       },
       // The reordering guard. Equal is allowed through: a provider that stamps
       // whole seconds says nothing about two edits inside one, and the later

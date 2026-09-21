@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createAuth } from "../src/auth.ts";
 import { betterAuthKeys } from "../src/keys.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, testDb } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -41,12 +41,21 @@ describe("the read surface", () => {
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     // With the real key store on the context, so agents.keys.list answers for
     // real rather than refusing and quietly passing this test.
+    const { sockets } = fakeSockets();
     const asAda = createRouterClient(router, {
-      context: { ...ada, apiKeys: betterAuthKeys(auth, db) },
+      context: { ...ada, sockets, apiKeys: betterAuthKeys(auth, db) },
     });
-    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+    const socket = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+    const project = await asAda.projects.create({
+      slug: "deevy",
+      name: "deevy",
+      tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
+    });
     const agent = await agentContext(db, { sponsor: ada.member, grants: [project.id] });
-    await asAda.issues.create({ projectKey: "DEV", title: "Something to read back" });
+    const issue = await asAda.issues.create({
+      projectSlug: "deevy",
+      title: "Something to read back",
+    });
 
     const issued = await betterAuthKeys(auth, db).issue({
       userId: agent.member.userId,
@@ -77,10 +86,12 @@ describe("the read surface", () => {
       "agents.list": await asAda.agents.list({}),
       "agents.keys.list": await asAda.agents.keys.list({ memberId: agent.member.id }),
       "projects.list": await asAda.projects.list({}),
-      "projects.get": await asAda.projects.get({ key: "DEV" }),
-      "workflow.get": await asAda.workflow.get({ projectKey: "DEV" }),
-      "issues.list": await asAda.issues.list({ projectKey: "DEV" }),
-      "issues.get": await asAda.issues.get({ key: "DEV-1" }),
+      "projects.get": await asAda.projects.get({ slug: "deevy" }),
+      // A Socket is a credential by definition (ADR-0024), so its read is the
+      // one this ratchet most has to cover.
+      "sockets.list": await asAda.sockets.list({}),
+      "issues.list": await asAda.issues.list({ projectSlug: "deevy" }),
+      "issues.get": await asAda.issues.get({ issue: issue.externalKey }),
       "events.list": await asAda.events.list({}),
       "inbox.list": await asAda.inbox.list({}),
       "webhooks.list": subscriptions,

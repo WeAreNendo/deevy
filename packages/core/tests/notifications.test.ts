@@ -12,7 +12,7 @@ import { routeEvent } from "../src/notifications.ts";
 import { slackMessage } from "../src/slack.ts";
 import { deliverDueChannelMessages, dueDeliveriesQuery } from "../src/work.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
 const closers: Array<() => void> = [];
@@ -22,20 +22,29 @@ afterEach(() => {
 
 const webhookUrl = "https://hooks.slack.example/services/T000/B000/xxx";
 
-/** An admin, a second Human to be notified, and a Project whose first State is a Gate. */
+/**
+ * An admin, a second Human to be notified, and a Project bound to a tracker
+ * Socket with one record projected from it (ADR-0024).
+ *
+ * A mention is the Event these tests route: it is the one a Human writes, it
+ * reaches as many Humans as the body names, and it is what tells a room full of
+ * them that something happened.
+ */
 async function workspace() {
   const { db, close } = testDb();
   closers.push(close);
   const alice = await memberContext(db, { role: "admin", name: "Alice" });
   const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-  const asAlice = createRouterClient(router, { context: alice });
-  const project = await asAlice.projects.create({ name: "deevy", key: "DEV" });
-  return { db, alice, bob, asAlice, project, workspaceId: alice.workspace.id };
+  const { sockets } = fakeSockets();
+  const asAlice = createRouterClient(router, { context: { ...alice, sockets } });
+  const { project, record } = await seedProject(db, alice.workspace.id);
+  const issue = await record({ externalId: "1", title: "Ship the thing" });
+  return { db, alice, bob, asAlice, project, issue, sockets, workspaceId: alice.workspace.id };
 }
 
 interface SlackChannelOptions {
   workspaceId: string;
-  kind?: "gate_awaiting" | "run_finished" | null;
+  kind?: "mention" | "run_finished" | null;
   projectId?: string | null;
 }
 

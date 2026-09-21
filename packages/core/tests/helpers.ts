@@ -77,6 +77,7 @@ export interface MemberContextOptions {
   kind?: Member["kind"];
   name?: string;
   email?: string;
+  handle?: string;
 }
 
 /**
@@ -105,6 +106,9 @@ export async function memberContext(
     id: memberId,
     workspaceId: ws.id,
     userId,
+    // Every Member a real sign-in makes has one (handles.ts), and a routing
+    // label is built from it, so a fixture without one is not a Member.
+    handle: options.handle ?? name.toLowerCase(),
     role: options.role ?? "member",
     kind: options.kind ?? "human",
   });
@@ -221,9 +225,13 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
       createIssue: (scope, draft) => {
         opened += 1;
         const container = typeof scope.scopeKey === "string" ? scope.scopeKey : "acme/deevy";
-        const key = `${container}#${String(opened)}`;
+        // Prefixed, so a record this opens can never collide with one a test
+        // seeded by hand — a collision would silently update that record
+        // instead of opening a new one.
+        const externalId = `new-${String(opened)}`;
+        const key = `${container}#${externalId}`;
         const made: ExternalIssue = {
-          externalId: String(opened),
+          externalId,
           key,
           url: `https://tracker.test/${key}`,
           title: draft.title,

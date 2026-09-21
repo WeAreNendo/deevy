@@ -15,23 +15,86 @@ export interface StubOverrides {
   [namespace: string]: Record<string, StubOperation> | undefined;
 }
 
+const stamp = new Date("2026-09-20T09:00:00Z");
+
+/**
+ * The Socket every fixture here is projected from: one in-process tracker, so
+ * a Project has something to be bound to and an Issue has somewhere to have
+ * come from (ADR-0024).
+ */
+export const stubSocket = {
+  id: "sock_stub00000",
+  workspaceId: "w1",
+  provider: "stub",
+  capabilities: ["tracker", "forge"],
+  name: "Stub tracker",
+  identity: { login: "deevy[bot]", id: "1", mentionHandle: "deevy" },
+  config: {},
+  installedBy: null,
+  status: "active",
+  lastInboundAt: stamp,
+  pollMinutes: null,
+  createdAt: stamp,
+  updatedAt: stamp,
+};
+
+/** A Project as the API answers one: a binding, with no Issues and no Workflow of its own. */
+export function stubProject(slug: string, name: string, extra: Record<string, unknown> = {}) {
+  return {
+    id: `proj_${slug}`,
+    workspaceId: "w1",
+    slug,
+    name,
+    description: null,
+    trackerSocketId: stubSocket.id,
+    trackerScope: { container: slug },
+    trackerScopeKey: slug,
+    forgeSocketId: null,
+    forgeScope: null,
+    docsSocketId: null,
+    docsScope: null,
+    defaultAgentMemberId: null,
+    routing: { labelPrefix: "agent:", mention: true },
+    mirror: "gates",
+    createdAt: stamp,
+    archivedAt: null,
+    ...extra,
+  };
+}
+
+const stubbedProject = stubProject("acme-deevy", "deevy");
+
+/**
+ * An Issue as the API answers one: the projection of a record, in the tracker's
+ * own words — its key, its URL and its state (ADR-0024). deevy authors none of
+ * it, so there is nothing here a screen may edit.
+ */
 const emptyIssue = {
-  id: "stub-issue",
-  key: "DEV-0",
-  number: 0,
+  id: "iss_stub000000",
+  projectId: stubbedProject.id,
+  socketId: stubSocket.id,
+  externalId: "1",
+  externalKey: "acme/deevy#1",
+  url: "https://example.com/acme/deevy/issues/1",
   title: "Stub",
-  description: null,
-  state: { id: "stub-state", name: "Build", position: 0, isGate: false, category: "active" },
+  body: null,
+  state: "open",
+  stateName: "open",
+  assignees: [],
+  labels: [],
   assignee: null,
   assigneeMemberId: null,
+  parentExternalId: null,
   parent: null,
   parentId: null,
   children: [],
-  gateDecisions: [],
-  labels: [],
+  createdBy: null,
+  externalUpdatedAt: stamp,
+  lastSyncedAt: stamp,
+  createdAt: stamp,
+  updatedAt: stamp,
   closedAt: null,
-  updatedAt: new Date(),
-  project: { id: "stub-project", key: "DEV", name: "deevy" },
+  project: stubbedProject,
 };
 
 // The return type is deliberately loose: createTanstackQueryUtils wants a real
@@ -102,14 +165,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
         remove: async () => ({ projects: [] }),
       },
     },
-    teams: {
-      list: async () => ({ teams: [] }),
-      create: async () => ({}),
-      update: async () => ({}),
-      delete: async () => ({ deleted: true }),
-      addMember: async () => ({}),
-      removeMember: async () => ({}),
-    },
     allowlist: {
       list: async () => ({ rules: [] }),
       add: async () => ({}),
@@ -121,48 +176,22 @@ export function stubClient(overrides: StubOverrides = {}): never {
       revoke: async () => ({ id: "inv-stub" }),
       accept: async () => ({ id: "mem-stub", role: "member" }),
     },
+    sockets: {
+      list: async () => ({ sockets: [] }),
+      connect: async () => stubSocket,
+      remove: async () => ({ ...stubSocket, status: "removed" }),
+    },
     projects: {
       list: async () => ({ projects: [] }),
-      get: async () => ({
-        ...emptyIssue.project,
-        description: null,
-        team: null,
-        archivedAt: null,
-        states: [],
-      }),
-      create: async () => ({}),
-      update: async () => ({}),
-      archive: async () => ({}),
+      get: async () => stubbedProject,
+      create: async () => stubbedProject,
+      update: async () => stubbedProject,
+      archive: async () => ({ ...stubbedProject, archivedAt: stamp }),
     },
-    workflow: { get: async () => ({ states: [] }), update: async () => ({ states: [] }) },
     issues: {
-      list: async () => ({ issues: [], nextCursor: null }),
+      list: async () => ({ issues: [], nextCursor: null, hasMore: false }),
       get: async () => emptyIssue,
       create: async () => emptyIssue,
-      update: async () => emptyIssue,
-      move: async () => emptyIssue,
-      setLabels: async () => emptyIssue,
-    },
-    gates: { approve: async () => emptyIssue, reject: async () => emptyIssue },
-    labels: {
-      list: async () => ({ labels: [] }),
-      create: async () => ({}),
-      update: async () => ({}),
-      delete: async () => ({ deleted: true }),
-    },
-    documents: {
-      list: async () => ({ documents: [] }),
-      get: async () => ({
-        id: "d",
-        name: "intent",
-        currentVersion: 1,
-        version: 1,
-        body: "",
-        authorMemberId: null,
-        writtenAt: new Date("2026-09-01T10:00:00Z"),
-      }),
-      versions: async () => ({ versions: [] }),
-      write: async () => ({}),
     },
     inbox: {
       list: async () => ({ notifications: [], nextCursor: null }),
@@ -207,10 +236,7 @@ export function stubClient(overrides: StubOverrides = {}): never {
       finish: async () => ({}),
     },
     comments: {
-      list: async () => ({ comments: [] }),
       create: async () => ({}),
-      update: async () => ({}),
-      delete: async () => ({ deleted: true }),
     },
     events: {
       list: async () => ({ events: [], nextCursor: null }),
