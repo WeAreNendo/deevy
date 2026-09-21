@@ -26,6 +26,23 @@ export interface DeliverOptions {
 }
 
 /** The Agent's words as one line, or the runtime's when it left none. */
+/**
+ * The branch a Run's work is delivered on.
+ *
+ * A tracker's key is not a ref: `acme/deevy#42` would nest the branch under
+ * `deevy/acme/`, where it collides with any branch called `deevy/acme`, and a
+ * `#` is not a character to put in a ref by choice (ADR-0024). So the key is
+ * reduced to what git takes, and a key with nothing usable in it still leaves a
+ * branch named after the Run.
+ */
+export function branchFor(issueKey: string, runId: string): string {
+  const slug = issueKey
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `deevy/${slug ? `${slug}-` : ""}${runId.slice(0, 8)}`;
+}
+
 export function titleFor(issueKey: string, summary?: string): string {
   const first = (summary ?? "").trim().split("\n")[0]?.trim() ?? "";
   if (first === "") return `${issueKey}: worked by a deevy Agent`;
@@ -46,7 +63,7 @@ export async function deliver(options: DeliverOptions): Promise<Delivery | null>
   const dirty = await workspace.git(["status", "--porcelain"]);
   if (dirty === "") return null;
 
-  const branch = `deevy/${issueKey.toLowerCase()}-${runId.slice(0, 8)}`;
+  const branch = branchFor(issueKey, runId);
   const base = workspace.repo?.baseBranch ?? "main";
   // A Run that stopped at a Gate and was resumed delivers twice, from a fresh
   // clone each time. Branching from the base again would push a history the

@@ -47,7 +47,7 @@ export function NotFoundPage({
             <a> keeps its link role (the test asks for one) and Base UI has no
             native-button expectation to warn about. */}
         <Link to="/" className={buttonVariants({ variant: "outline" })}>
-          All Issues
+          Home
         </Link>
         <Link to="/inbox" className={buttonVariants({ variant: "outline" })}>
           Inbox

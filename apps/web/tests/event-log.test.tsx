@@ -127,3 +127,26 @@ describe("the Event log", () => {
     );
   });
 });
+
+describe("what the Event log offers to filter by", () => {
+  it("names only kinds and subjects something can still append", async () => {
+    const [{ kindFamilies, subjectFamilies }, source] = await Promise.all([
+      import("../src/routes/settings/events.tsx"),
+      import("../../../packages/core/src/events.ts?raw").then((module) => module.default),
+    ]);
+    const union = source.slice(
+      source.indexOf("export type EventKind ="),
+      source.indexOf("export type EventPayload"),
+    );
+    const kinds = [...union.matchAll(/\| "([a-z_]+)\.([a-z_]+)"/g)].map((match) => match[1] ?? "");
+
+    // A filter for a prefix nothing appends is a filter that always answers
+    // nothing, which reads as a bug in the log rather than in the list.
+    const offered = kindFamilies.flatMap((family) => family.prefixes);
+    expect(offered.filter((prefix) => !kinds.includes(prefix))).toEqual([]);
+    const subjects = subjectFamilies.flatMap((family) => family.types);
+    expect(subjects).toContain("socket");
+    expect(subjects).not.toContain("team");
+    expect(subjects).not.toContain("label");
+  });
+});

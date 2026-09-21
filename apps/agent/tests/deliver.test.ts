@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { deliver } from "../src/deliver.ts";
+import { deliver, branchFor } from "../src/deliver.ts";
 import { forgeFor, githubForge, githubSlug, type Forge, type PullRequest } from "../src/forge.ts";
 import { openWorkspace, type RepoConfig } from "../src/workspace.ts";
 
@@ -314,5 +314,17 @@ describe("the forge", () => {
     await expect(forge.open({ branch: "b", base: "main", title: "t", body: "y" })).rejects.toThrow(
       "Validation Failed",
     );
+  });
+});
+
+describe("the branch a Run is delivered on", () => {
+  it("is a name git will take, whatever the tracker calls the record", () => {
+    // `acme/deevy#42` is an ordinary GitHub key and a terrible ref: the slash
+    // would nest it under `deevy/acme/`, colliding with any branch called
+    // `deevy/acme`, and `#` is not a character to put in a ref by choice.
+    expect(branchFor("acme/deevy#42", "run_abcdefgh12")).toBe("deevy/acme-deevy-42-run_abcd");
+    expect(branchFor("ENG-12", "run_abcdefgh12")).toBe("deevy/eng-12-run_abcd");
+    // Nothing usable in the key still leaves a branch named after the Run.
+    expect(branchFor("###", "run_abcdefgh12")).toBe("deevy/run_abcd");
   });
 });

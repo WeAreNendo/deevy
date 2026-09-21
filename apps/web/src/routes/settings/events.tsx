@@ -27,29 +27,25 @@ const PAGE = 100;
 /** Base UI's Select wants a value for "everything"; the empty string is not one. */
 const ANY = "__any";
 
-/** The Event kinds by what they are about, so the filter reads as the log does. */
-const kindFamilies = [
-  { label: "Issues", prefixes: ["issue", "gate", "document", "comment"] },
+/**
+ * The Event kinds by what they are about, so the filter reads as the log does.
+ * A prefix nothing appends is a filter that always answers nothing, which reads
+ * as a bug in the log rather than in this list — `event-log.test.tsx` holds it
+ * against the core's own union.
+ */
+export const kindFamilies = [
+  { label: "Records", prefixes: ["issue", "comment"] },
   { label: "Runs", prefixes: ["run"] },
   {
     label: "Workspace",
-    prefixes: ["member", "invitation", "allowlist", "agent", "project", "workspace"],
+    prefixes: ["member", "invitation", "allowlist", "agent", "socket", "project", "workspace"],
   },
 ];
-const subjectFamilies = [
+export const subjectFamilies = [
   { label: "Work", types: ["issue", "run", "project"] },
   {
     label: "Workspace",
-    types: [
-      "member",
-      "invitation",
-      "allowlist_rule",
-      "team",
-      "label",
-      "channel",
-      "webhook",
-      "workspace",
-    ],
+    types: ["member", "invitation", "allowlist_rule", "socket", "channel", "webhook", "workspace"],
   },
 ];
 

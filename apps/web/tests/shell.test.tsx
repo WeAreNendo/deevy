@@ -194,3 +194,37 @@ describe("the breadcrumb in the top bar", () => {
     expect(within(nav).getByText("Event log")).toBeTruthy();
   });
 });
+
+describe("what Settings offers", () => {
+  it("lists no page that only redirects somewhere else", async () => {
+    const { settingsNav } = await import("../src/routes/settings/layout.tsx");
+    const pages = settingsNav.flatMap((group) => group.pages.map((page) => page.to));
+
+    // Teams and Labels went with the tracker (ADR-0024) and their URLs only
+    // redirect now; a navigation that offers one sends somebody in a circle.
+    expect(pages).not.toContain("/settings/teams");
+    expect(pages).not.toContain("/settings/labels");
+    expect(pages).toContain("/settings/projects");
+  });
+});
+
+describe("the way out of an empty screen", () => {
+  it("never points at a URL that redirects straight back", async () => {
+    const sources = await Promise.all(
+      [
+        import("../src/routes/settings/projects.tsx?raw"),
+        import("../src/routes/not-found.tsx?raw"),
+        import("../src/components/app-breadcrumb.tsx?raw"),
+      ].map((loaded) => loaded.then((module) => module.default as string)),
+    );
+
+    for (const source of sources) {
+      // `/projects` and `/issues/…` are redirects and dead routes now
+      // (ADR-0024). A link to one is a way out that leads nowhere.
+      expect(source).not.toMatch(/to="\/projects"/);
+      expect(source).not.toMatch(/to="\/issues/);
+      // And the words that named what is gone.
+      expect(source).not.toMatch(/All Issues|My Issues|the Workflow they move through/);
+    }
+  });
+});

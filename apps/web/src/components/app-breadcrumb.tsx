@@ -46,35 +46,10 @@ export function crumbsFor(
   const parts = pathname.split("/").filter(Boolean);
   const [head, second, third] = parts;
 
-  if (parts.length === 0) {
-    const label =
-      search.assignee === "me"
-        ? "My Issues"
-        : search.assignee === "agents:me"
-          ? "My Agents' Issues"
-          : "All Issues";
-    return search.view === "board" ? [{ label, to: "/" }, { label: "Board" }] : [{ label }];
-  }
+  // Home is what needs you; `/projects` and `/issues/…` only redirect now, so
+  // neither ever asks for a crumb (ADR-0024).
+  if (parts.length === 0) return [{ label: "Home" }];
   if (head === "inbox") return [{ label: "Inbox" }];
-  if (head === "projects") {
-    const projects: Crumb = { label: "Projects", to: "/projects" };
-    if (!second) return [projects];
-    const project: Crumb = {
-      label: projectName(second) ?? second,
-      to: "/projects/$key",
-      params: { key: second },
-    };
-    if (!third) return [projects, project];
-    return [projects, project, { label: projectTabs[third] ?? third }];
-  }
-  if (head === "issues" && second) {
-    const key = second.split("-")[0] ?? second;
-    return [
-      { label: "Projects", to: "/projects" },
-      { label: projectName(key) ?? key, to: "/projects/$key", params: { key } },
-      { label: second },
-    ];
-  }
   if (head === "settings") {
     const settings: Crumb = { label: "Settings", to: "/settings/workspace" };
     const pages = settingsNav.flatMap((group) => group.pages);
