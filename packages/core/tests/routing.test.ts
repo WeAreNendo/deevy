@@ -1,7 +1,7 @@
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
-import { memberContext, testDb } from "./helpers.ts";
+import { memberContext, testDb, seedProject } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -16,7 +16,7 @@ async function workspace() {
   const admin = await memberContext(db, { role: "admin", name: "Alice" });
   const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
   const asAdmin = createRouterClient(router, { context: admin });
-  const project = await asAdmin.projects.create({ name: "deevy", key: "DEV" });
+  const { project } = await seedProject(db, admin.workspace.id);
   const channel = await asAdmin.channels.create({ name: "#deevy", webhookUrl });
   return { db, asAdmin, asBob: createRouterClient(router, { context: bob }), project, channel };
 }

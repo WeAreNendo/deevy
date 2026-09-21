@@ -170,6 +170,9 @@ export function createApp({
     ...(webURL ? { webURL } : {}),
     secret,
     jobs,
+    // The same registry the operation surfaces get: a tool that opens a record
+    // in a tracker is refused without it (ADR-0024).
+    ...(sockets ? { sockets } : {}),
     onError: reportUnexpected,
   });
   app.all("/mcp", (c) => mcp.fetch(c.req.raw));

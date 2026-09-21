@@ -45,8 +45,7 @@ async function refsOn(repo: RepoConfig): Promise<string> {
 async function assigned() {
   const deevy = await instance();
   closers.push(deevy.close);
-  await deevy.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-  await deevy.asAda.issues.update({ key: "DEV-1", assigneeMemberId: deevy.planner.id });
+  await deevy.assign("Ship it");
   return deevy;
 }
 
@@ -133,8 +132,13 @@ describe("a session that runs its own git", () => {
 
     const pass = await runOnce({ ...work(deevy, repo), session });
 
-    expect(pass.worked[0]?.delivered?.branch).toMatch(/^deevy\/dev-1-/);
-    expect(await refsOn(repo)).toContain("refs/heads/deevy/dev-1-");
+    // Named after the attempt, from the key the tracker wrote. The shape of
+    // that name moves to the core with `runs.checkout` (docs/plans/sockets.md,
+    // slice 6), so what is asserted here is that the supervisor pushed its own
+    // branch and said which one.
+    const branch = pass.worked[0]?.delivered?.branch ?? "";
+    expect(branch.startsWith("deevy/")).toBe(true);
+    expect(await refsOn(repo)).toContain(`refs/heads/${branch}`);
   });
 
   it("never holds the credential that made the push possible", async () => {
@@ -242,7 +246,7 @@ describe("a session that runs its own git", () => {
     expect(await refsOn(repo)).not.toContain("refs/heads/deevy/");
     expect(forge.opened.map((draft) => draft.branch)).toEqual(["its-own-branch"]);
     expect(pass.worked[0]?.delivered?.branch).toBe("its-own-branch");
-    const links = await deevy.asAda.links.list({ issueKey: "DEV-1" });
+    const links = await deevy.asAda.links.list({ issue: "acme/deevy#1" });
     expect(links.links.map((link) => [link.url, link.runId])).toEqual([
       ["https://forge.test/pull/1", pass.worked[0].runId],
     ]);
@@ -269,7 +273,7 @@ describe("a session that runs its own git", () => {
     await runOnce({ ...work(deevy, repo, forge), session });
 
     expect(forge.opened[0]).toMatchObject({
-      title: "DEV-1: Added a health endpoint, and a smoke that proves it answers.",
+      title: "acme/deevy#1: Added a health endpoint, and a smoke that proves it answers.",
     });
   });
 });

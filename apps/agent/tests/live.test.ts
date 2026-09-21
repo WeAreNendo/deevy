@@ -24,7 +24,7 @@ afterEach(async () => {
 
 describe("Claude, working a real Issue", () => {
   live(
-    "reads the intent, writes the plan, and stops at the Gate",
+    "reads the record, works it, and finishes its own Run",
     async () => {
       const deevy = await instance();
       closers.push(deevy.close);
@@ -32,24 +32,16 @@ describe("Claude, working a real Issue", () => {
       closers.push(server.close);
 
       await deevy.asAda.issues.create({
-        projectKey: "DEV",
+        projectSlug: deevy.project.slug,
         title: "Give the runtime a health endpoint",
-      });
-      await deevy.asAda.documents.write({
-        issueKey: "DEV-1",
-        name: "intent",
         body: [
           "## Problem",
           "An operator cannot tell whether the runtime is alive.",
           "## Proposed outcome",
           "An HTTP endpoint that answers while the loop is running.",
         ].join("\n\n"),
+        assignAgent: deevy.planner.id,
       });
-      // Intent and Spec approved by a Human, so the Issue is in the Plan Gate and
-      // the plan Document is the work waiting (docs/agent-loop.md).
-      await deevy.asAda.gates.approve({ key: "DEV-1" });
-      await deevy.asAda.gates.approve({ key: "DEV-1" });
-      await deevy.asAda.issues.update({ key: "DEV-1", assigneeMemberId: deevy.planner.id });
 
       const config = { ...testConfig, url: server.url, key: deevy.config.key };
       const pass = await runOnce({
@@ -59,11 +51,10 @@ describe("Claude, working a real Issue", () => {
         runTimeoutMs: 10 * 60 * 1000,
       });
 
-      expect(pass.worked[0]).toMatchObject({ issueKey: "DEV-1", status: "awaiting_input" });
-      const plan = await deevy.asAda.documents.get({ issueKey: "DEV-1", name: "plan" });
-      expect(plan.body.length).toBeGreaterThan(100);
+      expect(pass.worked[0]).toMatchObject({ issueKey: "acme/deevy#1", status: "completed" });
       const feed = await deevy.asAda.runs.get({ runId: pass.worked[0].runId });
-      expect(feed.activities.map((activity) => activity.kind)).toContain("elicitation");
+      expect(feed.activities.map((activity) => activity.kind)).toContain("action");
+      expect(feed.summary?.length ?? 0).toBeGreaterThan(0);
     },
     900_000,
   );

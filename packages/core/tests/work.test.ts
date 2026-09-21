@@ -17,13 +17,12 @@ import {
   dueAgentsQuery,
   dueRunsQuery,
   dueWebhookDeliveriesQuery,
-  remindAboutGates,
   runDueWork,
   scheduledIssuesQuery,
   sweepSchedules,
   sweepStaleRuns,
 } from "../src/work.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, memberContext, testDb, seedProject, fakeSockets } from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
 const closers: Array<() => void> = [];
@@ -33,18 +32,25 @@ afterEach(() => {
 
 const MINUTE = 60_000;
 
-/** An admin, a Project with one Issue, and an Agent granted that Project. */
+/** An admin, a Project bound to a tracker with one record in it, and an Agent granted it. */
 async function workspaceWithAgent() {
   const { db, close } = testDb();
   closers.push(close);
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const asAdmin = createRouterClient(router, { context: admin });
-  const project = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
-  await asAdmin.issues.create({ projectKey: "DEV", title: "Ship the thing" });
-  const issue = await db.query.issue.findFirst({ where: { projectId: project.id } });
-  if (!issue) throw new Error("the Issue was not created");
-  const agent = await agentContext(db, { sponsor: admin.member, grants: [project.id] });
-  return { db, admin, workspaceId: admin.workspace.id, project, issue, agent };
+  const { sockets } = fakeSockets();
+  const seeded = await seedProject(db, admin.workspace.id);
+  const issue = await seeded.record({ externalId: "1", title: "Ship the thing" });
+  const agent = await agentContext(db, { sponsor: admin.member, grants: [seeded.project.id] });
+  return {
+    db,
+    admin: { ...admin, sockets },
+    asAdmin: createRouterClient(router, { context: { ...admin, sockets } }),
+    workspaceId: admin.workspace.id,
+    project: seeded.project,
+    record: seeded.record,
+    issue,
+    agent,
+  };
 }
 
 type RunStatus = "pending" | "active" | "awaiting_input" | "completed";
@@ -79,14 +85,23 @@ async function seedRuns(
     agentMemberId: where.agentMemberId,
   }));
   await db.insert(issueTable).values(
-    rows.map((row) => ({
-      id: row.issueId,
-      projectId: on.projectId,
-      number: (seeded += 1),
-      title: `Silent ${String(seeded)}`,
-      stateId: on.stateId,
-      createdBy: on.createdBy,
-    })),
+    rows.map((row) => {
+      seeded += 1;
+      const key = `acme/deevy#${String(seeded)}`;
+      return {
+        id: row.issueId,
+        projectId: on.projectId,
+        socketId: on.socketId,
+        externalId: String(seeded),
+        externalKey: key,
+        url: `https://tracker.test/${key}`,
+        title: `Silent ${String(seeded)}`,
+        state: "open" as const,
+        stateName: "Open",
+        externalUpdatedAt: new Date(),
+        createdBy: on.createdBy,
+      };
+    }),
   );
   await db.insert(runTable).values(
     rows.map((row) => ({
@@ -260,10 +275,22 @@ describe("the job queue port", () => {
   });
 });
 
-/** A second Issue in the same Project and State, straight into the table. */
-async function seedIssue(db: Db, projectId: string, stateId: string, number: number) {
+/** A second record in the same Project, straight into the table. */
+async function seedIssue(db: Db, projectId: string, socketId: string, number: number) {
   const id = newId("issue");
-  await db.insert(issueTable).values({ id, projectId, number, title: `Issue ${number}`, stateId });
+  const key = `acme/deevy#${String(number)}`;
+  await db.insert(issueTable).values({
+    id,
+    projectId,
+    socketId,
+    externalId: String(number),
+    externalKey: key,
+    url: `https://tracker.test/${key}`,
+    title: `Record ${String(number)}`,
+    state: "open",
+    stateName: "Open",
+    externalUpdatedAt: new Date(),
+  });
   return id;
 }
 
@@ -282,7 +309,7 @@ async function assignTo(db: Db, issueId: string, memberId: string | null) {
 describe("the schedule sweep", () => {
   it("starts one Run per assigned Issue when an Agent's schedule comes due, and none again", async () => {
     const { db, workspaceId, project, issue, agent } = await workspaceWithAgent();
-    const second = await seedIssue(db, project.id, issue.stateId, 2);
+    const second = await seedIssue(db, project.id, issue.socketId, 2);
     await assignTo(db, issue.id, agent.member.id);
     await assignTo(db, second, agent.member.id);
     await scheduleEvery(db, agent.member.id, 60);
@@ -352,7 +379,7 @@ describe("the schedule sweep", () => {
     const { db, workspaceId, project, issue, agent } = await workspaceWithAgent();
     await assignTo(db, issue.id, agent.member.id);
     for (let number = 2; number <= 40; number += 1) {
-      await assignTo(db, await seedIssue(db, project.id, issue.stateId, number), agent.member.id);
+      await assignTo(db, await seedIssue(db, project.id, issue.socketId, number), agent.member.id);
     }
     await scheduleEvery(db, agent.member.id, 60);
     const { counted, statements } = countingDb(db);
@@ -384,7 +411,7 @@ describe("the schedule sweep", () => {
     const { db, workspaceId, project, issue, agent } = await workspaceWithAgent();
     await assignTo(db, issue.id, agent.member.id);
     for (let number = 2; number <= 50; number += 1) {
-      await assignTo(db, await seedIssue(db, project.id, issue.stateId, number), agent.member.id);
+      await assignTo(db, await seedIssue(db, project.id, issue.socketId, number), agent.member.id);
     }
     await scheduleEvery(db, agent.member.id, 60);
     const { counted, statements } = countingDb(db);
@@ -439,11 +466,13 @@ describe("the webhook delivery sweep", () => {
   });
 
   it("is claimed by one pass only, because two of them must not POST it twice", async () => {
-    const { db, workspaceId, admin } = await workspaceWithAgent();
+    const { db, workspaceId, asAdmin, project } = await workspaceWithAgent();
     await subscribeTo(db, workspaceId);
-    const asAdmin = createRouterClient(router, { context: admin });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "First" });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Second" });
+    // Four records, so four Events are owed: one apiece now that opening one
+    // no longer creates a Document beside it (ADR-0024).
+    for (const title of ["First", "Second", "Third", "Fourth"]) {
+      await asAdmin.issues.create({ projectSlug: project.slug, title });
+    }
     const posted: string[] = [];
     const now = new Date();
     const pass = () =>
@@ -470,11 +499,10 @@ describe("the webhook delivery sweep", () => {
   });
 
   it("costs the same handful of statements whatever is owed", async () => {
-    const { db, workspaceId, admin } = await workspaceWithAgent();
+    const { db, workspaceId, asAdmin, project } = await workspaceWithAgent();
     await subscribeTo(db, workspaceId, ["issue.created"]);
-    const asAdmin = createRouterClient(router, { context: admin });
     for (let n = 0; n < 20; n += 1) {
-      await asAdmin.issues.create({ projectKey: "DEV", title: `Issue ${n}` });
+      await asAdmin.issues.create({ projectSlug: project.slug, title: `Record ${String(n)}` });
     }
     const { counted, statements } = countingDb(db);
 
@@ -492,74 +520,24 @@ describe("the webhook delivery sweep", () => {
   });
 });
 
-describe("remindAboutGates", () => {
-  it("asks the approvers again about a Gate nobody has decided, once per round", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const asAda = createRouterClient(router, { context: ada });
-    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
-    const agent = await agentContext(db, { sponsor: ada.member, grants: [project.id] });
-    const asAgent = createRouterClient(router, { context: agent });
-    await asAda.issues.create({ projectKey: "DEV", title: "Waiting on a Human" });
-
-    const run = await asAgent.runs.start({ issueKey: "DEV-1" });
-    await asAgent.runs.requestApproval({ runId: run.id });
-    // Ada has seen the Gate and moved on without deciding it, which is the
-    // whole reason the reminder exists.
-    await asAda.inbox.markAllRead({});
-    const before = (await asAda.inbox.list({})).notifications.length;
-    expect(await asAda.inbox.unreadCount({})).toMatchObject({ unread: 0 });
-
-    // Nothing has been decided and nobody has looked. A Run waiting on a Human
-    // is not stale, so the stale sweep leaves it alone for ever; without a
-    // reminder the Agent's slot on that Issue is occupied and nobody is asked
-    // again (docs/plans/m2.md, slice 6).
-    const quiet = await remindAboutGates({
-      db,
-      workspaceId: ada.workspace.id,
-      now: new Date(Date.now() + 5 * 60 * 1000),
-      silenceMs: 4 * 60 * 60 * 1000,
-    });
-    expect(quiet).toMatchObject({ scanned: 0, changed: 0 });
-    expect(await asAda.inbox.unreadCount({})).toMatchObject({ unread: 0 });
-
-    // "A Gate reminder past its silence window brings the approver's existing
-    // Notification back unread rather than writing a second one" — m3 slice 2.
-    // Which is why this counts unread rows rather than inbox rows: one row per
-    // Member per kind per Event is the schema's invariant now, so the reminder
-    // has nowhere to put a second copy and never wanted one.
-    const due = new Date(Date.now() + 5 * 60 * 60 * 1000);
-    const first = await remindAboutGates({ db, workspaceId: ada.workspace.id, now: due });
-    expect(first).toMatchObject({ scanned: 1, changed: 1 });
-    expect(await asAda.inbox.unreadCount({})).toMatchObject({ unread: 1 });
-    expect((await asAda.inbox.list({})).notifications.length).toBe(before);
-    expect(
-      (await createRouterClient(router, { context: bob }).inbox.list({})).notifications[0],
-    ).toMatchObject({ kind: "gate_awaiting" });
-
-    // Reminding is not nagging: the same round does not ask twice.
-    const second = await remindAboutGates({ db, workspaceId: ada.workspace.id, now: due });
-    expect(second).toMatchObject({ scanned: 0, changed: 0 });
-    expect((await asAda.inbox.list({})).notifications.length).toBe(before);
-  });
-});
-
 describe("Events a sweep writes", () => {
   it("are owed to a subscription like any other, though the sweep skips appendEvent", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAda = createRouterClient(router, { context: ada });
-    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
-    const agent = await agentContext(db, { sponsor: ada.member, grants: [project.id] });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const agent = await agentContext(db, { sponsor: ada.member, grants: [seeded.project.id] });
     await asAda.webhooks.create({
       url: "https://runner.example/deevy",
       secret: "whsec_the_receiver_holds_this",
     });
-    await asAda.issues.create({ projectKey: "DEV", title: "Nightly" });
-    await asAda.issues.update({ key: "DEV-1", assigneeMemberId: agent.member.id });
+    const nightly = await asAda.issues.create({
+      projectSlug: seeded.project.slug,
+      title: "Nightly",
+      assignAgent: agent.member.id,
+    });
     await db
       .update(agentTable)
       .set({ scheduleMinutes: 60 })
@@ -568,7 +546,7 @@ describe("Events a sweep writes", () => {
     // Assigning already opened a Run, and an Agent has one open Run per Issue,
     // so finish it or the schedule correctly finds nothing to do.
     const asAgent = createRouterClient(router, { context: agent });
-    const opened = await asAgent.runs.list({ issueKey: "DEV-1" });
+    const opened = await asAgent.runs.list({ issue: nightly.url });
     await asAgent.runs.finish({
       runId: opened.runs[0]?.id ?? "",
       status: "completed",
@@ -616,7 +594,7 @@ describe("one trigger's worth of background work", () => {
     await seedRuns(db, { issueId: issue.id, agentMemberId: agent.member.id }, 3, 31);
     // Work for the pass after the stale sweep, so the report saying it started
     // nothing is a fact about the abort rather than about the seed.
-    const second = await seedIssue(db, project.id, issue.stateId, 2);
+    const second = await seedIssue(db, project.id, issue.socketId, 2);
     await assignTo(db, second, agent.member.id);
     await scheduleEvery(db, agent.member.id, 60);
 

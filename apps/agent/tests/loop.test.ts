@@ -59,8 +59,7 @@ describe("the loop", () => {
         if (clock.waits.length === 2 && !assigned) {
           assigned = true;
           void (async () => {
-            await it.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-            await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+            await it.assign("Ship it");
           })();
         }
       },
@@ -83,8 +82,7 @@ describe("the loop", () => {
   it("never runs two passes at once, because there is only ever one", async () => {
     const it = await instance();
     closers.push(it.close);
-    await it.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-    await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+    await it.assign("Ship it");
     let inside = 0;
     let overlapped = false;
     const counter = stopAfter(3);
@@ -124,8 +122,7 @@ describe("the loop", () => {
   it("waits for the pass in flight before it stops", async () => {
     const it = await instance();
     closers.push(it.close);
-    await it.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-    await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+    await it.assign("Ship it");
     let finishedWorking = false;
 
     const loop = startLoop({
@@ -149,7 +146,7 @@ describe("the loop", () => {
     await loop.done;
 
     expect(finishedWorking).toBe(true);
-    expect((await it.asAda.runs.list({ issueKey: "DEV-1" })).runs[0].status).toBe("completed");
+    expect((await it.asAda.runs.list({ issue: "acme/deevy#1" })).runs[0].status).toBe("completed");
   });
 });
 
@@ -157,8 +154,7 @@ describe("stopping with a Run in flight", () => {
   it("fails the Run and says the runtime stopped, rather than leaving it silent", async () => {
     const it = await instance();
     closers.push(it.close);
-    await it.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-    await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+    await it.assign("Ship it");
     const stopping = new AbortController();
 
     const loop = startLoop({
@@ -181,7 +177,7 @@ describe("stopping with a Run in flight", () => {
     });
     await loop.done;
 
-    const run = (await it.asAda.runs.list({ issueKey: "DEV-1" })).runs[0];
+    const run = (await it.asAda.runs.list({ issue: "acme/deevy#1" })).runs[0];
     expect(run.status).toBe("failed");
     expect(run.summary).toBe("The runtime stopped while this Run was in flight");
     const feed = await it.asAda.runs.get({ runId: run.id });

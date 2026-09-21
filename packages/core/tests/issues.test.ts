@@ -156,13 +156,13 @@ describe("issues.create", () => {
     });
 
     expect(issue).toMatchObject({
-      externalKey: "acme/deevy#1",
+      externalKey: "acme/deevy#new-1",
       title: "Ship the Event log",
       state: "open",
       createdBy: admin.member.id,
       parentId: null,
     });
-    expect(issue.url).toBe("https://tracker.test/acme/deevy#1");
+    expect(issue.url).toBe("https://tracker.test/acme/deevy#new-1");
     expect(issue.projectId).toBe(project.id);
   });
 

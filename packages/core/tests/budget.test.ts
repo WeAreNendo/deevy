@@ -3,7 +3,7 @@ import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
-import { agentContext, countingDb, memberContext } from "./helpers.ts";
+import { agentContext, countingDb, memberContext, fakeSockets, seedProject } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -22,9 +22,6 @@ const d1StatementsPerInvocation = 50;
  * What creating an Issue costs today, measured rather than guessed. It buys the
  * handler's own reads and writes, `openStateDocument`'s Document and first
  * version, and `appendEvent`'s whole tail twice over — once for `issue.created`
- * and again for the `document.created` that follows it, each paying for
- * `deriveNotifications` with its routing reads and `deriveWebhookDeliveries`.
- *
  * It is a ratchet, not a target: a change that adds a query to any of those
  * fails here, on Node, long before a Worker invocation runs out of statements.
  * The count is asserted exactly rather than as a ceiling, so the test also
@@ -33,15 +30,14 @@ const d1StatementsPerInvocation = 50;
  * is happy with nothing. A change that genuinely spends fewer statements is
  * welcome and edits this number; one that spends more has to explain itself.
  *
- * It went from 22 to 24 when a Gate gained a standing (docs/plans/four-eyes-gates.md
- * slice 3): the Issue an Agent or a Human is looking at says how many Humans
- * must approve, how many could, and whether the reader is one of them, and the
- * two statements are the two eligibility questions — the approvers this Gate
- * names, and the Humans of the Workspace who are not suspended. The rulings
- * themselves cost nothing extra, because the Issue page already loads them for
- * its history. An Issue in a State that is not a Gate asks neither question.
+ * It went from 24 to 7 with the Sockets cut (ADR-0024), and the seventeen it
+ * stopped spending are all the tracker's now: no Document created beside the
+ * Issue and no version row under it, no second `appendEvent` tail for the
+ * `document.created` that followed, no State to read and no Gate standing to
+ * work out, and no numbering statement. What replaced them costs nothing here,
+ * because opening the record is a call to the Socket rather than a write.
  */
-const budget = 24;
+const budget = 7;
 
 describe(`the D1 request budget: ${String(budget)} statements, under D1's ${String(d1StatementsPerInvocation)}`, () => {
   it("is what creating an Issue with one mention, one Slack Channel and one webhook subscription costs", async () => {
@@ -50,8 +46,9 @@ describe(`the D1 request budget: ${String(budget)} statements, under D1's ${Stri
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
     await db.update(memberTable).set({ handle: "bob" }).where(eq(memberTable.id, bob.member.id));
-    const asAda = createRouterClient(router, { context: ada });
-    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const seeded = await seedProject(db, ada.workspace.id);
     const channel = await asAda.channels.create({
       name: "#deevy",
       webhookUrl: "https://hooks.slack.example/services/T000/B000/xxx",
@@ -66,13 +63,12 @@ describe(`the D1 request budget: ${String(budget)} statements, under D1's ${Stri
 
     statements.length = 0;
     await asAda.issues.create({
-      projectKey: project.key,
+      projectSlug: seeded.project.slug,
       title: "Ship the Worker",
       // A Member who exists and is findable by handle. `issues.create` never
-      // looks: only `issues.update` and `comments.create` resolve mentions, so
-      // a mention costs an Issue nothing on the way in and two queries on the
-      // next edit (packages/core/src/mentions.ts).
-      description: "@bob, the Intent Gate is yours",
+      // looks: only `comments.create` resolves mentions, so a mention costs a
+      // record nothing on the way in (packages/core/src/mentions.ts).
+      body: "@bob, the plan Checkpoint is yours",
     });
 
     expect(statements.length).toBe(budget);
@@ -93,25 +89,36 @@ describe("reading an Issue with children", () => {
     const { db, close, statements } = countingDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAda = createRouterClient(router, { context: ada });
-    await asAda.projects.create({ name: "deevy", key: "DEV" });
-    await asAda.projects.create({ name: "Operations", key: "OPS" });
-    await asAda.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
-    await asAda.issues.create({ projectKey: "OPS", title: "One child", parentKey: "DEV-1" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const other = await seedProject(db, ada.workspace.id, {
+      slug: "operations",
+      scopeKey: "acme/ops",
+    });
+    const parent = await asAda.issues.create({
+      projectSlug: seeded.project.slug,
+      title: "Checkout rewrite",
+    });
+    await asAda.issues.create({
+      projectSlug: other.project.slug,
+      title: "One child",
+      parent: parent.url,
+    });
 
     statements.length = 0;
-    await asAda.issues.get({ key: "DEV-1" });
+    await asAda.issues.get({ issue: parent.url });
     const withOne = statements.length;
 
     for (let more = 2; more <= 6; more++) {
       await asAda.issues.create({
-        projectKey: "OPS",
+        projectSlug: other.project.slug,
         title: `Child ${String(more)}`,
-        parentKey: "DEV-1",
+        parent: parent.url,
       });
     }
     statements.length = 0;
-    await asAda.issues.get({ key: "DEV-1" });
+    await asAda.issues.get({ issue: parent.url });
 
     expect(statements.length).toBe(withOne);
     expect(withOne).toBeLessThan(d1StatementsPerInvocation);
@@ -133,17 +140,20 @@ describe("reading an Issue with children", () => {
  * Fifty-two when it was written, which is over D1's cap and would have failed
  * on the Worker: the three ceilings walked the tree a row at a time, and the
  * depth an admin may raise multiplied it. Two recursive queries replaced nine,
- * and `startRun` stopped reading back a row it had just inserted.
+ * and `startRun` stopped reading back a row it had just inserted. Forty-four
+ * until the Sockets cut, which took the Document and its Event tail out of the
+ * same write.
  */
-const delegating = 44;
+const delegating = 34;
 
 describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(delegating)}`, () => {
   it("stays under D1's cap at the deepest tree the Workspace allows", async () => {
     const { db, close, statements } = countingDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAda = createRouterClient(router, { context: ada });
-    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const seeded = await seedProject(db, ada.workspace.id);
     const channel = await asAda.channels.create({
       name: "#deevy",
       webhookUrl: "https://hooks.slack.example/services/T000/B000/xxx",
@@ -158,27 +168,29 @@ describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(del
     const planner = await agentContext(db, {
       name: "Planner",
       sponsor: ada.member,
-      grants: [project.id],
+      grants: [seeded.project.id],
     });
     const builder = await agentContext(db, {
       name: "Builder",
       sponsor: ada.member,
-      grants: [project.id],
+      grants: [seeded.project.id],
     });
-    const asPlanner = createRouterClient(router, { context: planner });
+    const asPlanner = createRouterClient(router, { context: { ...planner, sockets } });
 
     // The deepest tree the default ceilings allow: a root and three below it,
     // so the next sub-issue sits where the walks are longest.
-    await asAda.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
-    await asPlanner.issues.create({ projectKey: "DEV", title: "One", parentKey: "DEV-1" });
-    await asPlanner.issues.create({ projectKey: "DEV", title: "Two", parentKey: "DEV-2" });
+    const root = await asAda.issues.create({
+      projectSlug: seeded.project.slug,
+      title: "Checkout rewrite",
+    });
+    const one = await asPlanner.issues.create({ parent: root.url, title: "One" });
+    const two = await asPlanner.issues.create({ parent: one.url, title: "Two" });
 
     statements.length = 0;
     await asPlanner.issues.create({
-      projectKey: "DEV",
+      parent: two.url,
       title: "Three",
-      parentKey: "DEV-3",
-      assigneeMemberId: builder.member.id,
+      assignAgent: builder.member.id,
     });
 
     expect(statements.length).toBe(delegating);
@@ -189,27 +201,30 @@ describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(del
     const { db, close, statements } = countingDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAda = createRouterClient(router, { context: ada });
-    const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const seeded = await seedProject(db, ada.workspace.id);
     await asAda.workspace.update({ maxDelegationDepth: 8 });
     const planner = await agentContext(db, {
       name: "Planner",
       sponsor: ada.member,
-      grants: [project.id],
+      grants: [seeded.project.id],
     });
-    const asPlanner = createRouterClient(router, { context: planner });
+    const asPlanner = createRouterClient(router, { context: { ...planner, sockets } });
 
-    await asAda.issues.create({ projectKey: "DEV", title: "Checkout rewrite" });
+    let deepest = await asAda.issues.create({
+      projectSlug: seeded.project.slug,
+      title: "Checkout rewrite",
+    });
     for (let deeper = 1; deeper <= 7; deeper++) {
-      await asPlanner.issues.create({
-        projectKey: "DEV",
+      deepest = await asPlanner.issues.create({
+        parent: deepest.url,
         title: `Level ${String(deeper)}`,
-        parentKey: `DEV-${String(deeper)}`,
       });
     }
 
     statements.length = 0;
-    await asPlanner.issues.create({ projectKey: "DEV", title: "Deepest", parentKey: "DEV-8" });
+    await asPlanner.issues.create({ parent: deepest.url, title: "Deepest" });
 
     // The whole reason the walks are two recursive queries rather than a loop:
     // `maxDelegationDepth` is a number the Settings screen invites an admin to

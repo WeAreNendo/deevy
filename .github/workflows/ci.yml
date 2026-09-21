@@ -122,7 +122,7 @@ jobs:
           key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   runtime:
-    name: Workers, D1 migrations, and the acceptance walk
+    name: Workers and D1 migrations
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -154,12 +154,13 @@ jobs:
       - name: Migrations build the schema on D1
         run: vp run db#check:d1
 
-      # M4's acceptance walk, which needs no account and no OAuth App: deevy on
-      # both deployments, a GitHub stub, a bare git repository and a stub of
-      # GitHub's pull-request API, with the real supervisor driving
-      # (docs/m4-acceptance.md).
-      - name: The reference runtime works an Issue end to end, on both deployments
-        run: vp run agent#acceptance
+      # M4's acceptance walk is out of CI for now. It walks Documents and a
+      # Gate through a Workflow, and both went with the tracker (ADR-0024);
+      # there is no honest intermediate, so it comes back — rewritten around a
+      # Socket, a Checkpoint and a Proposal — in slice 8 of
+      # docs/plans/sockets.md, and proves the milestone there.
+      # - name: The reference runtime works an Issue end to end, on both deployments
+      #   run: vp run agent#acceptance
 
   # Both images in one job: the runtime smoke needs a deevy to talk to, and
   # building that image twice in two jobs is the same minute spent twice. This
