@@ -10,13 +10,10 @@ import { agents } from "./agents.ts";
 import { allowlist } from "./allowlist.ts";
 import { channels } from "./channels.ts";
 import { comments } from "./comments.ts";
-import { documents } from "./documents.ts";
 import { events } from "./events.ts";
-import { gates } from "./gates.ts";
 import { inbox } from "./inbox.ts";
 import { invitations } from "./invitations.ts";
 import { issues } from "./issues.ts";
-import { labels } from "./labels.ts";
 import { links } from "./links.ts";
 import { members } from "./members.ts";
 import { oauthClients } from "./oauth-clients.ts";
@@ -24,10 +21,9 @@ import { preferences } from "./preferences.ts";
 import { projects } from "./projects.ts";
 import { routing } from "./routing.ts";
 import { runs } from "./runs.ts";
+import { sockets } from "./sockets.ts";
 import { health, me } from "./system.ts";
-import { teams } from "./teams.ts";
 import { webhooks } from "./webhooks.ts";
-import { workflow } from "./workflow.ts";
 import { workspace } from "./workspace.ts";
 
 export const router = {
@@ -40,13 +36,9 @@ export const router = {
   agents,
   allowlist,
   invitations,
+  sockets,
   projects,
-  teams,
   issues,
-  gates,
-  workflow,
-  documents,
-  labels,
   comments,
   links,
   inbox,
@@ -63,24 +55,20 @@ export {
   allowlist,
   channels,
   comments,
-  documents,
   events,
-  gates,
   health,
   inbox,
   invitations,
   issues,
-  labels,
   links,
   me,
   members,
   oauthClients,
   preferences,
+  sockets,
   projects,
   routing,
   runs,
-  teams,
   webhooks,
-  workflow,
   workspace,
 };

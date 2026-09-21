@@ -386,7 +386,7 @@ export const agents = {
             subjectType: "member",
             subjectId: found.id,
             projectId: project.id,
-            payload: { projectKey: project.key },
+            payload: { projectSlug: project.slug },
           });
         }
         return grantedProjects(context, found.id);

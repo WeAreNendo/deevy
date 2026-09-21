@@ -4,7 +4,6 @@ import {
   createRouter,
   createMemoryHistory,
   redirect,
-  useNavigate,
 } from "@tanstack/react-router";
 
 declare module "@tanstack/react-router" {
@@ -14,24 +13,16 @@ declare module "@tanstack/react-router" {
   }
 }
 import { dropInvitation } from "./lib/invitation.ts";
-import { parseIssuesSearch, type IssuesSearch } from "./components/issue-filters.tsx";
-import { IssuesPage } from "./routes/issues/list.tsx";
-import { ProjectsPage } from "./routes/projects/projects.tsx";
+import { HomePage } from "./routes/home.tsx";
 import { ConsentPage } from "./routes/consent.tsx";
 import { TokensPage } from "./routes/dev/tokens.tsx";
 import { InboxPage, parseInboxSearch } from "./routes/inbox.tsx";
 import { NotFoundPage } from "./routes/not-found.tsx";
-import { IssuePage } from "./routes/issues/issue.tsx";
-import { BoardPage } from "./routes/projects/board.tsx";
-import { ProjectIssuesTab, ProjectLayout } from "./routes/projects/project.tsx";
 import { ProjectsSettingsPage } from "./routes/settings/projects.tsx";
-import { WorkflowPage } from "./routes/projects/workflow.tsx";
 import { ChannelsPage } from "./routes/settings/channels.tsx";
 import { EventLogPage } from "./routes/settings/events.tsx";
-import { LabelsPage } from "./routes/settings/labels.tsx";
 import { SettingsLayout } from "./routes/settings/layout.tsx";
 import { NotificationsPage } from "./routes/settings/notifications.tsx";
-import { TeamsPage } from "./routes/settings/teams.tsx";
 import { WebhooksPage } from "./routes/settings/webhooks.tsx";
 import { WorkspacePage } from "./routes/settings/workspace.tsx";
 import { McpClientsPage } from "./routes/settings/mcp-clients.tsx";
@@ -52,69 +43,27 @@ const rootRoute = createRootRouteWithContext<ShellProps>()({
   notFoundComponent: () => <NotFoundPage />,
 });
 
-// Home is the Issues you may see; the filters and the peek ride in the URL, so
-// a view is a link and Back undoes a filter (docs/plans/ui-redesign.md slice 2).
+// Home is what needs you. The Issue list and the board went with the tracker
+// (ADR-0024); what a Human opens deevy for is a Gate and a Run.
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  validateSearch: (search: Record<string, unknown>) => parseIssuesSearch(search),
-  component: function Issues() {
-    const search = indexRoute.useSearch();
-    const navigate = indexRoute.useNavigate();
-    return (
-      <IssuesPage
-        search={search}
-        onSearch={(patch) =>
-          void navigate({
-            search: (previous) => parseIssuesSearch({ ...previous, ...patch }),
-          })
-        }
-      />
-    );
-  },
+  component: HomePage,
 });
+// A Project is a binding now, not a place with Issues in it, so both of its
+// old URLs land where that binding is edited and links in the wild keep working.
 const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects",
-  component: ProjectsPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/projects" });
+  },
 });
-// A Project is a layout route: header and tabs, with each tab a child so it is
-// linkable alone. The Issue filters and the peek ride on the layout's search,
-// so the Issues tab and the Board share them (docs/plans/ui-redesign.md).
 const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects/$key",
-  validateSearch: (search: Record<string, unknown>) => parseIssuesSearch(search),
-  component: function Project() {
-    return <ProjectLayout projectKey={projectRoute.useParams().key} />;
-  },
-});
-function useProjectSearch() {
-  const search = projectRoute.useSearch();
-  // The router's own navigate, not the layout route's: a route's navigate takes
-  // its path as `from`, and a tab writing its search would land on the layout —
-  // the Board losing "/board" the moment a peek opened. `to: "."` is where we are.
-  const navigate = useNavigate();
-  const onSearch = (patch: Partial<IssuesSearch>) =>
-    void navigate({
-      to: ".",
-      search: (previous) =>
-        parseIssuesSearch({ ...(previous as Record<string, unknown>), ...patch }) as never,
-    });
-  return { search, onSearch };
-}
-const projectIssuesRoute = createRoute({
-  getParentRoute: () => projectRoute,
-  path: "/",
-  component: function ProjectIssues() {
-    const { search, onSearch } = useProjectSearch();
-    return (
-      <ProjectIssuesTab
-        projectKey={projectRoute.useParams().key}
-        search={search}
-        onSearch={onSearch}
-      />
-    );
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/settings/projects", search: { project: params.key } });
   },
 });
 const inboxRoute = createRoute({
@@ -135,48 +84,6 @@ const inboxRoute = createRoute({
     );
   },
 });
-const boardRoute = createRoute({
-  getParentRoute: () => projectRoute,
-  path: "board",
-  component: function Board() {
-    const { search, onSearch } = useProjectSearch();
-    return (
-      <BoardPage projectKey={projectRoute.useParams().key} search={search} onSearch={onSearch} />
-    );
-  },
-});
-const workflowRoute = createRoute({
-  getParentRoute: () => projectRoute,
-  path: "workflow",
-  component: function Workflow() {
-    return <WorkflowPage projectKey={projectRoute.useParams().key} />;
-  },
-});
-// Where a Project's settings used to be a tab; they are an entity's section in
-// Settings now, and links in the wild keep working.
-const projectSettingsRoute = createRoute({
-  getParentRoute: () => projectRoute,
-  path: "settings",
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: "/settings/projects", search: { project: params.key } });
-  },
-});
-// Where the Workflow editor used to live; links in the wild keep working.
-const oldWorkflowRoute = createRoute({
-  getParentRoute: () => projectRoute,
-  path: "settings/workflow",
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: "/projects/$key/workflow", params: { key: params.key } });
-  },
-});
-const issueRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/issues/$issueKey",
-  component: function Issue() {
-    return <IssuePage issueKey={issueRoute.useParams().issueKey} />;
-  },
-});
-
 // The Settings area: one layout route with its own navigation, and the pages
 // as its children so `/settings/<page>` keeps every URL it had.
 const settingsRoute = createRoute({
@@ -197,27 +104,20 @@ const workspaceRoute = createRoute({
   path: "workspace",
   component: WorkspacePage,
 });
+// Teams and Labels were deevy's own; a tracker's are its own (ADR-0024). Both
+// URLs land where what replaced them is, so links in the wild keep working.
 const teamsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "teams",
-  // `?team=` names the open Team, so one is a link and Back undoes a selection.
-  validateSearch: (search: Record<string, unknown>) =>
-    typeof search.team === "string" && search.team ? { team: search.team } : {},
-  component: function Teams() {
-    const { team } = teamsRoute.useSearch();
-    const navigate = teamsRoute.useNavigate();
-    return (
-      <TeamsPage
-        selected={team ?? null}
-        onSelect={(next) => void navigate({ search: () => (next ? { team: next } : {}) })}
-      />
-    );
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/members" });
   },
 });
 const projectsSettingsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "projects",
-  // `?project=` names the Project being configured, the way `?team=` does.
+  // `?project=` names the Project being configured, and is where a link to the
+  // old `/projects/<slug>` lands.
   validateSearch: (search: Record<string, unknown>) =>
     typeof search.project === "string" && search.project ? { project: search.project } : {},
   component: function ProjectsSettings() {
@@ -234,7 +134,9 @@ const projectsSettingsRoute = createRoute({
 const labelsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "labels",
-  component: LabelsPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/projects" });
+  },
 });
 const membersRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -318,14 +220,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   projectsRoute,
   inboxRoute,
-  projectRoute.addChildren([
-    projectIssuesRoute,
-    boardRoute,
-    workflowRoute,
-    projectSettingsRoute,
-    oldWorkflowRoute,
-  ]),
-  issueRoute,
+  projectRoute,
   settingsRoute.addChildren([
     settingsIndexRoute,
     workspaceRoute,

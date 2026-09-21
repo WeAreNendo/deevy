@@ -6,7 +6,7 @@ import { IssueLinkSchema } from "../schemas.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import { defineOperation } from "./registry.ts";
-import { assertProjectVisible, requireIssue, requireRun } from "./shared.ts";
+import { assertProjectVisible, requireRun, resolveIssueRef } from "./shared.ts";
 import { newId } from "../ids.ts";
 
 export const links = {
@@ -14,14 +14,17 @@ export const links = {
     name: "links.list",
     summary: "What an Issue points at",
     method: "GET",
-    path: "/issues/{issueKey}/links",
+    path: "/issues/{issue}/links",
     auth: "member",
     agents: true,
     mcp: true,
-    input: z.object({ issueKey: z.string() }),
+    input: z.object({
+      /** An `iss_` id, the record's URL, or the key the tracker wrote. */
+      issue: z.string().trim().min(1),
+    }),
     output: z.object({ links: z.array(IssueLinkSchema) }),
     handler: async ({ input, context }) => {
-      const { issue } = await requireIssue(context, input.issueKey);
+      const { issue } = await resolveIssueRef(context, input.issue);
       const rows = await context.db.query.issueLink.findMany({
         where: { issueId: issue.id },
         orderBy: { createdAt: "asc" },
@@ -34,12 +37,12 @@ export const links = {
     name: "links.add",
     summary: "Point an Issue at a pull request, a commit, a branch, or any URL",
     method: "POST",
-    path: "/issues/{issueKey}/links",
+    path: "/issues/{issue}/links",
     auth: "member",
     agents: true,
     mcp: true,
     input: z.object({
-      issueKey: z.string(),
+      issue: z.string().trim().min(1),
       url: z.url().max(2000),
       title: z.string().trim().max(300).nullish(),
       /** Derived from the URL unless given. */
@@ -49,7 +52,7 @@ export const links = {
     }),
     output: IssueLinkSchema,
     handler: async ({ input, context }) => {
-      const { issue, project } = await requireIssue(context, input.issueKey);
+      const { issue, project } = await resolveIssueRef(context, input.issue);
       if (input.runId) {
         const attributed = await requireRun(context, input.runId);
         if (attributed.run.issueId !== issue.id) {

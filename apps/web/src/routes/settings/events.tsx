@@ -188,11 +188,11 @@ export function EventLogPage() {
           return (
             <span className="flex items-center gap-2">
               <span className="text-muted-foreground">{row.subjectType}</span>
-              {project ? <span className="font-mono">{project.key}</span> : null}
+              {project ? <span className="font-mono">{project.slug}</span> : null}
               {row.subjectType === "project" && project ? (
                 <Link
                   to="/projects/$key"
-                  params={{ key: project.key }}
+                  params={{ key: project.slug }}
                   className="hover:underline"
                   onClick={(event) => event.stopPropagation()}
                 >
@@ -296,7 +296,7 @@ export function EventLogPage() {
                 {(selected: string) => {
                   if (selected === ANY) return "All Projects";
                   const project = projectById.get(selected);
-                  return project ? `${project.key} — ${project.name}` : selected;
+                  return project ? `${project.slug} — ${project.name}` : selected;
                 }}
               </SelectValue>
             </SelectTrigger>
@@ -308,7 +308,7 @@ export function EventLogPage() {
               <SelectGroup>
                 {(projects.data?.projects ?? []).map((project) => (
                   <SelectItem key={project.id} value={project.id}>
-                    {project.key} — {project.name}
+                    {project.slug} — {project.name}
                   </SelectItem>
                 ))}
               </SelectGroup>

@@ -171,16 +171,13 @@ export async function setAgentWebhook(
   });
 }
 
-/**
- * Members and Teams share one handle namespace (see handles.ts), so a rename
- * has to look in both before it lands.
- */
+/** A handle names one Member (see handles.ts), so a rename looks there. */
 export async function handleTaken(db: Db, handle: string): Promise<boolean> {
-  const [asMember, asTeam] = await Promise.all([
-    db.query.member.findFirst({ where: { handle }, columns: { id: true } }),
-    db.query.team.findFirst({ where: { handle }, columns: { id: true } }),
-  ]);
-  return Boolean(asMember || asTeam);
+  const asMember = await db.query.member.findFirst({
+    where: { handle },
+    columns: { id: true },
+  });
+  return Boolean(asMember);
 }
 
 /**

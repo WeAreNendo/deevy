@@ -1,4 +1,3 @@
-import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AtSign,
@@ -6,7 +5,6 @@ import {
   CircleCheck,
   CircleX,
   Diamond,
-  ExternalLink,
   Inbox,
   MailOpen,
   UserPlus,
@@ -16,7 +14,6 @@ import { useMemo, useState } from "react";
 import { useMaxWidth } from "@/hooks/use-max-width";
 import { Shortcut } from "@/components/kbd-hint";
 import { PageHeader } from "@/components/page-header";
-import { SidePeek } from "@/components/side-peek";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -36,7 +33,6 @@ import { orpc } from "@/lib/orpc";
 import { useShortcut } from "@/lib/shortcuts";
 import { ago } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { IssuePage } from "@/routes/issues/issue";
 
 /** How the Inbox reads its URL: the selected Notification, and whether only unread are shown. */
 export interface InboxSearch {
@@ -81,7 +77,6 @@ export function InboxPage({
   onSearch: (patch: Partial<InboxSearch>) => void;
 }) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   // Too narrow for two panes below 1024px; the preview is a peek then.
   const narrow = useMaxWidth(1024);
   const inbox = useQuery(orpc.inbox.list.queryOptions({ input: {} }));
@@ -143,12 +138,7 @@ export function InboxPage({
   useShortcut("e", () => selected && !selected.readAt && markRead.mutate({ ids: [selected.id] }));
   useShortcut("x", () => selected && togglePicked(selected.id));
   useShortcut("shift+e", () => markAllRead.mutate({}));
-  useShortcut(
-    "o",
-    () =>
-      selected?.issue &&
-      void navigate({ to: "/issues/$issueKey", params: { issueKey: selected.issue.key } }),
-  );
+  useShortcut("o", () => selected?.issue && window.open(selected.issue.url, "_blank", "noopener"));
 
   if (inbox.isError) {
     return <p className="text-destructive">Could not load your inbox: {inbox.error.message}</p>;
@@ -276,7 +266,7 @@ export function InboxPage({
                             {" "}
                             <span className="text-muted-foreground">on</span>{" "}
                             <span className="font-mono text-xs whitespace-nowrap">
-                              {notification.issue.key}
+                              {notification.issue.externalKey}
                             </span>
                           </>
                         ) : null}
@@ -316,32 +306,7 @@ export function InboxPage({
     </section>
   );
 
-  const preview = selected?.issue ? (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-2 text-sm">
-        <span className="font-mono text-muted-foreground">{selected.issue.key}</span>
-        <span className="truncate font-medium">{selected.issue.title}</span>
-        <span className="flex-1" />
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/issues/$issueKey" params={{ issueKey: selected.issue.key }} />}
-        >
-          <ExternalLink />
-          Open full page
-          <Shortcut keys="o" />
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <IssuePage
-          key={selected.issue.key}
-          issueKey={selected.issue.key}
-          focusGate={selected.kind === "gate_awaiting"}
-        />
-      </div>
-    </div>
-  ) : (
+  const preview = (
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
@@ -349,27 +314,13 @@ export function InboxPage({
         </EmptyMedia>
         <EmptyTitle>Pick a Notification</EmptyTitle>
         <EmptyDescription>
-          Choose one from the list and its Issue opens here, with whatever it needs from you up
-          front.
+          Choose one from the list, and open the record where it lives.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
 
-  if (narrow) {
-    return (
-      <>
-        {list}
-        <SidePeek
-          issueKey={selected?.issue?.key ?? null}
-          onClose={() => onSearch({ n: undefined })}
-          onOpenFull={(key) =>
-            void navigate({ to: "/issues/$issueKey", params: { issueKey: key } })
-          }
-        />
-      </>
-    );
-  }
+  if (narrow) return list;
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-full">

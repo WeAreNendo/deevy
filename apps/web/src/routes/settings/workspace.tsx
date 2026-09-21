@@ -46,7 +46,6 @@ function Identity({ canRename }: { canRename: boolean }) {
   // Both are already in cache: the shell reads them for the sidebar.
   const members = useQuery(orpc.members.list.queryOptions({ input: {} }));
   const projects = useQuery(orpc.projects.list.queryOptions({ input: {} }));
-  const teams = useQuery(orpc.teams.list.queryOptions({ input: {} }));
 
   const [draft, setDraft] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
@@ -93,10 +92,6 @@ function Identity({ canRename }: { canRename: boolean }) {
   const counts = [
     { n: humans, of: humans === 1 ? "Human" : "Humans" },
     { n: agents, of: agents === 1 ? "Agent" : "Agents" },
-    {
-      n: teams.data?.teams.length ?? 0,
-      of: (teams.data?.teams.length ?? 0) === 1 ? "Team" : "Teams",
-    },
     {
       n: projects.data?.projects.length ?? 0,
       of: (projects.data?.projects.length ?? 0) === 1 ? "Project" : "Projects",
@@ -199,7 +194,7 @@ function SetUp() {
     {
       done: (projects.data?.projects.length ?? 0) > 0,
       todo: "Create a Project so your Issues have somewhere to live",
-      action: { label: "New Project", to: "/projects" },
+      action: { label: "New Project", to: "/settings/projects" },
     },
     {
       done: (agents.data?.agents.length ?? 0) > 0,

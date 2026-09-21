@@ -7,13 +7,10 @@ import { and, count, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { allowlistRuleKinds, member as memberTable } from "@deevy/db";
 import { loadAgent } from "../agents.ts";
-import { issueKey, parseIssueKey } from "../issues.ts";
-import { ensureStateDocument } from "../documents.ts";
-import { ProjectKeyPattern } from "../projects.ts";
-import { gateStanding } from "../workflow.ts";
+import { parseIssueRef } from "../issues.ts";
+import { ProjectSlugPattern } from "../projects.ts";
 import { ORPCError } from "@orpc/server";
-import { appendEvent } from "../events.ts";
-import type { Run } from "@deevy/db";
+import type { Issue, Run } from "@deevy/db";
 import type { AppContext, ContextFor } from "./registry.ts";
 
 /** The Member an admin operation names, or NOT_FOUND. Scoped to the Workspace. */
@@ -145,14 +142,14 @@ export const AllowlistRuleInput = z
     if (!pattern.test(value)) ctx.addIssue({ code: "custom", message, path: ["value"] });
   });
 
-/** Strict on the way in: `dev` is a mistake worth reporting, not something to correct silently. */
-export const ProjectKey = z
+/** Strict on the way in: a slug is a URL handle and a typo in one is a 404 later. */
+export const ProjectSlug = z
   .string()
   .trim()
-  .regex(ProjectKeyPattern, "Two to six uppercase letters, as in DEV");
+  .regex(ProjectSlugPattern, "Lowercase letters, numbers and hyphens, as in acme-deevy");
 
-/** Lenient on the way out, so `/projects/dev` finds DEV. */
-export const ProjectKeyLookup = z.string().trim().toUpperCase().regex(ProjectKeyPattern);
+/** Lenient on the way out, so `/projects/Acme-Deevy` finds it. */
+export const ProjectSlugLookup = z.string().trim().toLowerCase().regex(ProjectSlugPattern);
 
 /**
  * A boolean in a GET input. The OpenAPI surface sends it as a query string and
@@ -184,10 +181,10 @@ export function projectVisible(context: ContextFor<"member">, projectId: string)
   return !granted || granted.includes(projectId);
 }
 
-/** The Project an operation names by key, or NOT_FOUND. Scoped to the Workspace. */
-export async function requireProject(context: ContextFor<"member">, key: string) {
+/** The Project an operation names by slug, or NOT_FOUND. Scoped to the Workspace. */
+export async function requireProject(context: ContextFor<"member">, slug: string) {
   const found = await context.db.query.project.findFirst({
-    where: { workspaceId: context.workspace.id, key },
+    where: { workspaceId: context.workspace.id, slug },
   });
   if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Project" });
   assertProjectVisible(context, found.id);
@@ -195,95 +192,61 @@ export async function requireProject(context: ContextFor<"member">, key: string)
 }
 
 /**
- * An admin, or a Member of the Team that owns the Project, may change it. A
- * Project no Team owns is the admins' to change (docs/plans/m1.md).
+ * Who may change a Project's binding. An admin: a binding names a Socket and a
+ * container, and pointing a Project at somebody else's repository is not a
+ * Project-level decision (ADR-0024). Teams used to soften this and are gone.
  */
-export async function requireProjectOrAdmin(context: ContextFor<"member">, key: string) {
-  const found = await requireProject(context, key);
+export async function requireProjectOrAdmin(context: ContextFor<"member">, slug: string) {
+  const found = await requireProject(context, slug);
   if (context.member.role === "admin") return found;
-  const onTeam = found.teamId
-    ? await context.db.query.teamMember.findFirst({
-        where: { teamId: found.teamId, memberId: context.member.id },
-      })
-    : undefined;
-  if (!onTeam) {
-    throw new ORPCError("FORBIDDEN", {
-      message: "Only an admin or a Member of the owning Team can change this Project",
-    });
-  }
-  return found;
-}
-
-/** The Team an operation names, or NOT_FOUND. Scoped to the Workspace. */
-export async function requireTeam(context: ContextFor<"member">, teamId: string) {
-  const found = await context.db.query.team.findFirst({
-    where: { id: teamId, workspaceId: context.workspace.id },
+  throw new ORPCError("FORBIDDEN", {
+    message: "Only an admin can change what a Project is bound to",
   });
-  if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Team in this Workspace" });
-  return found;
 }
 
-/** A Project with its Workflow and Team, the shape every Project operation returns. */
+/** A Project as every Project operation returns one: the row and its binding. */
 export async function loadProject(db: ContextFor<"member">["db"], id: string) {
-  const found = await db.query.project.findFirst({
-    where: { id },
-    with: { states: { orderBy: { position: "asc" } }, team: true },
-  });
+  const found = await db.query.project.findFirst({ where: { id } });
   if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Project" });
   return found;
 }
 
-/** A Team with the Members on it, the shape every Team operation returns. */
-export async function loadTeam(db: ContextFor<"member">["db"], id: string) {
-  const found = await db.query.team.findFirst({
-    where: { id },
-    with: { members: { with: { user: true } } },
-  });
-  if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Team" });
-  return found;
-}
+/** The relations every Issue shape needs loaded. State and Labels are columns now. */
+export const issueWith = { assignee: { with: { user: true } } } as const;
 
 /**
- * A Team is not a permission wall, but its own Members maintain it: an admin,
- * or someone on the Team, may change it (docs/plans/m1.md).
+ * The Issue an operation names, by id, by URL or by the tracker's key.
+ *
+ * The URL is canonical because it is what a Human pastes and what a delivery
+ * carries. A key may be ambiguous — two Sockets can both know an
+ * `acme/deevy#42` — and this refuses rather than picking one, because picking
+ * one silently is how an Agent works somebody else's Issue (ADR-0024).
  */
-export async function requireTeamOrAdmin(context: ContextFor<"member">, teamId: string) {
-  const found = await requireTeam(context, teamId);
-  if (context.member.role === "admin") return found;
-  const onTeam = await context.db.query.teamMember.findFirst({
-    where: { teamId, memberId: context.member.id },
+export async function resolveIssueRef(context: ContextFor<"member">, ref: string) {
+  const parsed = parseIssueRef(ref);
+  const rows = await context.db.query.issue.findMany({
+    where:
+      parsed.by === "id"
+        ? { id: parsed.id }
+        : parsed.by === "url"
+          ? { url: parsed.url }
+          : { externalKey: parsed.key },
+    with: { project: true },
+    limit: 2,
   });
-  if (!onTeam) {
-    throw new ORPCError("FORBIDDEN", {
-      message: "Only an admin or a Member of this Team can do that",
+  const visible = rows.filter(
+    (row) =>
+      row.project.workspaceId === context.workspace.id && projectVisible(context, row.projectId),
+  );
+  const [first, second] = visible;
+  if (!first) throw new ORPCError("NOT_FOUND", { message: `No such Issue: ${ref}` });
+  if (second) {
+    throw new ORPCError("CONFLICT", {
+      message: `Two Sockets know an Issue called ${ref}. Name it by its URL.`,
     });
   }
-  return found;
-}
-
-/** The relations every Issue shape needs loaded, and the key derived onto it. */
-export const issueWith = { state: true, assignee: { with: { user: true } }, labels: true } as const;
-
-export type LoadedIssue = { number: number; project?: { key: string } } & Record<string, unknown>;
-
-export function withKey<T extends LoadedIssue>(row: T, projectKey: string) {
-  return { ...row, key: issueKey(projectKey, row.number) };
-}
-
-/** The Issue an operation names by key, or NOT_FOUND. Scoped to the Workspace. */
-export async function requireIssue(context: ContextFor<"member">, key: string) {
-  const parsed = parseIssueKey(key);
-  if (!parsed) throw new ORPCError("NOT_FOUND", { message: "Not an Issue key" });
-  const project = await context.db.query.project.findFirst({
-    where: { workspaceId: context.workspace.id, key: parsed.projectKey },
-  });
-  if (!project) throw new ORPCError("NOT_FOUND", { message: "No such Project" });
-  assertProjectVisible(context, project.id);
-  const found = await context.db.query.issue.findFirst({
-    where: { projectId: project.id, number: parsed.number },
-  });
-  if (!found) throw new ORPCError("NOT_FOUND", { message: `No such Issue: ${key}` });
-  return { issue: found, project };
+  const { project, ...issue } = first;
+  return { issue: issue as Issue, project };
 }
 
 export async function loadIssue(context: ContextFor<"member">, id: string) {
@@ -293,16 +256,12 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
       ...issueWith,
       project: true,
       // Each related Issue with its own Project, because a tree may cross one
-      // and an Issue is called by its own name or by a lie: a key built from
-      // the wrong Project links to nothing and reads as somebody else's work
       // (docs/plans/sub-issue-delegation.md). One relation, not a query each.
       parent: { with: { ...issueWith, project: true } },
-      children: { with: { ...issueWith, project: true }, orderBy: { number: "asc" } },
-      gateDecisions: { orderBy: { createdAt: "asc" }, with: { documents: true } },
+      children: { with: { ...issueWith, project: true }, orderBy: { externalKey: "asc" } },
     },
   });
   if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Issue" });
-  const key = found.project.key;
   const shown = found.children.filter((child) => projectVisible(context, child.projectId));
   /*
    * Which children an Agent is working right now: one query for all of them,
@@ -322,35 +281,10 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
           })
         ).map((run) => run.issueId),
   );
-  // Only a Gate has a standing, and only a Gate pays for one: an Issue in Build
-  // asks nothing (docs/plans/four-eyes-gates.md).
-  const gate = found.state.isGate
-    ? await gateStanding(context.db, {
-        workspaceId: context.workspace.id,
-        issue: found,
-        state: found.state,
-        memberId: context.member.id,
-        decisions: found.gateDecisions,
-      })
-    : null;
   return {
-    ...withKey(found, key),
-    parent:
-      found.parent && projectVisible(context, found.parent.projectId)
-        ? withKey(found.parent, found.parent.project.key)
-        : null,
-    children: shown.map((child) => ({
-      ...withKey(child, child.project.key),
-      hasOpenRun: working.has(child.id),
-    })),
-    gateDecisions: found.gateDecisions.map((decision) => ({
-      ...decision,
-      documents: decision.documents.map((pinned) => ({
-        name: pinned.name,
-        version: pinned.version,
-      })),
-    })),
-    gate,
+    ...found,
+    parent: found.parent && projectVisible(context, found.parent.projectId) ? found.parent : null,
+    children: shown.map((child) => ({ ...child, hasOpenRun: working.has(child.id) })),
   };
 }
 
@@ -371,90 +305,7 @@ export async function requireAssignee(context: ContextFor<"member">, memberId: s
   return found;
 }
 
-/**
- * Creates the Document the State an Issue just entered asks for, and records
- * it. Called wherever an Issue enters a State: on create, move, approve and
- * reject (docs/plans/m1.md).
- */
-export async function openStateDocument(
-  context: ContextFor<"member">,
-  issueId: string,
-  projectId: string,
-  state: { documentName: string | null; documentTemplate: string | null },
-) {
-  const created = await ensureStateDocument(context.db, issueId, state, context.member.id);
-  if (!created) return;
-  await appendEvent(context, {
-    kind: "document.created",
-    subjectType: "issue",
-    subjectId: issueId,
-    projectId,
-    payload: { name: created.name, documentId: created.id },
-  });
-}
-
-/** The Issue, its Project, and that Project's States in order: what a move needs. */
-export async function requireIssueForMove(context: ContextFor<"member">, key: string) {
-  const { issue, project } = await requireIssue(context, key);
-  const states = await context.db.query.workflowState.findMany({
-    where: { projectId: project.id },
-    orderBy: { position: "asc" },
-  });
-  const from = states.find((state) => state.id === issue.stateId);
-  if (!from) throw new ORPCError("BAD_REQUEST", { message: "This Issue is in no known State" });
-  return { issue, project, states, from };
-}
-
-/** The Document an operation names on an Issue, or NOT_FOUND. */
-export async function requireDocument(
-  context: ContextFor<"member">,
-  issueId: string,
-  name: string,
-) {
-  const found = await context.db.query.document.findFirst({
-    where: { issueId, name },
-  });
-  if (!found) throw new ORPCError("NOT_FOUND", { message: `This Issue has no ${name} Document` });
-  return found;
-}
-
-export async function loadComment(context: ContextFor<"member">, id: string) {
-  const found = await context.db.query.comment.findFirst({
-    where: { id },
-    with: { author: { with: { user: true } } },
-  });
-  if (!found) throw new ORPCError("NOT_FOUND", { message: "No such comment" });
-  return found.deletedAt ? { ...found, body: "" } : found;
-}
-
-/** The Label an operation names, or NOT_FOUND. Scoped to the Workspace. */
-export async function requireLabel(context: ContextFor<"member">, labelId: string) {
-  const found = await context.db.query.label.findFirst({
-    where: { id: labelId, workspaceId: context.workspace.id },
-  });
-  if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Label in this Workspace" });
-  return found;
-}
-
-/** The comment an operation names, with the Issue it belongs to. Scoped to the Workspace. */
-export async function requireComment(context: ContextFor<"member">, commentId: string) {
-  const found = await context.db.query.comment.findFirst({
-    where: { id: commentId },
-    with: { issue: { with: { project: true } } },
-  });
-  if (!found || found.issue.project.workspaceId !== context.workspace.id) {
-    throw new ORPCError("NOT_FOUND", { message: "No such comment" });
-  }
-  return found;
-}
-
-/** Its author may change a comment; an admin may also remove one. */
-export function assertMayEdit(context: ContextFor<"member">, authorMemberId: string | null) {
-  if (authorMemberId === context.member.id) return;
-  throw new ORPCError("FORBIDDEN", { message: "Only its author can change this comment" });
-}
-
-/** The Run an operation names, with the Issue key every surface shows. */
+/** The Run an operation names, with the Issue key the tracker wrote. */
 export function runView(row: Run, issueKey: string) {
   return {
     id: row.id,
@@ -498,7 +349,7 @@ export async function requireRun(context: ContextFor<"member">, runId: string) {
     run: found,
     issue: found.issue,
     project: found.issue.project,
-    key: issueKey(found.issue.project.key, found.issue.number),
+    key: found.issue.externalKey,
   };
 }
 

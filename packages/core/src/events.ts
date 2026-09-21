@@ -35,15 +35,20 @@ export type EventKind =
   | "project.created"
   | "project.updated"
   | "project.archived"
-  | "team.created"
-  | "team.updated"
-  | "team.deleted"
-  | "team.member_added"
-  | "team.member_removed"
+  /**
+   * A record arrived from a tracker Socket (ADR-0024). `issue.created` is the
+   * first sight of one; `issue.synced` is every sight after that, carrying what
+   * changed so a reader is not left diffing two snapshots.
+   */
   | "issue.created"
-  | "issue.updated"
+  | "issue.synced"
   | "issue.assigned"
-  | "issue.reparented"
+  /**
+   * The record closed, or opened again. What "closed" means is the tracker's to
+   * say, and `wakeParent` reads it rather than a State's category.
+   */
+  | "issue.closed"
+  | "issue.reopened"
   /**
    * An Agent asked for one more sub-issue than this Workspace allows, and did
    * not get it (docs/plans/sub-issue-delegation.md). The one Event here that
@@ -60,36 +65,14 @@ export type EventKind =
    * rather than silently nobody's.
    */
   | "issue.children_closed"
-  | "issue.moved"
-  /**
-   * One Human's approval of a Gate that wants more than one, and the Issue
-   * still in it. `gate.approved` stays the Event that means the Issue left, so
-   * everything that reads the log keeps meaning what it meant
-   * (docs/plans/four-eyes-gates.md).
-   */
-  | "gate.approval"
-  | "gate.approved"
-  /**
-   * A Document changed while its Issue sat at a Gate that had approvals toward
-   * a threshold, so those approvals were cleared (ADR-0021). A Gate wanting two
-   * Humans exists to stop one text being approved by two people who read two
-   * different texts; nothing is deleted, and the count starts again.
-   */
-  | "gate.approvals_cleared"
-  | "gate.rejected"
-  | "workflow.updated"
-  | "document.created"
-  | "document.updated"
-  | "label.created"
-  | "label.updated"
-  | "label.deleted"
-  | "issue.labels_changed"
   | "comment.created"
-  | "comment.edited"
-  | "comment.deleted"
   | "issue.link_added"
   | "issue.link_removed"
   | "workspace.updated"
+  /** A tool deevy is connected to, and the Projects bound to it (ADR-0024). */
+  | "socket.connected"
+  | "socket.updated"
+  | "socket.removed"
   | "agent.created"
   | "agent.updated"
   | "agent.key_issued"

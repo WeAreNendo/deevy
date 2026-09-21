@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ConnectAgent } from "@/components/connect-agent";
@@ -249,12 +248,12 @@ function Grants({ memberId, onChanged }: { memberId: string; onChanged: () => Pr
               key={project.id}
               className="flex items-center gap-1 rounded-md border bg-background px-2 py-1"
             >
-              <span className="font-mono text-xs text-muted-foreground">{project.key}</span>
+              <span className="font-mono text-xs text-muted-foreground">{project.slug}</span>
               <span className="text-sm">{project.name}</span>
               <Button
                 size="xs"
                 variant="destructive"
-                aria-label={`Revoke ${project.key}`}
+                aria-label={`Revoke ${project.slug}`}
                 disabled={remove.isPending}
                 onClick={() => remove.mutate({ memberId, projectId: project.id })}
               >
@@ -276,7 +275,7 @@ function Grants({ memberId, onChanged }: { memberId: string; onChanged: () => Pr
             if (project) add.mutate({ memberId, projectId: project.id });
           }}
           itemToStringLabel={(project: (typeof ungranted)[number]) =>
-            `${project.key} — ${project.name}`
+            `${project.slug} — ${project.name}`
           }
           isItemEqualToValue={(a: (typeof ungranted)[number], b: (typeof ungranted)[number]) =>
             a.id === b.id
@@ -293,7 +292,7 @@ function Grants({ memberId, onChanged }: { memberId: string; onChanged: () => Pr
             <ComboboxList>
               {(project: (typeof ungranted)[number]) => (
                 <ComboboxItem key={project.id} value={project}>
-                  <span className="font-mono text-xs text-muted-foreground">{project.key}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{project.slug}</span>
                   {project.name}
                 </ComboboxItem>
               )}
@@ -434,15 +433,7 @@ function RecentRuns({ memberId }: { memberId: string }) {
           {rows.map((run) => (
             <li key={run.id} className="flex items-center gap-3 py-2 text-sm">
               <RunStatus status={run.status as RunStatusValue} />
-              {run.issueKey ? (
-                <Link
-                  to="/issues/$issueKey"
-                  params={{ issueKey: run.issueKey }}
-                  className="font-mono text-xs hover:underline"
-                >
-                  {run.issueKey}
-                </Link>
-              ) : null}
+              {run.issueKey ? <span className="font-mono text-xs">{run.issueKey}</span> : null}
               <span className="min-w-0 flex-1 truncate text-muted-foreground">
                 {run.summary ?? ""}
               </span>

@@ -19,26 +19,17 @@ export function keysFor(event: LiveEvent): QueryKey[] {
   const keys: QueryKey[] = [orpc.events.key()];
   switch (event.subjectType) {
     case "issue":
-      keys.push(
-        orpc.issues.key(),
-        orpc.comments.key(),
-        orpc.documents.key(),
-        orpc.links.key(),
-        orpc.inbox.key(),
-      );
+      keys.push(orpc.issues.key(), orpc.comments.key(), orpc.links.key(), orpc.inbox.key());
       break;
     case "run":
       keys.push(orpc.runs.key(), orpc.inbox.key());
       break;
     case "project":
-      keys.push(orpc.projects.key(), orpc.workflow.key(), orpc.issues.key());
+      keys.push(orpc.projects.key(), orpc.issues.key());
       break;
     case "member":
       // me.get carries the caller's role and suspension, which are Member Events.
       keys.push(orpc.members.key(), orpc.agents.key(), orpc.inbox.key(), orpc.me.key());
-      break;
-    case "team":
-      keys.push(orpc.teams.key());
       break;
     case "allowlist_rule":
       keys.push(orpc.allowlist.key());
@@ -47,9 +38,6 @@ export function keysFor(event: LiveEvent): QueryKey[] {
       // A Member joined by one, or an admin issued or revoked one: the Invited
       // row and the Members list are both a screen behind until they re-read.
       keys.push(orpc.invitations.key(), orpc.members.key());
-      break;
-    case "label":
-      keys.push(orpc.labels.key(), orpc.issues.key());
       break;
     case "channel":
       keys.push(orpc.channels.key(), orpc.routing.key());

@@ -1,1 +1,0 @@
-ALTER TABLE `room_state` ADD `compacted_at` integer;

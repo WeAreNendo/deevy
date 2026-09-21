@@ -1,53 +1,18 @@
 import { sql } from "drizzle-orm";
-import {
-  index,
-  integer,
-  primaryKey,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { socket } from "./socket.ts";
 import { member, workspace } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
+/** How much deevy says back in the tracker it took the work from. */
+export const projectMirrors = ["off", "gates", "runs"] as const;
+
 /**
- * A named group of Members that owns Projects and can be mentioned (CONTEXT.md).
- * Not a permission boundary: every Human sees every Project in v1.
+ * A scope of work bound to Sockets (CONTEXT.md, ADR-0024): where its Issues
+ * live, where its code lives, which Agent gets a record nobody named, and how
+ * much deevy says back. It holds no Issues of its own and no Workflow.
  */
-export const team = sqliteTable(
-  "team",
-  {
-    id: text("id").primaryKey(),
-    workspaceId: text("workspace_id")
-      .notNull()
-      .references(() => workspace.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    /** Shares one namespace with `member.handle`, so a mention resolves to one thing. */
-    handle: text("handle").notNull().unique(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
-  },
-  (table) => [index("team_workspaceId_idx").on(table.workspaceId)],
-);
-
-export const teamMember = sqliteTable(
-  "team_member",
-  {
-    teamId: text("team_id")
-      .notNull()
-      .references(() => team.id, { onDelete: "cascade" }),
-    memberId: text("member_id")
-      .notNull()
-      .references(() => member.id, { onDelete: "cascade" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.teamId, table.memberId] }),
-    index("team_member_memberId_idx").on(table.memberId),
-  ],
-);
-
-/** A stream of work with its own Issues and Workflow (CONTEXT.md). */
 export const project = sqliteTable(
   "project",
   {
@@ -55,67 +20,46 @@ export const project = sqliteTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
-    /** Two to six uppercase letters; the prefix of every Issue key, as in `DEV-42`. */
-    key: text("key").notNull(),
+    /** The URL handle, derived from the container it is bound to: `acme-deevy`, `eng`. */
+    slug: text("slug").notNull(),
     name: text("name").notNull(),
     description: text("description"),
-    teamId: text("team_id").references(() => team.id, { onDelete: "set null" }),
+    /** Where this Project's Issues come from. A Project without one has nothing to work. */
+    trackerSocketId: text("tracker_socket_id")
+      .notNull()
+      .references(() => socket.id, { onDelete: "restrict" }),
+    /** Which container inside that Socket: a repository, a Linear team, a Notion database. */
+    trackerScope: text("tracker_scope", { mode: "json" })
+      .$type<Record<string, unknown>>()
+      .notNull(),
     /**
-     * Handed out by `UPDATE ... RETURNING` in slice 4, so Issue numbers stay
-     * gapless under concurrency without a transaction (ADR-0006).
+     * `scopeKeyOf(scope)` stored, so an inbound delivery finds its Project in
+     * one indexed read rather than by comparing JSON.
      */
-    nextIssueNumber: integer("next_issue_number").default(1).notNull(),
+    trackerScopeKey: text("tracker_scope_key").notNull(),
+    /** Where this Project's code lives, when an Agent working it should have a checkout. */
+    forgeSocketId: text("forge_socket_id").references(() => socket.id, { onDelete: "set null" }),
+    /** The repository and the base branch a Run is cut from. */
+    forgeScope: text("forge_scope", { mode: "json" }).$type<Record<string, unknown>>(),
+    docsSocketId: text("docs_socket_id").references(() => socket.id, { onDelete: "set null" }),
+    docsScope: text("docs_scope", { mode: "json" }).$type<Record<string, unknown>>(),
+    /** Who gets an open record no label and no mention named. */
+    defaultAgentMemberId: text("default_agent_member_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    /** How a record says which Agent it is for: a label prefix, a mention, or neither. */
+    routing: text("routing", { mode: "json" })
+      .$type<{ labelPrefix: string; mention: boolean }>()
+      .notNull()
+      .default(sql`'{"labelPrefix":"agent:","mention":true}'`),
+    mirror: text("mirror", { enum: projectMirrors }).notNull().default("gates"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
     archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
   },
   (table) => [
-    uniqueIndex("project_key_uidx").on(table.workspaceId, table.key),
+    uniqueIndex("project_slug_uidx").on(table.workspaceId, table.slug),
+    /** One container is one Project, and the inbound route's lookup. */
+    uniqueIndex("project_tracker_uidx").on(table.trackerSocketId, table.trackerScopeKey),
     index("project_workspaceId_idx").on(table.workspaceId),
-    index("project_teamId_idx").on(table.teamId),
   ],
-);
-
-/**
- * What "open" means to a board or a list. `backlog` is not started, `active` is
- * in flight, `done` closes the Issue (slice 4 sets `closedAt` from it).
- */
-export const workflowStateCategories = ["backlog", "active", "done"] as const;
-
-/** A step in a Project's Workflow. A Gate is one an Issue cannot leave without a Human's approval. */
-export const workflowState = sqliteTable(
-  "workflow_state",
-  {
-    id: text("id").primaryKey(),
-    projectId: text("project_id")
-      .notNull()
-      .references(() => project.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    position: integer("position").notNull(),
-    isGate: integer("is_gate", { mode: "boolean" }).default(false).notNull(),
-    /**
-     * How many distinct Humans must approve before an Issue leaves this Gate.
-     * One is what every Workflow did before this column existed, so the default
-     * keeps them behaving exactly as they did (docs/plans/four-eyes-gates.md).
-     */
-    approvalsRequired: integer("approvals_required").default(1).notNull(),
-    /**
-     * Whether the Human who put the Issue in front of this Gate may be one of
-     * the Humans who lets it through. False is what every Workflow did before
-     * this column existed (docs/plans/four-eyes-gates.md).
-     */
-    excludeRequester: integer("exclude_requester", { mode: "boolean" }).default(false).notNull(),
-    category: text("category", { enum: workflowStateCategories }).notNull(),
-    /** The Document this State asks for, created from its template on entry. */
-    documentName: text("document_name"),
-    documentTemplate: text("document_template"),
-    /**
-     * The workflow rule: entering this State assigns the Issue to this Agent
-     * and starts a Run (PLAN.md's third trigger). Null is no rule.
-     */
-    triggerAgentMemberId: text("trigger_agent_member_id").references(() => member.id, {
-      onDelete: "set null",
-    }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
-  },
-  (table) => [index("workflow_state_projectId_position_idx").on(table.projectId, table.position)],
 );

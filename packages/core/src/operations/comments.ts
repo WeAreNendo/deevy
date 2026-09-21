@@ -1,56 +1,52 @@
-import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { comment as commentTable } from "@deevy/db";
 import { resolveMentions } from "../mentions.ts";
-import { CommentWithAuthorSchema } from "../schemas.ts";
+import { ExternalCommentSchema } from "../schemas.ts";
+import { requireSocket, requireTracker, socketModuleFor } from "../sockets/registry.ts";
 import { appendEvent } from "../events.ts";
 import { defineOperation } from "./registry.ts";
-import { assertMayEdit, loadComment, requireComment, requireIssue } from "./shared.ts";
-import { newId } from "../ids.ts";
+import { resolveIssueRef } from "./shared.ts";
 
+/**
+ * Saying something where the work lives (ADR-0024).
+ *
+ * deevy stores no comments. A comment goes to the tracker and the thread is
+ * read back from it, so the conversation stays in one place and the people who
+ * are not in deevy still see it. What deevy keeps is the Event, because a
+ * mention is a trigger and the log is the record of what happened.
+ *
+ * The comment is signed with the Member who wrote it, because the tracker shows
+ * the Socket's own account as the author and a reader should not have to guess
+ * which Agent spoke.
+ */
 export const comments = {
-  list: defineOperation({
-    name: "comments.list",
-    summary: "The comments on an Issue, oldest first",
-    method: "GET",
-    path: "/issues/{issueKey}/comments",
-    auth: "member",
-    agents: true,
-    input: z.object({ issueKey: z.string() }),
-    output: z.object({ comments: z.array(CommentWithAuthorSchema) }),
-    handler: async ({ input, context }) => {
-      const { issue } = await requireIssue(context, input.issueKey);
-      const rows = await context.db.query.comment.findMany({
-        where: { issueId: issue.id },
-        with: { author: { with: { user: true } } },
-        orderBy: { createdAt: "asc" },
-      });
-      // A deleted comment keeps its place in the thread but not its words.
-      return {
-        comments: rows.map((row) => (row.deletedAt ? { ...row, body: "" } : row)),
-      };
-    },
-  }),
-
   create: defineOperation({
     name: "comments.create",
-    summary: "Say something on an Issue, mentioning Members and Teams by handle",
+    summary: "Say something on the record in the tracker it lives in",
     method: "POST",
-    path: "/issues/{issueKey}/comments",
+    path: "/issues/{issue}/comments",
     auth: "member",
     agents: true,
     mcp: true,
-    input: z.object({ issueKey: z.string(), body: z.string().trim().min(1).max(100_000) }),
-    output: CommentWithAuthorSchema,
+    input: z.object({
+      issue: z.string().trim().min(1),
+      body: z.string().trim().min(1).max(100_000),
+    }),
+    output: ExternalCommentSchema,
     handler: async ({ input, context }) => {
-      const { issue, project } = await requireIssue(context, input.issueKey);
-      const id = newId("comment");
-      await context.db.insert(commentTable).values({
-        id,
-        issueId: issue.id,
-        authorMemberId: context.member.id,
-        body: input.body,
-      });
+      const { issue, project } = await resolveIssueRef(context, input.issue);
+      const row = await requireSocket(context, project.trackerSocketId);
+      const tracker = requireTracker(socketModuleFor(context, row));
+
+      const signature = `— ${context.member.handle ?? context.member.id} · via deevy`;
+      const ref = await tracker.createComment(
+        project.trackerScope,
+        { externalId: issue.externalId, url: issue.url },
+        `${input.body}\n\n${signature}`,
+      );
+
+      // Resolved here rather than from the delivery that echoes this back,
+      // because the echo is dropped by the loop guard: a mention deevy wrote is
+      // still a mention (`triggersFor`).
       const mentionedMemberIds = await resolveMentions(
         context.db,
         context.workspace.id,
@@ -60,69 +56,22 @@ export const comments = {
         kind: "comment.created",
         subjectType: "issue",
         subjectId: issue.id,
-        projectId: project.id,
-        payload: { commentId: id, mentionedMemberIds },
+        projectId: issue.projectId,
+        payload: {
+          externalCommentId: ref.externalId,
+          url: ref.url,
+          body: input.body,
+          mentionedMemberIds: mentionedMemberIds.filter((id) => id !== context.member.id),
+        },
       });
-      return loadComment(context, id);
-    },
-  }),
 
-  update: defineOperation({
-    name: "comments.update",
-    summary: "Edit a comment you wrote",
-    method: "PATCH",
-    path: "/comments/{commentId}",
-    auth: "member",
-    input: z.object({ commentId: z.string(), body: z.string().trim().min(1).max(100_000) }),
-    output: CommentWithAuthorSchema,
-    handler: async ({ input, context }) => {
-      const found = await requireComment(context, input.commentId);
-      assertMayEdit(context, found.authorMemberId);
-      await context.db
-        .update(commentTable)
-        .set({ body: input.body, editedAt: new Date() })
-        .where(eq(commentTable.id, found.id));
-      const mentionedMemberIds = await resolveMentions(
-        context.db,
-        context.workspace.id,
-        input.body,
-      );
-      await appendEvent(context, {
-        kind: "comment.edited",
-        subjectType: "issue",
-        subjectId: found.issueId,
-        projectId: found.issue.projectId,
-        payload: { commentId: found.id, mentionedMemberIds },
-      });
-      return loadComment(context, found.id);
-    },
-  }),
-
-  delete: defineOperation({
-    name: "comments.delete",
-    summary: "Withdraw a comment; it keeps its place in the thread",
-    method: "DELETE",
-    path: "/comments/{commentId}",
-    auth: "member",
-    input: z.object({ commentId: z.string() }),
-    output: z.object({ deleted: z.literal(true) }),
-    handler: async ({ input, context }) => {
-      const found = await requireComment(context, input.commentId);
-      if (context.member.role !== "admin") assertMayEdit(context, found.authorMemberId);
-      if (found.deletedAt) return { deleted: true as const };
-
-      await context.db
-        .update(commentTable)
-        .set({ deletedAt: new Date() })
-        .where(eq(commentTable.id, found.id));
-      await appendEvent(context, {
-        kind: "comment.deleted",
-        subjectType: "issue",
-        subjectId: found.issueId,
-        projectId: found.issue.projectId,
-        payload: { commentId: found.id },
-      });
-      return { deleted: true as const };
+      return {
+        externalId: ref.externalId,
+        url: ref.url,
+        body: input.body,
+        author: { login: row.identity.login, id: row.identity.id, isBot: true },
+        createdAt: new Date(),
+      };
     },
   }),
 };

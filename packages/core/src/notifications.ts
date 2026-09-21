@@ -1,16 +1,12 @@
 import {
   humanNotificationKinds,
   delivery as deliveryTable,
-  issue as issueTable,
   notification as notificationTable,
-  workflowState,
   type Db,
   type Event,
   type HumanNotificationKind,
   type Notification,
 } from "@deevy/db";
-import { eq } from "drizzle-orm";
-import { approvalsThisVisit, eligibleApprovers, gateApprovers, requesterFor } from "./workflow.ts";
 import { newId } from "./ids.ts";
 
 /**
@@ -223,15 +219,6 @@ const runNotificationKinds: Partial<Record<Event["kind"], Notification["kind"]>>
  */
 const AGENT_ANSWERED: Event["kind"] = "run.answered";
 
-/** The Events that mean a Gate is waiting, whichever way the Issue arrived in one. */
-const gateEventKinds = new Set<Event["kind"]>([
-  "issue.created",
-  "issue.moved",
-  "gate.approval",
-  "gate.approved",
-  "gate.rejected",
-]);
-
 /**
  * What this Event tells a Human, decided from the Event alone. Delivery asks
  * this again when it sends, hours later and without the request that appended
@@ -240,25 +227,12 @@ const gateEventKinds = new Set<Event["kind"]>([
  */
 export function notificationKindOf(event: Event): Notification["kind"] | null {
   if (event.kind === "issue.assigned") return "assignment";
-  if (event.kind === "comment.created" || event.kind === "issue.updated") return "mention";
-  // Before the Gate kinds below, which `issue.created` is otherwise one of: a
-  // sub-issue arriving in a Gate is not everybody's business, it is its
-  // Sponsor's, and forty of them are one line.
+  if (event.kind === "comment.created") return "mention";
+  // A wave of sub-issues is its Sponsor's business and not everybody's, and
+  // forty of them are one line (docs/plans/sub-issue-delegation.md).
   if (delegatedUnder(event) || event.kind === "issue.children_closed") return "delegation";
-  if (gateEventKinds.has(event.kind)) return "gate_awaiting";
-  // A Run that stopped at a Gate is asking for a decision, not for an answer:
-  // the Event says so by carrying the Gate, and that is what the Human is
-  // being asked for (docs/plans/m2.md).
-  if (gateStateAsked(event)) return "gate_awaiting";
   if (event.kind === AGENT_ANSWERED) return "run_answered";
   return runNotificationKinds[event.kind] ?? null;
-}
-
-/** The Gate a `run.awaiting_input` Event is waiting on, when it is waiting on one. */
-function gateStateAsked(event: Event): string | null {
-  if (event.kind !== "run.awaiting_input") return null;
-  const carried = (event.payload as { gateStateId?: unknown } | null)?.gateStateId;
-  return typeof carried === "string" ? carried : null;
 }
 
 async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
@@ -290,7 +264,7 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
       : [];
   }
 
-  if (event.kind === "comment.created" || event.kind === "issue.updated") {
+  if (event.kind === "comment.created") {
     const mentioned = Array.isArray(payload.mentionedMemberIds)
       ? payload.mentionedMemberIds.filter((id): id is string => typeof id === "string")
       : [];
@@ -299,33 +273,6 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
       memberId,
       kind: "mention" as const,
     }));
-  }
-
-  // A Gate is a State an Issue cannot leave without a Human, so arriving in one
-  // is everyone's business until somebody decides. That includes arriving by
-  // approval: approving Intent lands the Issue in the Spec Gate, which needs a
-  // Human just as much as the one before it.
-  if (
-    event.kind === "issue.created" ||
-    event.kind === "issue.moved" ||
-    event.kind === "gate.approval" ||
-    event.kind === "gate.approved" ||
-    event.kind === "gate.rejected"
-  ) {
-    if (event.subjectType !== "issue") return [];
-    const gate = await gateStateOf(db, event.subjectId);
-    if (!gate) return [];
-    return gateRecipients(db, event, gate);
-  }
-
-  // An Agent that reached a Gate mid-Run asks the same Humans the Gate itself
-  // would ask, not the Human behind the Run: the decision is the Gate's to
-  // make (ADR-0004), and the Sponsor may not be one of its approvers.
-  const askedAbout = gateStateAsked(event);
-  if (askedAbout) {
-    const asked = (event.payload as { issueId?: unknown } | null)?.issueId;
-    const gate = await gateAsked(db, askedAbout, typeof asked === "string" ? asked : null);
-    return gate ? gateRecipients(db, event, gate) : [];
   }
 
   // A ruling is owed to whoever asked for it, and that is the Agent.
@@ -372,84 +319,6 @@ async function humanBehind(db: Db, memberId: string | null): Promise<string | nu
   });
   if (!found) return null;
   return found.kind === "human" ? memberId : found.sponsorId;
-}
-
-/** The Gate an Issue is sitting in, or none when the State it is in is not one. */
-async function gateStateOf(db: Db, issueId: string): Promise<Gate | null> {
-  const [row] = await db
-    .select({
-      id: workflowState.id,
-      isGate: workflowState.isGate,
-      excludeRequester: workflowState.excludeRequester,
-      issueId: issueTable.id,
-      stateEnteredAt: issueTable.stateEnteredAt,
-    })
-    .from(issueTable)
-    .innerJoin(workflowState, eq(issueTable.stateId, workflowState.id))
-    .where(eq(issueTable.id, issueId))
-    .limit(1);
-  return row?.isGate === true ? row : null;
-}
-
-/** The Gate an Issue is in, with the Issue's visit to it. */
-interface Gate {
-  id: string;
-  excludeRequester: boolean;
-  issueId: string;
-  stateEnteredAt: Date;
-}
-
-/** The same, for a Gate named by a Run's question rather than by where the Issue is. */
-async function gateAsked(db: Db, stateId: string, issueId: string | null): Promise<Gate | null> {
-  const state = await db.query.workflowState.findFirst({
-    where: { id: stateId },
-    columns: { id: true, excludeRequester: true },
-  });
-  if (!state) return null;
-  const issue = issueId
-    ? await db.query.issue.findFirst({
-        where: { id: issueId },
-        columns: { id: true, stateEnteredAt: true },
-      })
-    : null;
-  return {
-    id: state.id,
-    excludeRequester: state.excludeRequester,
-    issueId: issue?.id ?? "",
-    stateEnteredAt: issue?.stateEnteredAt ?? new Date(0),
-  };
-}
-
-/**
- * Who is asked to decide one Gate. A Gate that names approvers asks only them;
- * one that names none asks every active Human, which is what M1 shipped
- * (schema/gate.ts). The actor is never asked about their own action either way.
- */
-async function gateRecipients(db: Db, event: Event, gate: Gate): Promise<Recipient[]> {
-  const named = await gateApprovers(db, gate.id);
-  const visit = { id: gate.issueId, stateEnteredAt: gate.stateEnteredAt };
-  // Both of these cost a query and neither is the common case, so neither is
-  // paid for by a Workflow that wants one approval from anybody: creating an
-  // Issue in a Gate is deevy's busiest write (tests/budget.test.ts).
-  //
-  // A Gate that excludes the requester is asking them for nothing, so it does
-  // not put the question in their inbox; and a Gate that wants more than one
-  // Human keeps asking the ones who have not answered and stops asking the one
-  // who has, since an approval already given is not a question
-  // (docs/plans/four-eyes-gates.md).
-  const requester = gate.excludeRequester && gate.issueId ? await requesterFor(db, visit) : null;
-  const already =
-    event.kind === "gate.approval" && gate.issueId
-      ? await approvalsThisVisit(db, visit, gate.id)
-      : [];
-  const humans = await eligibleApprovers(db, {
-    workspaceId: event.workspaceId,
-    named,
-    exclude: event.actorMemberId,
-  });
-  return humans
-    .filter((memberId) => memberId !== requester && !already.includes(memberId))
-    .map((memberId) => ({ memberId, kind: "gate_awaiting" as const }));
 }
 
 /** Of the given Members, those still able to act. Suspension silences an inbox. */

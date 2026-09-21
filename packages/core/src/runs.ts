@@ -3,7 +3,6 @@ import { run as runTable } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { appendEvent, type EventSource } from "./events.ts";
 
 export type RunStatus = Run["status"];
 export type ActivityKind = Activity["kind"];
@@ -70,7 +69,7 @@ export const RunSchema = z.object({
   issueKey: z.string(),
   agentMemberId: z.string(),
   triggeredByMemberId: z.string().nullable(),
-  trigger: z.enum(["assignment", "mention", "state_rule", "schedule", "manual", "children_done"]),
+  trigger: z.enum(["assignment", "mention", "schedule", "manual", "children_done"]),
   status: z.enum(["pending", "active", "awaiting_input", "completed", "failed", "stale"]),
   summary: z.string().nullable(),
   startedAt: z.date().nullable(),
@@ -131,125 +130,3 @@ export async function setRunStatus(
  * been notified. One field cannot carry two rules; this one says which
  * (docs/plans/m3.md).
  */
-export const GateApproversSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("any_human") }),
-  // Non-empty by construction: a named list with nothing in it is the state
-  // that caused the confusion, and it is now unrepresentable.
-  z.object({ kind: z.literal("named"), memberIds: z.array(z.string()).min(1) }),
-]);
-
-export type GateApprovers = z.infer<typeof GateApproversSchema>;
-
-/** The rule behind a Gate's named approvers, as the answer states it. */
-export function gateApproversView(memberIds: string[]): GateApprovers {
-  return memberIds.length > 0 ? { kind: "named", memberIds } : { kind: "any_human" };
-}
-
-export const GateApprovalSchema = z.object({
-  run: RunSchema,
-  status: z.enum(["awaiting", "approved", "rejected"]),
-  /** The Gate State in question, which is not where the Issue is once it is decided. */
-  stateId: z.string(),
-  stateName: z.string(),
-  /** The Issue's page with that Gate in focus. */
-  url: z.string(),
-  /** Who may rule on it, said outright rather than inferred from a list's length. */
-  approvers: GateApproversSchema,
-  decidedByMemberId: z.string().nullable(),
-  note: z.string().nullable(),
-});
-
-/** The `elicitation` Activity payload a Gate request writes, and reads back. */
-export interface GateRequest {
-  gateStateId: string;
-  url: string;
-}
-
-export function gateRequestOf(payload: unknown): GateRequest | null {
-  const found = payload as { gateStateId?: unknown; url?: unknown } | null;
-  if (typeof found?.gateStateId !== "string" || typeof found.url !== "string") return null;
-  return { gateStateId: found.gateStateId, url: found.url };
-}
-
-/** The Gate a Run last asked about, and whether it has since been told the answer. */
-export interface AskedGate {
-  request: GateRequest;
-  askedAt: Date;
-  /**
-   * A `prompt` Activity came after it, which is how a Human's word reaches a
-   * Run's feed (`runs.answer`, and the ruling `runs.requestApproval` relays).
-   * An answered question is closed: the Run may ask about another Gate.
-   */
-  answered: boolean;
-}
-
-/**
- * The Gate this Run last asked about, or none. A Run asks by writing an
- * `elicitation` Activity and is answered by a `prompt` one, so the feed is the
- * whole record and nothing is kept twice. Bounded: only the newest few are
- * read, because an Agent that asked twenty questions ago is not still waiting
- * on the first.
- */
-export async function lastGateRequest(db: Db, runId: string): Promise<AskedGate | null> {
-  const rows = await db.query.activity.findMany({
-    where: { runId, kind: { in: ["elicitation", "prompt"] } },
-    orderBy: { createdAt: "desc" },
-    limit: 20,
-  });
-  let answered = false;
-  for (const row of rows) {
-    if (row.kind === "prompt") {
-      answered = true;
-      continue;
-    }
-    const request = gateRequestOf(row.payload);
-    if (request) return { request, askedAt: row.createdAt, answered };
-  }
-  return null;
-}
-
-/** What a Human decided at a Gate, as the `run.answered` Event carries it. */
-export interface GateRuling {
-  /** The Gate State ruled on. */
-  stateId: string;
-  state: string;
-  ruling: "approved" | "rejected";
-  note?: string | null;
-}
-
-/**
- * A decision on a Gate un-blocks whatever Run was waiting on it, the way a
- * Human's answer un-blocks an elicitation (docs/plans/m2.md). Called from
- * `gates.approve` and `gates.reject`: the Human decides in deevy's UI, and the
- * Agent that asked carries on without being told twice. The Event says what
- * was decided, so the inbox and the log can tell an approval from a rejection
- * without reading the Gate again; a plain answer (`runs.answer`) carries none
- * of that.
- */
-export async function resumeGateRuns(
-  source: EventSource & { db: Db },
-  issue: { id: string; projectId: string },
-  decided: GateRuling,
-): Promise<void> {
-  const waiting = await source.db.query.run.findMany({
-    where: { issueId: issue.id, status: "awaiting_input" },
-  });
-  for (const row of waiting) {
-    const asked = await lastGateRequest(source.db, row.id);
-    if (!asked || asked.answered || asked.request.gateStateId !== decided.stateId) continue;
-    await setRunStatus(source.db, row, "active", { touchActivity: true });
-    await appendEvent(source, {
-      kind: "run.answered",
-      subjectType: "run",
-      subjectId: row.id,
-      projectId: issue.projectId,
-      payload: {
-        issueId: issue.id,
-        gateStateId: decided.stateId,
-        ruling: decided.ruling,
-        state: decided.state,
-        note: decided.note ?? null,
-      },
-    });
-  }
-}

@@ -1,64 +1,148 @@
-import { issue as issueTable, project as projectTable, type Db, type Issue } from "@deevy/db";
-import { eq, sql } from "drizzle-orm";
+import { issue as issueTable, type Db, type Issue } from "@deevy/db";
+import { and, eq, sql } from "drizzle-orm";
+import type { ExternalIssue } from "./sockets/port.ts";
 import { newId } from "./ids.ts";
 
-/** `DEV-42`: the Project's key and the Issue's number, derived and never stored twice. */
-export function issueKey(projectKey: string, number: number): string {
-  return `${projectKey}-${number}`;
+/**
+ * An Issue is a projection of a record in a tracker Socket (ADR-0024). It has
+ * no key of deevy's own: what a Human reads is the tracker's key, and what is
+ * canonical is the URL.
+ */
+
+/** How long a body snapshot may be. The record is the tracker's; this is a copy. */
+export const MAX_BODY = 64 * 1024;
+
+/** The three ways a caller may name an Issue, told apart by shape alone. */
+export type IssueRef =
+  | { by: "id"; id: string }
+  | { by: "url"; url: string }
+  | { by: "key"; key: string };
+
+/**
+ * Which of the three a string is.
+ *
+ * The URL is canonical because it is what a Human pastes and what a delivery
+ * carries; the key is what a Human reads and may be ambiguous across two
+ * Sockets, which is the caller's problem to disambiguate and this function's to
+ * not hide (`resolveIssueRef` refuses rather than guessing).
+ */
+export function parseIssueRef(ref: string): IssueRef {
+  const trimmed = ref.trim();
+  if (/^iss_[0-9a-z]{12}$/.test(trimmed)) return { by: "id", id: trimmed };
+  if (/^https?:\/\//i.test(trimmed)) return { by: "url", url: trimmed };
+  return { by: "key", key: trimmed };
 }
 
-const KEY_PATTERN = /^([A-Za-z]{2,6})-(\d+)$/;
+export interface ProjectionInput {
+  projectId: string;
+  socketId: string;
+  external: ExternalIssue;
+  /** Set only where deevy created the record, which is delegation. */
+  createdBy?: string | null;
+  /** deevy's own parent row, where the parent has been projected. */
+  parentId?: string | null;
+}
 
-/** Splits `DEV-42` into its Project key and number, or null when it is not a key at all. */
-export function parseIssueKey(key: string): { projectKey: string; number: number } | null {
-  const match = KEY_PATTERN.exec(key.trim());
-  if (!match) return null;
-  return { projectKey: match[1]!.toUpperCase(), number: Number(match[2]) };
+export interface ProjectionResult {
+  issue: Issue;
+  /** Whether this delivery is the first sight of the record. */
+  created: boolean;
+  /** False when a newer snapshot was already stored, which is a reordered delivery. */
+  applied: boolean;
 }
 
 /**
- * Hands out the next Issue number for a Project. One statement, so it is safe
- * on D1 and under concurrency without a transaction (docs/plans/m1.md); a read
- * followed by a write would hand the same number to two callers.
+ * Writes what the tracker last said, in one statement.
+ *
+ * The guard is the whole point: providers redeliver and reorder, so an older
+ * snapshot must not overwrite a newer one. `external_updated_at` is the
+ * provider's own clock and the only thing that can order two deliveries, so the
+ * update is conditional on it rather than on the order they arrived in.
  */
-export async function nextIssueNumber(db: Db, projectId: string): Promise<number> {
-  const [row] = await db
-    .update(projectTable)
-    .set({ nextIssueNumber: sql`${projectTable.nextIssueNumber} + 1` })
-    .where(eq(projectTable.id, projectId))
-    .returning({ number: projectTable.nextIssueNumber });
-  if (!row) throw new Error("nextIssueNumber: no such Project");
-  return row.number - 1;
-}
+export async function upsertProjection(db: Db, input: ProjectionInput): Promise<ProjectionResult> {
+  const { external } = input;
+  const closedAt = external.state === "closed" ? new Date() : null;
+  const values = {
+    id: newId("issue"),
+    projectId: input.projectId,
+    socketId: input.socketId,
+    externalId: external.externalId,
+    externalKey: external.key,
+    url: external.url,
+    title: external.title,
+    body: external.body === null ? null : external.body.slice(0, MAX_BODY),
+    state: external.state,
+    stateName: external.stateName,
+    assignees: external.assignees,
+    labels: external.labels,
+    parentExternalId: external.parentExternalId,
+    parentId: input.parentId ?? null,
+    createdBy: input.createdBy ?? null,
+    externalUpdatedAt: external.updatedAt,
+    lastSyncedAt: new Date(),
+    updatedAt: new Date(),
+    closedAt,
+  };
 
-export interface CreateIssueInput {
-  projectId: string;
-  number: number;
-  title: string;
-  description?: string | null;
-  stateId: string;
-  assigneeMemberId?: string | null;
-  parentId?: string | null;
-  createdBy: string;
-}
-
-export async function insertIssue(db: Db, input: CreateIssueInput): Promise<Issue> {
   const [row] = await db
     .insert(issueTable)
-    .values({
-      id: newId("issue"),
-      projectId: input.projectId,
-      number: input.number,
-      title: input.title,
-      description: input.description ?? null,
-      stateId: input.stateId,
-      assigneeMemberId: input.assigneeMemberId ?? null,
-      parentId: input.parentId ?? null,
-      createdBy: input.createdBy,
+    .values(values)
+    .onConflictDoUpdate({
+      target: [issueTable.socketId, issueTable.externalId],
+      set: {
+        externalKey: values.externalKey,
+        url: values.url,
+        title: values.title,
+        body: values.body,
+        state: values.state,
+        stateName: values.stateName,
+        assignees: values.assignees,
+        labels: values.labels,
+        parentExternalId: values.parentExternalId,
+        externalUpdatedAt: values.externalUpdatedAt,
+        lastSyncedAt: values.lastSyncedAt,
+        updatedAt: values.updatedAt,
+        // `closedAt` is reconciled with the state rather than stamped again, so
+        // a record that was already closed keeps the moment it closed.
+        closedAt: sql`case when ${issueTable.state} = 'closed' then ${issueTable.closedAt} else ${closedAt} end`,
+      },
+      // The reordering guard. Equal is allowed through: a provider that stamps
+      // whole seconds says nothing about two edits inside one, and the later
+      // delivery is the better guess.
+      setWhere: sql`${issueTable.externalUpdatedAt} <= ${external.updatedAt.getTime()}`,
     })
     .returning();
-  if (!row) throw new Error("insertIssue: the insert returned no row");
-  return row;
+
+  if (row) return { issue: row, created: row.id === values.id, applied: true };
+
+  // No row came back, so the guard refused the update: the stored snapshot is
+  // newer than this delivery. Read what is there and say it was not applied.
+  const stored = await db.query.issue.findFirst({
+    where: { socketId: input.socketId, externalId: external.externalId },
+  });
+  if (!stored) throw new Error("upsertProjection: neither written nor found");
+  return { issue: stored, created: false, applied: false };
+}
+
+/** Sets the Member deevy routed this Issue to, and says whether it changed. */
+export async function routeIssueTo(
+  db: Db,
+  issueId: string,
+  memberId: string | null,
+): Promise<boolean> {
+  const [row] = await db
+    .update(issueTable)
+    .set({ assigneeMemberId: memberId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(issueTable.id, issueId),
+        memberId === null
+          ? sql`${issueTable.assigneeMemberId} is not null`
+          : sql`${issueTable.assigneeMemberId} is null or ${issueTable.assigneeMemberId} <> ${memberId}`,
+      ),
+    )
+    .returning({ id: issueTable.id });
+  return Boolean(row);
 }
 
 /**
@@ -137,6 +221,7 @@ async function treeAround(
   const root = top?.id ?? parentId;
   const depth = top?.level ?? 0;
 
+  // Open is the tracker's word now: an Issue is closed when the record is.
   const counted = (await db.all(sql`
     with recursive descendant(id, level) as (
       select id, 0 from issue where id = ${root}
@@ -148,8 +233,7 @@ async function treeAround(
     select count(*) as open
       from descendant d
       join issue i on i.id = d.id
-      join workflow_state s on s.id = i.state_id
-     where d.level > 0 and s.category <> 'done'
+     where d.level > 0 and i.state <> 'closed'
   `)) as Array<{ open: number }>;
 
   return { depth, open: Number(counted[0]?.open ?? 0) };

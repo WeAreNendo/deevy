@@ -1,9 +1,7 @@
 import { MemberChip } from "@/components/member-chip";
 import { RunStatus, runStatusLabels, type RunStatusValue } from "@/components/run-status";
 import { Shortcut } from "@/components/kbd-hint";
-import { StateBadge } from "@/components/state-badge";
 import { Button } from "@/components/ui/button";
-import { LABEL_COLORS } from "@/lib/label-colors";
 import { cn } from "@/lib/utils";
 
 const slots = [
@@ -13,9 +11,6 @@ const slots = [
   ["human", "a Human Member"],
   ["agent", "an Agent"],
   ["gate", "a Gate, and anything owed a ruling"],
-  ["state-backlog", "a State before the work"],
-  ["state-active", "a State in the work"],
-  ["state-done", "a State after it"],
   ["destructive", "reject, revoke, delete"],
   ["muted", "quiet surfaces"],
   ["border", "rules"],
@@ -25,7 +20,6 @@ const ada = { id: "a", kind: "human" as const, handle: "ada", user: { name: "Ada
 const planner = { id: "p", kind: "agent" as const, handle: "planner", user: { name: "Planner" } };
 
 function Sheet({ theme }: { theme: "light" | "dark" }) {
-  const swatches = LABEL_COLORS;
   return (
     <section
       className={cn(theme, "flex flex-col gap-6 bg-background p-6 text-foreground")}
@@ -68,28 +62,9 @@ function Sheet({ theme }: { theme: "light" | "dark" }) {
         <MemberChip member={planner} size="lg" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <StateBadge state={{ name: "Intent", isGate: true, category: "backlog" }} />
-        <StateBadge state={{ name: "Build", isGate: false, category: "active" }} />
-        <StateBadge state={{ name: "Done", isGate: false, category: "done" }} />
-        <StateBadge state={{ name: "Todo", isGate: false, category: "backlog" }} />
-      </div>
-
       <div className="flex flex-wrap items-center gap-2">
         {(Object.keys(runStatusLabels) as RunStatusValue[]).map((status) => (
           <RunStatus key={status} status={status} />
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2" aria-label="Label swatches">
-        {swatches.map((hex, index) => (
-          <span
-            key={hex}
-            className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
-            style={{ background: hex }}
-          >
-            label {index + 1}
-          </span>
         ))}
       </div>
 
@@ -106,7 +81,7 @@ function Sheet({ theme }: { theme: "light" | "dark" }) {
   );
 }
 
-/** The tokens, drawn side by side in both themes, with the Label swatches, for reviewing a palette change. */
+/** The tokens, drawn side by side in both themes, for reviewing a palette change. */
 export function TokensPage() {
   return (
     <div className="flex flex-col gap-6">
@@ -114,8 +89,7 @@ export function TokensPage() {
         <h1 className="text-xl font-semibold tracking-tight">Tokens</h1>
         <p className="text-sm text-muted-foreground">
           The palette and the type scale, as the browser draws them. Human, Agent and Gate are the
-          only saturated colours on a screen besides the primary; Labels choose among the eight
-          swatches.
+          only saturated colours on a screen besides the primary.
         </p>
       </header>
       <div className="grid gap-4 lg:grid-cols-2">

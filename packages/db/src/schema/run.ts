@@ -9,7 +9,6 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 export const runTriggers = [
   "assignment",
   "mention",
-  "state_rule",
   "schedule",
   "manual",
   /**

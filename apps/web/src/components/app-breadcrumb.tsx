@@ -118,7 +118,7 @@ export function AppBreadcrumb() {
   const crumbs: Crumb[] = nowhere
     ? [{ label: "Not found" }]
     : crumbsFor(pathname, search, {
-        project: (key) => projects.data?.projects.find((project) => project.key === key)?.name,
+        project: (key) => projects.data?.projects.find((project) => project.slug === key)?.name,
         member: (id) => members.data?.members.find((member) => member.id === id)?.user.name,
       });
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { notification as notificationTable } from "@deevy/db";
 import { MemberWithUserSchema, NotificationWithIssueSchema } from "../schemas.ts";
 import { NoInput, defineOperation } from "./registry.ts";
-import { QueryFlag, issueWith, withKey } from "./shared.ts";
+import { QueryFlag, issueWith } from "./shared.ts";
 
 export const inbox = {
   list: defineOperation({
@@ -49,11 +49,6 @@ export const inbox = {
         orderBy: { eventId: "desc" },
         limit: input.limit,
       });
-      const projects = await context.db.query.project.findMany({
-        where: { workspaceId: context.workspace.id },
-        columns: { id: true, key: true },
-      });
-      const keyOf = new Map(projects.map((project) => [project.id, project.key]));
       const actorIds = [
         ...new Set(
           rows.flatMap((row) => (row.event.actorMemberId ? [row.event.actorMemberId] : [])),
@@ -67,34 +62,26 @@ export const inbox = {
             })
           : [];
       const actorById = new Map(actors.map((actor) => [actor.id, actor]));
-      const commentIds = rows.flatMap((row) => {
-        const payload = row.event.payload as { commentId?: unknown } | null;
-        return row.event.kind.startsWith("comment.") && typeof payload?.commentId === "string"
-          ? [payload.commentId]
-          : [];
-      });
-      const comments =
-        commentIds.length > 0
-          ? await context.db.query.comment.findMany({
-              where: { id: { in: commentIds } },
-              columns: { id: true, body: true, deletedAt: true },
-            })
-          : [];
-      const commentById = new Map(
-        comments.map((row) => [row.id, { id: row.id, body: row.deletedAt ? null : row.body }]),
-      );
       return {
         notifications: rows.map((row) => {
-          const payload = row.event.payload as { commentId?: unknown } | null;
+          // What was written rides on the Event: deevy stores no comments, and
+          // the body it appended is what the mention was about (ADR-0024).
+          const payload = row.event.payload as {
+            externalCommentId?: unknown;
+            body?: unknown;
+          } | null;
           return {
             ...row,
-            issue: row.issue ? withKey(row.issue, keyOf.get(row.issue.projectId) ?? "") : null,
+            issue: row.issue,
             actor: row.event.actorMemberId
               ? (actorById.get(row.event.actorMemberId) ?? null)
               : null,
             comment:
-              typeof payload?.commentId === "string"
-                ? (commentById.get(payload.commentId) ?? null)
+              typeof payload?.externalCommentId === "string"
+                ? {
+                    id: payload.externalCommentId,
+                    body: typeof payload.body === "string" ? payload.body : null,
+                  }
                 : null,
           };
         }),
