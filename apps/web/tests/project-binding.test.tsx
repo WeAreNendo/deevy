@@ -12,6 +12,7 @@ import { pickOption } from "./select.ts";
  */
 const calls = vi.hoisted(() => ({
   update: vi.fn(async (_input: Record<string, unknown>) => ({})),
+  create: vi.fn(async (_input: Record<string, unknown>) => ({})),
   setCheckpoints: vi.fn(async (_input: Record<string, unknown>) => ({ checkpoints: [] })),
 }));
 
@@ -33,6 +34,10 @@ vi.mock("../src/lib/orpc.ts", async () => {
       get: async () => project,
       update: async (input: Record<string, unknown>) => {
         void calls.update(input);
+        return { ...project, ...input };
+      },
+      create: async (input: Record<string, unknown>) => {
+        void calls.create(input);
         return { ...project, ...input };
       },
     },
@@ -181,5 +186,31 @@ describe("what a Project asks at a Checkpoint", () => {
 
     const policy = await screen.findByRole("region", { name: "Checkpoints" });
     expect(within(policy).getByText(/one approval, from anybody/i)).toBeTruthy();
+  });
+});
+
+describe("binding a new Project", () => {
+  it("picks a tool, a container inside it, and the Agent its records go to", async () => {
+    state.checkpoints = [];
+    calls.create.mockClear();
+    await mountAt("/settings/projects");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Bind a Project" }));
+    const dialog = await screen.findByRole("dialog", { name: /Bind a Project/ });
+
+    // The tool first, because the containers it offers depend on it.
+    await pickOption(within(dialog).getByRole("combobox", { name: "Tool" }), /acme on GitHub/);
+    // And the containers are the tool's own answer, never typed by hand.
+    await pickOption(within(dialog).getByRole("combobox", { name: "Container" }), "acme/ops");
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Operations" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Bind it" }));
+
+    await waitFor(() => expect(calls.create).toHaveBeenCalledTimes(1));
+    expect(calls.create.mock.calls[0]?.[0]).toMatchObject({
+      name: "Operations",
+      // From the container, so a Project's handle is the thing it is bound to.
+      slug: "acme-ops",
+      tracker: { socketId: "sock_stub00000", scope: { scopeKey: "acme/ops" } },
+    });
   });
 });

@@ -811,6 +811,18 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 5, as built.** The plan's list for this slice included Channels' `slack_app` kind and Notifications'
+Slack direct-message column. Both are the Slack Socket's, and it arrives in slice 10; offering either now
+would be a setting with nothing behind it, so they move there. What took their place is the one thing the
+plan's list did not name and a fresh instance cannot do without: **binding a Project at all**. The old
+`/projects` page is a redirect now, so without a `Bind a Project` dialog in Settings a new Workspace could
+connect GitHub and then have nowhere to point it.
+
+Two smaller decisions. `sockets.providers` exists because a screen has to offer exactly what the build can
+speak — the registry is injected, so the SPA cannot know it — and the `stub` is left out of what it offers,
+since a development fixture is not a tool somebody connects. And the container picker stays live while its
+answer is in flight rather than disabling itself: a select that goes dead loses the click that opened it.
+
 **Slice 4, as built.** The setup route came back from slice 1 with a shape the plan had not settled, and it
 settled itself: a provider's redirect is a port method (`SocketModule.setup`), so the core knows nothing
 about manifests, and the operator's browser is sent back to a Socket that already exists —
