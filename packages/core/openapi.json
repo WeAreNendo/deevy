@@ -4917,27 +4917,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -5181,27 +5174,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -5447,27 +5433,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -7896,27 +7875,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -8227,27 +8199,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -8464,27 +8429,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -8782,27 +8740,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -9029,27 +8980,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -11328,27 +11272,20 @@
                           ]
                         },
                         "routing": {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
+                          "type": "object",
+                          "properties": {
+                            "labelPrefix": {
+                              "type": "string"
                             },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
+                            "mention": {
+                              "type": "boolean"
                             }
-                          ]
+                          },
+                          "required": [
+                            "labelPrefix",
+                            "mention"
+                          ],
+                          "additionalProperties": false
                         },
                         "mirror": {
                           "type": "string",
@@ -12988,27 +12925,20 @@
                           ]
                         },
                         "routing": {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
+                          "type": "object",
+                          "properties": {
+                            "labelPrefix": {
+                              "type": "string"
                             },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
+                            "mention": {
+                              "type": "boolean"
                             }
-                          ]
+                          },
+                          "required": [
+                            "labelPrefix",
+                            "mention"
+                          ],
+                          "additionalProperties": false
                         },
                         "mirror": {
                           "type": "string",

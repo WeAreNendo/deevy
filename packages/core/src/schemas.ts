@@ -61,7 +61,15 @@ export const SocketSchema = createSelectSchema(socket)
 /** One delivery, as a settings page lists what a tool has said lately. */
 export const InboundDeliverySchema = createSelectSchema(inboundDelivery);
 
-export const ProjectSchema = createSelectSchema(project);
+export const ProjectSchema = createSelectSchema(project).extend({
+  /**
+   * How a record says which Agent it is for. Declared rather than left as
+   * loose JSON, because every reader of a Project asks for these two fields
+   * and a screen should not have to narrow a column deevy itself wrote
+   * (schema/project.ts).
+   */
+  routing: z.object({ labelPrefix: z.string(), mention: z.boolean() }),
+});
 
 export const IssueSchema = createSelectSchema(issue);
 

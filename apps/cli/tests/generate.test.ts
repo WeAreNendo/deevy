@@ -70,6 +70,10 @@ describe("what the registry turns into", () => {
       "projects.create.docs",
       "projects.create.forge",
       "projects.create.tracker",
+      // The rest of a binding, changed after the fact: where the code is, and
+      // how a record names the Agent it is for (ADR-0024).
+      "projects.update.forge",
+      "projects.update.routing",
       "routing.set.rules",
       "runs.postActivity.payload",
       // The configuration a provider's own flow needs before there is a

@@ -26,6 +26,8 @@ import { InboxPage, parseInboxSearch } from "./routes/inbox.tsx";
 import { NotFoundPage } from "./routes/not-found.tsx";
 import { ProjectsSettingsPage } from "./routes/settings/projects.tsx";
 import { ChannelsPage } from "./routes/settings/channels.tsx";
+import { SocketsPage } from "./routes/settings/sockets.tsx";
+import { SocketPage } from "./routes/settings/socket.tsx";
 import { EventLogPage } from "./routes/settings/events.tsx";
 import { SettingsLayout } from "./routes/settings/layout.tsx";
 import { NotificationsPage } from "./routes/settings/notifications.tsx";
@@ -196,6 +198,19 @@ const labelsRoute = createRoute({
     throw redirect({ to: "/settings/projects" });
   },
 });
+// The tools this Workspace is connected to, and one of them (ADR-0024).
+const socketsRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "sockets",
+  component: SocketsPage,
+});
+const socketRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "sockets/$socketId",
+  component: function SocketRoute() {
+    return <SocketPage socketId={socketRoute.useParams().socketId} />;
+  },
+});
 const membersRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "members",
@@ -289,6 +304,8 @@ const routeTree = rootRoute.addChildren([
     workspaceRoute,
     teamsRoute,
     projectsSettingsRoute,
+    socketsRoute,
+    socketRoute,
     labelsRoute,
     membersRoute,
     agentsRoute,
