@@ -82,12 +82,6 @@ export const IssueSummarySchema = IssueSchema.extend({
 });
 
 /** An Issue as its own page shows one: the summary plus its family. */
-export const IssueDetailSchema = IssueSummarySchema.extend({
-  project: ProjectSchema,
-  parent: IssueSummarySchema.nullable(),
-  children: z.array(IssueSummarySchema),
-});
-
 /** A comment as it stands in the tracker. deevy stores none of them. */
 export const ExternalCommentSchema = z.object({
   externalId: z.string(),
@@ -95,6 +89,18 @@ export const ExternalCommentSchema = z.object({
   body: z.string(),
   author: z.object({ login: z.string(), id: z.string(), isBot: z.boolean() }),
   createdAt: z.date(),
+});
+
+export const IssueDetailSchema = IssueSummarySchema.extend({
+  project: ProjectSchema,
+  parent: IssueSummarySchema.nullable(),
+  children: z.array(IssueSummarySchema),
+  /**
+   * The conversation, read from the tracker at the moment of asking, or null
+   * where the caller did not ask. deevy stores no comments (ADR-0024), so this
+   * is a request to somebody else's API and never a column.
+   */
+  comments: z.array(ExternalCommentSchema).nullable(),
 });
 
 export const IssueLinkSchema = createSelectSchema(issueLink);

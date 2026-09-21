@@ -353,3 +353,23 @@ describe("issues.list", () => {
     });
   });
 });
+
+describe("reading the conversation", () => {
+  it("is the tracker's to answer, and only when somebody asks for it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
+
+    // deevy stores no comments (ADR-0024), so a read that does not ask for
+    // them makes no request to the tracker at all.
+    const quiet = await asAda.issues.get({ issue: issue.url });
+    expect(quiet.comments).toBeNull();
+
+    const loud = await asAda.issues.get({ issue: issue.url, comments: true });
+    expect(loud.comments).toEqual([]);
+  });
+});

@@ -98,6 +98,12 @@ export {
   type SweepStaleRunsOptions,
 } from "./work.ts";
 export { idPrefixes, isId, newId, type IdKind } from "./ids.ts";
+/**
+ * Sealing, for the entries and for a provider package's own tests: what goes
+ * into a Socket's columns is what `sockets.connect` would have put there
+ * (secrets.ts).
+ */
+export { openSecret, requireSealingSecret, sealSecret, signState, verifyState } from "./secrets.ts";
 export {
   parseIssueRef,
   routeIssueTo,
