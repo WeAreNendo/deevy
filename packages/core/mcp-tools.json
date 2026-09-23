@@ -387,6 +387,43 @@
     }
   },
   {
+    "name": "pulls_open",
+    "operation": "pulls.open",
+    "summary": "Open the pull request for your Run's branch, and attach it to the record",
+    "readOnly": false,
+    "agents": true,
+    "agentsOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 60000
+        }
+      },
+      "required": [
+        "runId"
+      ]
+    }
+  },
+  {
     "name": "runs_answer",
     "operation": "runs.answer",
     "summary": "Answer a Run's elicitation, so the Agent carries on",

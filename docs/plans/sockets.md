@@ -811,6 +811,18 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 6, as built.** Nothing in the plan's shape changed, and two things were tightened on the way past.
+`links.add` and `pulls.open` now attach evidence through one function, so a link looks the same whoever
+attached it and the `runId` reaches the Event either way — the plan had them as separate writes, which is
+how the two would have drifted. And `requireForgeBinding` is a `NOT_FOUND` about the repository rather than
+an error about the Project, because a tracker with nothing to build is an ordinary Project and the refusal
+should read like it.
+
+The runtime still carries its own `branchFor` and its own forge client; slice 8 is where they go, and where
+it starts reading `headBranch` off `runs.checkout` instead. Until then the two agree because the core's
+implementation was moved from the runtime's, which is the weakest form of agreement and the reason slice 8
+deletes one of them.
+
 **Slice 5, as built.** The plan's list for this slice included Channels' `slack_app` kind and Notifications'
 Slack direct-message column. Both are the Slack Socket's, and it arrives in slice 10; offering either now
 would be a setting with nothing behind it, so they move there. What took their place is the one thing the

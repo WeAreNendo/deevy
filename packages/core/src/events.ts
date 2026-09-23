@@ -107,6 +107,13 @@ export type EventKind =
   /** Silence, not a decision: the sweep said so, and an Activity undoes it. */
   | "run.went_stale"
   /**
+   * The code half of a Run (ADR-0014, ADR-0024). `run.checkout_issued` says a
+   * credential was minted and never what it was; `run.pull_request_opened`
+   * says where the work went.
+   */
+  | "run.checkout_issued"
+  | "run.pull_request_opened"
+  /**
    * A URL that asked to be told, and the one thing that can go wrong with it:
    * `webhook.exhausted` is deevy admitting it could not deliver (ADR-0003).
    */

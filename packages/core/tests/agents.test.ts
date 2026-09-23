@@ -88,7 +88,15 @@ describe("the Agent capability rule", () => {
       // Where it learns what its Project is bound to, without asking a Human.
       "projects.get",
       "projects.list",
+      // Opening the pull request for its own Run's branch. deevy opens it, so
+      // the credential a Run clones with never has to be one that could
+      // (ADR-0014, docs/plans/sockets.md slice 6).
+      "pulls.open",
       // `runs.answer` is not here: an elicitation asks a Human.
+      // `runs.checkout` is, and is deliberately not a tool: it answers with a
+      // credential, and a credential in a model's context is one in a
+      // transcript.
+      "runs.checkout",
       "runs.finish",
       "runs.get",
       "runs.list",

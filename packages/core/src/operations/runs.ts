@@ -27,9 +27,12 @@ import {
   parseRunCursor,
   QueryFlag,
   resolveIssueRef,
+  requireForgeBinding,
   requireRun,
   runView,
 } from "./shared.ts";
+import { branchFor } from "../forge.ts";
+import { requireForge, requireSocket, socketModuleFor } from "../sockets/registry.ts";
 
 /** The Agent working a Run, joined so "mine" can ask who sponsors it. */
 const agentMember = alias(memberTable, "agent_member");
@@ -199,6 +202,66 @@ export const runs = {
       const row = await context.db.query.activity.findFirst({ where: { id } });
       if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
       return { run: runView(updated, key), activity: row };
+    },
+  }),
+
+  checkout: defineOperation({
+    name: "runs.checkout",
+    summary: "The repository, the branch to cut, and a credential to clone with",
+    method: "POST",
+    path: "/runs/{runId}/checkout",
+    auth: "member",
+    agents: true,
+    agentsOnly: true,
+    // Deliberately not a tool. It answers with a credential, and a credential
+    // in a model's context is a credential in a transcript (ADR-0014); the
+    // supervisor calls this over HTTP and keeps the token to itself. The
+    // runtime's own allowlist is the second fence.
+    input: z.object({ runId: z.string() }),
+    output: z.object({
+      cloneUrl: z.string(),
+      /** What to clone from, and what to push back to. */
+      baseBranch: z.string(),
+      /** The branch this Run works on. deevy names it so nobody invents one. */
+      headBranch: z.string(),
+      /** The user the token goes with, where the provider wants one. */
+      username: z.string(),
+      token: z.string(),
+      /** When it dies. A Run resumed after a Gate asks again (ADR-0019). */
+      expiresAt: z.date().nullable(),
+    }),
+    handler: async ({ input, context }) => {
+      const { run, project, key } = await requireRun(context, input.runId);
+      assertOwnRun(context, run);
+      const binding = requireForgeBinding(project);
+
+      const socket = await requireSocket(context, binding.socketId);
+      const forge = requireForge(await socketModuleFor(context, socket));
+      const credential = await forge.credential(binding.scope);
+
+      const headBranch = branchFor(key, run.id);
+      // The log says a credential was issued, and never what it was.
+      await appendEvent(context, {
+        kind: "run.checkout_issued",
+        subjectType: "run",
+        subjectId: run.id,
+        projectId: project.id,
+        payload: {
+          issueId: run.issueId,
+          cloneUrl: credential.cloneUrl,
+          baseBranch: binding.baseBranch,
+          headBranch,
+        },
+      });
+
+      return {
+        cloneUrl: credential.cloneUrl,
+        baseBranch: binding.baseBranch,
+        headBranch,
+        username: credential.username,
+        token: credential.secret,
+        expiresAt: credential.expiresAt,
+      };
     },
   }),
 
