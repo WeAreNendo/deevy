@@ -151,3 +151,32 @@ export const gateDecision = sqliteTable(
   },
   (table) => [uniqueIndex("gate_decision_uidx").on(table.gateRequestId, table.memberId)],
 );
+
+/** What a mirrored thing is: a comment on the record, a label on it, a message in a room. */
+export const socketMirrorKinds = ["comment", "label", "message"] as const;
+
+/**
+ * What deevy posted where (ADR-0024).
+ *
+ * Mirroring is one-way until somebody rules: then the comment deevy wrote
+ * about a Gate is out of date, and the Slack message still has buttons on it.
+ * This is the note of where those are, so a Ruling from any door can go back
+ * and change what it finds.
+ */
+export const socketMirror = sqliteTable(
+  "socket_mirror",
+  {
+    id: text("id").primaryKey(),
+    gateRequestId: text("gate_request_id").references(() => gateRequest.id, {
+      onDelete: "cascade",
+    }),
+    socketId: text("socket_id")
+      .notNull()
+      .references(() => socket.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: socketMirrorKinds }).notNull(),
+    /** Where it landed, in the provider's own words: a comment id, a channel and timestamp. */
+    externalRef: text("external_ref", { mode: "json" }).$type<Record<string, unknown>>(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
+  },
+  (table) => [index("socket_mirror_gate_idx").on(table.gateRequestId)],
+);

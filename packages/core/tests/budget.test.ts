@@ -152,9 +152,11 @@ describe("reading an Issue with children", () => {
  * depth an admin may raise multiplied it. Two recursive queries replaced nine,
  * and `startRun` stopped reading back a row it had just inserted. Forty-four
  * until the Sockets cut, which took the Document and its Event tail out of the
- * same write.
+ * same write; then one more for the mirror derivation, which reads the
+ * Project a `run.started` belongs to before deciding it has nothing to say
+ * (sockets/mirror.ts).
  */
-const delegating = 34;
+const delegating = 35;
 
 describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(delegating)}`, () => {
   it("stays under D1's cap at the deepest tree the Workspace allows", async () => {
@@ -254,7 +256,7 @@ describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(del
  * invocations and never one, because the page is what bounds a poll and the
  * provider is what bounds a hook.
  */
-const delivery = 23;
+const delivery = 24;
 
 describe(`the D1 request budget: one delivery that opens a Run costs ${String(delivery)}`, () => {
   it("is under D1's cap for the record a routing label names an Agent on", async () => {
@@ -308,8 +310,8 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
  * move and two Events; the ruling pays for the policy, the decision row, the
  * Event and the Run resuming with a third.
  */
-const asking = 17;
-const ruling = 17;
+const asking = 19;
+const ruling = 19;
 
 describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
   it("stays well under D1's cap on both halves", async () => {

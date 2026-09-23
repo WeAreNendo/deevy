@@ -19,6 +19,7 @@ export const idPrefixes = {
   checkpoint: "chk",
   gateRequest: "gate",
   gateDecision: "dec",
+  socketMirror: "mir",
   activity: "act",
   notification: "ntf",
   webhook: "whk",

@@ -289,6 +289,14 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     }
     case "socket.updated":
       return say(`changed ${str(p.name) ?? "a Socket"}`);
+    case "socket.mirror_exhausted":
+      // deevy could not say back in the tracker what happened here, and has
+      // stopped trying: the two records have drifted, and somebody should know.
+      return say(
+        `could not say this in ${str(p.name) ?? "the tool"}, and has stopped trying`,
+        null,
+        "destructive",
+      );
     case "socket.installation_added": {
       // One App serves every place somebody installs it, so this is the tool
       // telling deevy where it now is rather than anybody in deevy acting.

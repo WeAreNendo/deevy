@@ -26,7 +26,13 @@ import { event } from "./schema/event.ts";
 import { notification } from "./schema/notification.ts";
 import { issueLink } from "./schema/link.ts";
 import { issue } from "./schema/issue.ts";
-import { checkpoint, checkpointApprover, gateDecision, gateRequest } from "./schema/gate.ts";
+import {
+  checkpoint,
+  checkpointApprover,
+  gateDecision,
+  gateRequest,
+  socketMirror,
+} from "./schema/gate.ts";
 import { project } from "./schema/project.ts";
 import { inboundDelivery, socket } from "./schema/socket.ts";
 import { member, workspace } from "./schema/workspace.ts";
@@ -57,6 +63,7 @@ export const tables = {
   checkpointApprover,
   gateRequest,
   gateDecision,
+  socketMirror,
   issue,
   issueLink,
   notification,
@@ -174,6 +181,12 @@ const appRelations = defineRelationsPart(tables, (r) => ({
       from: r.gateRequest.id,
       to: r.gateDecision.gateRequestId,
     }),
+    /** What deevy posted about it, and where (ADR-0024). */
+    mirrors: r.many.socketMirror({ from: r.gateRequest.id, to: r.socketMirror.gateRequestId }),
+  },
+  socketMirror: {
+    request: r.one.gateRequest({ from: r.socketMirror.gateRequestId, to: r.gateRequest.id }),
+    socket: r.one.socket({ from: r.socketMirror.socketId, to: r.socket.id, optional: false }),
   },
   gateDecision: {
     request: r.one.gateRequest({

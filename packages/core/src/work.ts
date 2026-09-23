@@ -5,6 +5,7 @@ import {
   event as eventTable,
   inboundDelivery,
   issue as issueTable,
+  socketMirror as socketMirrorTable,
   member as memberTable,
   notification as notificationTable,
   project as projectTable,
@@ -13,6 +14,7 @@ import {
   type Db,
   type deliveryTargets,
   type Event,
+  type Issue,
   type Project,
   type Socket,
 } from "@deevy/db";
@@ -26,7 +28,9 @@ import {
   notificationKindOf,
 } from "./notifications.ts";
 import { openStatuses } from "./runs.ts";
+import { appendEvent } from "./events.ts";
 import { applyInbound } from "./sockets/apply.ts";
+import { mirrorFor, mirrorsKind, type MirrorAction } from "./sockets/mirror.ts";
 import { forgetOldDeliveries } from "./sockets/hooks.ts";
 import type { InboundEvent, SocketModules } from "./sockets/port.ts";
 import { socketModuleFor } from "./sockets/registry.ts";
@@ -820,6 +824,243 @@ export async function deliverDueChannelMessages({
   return result;
 }
 
+export interface DeliverDueSocketMirrorsOptions {
+  db: Db;
+  workspaceId: string;
+  /** The providers this deployment can speak. Without them nothing is sent. */
+  sockets?: SocketModules;
+  socketSecret?: string;
+  /** Where a Human opens the Gate the comment is about. */
+  baseUrl?: string;
+  now?: Date;
+  limit?: number;
+  maxAttempts?: number;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Says back in the tracker what happened in deevy (ADR-0024).
+ *
+ * The third arm beside Slack and the webhooks, with their claim, their backoff
+ * and their retirement: what is different is only where it lands. A Socket an
+ * operator has rested retires what it was owed rather than queueing comments
+ * against the day they resume it — that is not what resting a tool means.
+ */
+export async function deliverDueSocketMirrors({
+  db,
+  workspaceId,
+  sockets,
+  socketSecret,
+  baseUrl,
+  now = new Date(),
+  limit = defaultDeliveryLimit,
+  maxAttempts = maxDeliveryAttempts,
+  fetch: fetchImpl,
+}: DeliverDueSocketMirrorsOptions): Promise<DeliveryResult> {
+  const result: DeliveryResult = {
+    scanned: 0,
+    delivered: 0,
+    failed: 0,
+    gaveUp: 0,
+    more: false,
+  };
+  if (!sockets) return result;
+
+  const due = await dueDeliveries(db, "socket", { workspaceId, now, limit, maxAttempts });
+  result.more = due.length >= limit;
+  if (due.length === 0) return result;
+
+  const claimed = await claimDeliveries(
+    db,
+    due.map((row) => row.id),
+    now,
+  );
+  result.scanned = claimed.length;
+  if (claimed.length === 0) return result;
+
+  // The lookups the comments are rendered from, batched the way Slack's are:
+  // the Events, the Sockets they are headed for, the records they are about,
+  // the Gates they ask about, and who was working.
+  const eventBySeq = await eventsOf(db, claimed);
+  const events = [...eventBySeq.values()];
+  const socketRows = await db.query.socket.findMany({
+    where: { id: { in: [...new Set(claimed.map((row) => row.targetId))] } },
+  });
+  const socketById = new Map(socketRows.map((row) => [row.id, row]));
+  const projects = await db.query.project.findMany({
+    where: { id: { in: [...new Set(events.map((event) => event.projectId).filter(isText))] } },
+  });
+  const projectById = new Map(projects.map((row) => [row.id, row]));
+  const issueIds = [...new Set(events.map((event) => issueOf(event)).filter(isText))];
+  const issues = issueIds.length
+    ? await db.query.issue.findMany({ where: { id: { in: issueIds } } })
+    : [];
+  const issueById = new Map(issues.map((row) => [row.id, row]));
+
+  // A Gate's own words, and the Agent that asked: a comment says which
+  // Checkpoint and which Agent, and neither is in the Event.
+  const gateIds = events
+    .filter((event) => event.kind.startsWith("gate.") && event.subjectType === "gate")
+    .map((event) => event.subjectId);
+  const gates = gateIds.length
+    ? await db.query.gateRequest.findMany({ where: { id: { in: [...new Set(gateIds)] } } })
+    : [];
+  const gateById = new Map(gates.map((row) => [row.id, row]));
+  const runIds = [
+    ...new Set([
+      ...gates.map((gate) => gate.runId),
+      ...events.filter((event) => event.subjectType === "run").map((event) => event.subjectId),
+    ]),
+  ];
+  const runs = runIds.length
+    ? await db.query.run.findMany({
+        where: { id: { in: runIds } },
+        with: { agent: { with: { user: true } } },
+      })
+    : [];
+  const runById = new Map(runs.map((row) => [row.id, row]));
+
+  const undeliverable: string[] = [];
+  const sending: Array<{
+    id: string;
+    socket: Socket;
+    issue: Issue;
+    action: MirrorAction;
+    gateId: string | null;
+  }> = [];
+  for (const row of claimed) {
+    const event = eventBySeq.get(row.eventSeq);
+    const socket = socketById.get(row.targetId);
+    const issueId = event ? issueOf(event) : null;
+    const issue = issueId ? issueById.get(issueId) : undefined;
+    const project = event?.projectId ? projectById.get(event.projectId) : undefined;
+    // A Socket that was rested, disconnected or never built, a Project that
+    // stopped mirroring, a record that is gone: none of these become sendable
+    // by waiting, so they are retired rather than retried.
+    if (
+      !event ||
+      !socket ||
+      !issue ||
+      !project ||
+      socket.status !== "active" ||
+      !mirrorsKind(event.kind, project.mirror)
+    ) {
+      undeliverable.push(row.id);
+      continue;
+    }
+    const gate = event.subjectType === "gate" ? gateById.get(event.subjectId) : undefined;
+    const run = gate
+      ? runById.get(gate.runId)
+      : event.subjectType === "run"
+        ? runById.get(event.subjectId)
+        : undefined;
+    const action = mirrorFor(event, {
+      gate: gate
+        ? {
+            id: gate.id,
+            checkpoint: gate.checkpoint,
+            proposal: gate.proposal,
+            links: gate.links,
+          }
+        : null,
+      agentName: run?.agent.user.name ?? null,
+      runId: run?.id ?? null,
+      ...(baseUrl ? { origin: baseUrl.replace(/\/+$/, "") } : {}),
+    });
+    if (!action) {
+      undeliverable.push(row.id);
+      continue;
+    }
+    sending.push({ id: row.id, socket, issue, action, gateId: gate?.id ?? null });
+  }
+
+  const attempted: Attempted[] = [];
+  for (const { id, socket, issue, action, gateId } of sending) {
+    try {
+      const module = await socketModuleFor(
+        {
+          db,
+          sockets,
+          ...(socketSecret ? { socketSecret } : {}),
+          ...(fetchImpl ? { fetch: fetchImpl } : {}),
+        },
+        socket,
+      );
+      const tracker = module.tracker;
+      if (!tracker) {
+        undeliverable.push(id);
+        continue;
+      }
+      const project = projectById.get(issue.projectId);
+      const scope = project?.trackerScope ?? {};
+      const ref = { externalId: issue.externalId, url: issue.url };
+      const posted = await tracker.createComment(scope, ref, action.comment);
+      if (action.labels.add.length > 0 || action.labels.remove.length > 0) {
+        await tracker.setLabels(scope, ref, action.labels);
+      }
+      // Where it landed, so a later Ruling can go back and change what it
+      // finds (schema/gate.ts).
+      await db.insert(socketMirrorTable).values({
+        id: newId("socketMirror"),
+        gateRequestId: gateId,
+        socketId: socket.id,
+        kind: "comment",
+        externalRef: { externalId: posted.externalId, url: posted.url },
+      });
+      attempted.push({ id, delivered: true, status: 200, error: null });
+    } catch (error) {
+      attempted.push({
+        id,
+        delivered: false,
+        // No HTTP of deevy's own here: a provider module made the request and
+        // what comes back is its refusal in words.
+        status: 0,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const recorded = await recordOutcomes(db, attempted, {
+    now,
+    backoff: slackBackoff,
+    maxAttempts,
+    attemptsBefore: new Map(claimed.map((row) => [row.id, row.attempts])),
+  });
+  result.delivered = recorded.delivered;
+  result.failed = recorded.failed;
+  result.gaveUp = recorded.exhausted.length + undeliverable.length;
+
+  await retireDeliveries(
+    db,
+    undeliverable,
+    "the tool this was owed to is gone, rested, or no longer mirrors",
+    maxAttempts,
+  );
+
+  // Running out of attempts is deevy admitting it could not say what happened,
+  // which belongs in the log the way `webhook.exhausted` does (ADR-0003).
+  for (const id of recorded.exhausted) {
+    const row = claimed.find((one) => one.id === id);
+    const socket = row ? socketById.get(row.targetId) : undefined;
+    if (!socket) continue;
+    await appendEvent(
+      { db, workspace: { id: workspaceId }, member: null },
+      {
+        kind: "socket.mirror_exhausted",
+        subjectType: "socket",
+        subjectId: socket.id,
+        payload: { name: socket.name, deliveryId: id },
+      },
+    );
+  }
+  return result;
+}
+
+/** Whether a value is a string, for the id lists these lookups are built from. */
+function isText(value: string | null): value is string {
+  return typeof value === "string";
+}
+
 export interface DeliverDueWebhooksOptions {
   db: Db;
   workspaceId: string;
@@ -1397,6 +1638,8 @@ export interface DueWorkResult {
   syncedRecords: number;
   /** Deliveries old enough that no provider could still replay them. */
   forgottenDeliveries: number;
+  /** Comments deevy left in a tracker, saying back what happened here. */
+  mirrored: number;
   /** The signal was aborted, so the passes after that point did not run. */
   aborted: boolean;
 }
@@ -1443,6 +1686,7 @@ export async function runDueWork({
     gateReminders: 0,
     syncedRecords: 0,
     forgottenDeliveries: 0,
+    mirrored: 0,
     aborted: false,
   };
 
@@ -1512,6 +1756,27 @@ export async function runDueWork({
       result.gateReminders += of.changed;
     },
   );
+  // And what the trackers are owed: deevy saying back where the work lives, so
+  // a team never has to come here to follow along (ADR-0024). Without a
+  // registry there is nothing to say it to.
+  if (sockets) {
+    await drain(
+      () =>
+        deliverDueSocketMirrors({
+          db,
+          workspaceId,
+          sockets,
+          now,
+          ...(socketSecret ? { socketSecret } : {}),
+          ...(baseUrl ? { baseUrl } : {}),
+          ...(fetch ? { fetch } : {}),
+          ...deliveryBound,
+        }),
+      (of) => {
+        result.mirrored += of.delivered;
+      },
+    );
+  }
   // And what a tool was never able to tell deevy, because this instance has no
   // address it can reach: the poll asks instead (ADR-0024). Without a registry
   // there is nothing to ask, which is a deployment that connected no tool.
