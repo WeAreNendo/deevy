@@ -6,8 +6,13 @@ import { member, workspace } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
-/** Where Notifications are delivered (CONTEXT.md). The inbox always exists; Slack is configured. */
-export const channelKinds = ["inbox", "slack"] as const;
+/**
+ * Where Notifications are delivered (CONTEXT.md). The inbox always exists.
+ * `slack` is an incoming webhook: it posts a link and takes no click. `slack_app`
+ * is a room in a Slack Socket's workspace, where a Gate is posted with its two
+ * buttons and updated when somebody rules (ADR-0025).
+ */
+export const channelKinds = ["inbox", "slack", "slack_app"] as const;
 
 export const channel = sqliteTable(
   "channel",
@@ -57,6 +62,12 @@ export const notificationPreference = sqliteTable(
     kind: text("kind", { enum: humanNotificationKinds }).notNull(),
     inbox: integer("inbox", { mode: "boolean" }).default(true).notNull(),
     slack: integer("slack", { mode: "boolean" }).default(true).notNull(),
+    /**
+     * A direct message from the Slack app, for a Human whose Slack account is
+     * linked (ADR-0025). Nothing is sent to one who has not linked one, so the
+     * default only matters once they have.
+     */
+    slackDm: integer("slack_dm", { mode: "boolean" }).default(true).notNull(),
   },
   (table) => [primaryKey({ columns: [table.memberId, table.kind] })],
 );

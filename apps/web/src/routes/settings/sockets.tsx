@@ -3,6 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Cable, ChevronRight } from "lucide-react";
 import { ConnectGithub } from "@/components/connect-github";
+import { ConnectSlack } from "@/components/connect-slack";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -118,7 +119,7 @@ export function SocketsPage() {
       </SettingsSection>
 
       <Dialog open={connecting !== null} onOpenChange={(open) => !open && setConnecting(null)}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Connect {providerLabel(connecting ?? undefined)}</DialogTitle>
             <DialogDescription>
@@ -127,6 +128,13 @@ export function SocketsPage() {
           </DialogHeader>
           {connecting === "github" ? (
             <ConnectGithub
+              onConnected={() => {
+                setConnecting(null);
+                void client.invalidateQueries({ queryKey: orpc.sockets.key() });
+              }}
+            />
+          ) : connecting === "slack" ? (
+            <ConnectSlack
               onConnected={() => {
                 setConnecting(null);
                 void client.invalidateQueries({ queryKey: orpc.sockets.key() });

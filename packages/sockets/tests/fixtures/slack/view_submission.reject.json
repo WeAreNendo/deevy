@@ -1,0 +1,37 @@
+{
+  "type": "view_submission",
+  "team": {
+    "id": "T07ACME001",
+    "domain": "acme"
+  },
+  "user": {
+    "id": "U07GRACE01",
+    "username": "grace",
+    "name": "grace",
+    "team_id": "T07ACME001"
+  },
+  "api_app_id": "A07DEEVY01",
+  "token": "legacy-verification-token-unused",
+  "trigger_id": "9876543210124.7654321098765.1f2e3d4c5b6a79889706b5c4d3e2f1a0",
+  "view": {
+    "id": "V07NOTE001",
+    "team_id": "T07ACME001",
+    "type": "modal",
+    "callback_id": "deevy_reject",
+    "private_metadata": "{\"gateRequestId\": \"gate_k3xr8v2m9qpw\", \"channel\": \"C07DEEVY01\", \"ts\": \"1758625200.000100\"}",
+    "state": {
+      "values": {
+        "note": {
+          "note": {
+            "type": "plain_text_input",
+            "value": "Not until the migration is split in two"
+          }
+        }
+      }
+    },
+    "hash": "1758625400.abcdef12"
+  },
+  "response_urls": [],
+  "is_enterprise_install": false,
+  "enterprise": null
+}

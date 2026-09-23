@@ -56,6 +56,14 @@ export const socket = sqliteTable(
     credentials: text("credentials"),
     /** Sealed beside the credentials; what the provider signs its deliveries with. */
     webhookSecret: text("webhook_secret"),
+    /**
+     * The one it replaced, sealed, and when. A tool whose operator rotates its
+     * secret in the tool's own settings — Slack's signing secret — goes on
+     * signing with the old one until the new one is pasted here, and for a day
+     * after, both are taken (ADR-0025).
+     */
+    previousWebhookSecret: text("previous_webhook_secret"),
+    webhookSecretChangedAt: integer("webhook_secret_changed_at", { mode: "timestamp_ms" }),
     installedBy: text("installed_by").references(() => member.id, { onDelete: "set null" }),
     status: text("status", { enum: socketStatuses }).notNull().default("active"),
     /** When a delivery last arrived, which is what the catch-up poll reads. */

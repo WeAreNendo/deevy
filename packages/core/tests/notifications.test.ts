@@ -86,7 +86,7 @@ describe("routing a mention", () => {
     const routing = await routeEvent(db, await lastEvent(db, "comment.created"));
     expect(routing.inbox).toHaveLength(1);
     expect(routing.inbox[0]?.kind).toBe("mention");
-    expect(routing.slack).toEqual([{ channelId, webhookUrl, kind: "mention" }]);
+    expect(routing.slack).toEqual([{ channelId, target: "slack", kind: "mention" }]);
   });
 
   it("leaves one delivery owed to the Channel, whatever the Event told Humans", async () => {
@@ -372,7 +372,7 @@ describe("routing a finished Run", () => {
 
     const routing = await routeEvent(db, await lastEvent(db, "run.completed"));
     expect(routing.inbox).toEqual([]);
-    expect(routing.slack).toEqual([{ channelId, webhookUrl, kind: "run_finished" }]);
+    expect(routing.slack).toEqual([{ channelId, target: "slack", kind: "run_finished" }]);
     // The inbox row is not written either: the preference decides the row, not
     // just what a test is told about it.
     const rows = await db.query.notification.findMany({ where: { kind: "run_finished" } });

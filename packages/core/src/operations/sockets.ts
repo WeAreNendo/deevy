@@ -227,16 +227,26 @@ export const sockets = {
       webhookSecret: z.string().trim().min(8).max(500).optional(),
       /** Ask this tool every so often, for an instance the tool cannot reach. */
       pollMinutes: z.number().int().min(1).max(1440).optional(),
+      /**
+       * A Socket `sockets.begin` started, to complete rather than to connect a
+       * second one: Slack wants the request URL in the app's own manifest, and
+       * the URL names the Socket, so the row exists before its credential.
+       */
+      socketId: z.string().optional(),
     }),
     output: ConnectedSocketSchema,
     handler: async ({ input, context }) => {
-      // Built before the row exists, so a credential that does not work is a
-      // refusal rather than a Socket nobody can use.
-      const module = await socketModuleFor(
-        { ...context, socketSecret: context.socketSecret },
-        { provider: input.provider, config: input.config },
-      );
-      const identity = await module.identity();
+      const pending = input.socketId
+        ? await context.db.query.socket.findFirst({
+            where: { id: input.socketId, workspaceId: context.workspace.id },
+          })
+        : null;
+      if (input.socketId && (!pending || pending.provider !== input.provider)) {
+        throw new ORPCError("NOT_FOUND", { message: "No such Socket" });
+      }
+      if (pending && pending.status !== "pending") {
+        throw new ORPCError("CONFLICT", { message: "That Socket is already connected" });
+      }
 
       const sealed = {
         ...(input.credentials
@@ -244,23 +254,43 @@ export const sockets = {
           : {}),
         ...(input.webhookSecret ? { webhookSecret: await seal(context, input.webhookSecret) } : {}),
       };
+      const config = { ...pending?.config, ...input.config };
+      // Built before the row is written, and with the credential the operator
+      // pasted, so a credential that does not work is a refusal rather than a
+      // Socket nobody can use.
+      const module = await socketModuleFor(
+        { ...context, socketSecret: context.socketSecret },
+        { provider: input.provider, config, credentials: sealed.credentials ?? null },
+      );
+      // What proving the credential taught deevy that is not a secret — a
+      // Slack team's id — goes in the configuration, not the identity.
+      const { learned, ...identity } = await module.identity();
 
-      const [row] = await context.db
-        .insert(socketTable)
-        .values({
-          id: newId("socket"),
-          workspaceId: context.workspace.id,
-          provider: input.provider,
-          capabilities: [...module.capabilities],
-          name: input.name,
-          identity,
-          config: input.config,
-          installedBy: context.member.id,
-          ...(input.pollMinutes === undefined ? {} : { pollMinutes: input.pollMinutes }),
-          ...sealed,
-        })
-        .returning();
-      if (!row) throw new Error("sockets.connect: the insert returned no row");
+      const values = {
+        capabilities: [...module.capabilities],
+        name: input.name,
+        identity,
+        config: { ...config, ...learned },
+        ...(input.pollMinutes === undefined ? {} : { pollMinutes: input.pollMinutes }),
+        ...sealed,
+      };
+      const [row] = pending
+        ? await context.db
+            .update(socketTable)
+            .set({ ...values, status: "active", updatedAt: new Date() })
+            .where(eq(socketTable.id, pending.id))
+            .returning()
+        : await context.db
+            .insert(socketTable)
+            .values({
+              id: newId("socket"),
+              workspaceId: context.workspace.id,
+              provider: input.provider,
+              installedBy: context.member.id,
+              ...values,
+            })
+            .returning();
+      if (!row) throw new Error("sockets.connect: the write returned no row");
 
       await appendEvent(context, {
         kind: "socket.connected",
@@ -296,6 +326,13 @@ export const sockets = {
        * account id is the proof and an address is a weaker one (ADR-0025).
        */
       identityByEmail: z.boolean().optional(),
+      /**
+       * The secret the tool signs with, where the tool is where it is
+       * rotated — Slack's signing secret. The one it replaces is still taken
+       * for a day, so a rotation done in two places in either order drops
+       * nothing (ADR-0025).
+       */
+      webhookSecret: z.string().trim().min(8).max(500).optional(),
     }),
     output: SocketSchema,
     handler: async ({ input, context }) => {
@@ -313,9 +350,17 @@ export const sockets = {
         input.identityByEmail === undefined
           ? null
           : { ...found.config, identityByEmail: input.identityByEmail };
+      const secrets =
+        input.webhookSecret === undefined
+          ? {}
+          : {
+              webhookSecret: await seal(context, input.webhookSecret),
+              previousWebhookSecret: found.webhookSecret,
+              webhookSecretChangedAt: new Date(),
+            };
       const [row] = await context.db
         .update(socketTable)
-        .set({ ...changes, ...(config ? { config } : {}), updatedAt: new Date() })
+        .set({ ...changes, ...(config ? { config } : {}), ...secrets, updatedAt: new Date() })
         .where(eq(socketTable.id, found.id))
         .returning();
       if (!row) throw new Error("sockets.update: the update returned no row");
@@ -330,6 +375,8 @@ export const sockets = {
           ...(input.identityByEmail === undefined
             ? {}
             : { identityByEmail: input.identityByEmail }),
+          // That it changed, and never what to.
+          ...(input.webhookSecret === undefined ? {} : { webhookSecretReplaced: true }),
         },
       });
       return socketOut(row);
@@ -413,10 +460,15 @@ export const sockets = {
       const module = await socketModuleFor(context as SocketFor, row);
       // An account renamed on the tool's side is a thing that happens, and the
       // loop guard reads this, so what comes back is what is kept.
-      const identity = await module.identity();
+      const { learned, ...identity } = await module.identity();
       await context.db
         .update(socketTable)
-        .set({ identity, updatedAt: new Date() })
+        .set({
+          identity,
+          // A team renamed on the tool's side, learned the same way it was at connect.
+          ...(learned ? { config: { ...row.config, ...learned } } : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(socketTable.id, row.id));
       return { ok: true, identity };
     },

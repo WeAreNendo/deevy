@@ -29,7 +29,7 @@ import { newId } from "./ids.ts";
  * action, and a suspended Member is told nothing at all.
  */
 export async function deriveNotifications(db: Db, event: Event): Promise<void> {
-  const { inbox, slack } = await routeEvent(db, event);
+  const { inbox, slack, dms } = await routeEvent(db, event);
 
   if (inbox.length > 0) {
     // One row per recipient per kind per Event, which the unique index makes
@@ -53,21 +53,28 @@ export async function deriveNotifications(db: Db, event: Event): Promise<void> {
   // The delivery row is the record that a message is owed, and the only one
   // (schema/delivery.ts): the sweep renders it from this Event when it sends,
   // so nothing here copies what it will say. One row per Channel per Event
-  // with no recipient, because an incoming webhook posts to a room and three
-  // Humans concerned by one Event are not three messages in it.
-  if (slack.length > 0) {
-    await db
-      .insert(deliveryTable)
-      .values(
-        slack.map(({ channelId }) => ({
-          id: newId("delivery"),
-          workspaceId: event.workspaceId,
-          target: "slack" as const,
-          targetId: channelId,
-          eventSeq: event.seq,
-        })),
-      )
-      .onConflictDoNothing();
+  // with no recipient, because a room is a room and three Humans concerned by
+  // one Event are not three messages in it; and one per Identity for a direct
+  // message, which is a person.
+  const owed = [
+    ...slack.map(({ channelId, target }) => ({
+      id: newId("delivery"),
+      workspaceId: event.workspaceId,
+      target,
+      targetId: channelId,
+      eventSeq: event.seq,
+    })),
+    ...dms.map(({ identityId, memberId }) => ({
+      id: newId("delivery"),
+      workspaceId: event.workspaceId,
+      target: "chat_dm" as const,
+      targetId: identityId,
+      eventSeq: event.seq,
+      recipientMemberId: memberId,
+    })),
+  ];
+  if (owed.length > 0) {
+    await db.insert(deliveryTable).values(owed).onConflictDoNothing();
   }
 }
 
@@ -90,11 +97,21 @@ function isHumanRecipient(recipient: Recipient): recipient is HumanRecipient {
   return isHumanNotificationKind(recipient.kind);
 }
 
-/** One Slack Channel a Notification of this kind is due to reach. */
+/**
+ * One room a Notification of this kind is due to reach: an incoming webhook
+ * (`slack`), which posts a link, or a room in a Slack app (`chat`), which
+ * posts a Gate with its buttons (ADR-0025).
+ */
 export interface SlackTarget {
   channelId: string;
-  /** Slack's incoming-webhook URL, out of the Channel's config. */
-  webhookUrl: string;
+  target: "slack" | "chat";
+  kind: Notification["kind"];
+}
+
+/** One Human's direct messages in a chat tool, through the Identity linked there. */
+export interface DirectTarget {
+  identityId: string;
+  memberId: string;
   kind: Notification["kind"];
 }
 
@@ -103,20 +120,26 @@ export interface Routing {
   /** The Members who get an inbox row, and what it says. */
   inbox: Recipient[];
   /**
-   * The Slack Channels the same Notification reaches, at most once each: a
-   * Channel is a room, not a person, so two recipients routed to the same one
-   * are one message.
+   * The rooms the same Notification reaches, at most once each: a Channel is a
+   * room, not a person, so two recipients routed to the same one are one
+   * message.
    */
   slack: SlackTarget[];
+  /** The Humans told by direct message, one per linked account. */
+  dms: DirectTarget[];
 }
 
-const noRouting: Routing = { inbox: [], slack: [] };
+const noRouting: Routing = { inbox: [], slack: [], dms: [] };
+
+/** The providers whose accounts a direct message can reach. */
+const directProviders = ["slack"];
 
 /**
  * The routing decision for one Event: recipients first, then Channels. Two
- * queries beyond the recipients, whatever the Workspace holds — the
- * preferences of the Members concerned, and the Workspace's rules with their
- * Channels — because this runs in the tail of every write.
+ * queries beyond the recipients, whatever the Workspace holds — the Members
+ * concerned, with their preferences and their chat accounts in the same
+ * statement, and the Workspace's rules with their Channels — because this runs
+ * in the tail of every write.
  */
 export async function routeEvent(db: Db, event: Event): Promise<Routing> {
   const recipients = await recipientsFor(db, event);
@@ -128,30 +151,52 @@ export async function routeEvent(db: Db, event: Event): Promise<Routing> {
   // is the endpoint ADR-0003 promised it (schema/notification.ts).
   const forAgents = recipients.filter((recipient) => !isHumanRecipient(recipient));
   const forHumans = recipients.filter(isHumanRecipient);
-  if (forHumans.length === 0) return { inbox: forAgents, slack: [] };
+  if (forHumans.length === 0) return { inbox: forAgents, slack: [], dms: [] };
 
-  const preferences = await db.query.notificationPreference.findMany({
-    where: { memberId: { in: forHumans.map((recipient) => recipient.memberId) } },
+  const members = await db.query.member.findMany({
+    where: { id: { in: [...new Set(forHumans.map((recipient) => recipient.memberId))] } },
+    columns: { id: true },
+    with: {
+      preferences: true,
+      identities: {
+        where: { provider: { in: directProviders }, revokedAt: { isNull: true } },
+        columns: { id: true },
+      },
+    },
   });
-  const wanted = new Map(preferences.map((row) => [`${row.memberId}:${row.kind}`, row] as const));
-  // A Member who has never said otherwise wants everything, in both places:
-  // the row is a preference, and its absence is the default (schema/channel.ts).
-  const wants = (recipient: HumanRecipient, where: "inbox" | "slack") =>
+  const wanted = new Map(
+    members.flatMap((member) =>
+      member.preferences.map((row) => [`${row.memberId}:${row.kind}`, row] as const),
+    ),
+  );
+  const linked = new Map(members.map((member) => [member.id, member.identities]));
+  // A Member who has never said otherwise wants everything, everywhere: the
+  // row is a preference, and its absence is the default (schema/channel.ts).
+  const wants = (recipient: HumanRecipient, where: "inbox" | "slack" | "slackDm") =>
     wanted.get(`${recipient.memberId}:${recipient.kind}`)?.[where] ?? true;
 
   const inbox = [...forAgents, ...forHumans.filter((recipient) => wants(recipient, "inbox"))];
+  const dms = forHumans
+    .filter((recipient) => wants(recipient, "slackDm"))
+    .flatMap((recipient) =>
+      (linked.get(recipient.memberId) ?? []).map((identity) => ({
+        identityId: identity.id,
+        memberId: recipient.memberId,
+        kind: recipient.kind,
+      })),
+    );
   const kinds = new Set(
     forHumans.filter((recipient) => wants(recipient, "slack")).map((recipient) => recipient.kind),
   );
-  if (kinds.size === 0) return { inbox, slack: [] };
+  if (kinds.size === 0) return { inbox, slack: [], dms };
 
-  return { inbox, slack: await slackTargets(db, event, kinds) };
+  return { inbox, slack: await slackTargets(db, event, kinds), dms };
 }
 
 /**
- * The Slack Channels the Workspace's rules send these kinds to. A rule with a
- * null kind or a null Project means any of them (schema/channel.ts), and a
- * rule scoped to a Project only fires for that Project's Events.
+ * The rooms the Workspace's rules send these kinds to. A rule with a null kind
+ * or a null Project means any of them (schema/channel.ts), and a rule scoped to
+ * a Project only fires for that Project's Events.
  */
 async function slackTargets(
   db: Db,
@@ -165,16 +210,29 @@ async function slackTargets(
 
   const targets = new Map<string, SlackTarget>();
   for (const rule of rules) {
-    if (rule.channel.kind !== "slack") continue;
     if (rule.projectId !== null && rule.projectId !== event.projectId) continue;
-    const webhookUrl = rule.channel.config?.webhookUrl;
-    if (typeof webhookUrl !== "string" || webhookUrl.length === 0) continue;
+    const target = targetOf(rule.channel);
+    if (!target) continue;
     for (const kind of kinds) {
       if (rule.notificationKind !== null && rule.notificationKind !== kind) continue;
-      targets.set(`${rule.channelId}:${kind}`, { channelId: rule.channelId, webhookUrl, kind });
+      targets.set(`${rule.channelId}:${kind}`, { channelId: rule.channelId, target, kind });
     }
   }
   return [...targets.values()];
+}
+
+/** How a Channel is reached, or null when it is not configured enough to be. */
+function targetOf(channel: {
+  kind: string;
+  config: Record<string, unknown> | null;
+}): SlackTarget["target"] | null {
+  const text = (key: string) => {
+    const value = channel.config?.[key];
+    return typeof value === "string" && value.length > 0;
+  };
+  if (channel.kind === "slack" && text("webhookUrl")) return "slack";
+  if (channel.kind === "slack_app" && text("socketId") && text("conversation")) return "chat";
+  return null;
 }
 
 /**
@@ -217,7 +275,8 @@ const runNotificationKinds: Partial<Record<Event["kind"], Notification["kind"]>>
  * field, and it is read from the row rather than looked up, because the
  * delivery path asks hours later and must stay a pure function of the Event.
  */
-function gateRequestIdOf(event: Event): string | null {
+/** The Gate a Run stopped at, which a `run.awaiting_input` names in its payload. */
+export function gateRequestIdOf(event: Event): string | null {
   if (event.kind !== "run.awaiting_input") return null;
   const carried = (event.payload as { gateRequestId?: unknown } | null)?.gateRequestId;
   return typeof carried === "string" ? carried : null;

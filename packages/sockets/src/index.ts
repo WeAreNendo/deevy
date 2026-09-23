@@ -11,11 +11,14 @@
  */
 import type { SocketModules } from "@deevy/core/sockets";
 import { createGithubSocket } from "./github/index.ts";
+import { createSlackSocket } from "./slack/index.ts";
 import { createStubSocket, openDevStubStore } from "./stub/index.ts";
 
 export * from "./stub/index.ts";
 export { createGithubSocket, resetGithubTokens } from "./github/index.ts";
 export type { GithubConfig, GithubCredentials } from "./github/index.ts";
+export { createSlackSocket, normalizeSlack } from "./slack/index.ts";
+export type { SlackConfig, SlackCredentials } from "./slack/index.ts";
 
 /**
  * The providers an entry may register.
@@ -59,6 +62,7 @@ export function socketModules({
           ? { ...input, config: { ...input.config, apiBase: githubApiBase } }
           : input,
       ),
+    slack: createSlackSocket,
     ...(devStub ? { stub: createStubSocket } : {}),
   };
 }

@@ -28,6 +28,7 @@ interface Preference {
   kind: string;
   inbox: boolean;
   slack: boolean;
+  slackDm: boolean;
 }
 
 /**
@@ -50,7 +51,7 @@ export function NotificationsPage() {
     }),
   );
 
-  const toggle = (kind: string, where: "inbox" | "slack") =>
+  const toggle = (kind: string, where: "inbox" | "slack" | "slackDm") =>
     setDraft((current) =>
       current.map((row) => (row.kind === kind ? { ...row, [where]: !row[where] } : row)),
     );
@@ -67,6 +68,7 @@ export function NotificationsPage() {
               <TableHead>Notification</TableHead>
               <TableHead className="w-24 text-center">Inbox</TableHead>
               <TableHead className="w-24 text-center">Slack</TableHead>
+              <TableHead className="w-28 text-center">Direct message</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -91,10 +93,27 @@ export function NotificationsPage() {
                     />
                   </div>
                 </TableCell>
+                <TableCell className="w-28">
+                  <div className="flex justify-center">
+                    <Checkbox
+                      aria-label={`${labels[row.kind] ?? row.kind} as a Slack direct message`}
+                      checked={row.slackDm}
+                      onCheckedChange={() => toggle(row.kind, "slackDm")}
+                    />
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+      ) : null}
+
+      {draft.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Slack is the rooms your admin routes Notifications to. A direct message comes from the
+          Slack app once your Slack account is linked, under Identities; until then nothing is sent
+          there.
+        </p>
       ) : null}
 
       <div>
@@ -106,6 +125,7 @@ export function NotificationsPage() {
                 kind: row.kind as "mention",
                 inbox: row.inbox,
                 slack: row.slack,
+                slackDm: row.slackDm,
               })),
             })
           }

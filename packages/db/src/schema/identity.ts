@@ -57,3 +57,34 @@ export const memberIdentity = sqliteTable(
     index("member_identity_memberId_idx").on(table.memberId),
   ],
 );
+
+/**
+ * A code a chat tool delivered to one of its users alone, which links that user
+ * to whoever redeems it while signed in to deevy (ADR-0025).
+ *
+ * Single-use and short-lived, and kept only as a hash: the code is a bearer
+ * credential for ten minutes, and a row that held it would be one. It names the
+ * account it links rather than the Member — the Member is whoever proves
+ * themselves by redeeming it, and is shown who they are linking first.
+ */
+export const linkCode = sqliteTable(
+  "link_code",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    socketId: text("socket_id").notNull(),
+    provider: text("provider").notNull(),
+    instance: text("instance").notNull(),
+    externalUserId: text("external_user_id").notNull(),
+    externalLogin: text("external_login"),
+    /** SHA-256 of the code, hex. Never the code. */
+    codeHash: text("code_hash").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    redeemedAt: integer("redeemed_at", { mode: "timestamp_ms" }),
+    redeemedBy: text("redeemed_by").references(() => member.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
+  },
+  (table) => [uniqueIndex("link_code_hash_uidx").on(table.codeHash)],
+);

@@ -15,6 +15,7 @@
   "devDependencies": {
     "@deevy/adapters": "workspace:*",
     "@deevy/db": "workspace:*",
+    "@orpc/server": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

@@ -6420,6 +6420,24 @@
                               }
                             ]
                           },
+                          "previousWebhookSecret": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "webhookSecretChangedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "installedBy": {
                             "type": [
                               "string",
@@ -6484,6 +6502,8 @@
                           "name",
                           "identity",
                           "config",
+                          "previousWebhookSecret",
+                          "webhookSecretChangedAt",
                           "installedBy",
                           "status",
                           "lastInboundAt",
@@ -6559,6 +6579,9 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 1440
+                  },
+                  "socketId": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -6652,6 +6675,24 @@
                         }
                       ]
                     },
+                    "previousWebhookSecret": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "webhookSecretChangedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -6725,6 +6766,8 @@
                     "name",
                     "identity",
                     "config",
+                    "previousWebhookSecret",
+                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",
@@ -6871,6 +6914,24 @@
                         }
                       ]
                     },
+                    "previousWebhookSecret": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "webhookSecretChangedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -6950,6 +7011,8 @@
                     "name",
                     "identity",
                     "config",
+                    "previousWebhookSecret",
+                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",
@@ -7018,6 +7081,11 @@
                   },
                   "identityByEmail": {
                     "type": "boolean"
+                  },
+                  "webhookSecret": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 500
                   }
                 }
               }
@@ -7107,6 +7175,24 @@
                         }
                       ]
                     },
+                    "previousWebhookSecret": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "webhookSecretChangedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -7171,6 +7257,8 @@
                     "name",
                     "identity",
                     "config",
+                    "previousWebhookSecret",
+                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",
@@ -7298,6 +7386,24 @@
                             }
                           ]
                         },
+                        "previousWebhookSecret": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "webhookSecretChangedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "x-native-type": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "installedBy": {
                           "type": [
                             "string",
@@ -7362,6 +7468,8 @@
                         "name",
                         "identity",
                         "config",
+                        "previousWebhookSecret",
+                        "webhookSecretChangedAt",
                         "installedBy",
                         "status",
                         "lastInboundAt",
@@ -7725,6 +7833,24 @@
                         }
                       ]
                     },
+                    "previousWebhookSecret": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "webhookSecretChangedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -7789,6 +7915,8 @@
                     "name",
                     "identity",
                     "config",
+                    "previousWebhookSecret",
+                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",
@@ -7923,6 +8051,168 @@
               "schema": {
                 "type": "object",
                 "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "externalLogin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "verifiedBy": {
+                      "type": "string",
+                      "enum": [
+                        "sign_in",
+                        "oauth",
+                        "link_code",
+                        "email"
+                      ]
+                    },
+                    "linkedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "revokedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "instance",
+                    "externalLogin",
+                    "verifiedBy",
+                    "linkedAt",
+                    "revokedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identities/peek": {
+      "post": {
+        "operationId": "identities.peek",
+        "summary": "Say which account a link code would link to you, without linking it",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 20
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "externalLogin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "socketName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "instance",
+                    "externalLogin",
+                    "socketName",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identities/link": {
+      "post": {
+        "operationId": "identities.link",
+        "summary": "Link the account a code names to you, so it rules as you",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 20
+                  }
+                },
+                "required": [
+                  "code"
+                ]
               }
             }
           }
@@ -15475,13 +15765,26 @@
                             "type": "string",
                             "enum": [
                               "inbox",
-                              "slack"
+                              "slack",
+                              "slack_app"
                             ]
                           },
                           "name": {
                             "type": "string"
                           },
                           "webhookHost": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "socketId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "conversation": {
                             "type": [
                               "string",
                               "null"
@@ -15504,6 +15807,8 @@
                           "kind",
                           "name",
                           "webhookHost",
+                          "socketId",
+                          "conversation",
                           "createdBy",
                           "createdAt"
                         ],
@@ -15566,13 +15871,26 @@
                       "type": "string",
                       "enum": [
                         "inbox",
-                        "slack"
+                        "slack",
+                        "slack_app"
                       ]
                     },
                     "name": {
                       "type": "string"
                     },
                     "webhookHost": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "socketId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "conversation": {
                       "type": [
                         "string",
                         "null"
@@ -15595,6 +15913,112 @@
                     "kind",
                     "name",
                     "webhookHost",
+                    "socketId",
+                    "conversation",
+                    "createdBy",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/in-socket": {
+      "post": {
+        "operationId": "channels.createInSocket",
+        "summary": "Add a room in a connected Slack app as a Channel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "socketId": {
+                    "type": "string"
+                  },
+                  "conversation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  }
+                },
+                "required": [
+                  "name",
+                  "socketId",
+                  "conversation"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "inbox",
+                        "slack",
+                        "slack_app"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "webhookHost": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "socketId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "conversation": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdBy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "webhookHost",
+                    "socketId",
+                    "conversation",
                     "createdBy",
                     "createdAt"
                   ],
@@ -15657,13 +16081,26 @@
                       "type": "string",
                       "enum": [
                         "inbox",
-                        "slack"
+                        "slack",
+                        "slack_app"
                       ]
                     },
                     "name": {
                       "type": "string"
                     },
                     "webhookHost": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "socketId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "conversation": {
                       "type": [
                         "string",
                         "null"
@@ -15686,6 +16123,8 @@
                     "kind",
                     "name",
                     "webhookHost",
+                    "socketId",
+                    "conversation",
                     "createdBy",
                     "createdAt"
                   ],
@@ -16040,12 +16479,16 @@
                           },
                           "slack": {
                             "type": "boolean"
+                          },
+                          "slackDm": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
                           "kind",
                           "inbox",
-                          "slack"
+                          "slack",
+                          "slackDm"
                         ],
                         "additionalProperties": false
                       }
@@ -16093,6 +16536,9 @@
                         },
                         "slack": {
                           "type": "boolean"
+                        },
+                        "slackDm": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -16139,12 +16585,16 @@
                           },
                           "slack": {
                             "type": "boolean"
+                          },
+                          "slackDm": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
                           "kind",
                           "inbox",
-                          "slack"
+                          "slack",
+                          "slackDm"
                         ],
                         "additionalProperties": false
                       }

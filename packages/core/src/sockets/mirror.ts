@@ -64,6 +64,10 @@ export function couldMirror(kind: string): boolean {
  */
 export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[]> {
   if (!couldMirror(event.kind) || !event.projectId) return [];
+  // A Ruling refused in Slack was answered in Slack, to the one who clicked:
+  // telling the record's tracker too would say it to everybody else
+  // (sockets/chat.ts).
+  if (event.kind === "gate.ruling_refused" && payloadVia(event) === "slack") return [];
 
   const project = await db.query.project.findFirst({
     where: { id: event.projectId },
@@ -85,6 +89,11 @@ export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[
     .onConflictDoNothing()
     .returning({ id: deliveryTable.id });
   return row ? [row.id] : [];
+}
+
+function payloadVia(event: Event): string | null {
+  const via = (event.payload as { via?: unknown } | null)?.via;
+  return typeof via === "string" ? via : null;
 }
 
 export interface MirrorSubject {

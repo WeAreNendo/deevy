@@ -20,6 +20,7 @@ export type Invitation = typeof import("./schema/invitation.ts").invitation.$inf
 export type Socket = typeof import("./schema/socket.ts").socket.$inferSelect;
 export type InboundDelivery = typeof import("./schema/socket.ts").inboundDelivery.$inferSelect;
 export type MemberIdentity = typeof import("./schema/identity.ts").memberIdentity.$inferSelect;
+export type LinkCode = typeof import("./schema/identity.ts").linkCode.$inferSelect;
 export type Project = typeof import("./schema/project.ts").project.$inferSelect;
 export type Agent = typeof import("./schema/agent.ts").agent.$inferSelect;
 export type Run = typeof import("./schema/run.ts").run.$inferSelect;

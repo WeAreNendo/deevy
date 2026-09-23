@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const stub = vi.hoisted(() => ({
@@ -8,10 +8,14 @@ const stub = vi.hoisted(() => ({
       kind: "slack",
       name: "#deevy",
       webhookHost: "hooks.slack.com",
+      socketId: null,
+      conversation: null,
       createdBy: "m1",
       createdAt: new Date(),
     },
   ],
+  sockets: [] as Array<Record<string, unknown>>,
+  createdInSocket: [] as unknown[],
   rules: [
     {
       id: "r1",
@@ -40,6 +44,13 @@ vi.mock("../src/lib/orpc.ts", async () => {
         stub.tested.push(input);
         return { delivered: true, status: 200, error: null };
       },
+      createInSocket: async (input: unknown) => {
+        stub.createdInSocket.push(input);
+        return stub.channels[0];
+      },
+    },
+    sockets: {
+      list: async () => ({ sockets: stub.sockets }),
     },
     routing: {
       list: async () => ({ rules: stub.rules }),
@@ -89,6 +100,41 @@ describe("the Channels settings page", () => {
 
     await waitFor(() => expect(stub.tested).toContainEqual({ channelId: "c1" }));
     expect(await screen.findByText(/Slack accepted/)).toBeTruthy();
+  });
+
+  it("adds a room in a connected Slack app, where a Gate carries its buttons", async () => {
+    const { stubSocket } = await import("./stub-client.ts");
+    stub.sockets = [
+      {
+        ...stubSocket,
+        id: "sock_slack",
+        provider: "slack",
+        capabilities: ["chat"],
+        name: "Acme Slack",
+      },
+    ];
+    await mountAt("/settings/channels", { memberName: "Ada" });
+
+    const room = await screen.findByRole("form", { name: "Add a Slack room" });
+    fireEvent.change(within(room).getByLabelText("Name"), { target: { value: "#approvals" } });
+    fireEvent.change(within(room).getByLabelText("Slack channel ID"), {
+      target: { value: "C07DEEVY01" },
+    });
+    fireEvent.click(within(room).getByRole("button", { name: "Add room" }));
+
+    await waitFor(() =>
+      expect(stub.createdInSocket).toEqual([
+        { name: "#approvals", socketId: "sock_slack", conversation: "C07DEEVY01" },
+      ]),
+    );
+    stub.sockets = [];
+  });
+
+  it("offers no Slack room without a Slack app connected", async () => {
+    await mountAt("/settings/channels", { memberName: "Ada" });
+
+    await screen.findByText("#deevy");
+    expect(screen.queryByRole("form", { name: "Add a Slack room" })).toBeNull();
   });
 
   it("adds a routing rule and saves the whole set", async () => {

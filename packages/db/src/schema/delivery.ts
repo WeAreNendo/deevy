@@ -6,11 +6,13 @@ import { member, workspace } from "./workspace.ts";
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
 /**
- * Where an outbound attempt is headed: a subscriber's URL, a Slack Channel, or
- * the tracker a Project's records come from — deevy saying back where the work
- * lives, which is what `socket` is (ADR-0024).
+ * Where an outbound attempt is headed: a subscriber's URL, a Slack Channel, the
+ * tool a Project's records come from — deevy saying back where the work lives,
+ * which is what `socket` is (ADR-0024) — or a chat tool's room (`chat`, a
+ * `slack_app` Channel) or one Human's direct messages there (`chat_dm`, their
+ * linked Identity), where a Gate carries its buttons (ADR-0025).
  */
-export const deliveryTargets = ["webhook", "slack", "socket"] as const;
+export const deliveryTargets = ["webhook", "slack", "socket", "chat", "chat_dm"] as const;
 
 /**
  * One outbound attempt, and the only record that it is owed.

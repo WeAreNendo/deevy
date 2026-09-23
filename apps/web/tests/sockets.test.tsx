@@ -27,6 +27,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
       providers: async () => ({
         providers: [
           { id: "github", label: "GitHub", capabilities: ["tracker", "forge"] },
+          { id: "slack", label: "Slack", capabilities: ["chat"] },
           { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
         ],
       }),
@@ -190,6 +191,43 @@ describe("the tools this Workspace is connected to", () => {
       config: { appId: "1284461" },
       credentials: { privateKey: expect.stringContaining("BEGIN RSA PRIVATE KEY") as unknown },
       webhookSecret: "whsec_pasted_from_github",
+    });
+  });
+
+  it("connects Slack in one trip: the manifest with the real address, then the token", async () => {
+    state.sockets = [];
+    calls.begin.mockClear();
+    calls.connect.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect Slack" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme Slack" } });
+    fireEvent.click(screen.getByRole("button", { name: "Show the app manifest" }));
+
+    // The committed manifest (docs/slack-manifest.yaml), with this Socket's own
+    // address where Slack will send clicks and the slash command.
+    const manifest = await screen.findByLabelText("App manifest");
+    const text = manifest.textContent ?? "";
+    expect(text.match(/https:\/\/deevy\.test\/hooks\/sock_pending0000/g)).toHaveLength(2);
+    expect(text).not.toContain("SOCKET_ID");
+    expect(text).toContain("chat:write");
+    expect(text).toContain("command: /deevy");
+
+    fireEvent.change(screen.getByLabelText("Bot User OAuth Token"), {
+      target: { value: "xoxb-pasted-from-slack" },
+    });
+    fireEvent.change(screen.getByLabelText("Signing Secret"), {
+      target: { value: "8f14e45fceea167a5a36dedd4bea2543" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
+    expect(calls.connect.mock.calls[0]?.[0]).toEqual({
+      provider: "slack",
+      name: "Acme Slack",
+      socketId: "sock_pending0000",
+      credentials: { botToken: "xoxb-pasted-from-slack" },
+      webhookSecret: "8f14e45fceea167a5a36dedd4bea2543",
     });
   });
 });

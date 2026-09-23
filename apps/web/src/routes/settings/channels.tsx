@@ -48,6 +48,15 @@ export function ChannelsPage() {
   const channels = useQuery(orpc.channels.list.queryOptions({ input: {} }));
   const rules = useQuery(orpc.routing.list.queryOptions({ input: {} }));
   const projects = useQuery(orpc.projects.list.queryOptions({ input: {} }));
+  const sockets = useQuery(orpc.sockets.list.queryOptions({ input: {} }));
+  // The Slack apps this Workspace connected: a room in one is a Channel where a
+  // Gate is posted with its two buttons (ADR-0025).
+  const chats = (sockets.data?.sockets ?? []).filter(
+    (socket) => socket.status === "active" && socket.capabilities.includes("chat"),
+  );
+  const [roomName, setRoomName] = useState("");
+  const [conversation, setConversation] = useState("");
+  const [roomSocket, setRoomSocket] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
@@ -74,6 +83,15 @@ export function ChannelsPage() {
       onSuccess: async () => {
         setName("");
         setWebhookUrl("");
+        await refreshChannels();
+      },
+    }),
+  );
+  const createRoom = useMutation(
+    orpc.channels.createInSocket.mutationOptions({
+      onSuccess: async () => {
+        setRoomName("");
+        setConversation("");
         await refreshChannels();
       },
     }),
@@ -105,7 +123,9 @@ export function ChannelsPage() {
   );
 
   const rows = channels.data?.channels ?? [];
-  const failed = create.error ?? remove.error ?? test.error ?? save.error;
+  const failed = create.error ?? createRoom.error ?? remove.error ?? test.error ?? save.error;
+  const chosenSocket = roomSocket ?? chats[0]?.id ?? null;
+  const socketName = (id: string | null) => chats.find((one) => one.id === id)?.name ?? "Slack";
 
   type ChannelRow = (typeof rows)[number];
   const columns: DataColumn<ChannelRow>[] = [
@@ -118,8 +138,14 @@ export function ChannelsPage() {
     {
       id: "host",
       header: "Posts to",
-      cell: (channel) => <span className="text-muted-foreground">{channel.webhookHost}</span>,
-      sortValue: (channel) => channel.webhookHost,
+      cell: (channel) => (
+        <span className="text-muted-foreground">
+          {channel.kind === "slack_app"
+            ? `${socketName(channel.socketId)} · ${channel.conversation ?? ""}`
+            : channel.webhookHost}
+        </span>
+      ),
+      sortValue: (channel) => channel.webhookHost ?? channel.conversation,
       className: "w-full",
     },
     {
@@ -182,6 +208,73 @@ export function ChannelsPage() {
           Add Channel
         </Button>
       </form>
+
+      {chats.length > 0 ? (
+        <form
+          aria-label="Add a Slack room"
+          className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4"
+          onSubmit={(submitted) => {
+            submitted.preventDefault();
+            if (roomName.trim() && conversation.trim() && chosenSocket) {
+              createRoom.mutate({
+                name: roomName.trim(),
+                socketId: chosenSocket,
+                conversation: conversation.trim(),
+              });
+            }
+          }}
+        >
+          <p className="w-full text-sm text-muted-foreground">
+            A room in your Slack app gets a Gate with Approve and Reject on it, and the message
+            changes when somebody rules. Invite the app to the room first (
+            <code>/invite @deevy</code>), then paste the channel ID from its details.
+          </p>
+          {chats.length > 1 ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="room-socket">Slack app</Label>
+              <Select value={chosenSocket} onValueChange={(next) => setRoomSocket(next)}>
+                <SelectTrigger id="room-socket" className="w-48">
+                  <SelectValue>{(selected: string) => socketName(selected)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {chats.map((socket) => (
+                      <SelectItem key={socket.id} value={socket.id}>
+                        {socket.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="room-name">Name</Label>
+            <Input
+              id="room-name"
+              value={roomName}
+              placeholder="#approvals"
+              onChange={(changed) => setRoomName(changed.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="room-conversation">Slack channel ID</Label>
+            <Input
+              id="room-conversation"
+              value={conversation}
+              placeholder="C0123ABCD"
+              className="font-mono"
+              onChange={(changed) => setConversation(changed.target.value)}
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={createRoom.isPending || !roomName.trim() || !conversation.trim()}
+          >
+            Add room
+          </Button>
+        </form>
+      ) : null}
 
       {failed ? <p className="text-sm text-destructive">{failed.message}</p> : null}
       {tested ? <p className="text-sm text-muted-foreground">{tested}</p> : null}

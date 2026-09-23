@@ -19,6 +19,8 @@ const stub = vi.hoisted(() => ({
   revoked: [] as unknown[],
   restored: [] as unknown[],
   linked: [] as unknown[],
+  peeked: [] as unknown[],
+  redeemed: [] as unknown[],
 }));
 
 vi.mock("../src/lib/auth.ts", () => ({
@@ -58,6 +60,30 @@ vi.mock("../src/lib/orpc.ts", async () => {
         );
         return stub.identities.find((one) => one.id === input.identityId);
       },
+      peek: async (input: { code: string }) => {
+        stub.peeked.push(input);
+        return {
+          provider: "slack",
+          instance: "T07ACME001",
+          externalLogin: "omar",
+          socketName: "Acme Slack",
+          expiresAt: new Date(Date.now() + 600_000),
+        };
+      },
+      link: async (input: { code: string }) => {
+        stub.redeemed.push(input);
+        const linked = {
+          id: "mid_omar",
+          provider: "slack",
+          instance: "T07ACME001",
+          externalLogin: "omar",
+          verifiedBy: "link_code" as const,
+          linkedAt: new Date(),
+          revokedAt: null,
+        };
+        stub.identities = [...stub.identities, linked];
+        return linked;
+      },
       restore: async (input: { identityId: string }) => {
         stub.restored.push(input);
         stub.identities = stub.identities.map((one) =>
@@ -83,6 +109,8 @@ beforeEach(() => {
   stub.revoked = [];
   stub.restored = [];
   stub.linked = [];
+  stub.peeked = [];
+  stub.redeemed = [];
 });
 
 describe("Settings › Identities", () => {
@@ -143,6 +171,25 @@ describe("Settings › Identities", () => {
     await screen.findByRole("heading", { name: "Identities" });
     expect(screen.queryByRole("region", { name: "Link an account" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Link GitHub" })).toBeNull();
+  });
+
+  it("links a Slack account by the code Slack gave it, naming the account first", async () => {
+    await mountAt("/settings/identities", { memberName: "Omar" });
+
+    fireEvent.change(await screen.findByLabelText("Code from Slack"), {
+      target: { value: "ABCD-EFGH" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Check the code" }));
+
+    // Who it would link, before it does: a code handed over by somebody else
+    // is their account, and this is where that shows (ADR-0025).
+    expect(await screen.findByText(/in Acme Slack to you/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Link @omar to me" })).toBeTruthy();
+    expect(stub.redeemed).toEqual([]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Link @omar to me" }));
+    await waitFor(() => expect(stub.redeemed).toEqual([{ code: "ABCD-EFGH" }]));
+    expect(await screen.findByText("You redeemed a code sent to it")).toBeTruthy();
   });
 
   it("is under You in Settings", async () => {

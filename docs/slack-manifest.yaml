@@ -1,0 +1,40 @@
+# The Slack app deevy connects to (ADR-0025, docs/plans/sockets.md, slice 10).
+#
+# Settings › Sockets › Connect Slack shows this with your instance's own request
+# URL in place of the one below, ready to paste into https://api.slack.com/apps
+# → Create New App → From an app manifest. Install it to your workspace, then
+# paste the Bot User OAuth Token and the Signing Secret back into deevy.
+#
+# What it may do, and why:
+#   chat:write   post a Gate with Approve and Reject, and change it when somebody rules
+#   im:write     open a direct message with a Human who linked their account
+#   users:read   name who clicked
+#   commands     `/deevy link`, which is how a Human links their Slack account
+display_information:
+  name: deevy
+  description: Approve and reject what your Agents ask, where you already are.
+  background_color: "#4f46e5"
+features:
+  bot_user:
+    display_name: deevy
+    always_online: false
+  slash_commands:
+    - command: /deevy
+      url: https://deevy.example.com/hooks/SOCKET_ID
+      description: Link your Slack account to deevy
+      usage_hint: link
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - im:write
+      - users:read
+      - commands
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: https://deevy.example.com/hooks/SOCKET_ID
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

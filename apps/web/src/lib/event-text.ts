@@ -289,8 +289,9 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
           : str(p.reason) === "nothing_waiting"
             ? "nothing was waiting on a ruling"
             : (str(p.message) ?? "the Checkpoint would not take it");
+      const where = str(p.via) === "slack" ? "in Slack" : "from the tracker";
       return say(
-        `${who ? `@${who}` : "somebody"} ruled from the tracker and it counted for nothing: ${why}`,
+        `${who ? `@${who}` : "somebody"} ruled ${where} and it counted for nothing: ${why}`,
         null,
         "muted",
       );

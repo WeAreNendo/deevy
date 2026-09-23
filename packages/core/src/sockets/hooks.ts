@@ -5,7 +5,8 @@ import { newId } from "../ids.ts";
 import type { JobQueue } from "../jobs.ts";
 import { openSecret, requireSealingSecret, sealSecret, verifyState } from "../secrets.ts";
 import { applyInbound } from "./apply.ts";
-import type { SocketModules } from "./port.ts";
+import { applyChat, type ChatOutcome } from "./chat.ts";
+import type { InboundCheck, SocketModule, SocketModules } from "./port.ts";
 import { socketModuleFor } from "./registry.ts";
 
 /**
@@ -33,9 +34,18 @@ export interface InboundOptions {
   /** The secret this deployment seals credentials with (secrets.ts). */
   socketSecret?: string;
   jobs?: JobQueue;
+  /** Where a Human opens deevy, for the one link a chat reply carries. */
+  origin?: string;
   now?: () => Date;
   fetch?: typeof fetch;
 }
+
+/**
+ * How long a replaced webhook secret is still taken. A tool whose secret is
+ * rotated in its own settings — Slack's signing secret — signs with the old one
+ * until the new one is pasted into deevy, and a day is room to do both.
+ */
+export const PREVIOUS_SECRET_MS = 24 * 3_600_000;
 
 /** What applying a delivery came to, which is what the row records. */
 export interface AppliedOutcome {
@@ -69,20 +79,21 @@ export async function handleInbound(request: Request, options: InboundOptions): 
   }
 
   const module = await socketModuleFor(options, socket);
-  const tracker = module.tracker;
-  if (!tracker) return json({ error: "This Socket does not take deliveries" }, 400);
-
-  const webhookSecret = await webhookSecretOf(socket, options.socketSecret);
-  if (webhookSecret === null) {
+  const secrets = await webhookSecretsOf(socket, options.socketSecret, now());
+  if (secrets.length === 0) {
     return json({ error: "This Socket has no webhook secret to check a delivery against" }, 401);
   }
 
-  const checked = await tracker.verifyInbound({
-    headers: request.headers,
-    rawBody,
-    webhookSecret,
-    now: now(),
-  });
+  if (module.chat) {
+    return handleChatRequest(options, socket, module, rawBody, request.headers, secrets, now);
+  }
+
+  const tracker = module.tracker;
+  if (!tracker) return json({ error: "This Socket does not take deliveries" }, 400);
+
+  const checked = await firstSigned(secrets, (webhookSecret) =>
+    tracker.verifyInbound({ headers: request.headers, rawBody, webhookSecret, now: now() }),
+  );
   if (!checked.ok) return json({ error: "That delivery is not signed by this Socket" }, 401);
 
   // The insert is the claim: a provider redelivering — by retry, by a button, or
@@ -162,16 +173,124 @@ async function applyDelivery(
   }
 }
 
-/** The shared secret, opened from the sealed column, or null when there is none. */
-async function webhookSecretOf(socket: Socket, secret: string | undefined): Promise<string | null> {
-  if (!socket.webhookSecret || !secret) return null;
-  try {
-    return await openSecret(secret, socket.webhookSecret);
-  } catch {
-    // A sealing secret that changed takes every Socket with it, and the
-    // delivery is the wrong place to find out: the settings page says so.
-    return null;
+/**
+ * The shared secrets a request may be signed with: the current one, and the
+ * one it replaced while that is less than a day old. Empty when there is none
+ * to check against, which is a refusal.
+ */
+async function webhookSecretsOf(
+  socket: Socket,
+  secret: string | undefined,
+  now: Date,
+): Promise<string[]> {
+  if (!secret) return [];
+  const open = async (sealed: string | null): Promise<string | null> => {
+    if (!sealed) return null;
+    try {
+      return await openSecret(secret, sealed);
+    } catch {
+      // A sealing secret that changed takes every Socket with it, and the
+      // delivery is the wrong place to find out: the settings page says so.
+      return null;
+    }
+  };
+  const recent =
+    socket.webhookSecretChangedAt !== null &&
+    now.getTime() - socket.webhookSecretChangedAt.getTime() < PREVIOUS_SECRET_MS;
+  const found = [
+    await open(socket.webhookSecret),
+    recent ? await open(socket.previousWebhookSecret) : null,
+  ];
+  return found.filter((one): one is string => one !== null);
+}
+
+/** The first of the secrets the request checks out against, or the last refusal. */
+async function firstSigned(
+  secrets: string[],
+  verify: (secret: string) => Promise<InboundCheck>,
+): Promise<InboundCheck> {
+  let checked: InboundCheck = { ok: false, deliveryId: null, eventName: "" };
+  for (const secret of secrets) {
+    checked = await verify(secret);
+    if (checked.ok) return checked;
   }
+  return checked;
+}
+
+/**
+ * A request from a chat tool: a click, a dialog, a command. Written down like a
+ * delivery, so a settings page can say what the tool has said lately; answered
+ * the way the tool reads an answer, which is the module's to say.
+ */
+async function handleChatRequest(
+  options: InboundOptions,
+  socket: Socket,
+  module: SocketModule,
+  rawBody: string,
+  headers: Headers,
+  secrets: string[],
+  now: () => Date,
+): Promise<Response> {
+  const chat = module.chat;
+  if (!chat) return json({ error: "This Socket is not a chat tool" }, 400);
+  const checked = await firstSigned(secrets, (webhookSecret) =>
+    chat.verifyInteraction({ headers, rawBody, webhookSecret, now: now() }),
+  );
+  if (!checked.ok) return json({ error: "That request is not signed by this Socket" }, 401);
+
+  const { db } = options;
+  const [claimed] = await db
+    .insert(inboundDelivery)
+    .values({
+      id: newId("inboundDelivery"),
+      socketId: socket.id,
+      // A chat tool signs a timestamp rather than naming its requests: the
+      // window is the replay guard, and a Ruling counts once per Human anyway.
+      deliveryId: `deevy-${newId("inboundDelivery")}`,
+      eventName: checked.eventName,
+    })
+    .returning();
+
+  let outcome: ChatOutcome;
+  try {
+    outcome = await applyChat({
+      source: {
+        db,
+        workspace: { id: socket.workspaceId },
+        member: null,
+        ...(options.jobs ? { jobs: options.jobs } : {}),
+      },
+      socket,
+      chat,
+      scope: module.identityScope ?? { instance: socket.provider },
+      eventName: checked.eventName,
+      interaction: chat.normalizeInteraction(checked.eventName, rawBody),
+      origin: (options.origin ?? "").replace(/\/+$/, ""),
+      now: now(),
+    });
+  } catch (error) {
+    outcome = {
+      reply: { kind: "none" },
+      status: "skipped",
+      why: String(error instanceof Error ? error.message : error),
+    };
+    if (claimed) {
+      await db
+        .update(inboundDelivery)
+        .set({ status: "failed", error: outcome.why?.slice(0, 2000) ?? null })
+        .where(eq(inboundDelivery.id, claimed.id));
+    }
+    return chat.answer(outcome.reply);
+  }
+
+  if (claimed) {
+    await db
+      .update(inboundDelivery)
+      .set({ status: outcome.status, error: outcome.why?.slice(0, 2000) ?? null })
+      .where(eq(inboundDelivery.id, claimed.id));
+  }
+  await db.update(socketTable).set({ lastInboundAt: now() }).where(eq(socketTable.id, socket.id));
+  return chat.answer(outcome.reply);
 }
 
 function json(body: unknown, status: number): Response {

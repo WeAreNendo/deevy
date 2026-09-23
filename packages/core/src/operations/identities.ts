@@ -2,7 +2,13 @@ import { account as accountTable, identityVerifications } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { identitiesOf, restoreIdentity, revokeIdentity } from "../identities.ts";
+import {
+  identitiesOf,
+  redeemLinkCode,
+  requireLinkCode,
+  restoreIdentity,
+  revokeIdentity,
+} from "../identities.ts";
 import { socketModuleFor } from "../sockets/registry.ts";
 import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
 
@@ -81,6 +87,61 @@ export const identities = {
       // Somebody else's is not there, as far as this caller can tell.
       if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Identity" });
       return view(await revokeIdentity(context, found));
+    },
+  }),
+
+  /**
+   * Who a code would link, before it does.
+   *
+   * A code links its account to whoever redeems it, so the one thing a Human
+   * handed somebody else's code must see is that it is somebody else's: this
+   * names the account, and linking is a second, deliberate step (ADR-0025).
+   */
+  peek: defineOperation({
+    name: "identities.peek",
+    summary: "Say which account a link code would link to you, without linking it",
+    method: "POST",
+    path: "/identities/peek",
+    auth: "member",
+    // A Human present, not a credential they delegated: linking an account is
+    // giving it the power to rule as you (ADR-0010).
+    sessionOnly: true,
+    input: z.object({ code: z.string().trim().min(8).max(20) }),
+    output: z.object({
+      provider: z.string(),
+      instance: z.string(),
+      externalLogin: z.string().nullable(),
+      socketName: z.string().nullable(),
+      expiresAt: z.date(),
+    }),
+    handler: async ({ input, context }) => {
+      const found = await requireLinkCode(context.db, context.workspace.id, input.code);
+      const socket = await context.db.query.socket.findFirst({
+        where: { id: found.socketId },
+        columns: { name: true },
+      });
+      return {
+        provider: found.provider,
+        instance: found.instance,
+        externalLogin: found.externalLogin,
+        socketName: socket?.name ?? null,
+        expiresAt: found.expiresAt,
+      };
+    },
+  }),
+
+  link: defineOperation({
+    name: "identities.link",
+    summary: "Link the account a code names to you, so it rules as you",
+    method: "POST",
+    path: "/identities/link",
+    auth: "member",
+    sessionOnly: true,
+    input: z.object({ code: z.string().trim().min(8).max(20) }),
+    output: IdentitySchema,
+    handler: async ({ input, context }) => {
+      const found = await requireLinkCode(context.db, context.workspace.id, input.code);
+      return view(await redeemLinkCode(context, found));
     },
   }),
 

@@ -10,6 +10,9 @@ import { newId } from "../src/ids.ts";
 import { upsertProjection } from "../src/issues.ts";
 import { sealSecret } from "../src/secrets.ts";
 import type {
+  ChatInteraction,
+  ChatMessage,
+  ChatMessageRef,
   ExternalIssue,
   InboundEvent,
   SocketModule,
@@ -462,4 +465,81 @@ export async function seedProject(
       return issue;
     },
   };
+}
+
+/** What a fake chat tool was asked to do, for a test to read back. */
+export interface FakeChat {
+  sockets: SocketModules;
+  posted: Array<{ channel: string; message: ChatMessage; ref: ChatMessageRef }>;
+  updated: Array<{ ref: ChatMessageRef; message: ChatMessage }>;
+  dms: string[];
+  notes: Array<{ triggerId: string; gateRequestId: string }>;
+  responses: Array<{ responseUrl: string; text: string }>;
+}
+
+/**
+ * A chat tool that is not a tool.
+ *
+ * The core's half of Slack is what a click means and what deevy says back, and
+ * none of that needs Slack's wire format: the Slack module is tested against
+ * recorded requests in `packages/sockets`, and the whole sentence — the real
+ * module behind the real route — is `packages/sockets/tests/slack-deevy.test.ts`.
+ * So this signs the way the fake tracker does, carries its interaction
+ * verbatim, and writes down every call.
+ */
+export function fakeChat(): FakeChat {
+  const posted: FakeChat["posted"] = [];
+  const updated: FakeChat["updated"] = [];
+  const dms: string[] = [];
+  const notes: FakeChat["notes"] = [];
+  const responses: FakeChat["responses"] = [];
+  const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
+    provider: "slack",
+    capabilities: new Set(["chat"] as const),
+    identityScope: { instance: typeof config.teamId === "string" ? config.teamId : "T0TEST" },
+    identity: () =>
+      Promise.resolve({
+        login: "deevy",
+        id: "U0DEEVY",
+        mentionHandle: "@deevy",
+        learned: { teamId: "T0TEST", team: "Acme" },
+      }),
+    chat: {
+      verifyInteraction: ({ headers, rawBody, webhookSecret, now }) => {
+        const at = Number(headers.get("x-test-timestamp") ?? "0");
+        const fresh = Math.abs((now ?? new Date()).getTime() / 1000 - at) <= 300;
+        return Promise.resolve({
+          ok:
+            fresh &&
+            headers.get("x-test-signature") === `${webhookSecret}:${String(rawBody.length)}`,
+          deliveryId: null,
+          eventName: headers.get("x-test-event") ?? "",
+        });
+      },
+      normalizeInteraction: (_eventName, rawBody) => JSON.parse(rawBody) as ChatInteraction,
+      answer: (reply) => Response.json(reply),
+      post: (channel, message) => {
+        const ref = { channel, ts: `${String(posted.length + 1)}.000100` };
+        posted.push({ channel, message, ref });
+        return Promise.resolve(ref);
+      },
+      update: (ref, message) => {
+        updated.push({ ref, message });
+        return Promise.resolve();
+      },
+      openDm: (user) => {
+        dms.push(user);
+        return Promise.resolve(`D-${user}`);
+      },
+      askForNote: (triggerId, input) => {
+        notes.push({ triggerId, gateRequestId: input.gateRequestId });
+        return Promise.resolve();
+      },
+      respond: (responseUrl, text) => {
+        responses.push({ responseUrl, text });
+        return Promise.resolve();
+      },
+    },
+  });
+  return { sockets: { slack: module }, posted, updated, dms, notes, responses };
 }
