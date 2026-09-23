@@ -200,6 +200,44 @@ function stated(
   };
 }
 
+let comments = 0;
+
+/**
+ * A comment on the record that is a Ruling, as a provider's `normalize` reads
+ * one (`parseRulingCommand`). The author is the tool's own account id, which
+ * for the stub's GitHub is the address the Human signs in with — the id
+ * `apps/web/scripts/stub-oauth.js` hands Better Auth.
+ */
+function rulingComment(
+  record: { externalId: string; url: string },
+  author: { login: string; id: string },
+  body: string,
+): unknown {
+  comments += 1;
+  const [first = ""] = body.split("\n");
+  const rejected = first.startsWith("/reject");
+  return {
+    kind: "ruling",
+    scopeKey: CONTAINER,
+    issueExternalId: record.externalId,
+    comment: {
+      externalId: `walk-${String(comments)}`,
+      url: `${record.url}#walk-${String(comments)}`,
+      body,
+      author: { ...author, isBot: false },
+      createdAt: new Date().toISOString(),
+    },
+    decision: rejected ? "rejected" : "approved",
+    note: first.replace(/^\/(approve|reject)\s*/, "") || null,
+  };
+}
+
+/** What deevy has said on the record so far, read from the tracker through deevy. */
+async function said(origin: string, issue: string, cookie: string): Promise<string[]> {
+  const read = await human(origin, "issues/get", { issue, comments: true }, cookie);
+  return ((read.comments as Array<{ body: string }> | null) ?? []).map((one) => one.body);
+}
+
 // ---------------------------------------------------------------- the model
 
 /**
@@ -286,7 +324,15 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   const socket = await human(
     origin,
     "sockets/connect",
-    { provider: "stub", name: "Example tracker", config: {}, webhookSecret },
+    // Its accounts are the ones deevy signs people in with, as github.com's
+    // are: so a Human who signed in with GitHub rules from the tracker with no
+    // linking step (ADR-0025).
+    {
+      provider: "stub",
+      name: "Example tracker",
+      config: { signInProvider: "github" },
+      webhookSecret,
+    },
     ada,
   );
   const socketId = String(socket.id);
@@ -512,15 +558,52 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     JSON.stringify(untouched.waiting.map((run) => run.status)),
   );
 
-  // Part 4: the Human rules, in deevy, and the loop carries on.
-  const planGate = (
-    (await human(origin, "gates/list", { runId }, ada)).gates as Array<{ id: string }>
-  )[0];
-  await human(
+  // Part 4: the Human rules where they read the Proposal — in the tracker —
+  // and the loop carries on (ADR-0025).
+  //
+  // First somebody deevy cannot place, who is told how to be placed and rules
+  // nothing: an account id is proof, a login is not.
+  const stranger = await deliver(
     origin,
-    "gates/approve",
-    { requestId: planGate?.id, note: "Looks right, build it" },
-    ada,
+    socketId,
+    [rulingComment(record, { login: "mallory", id: "mallory@example.net" }, "/approve")],
+    "acceptance-ruling-1",
+  );
+  check("a Ruling from the tracker is a delivery like any other", stranger.status === 200);
+  const linkReply = await until(
+    deployment,
+    "the stranger being answered",
+    async () => (await said(origin, issueKey, ada)).find((one) => one.includes("@mallory")) ?? null,
+  );
+  check(
+    "an account nobody linked rules nothing, and is told where to link it",
+    linkReply.includes("ruled nothing") && linkReply.includes("/settings/identities"),
+    linkReply,
+  );
+  const stillOpen = (await human(origin, "gates/list", { runId }, ada)).gates as Array<{
+    status: string;
+  }>;
+  check(
+    "and the Gate is still waiting",
+    stillOpen[0]?.status === "open",
+    JSON.stringify(stillOpen),
+  );
+
+  // Then the admin, from the GitHub account they signed in to deevy with.
+  await deliver(
+    origin,
+    socketId,
+    [rulingComment(record, { login: "ada", id: adminEmail }, "/approve Looks right, build it")],
+    "acceptance-ruling-2",
+  );
+  const planRuled = (await human(origin, "gates/list", { runId }, ada)).gates as Array<{
+    status: string;
+    decisions: Array<{ via: string; memberId: string }>;
+  }>;
+  check(
+    "the admin rules from the tracker with no linking step, and deevy says where it came from",
+    planRuled[0]?.status === "approved" && planRuled[0]?.decisions[0]?.via === "socket",
+    JSON.stringify(planRuled.map((gate) => [gate.status, gate.decisions])),
   );
   check(
     "the ruling reaches the Agent's inbox",
@@ -589,6 +672,26 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     refusedSaid.includes("wants somebody other than the Human this Run is for"),
     refusedSaid,
   );
+  await deliver(
+    origin,
+    socketId,
+    [rulingComment(record, { login: "ada", id: adminEmail }, "/approve")],
+    "acceptance-ruling-3",
+  );
+  const fourEyes = await until(
+    deployment,
+    "the requester being answered",
+    async () =>
+      (await said(origin, issueKey, ada)).find((one) =>
+        one.includes("wants somebody other than the Human this Run is for"),
+      ) ?? null,
+  );
+  check(
+    "and refused from the tracker too, in the same words",
+    fourEyes.startsWith("@ada, that ruled nothing"),
+    fourEyes,
+  );
+  // Somebody else rules, in deevy: both doors lead to the same Ruling.
   await human(origin, "gates/approve", { requestId: shipGate?.id, note: "Ship it" }, grace);
   check("and somebody else can rule on it", graceId !== "");
 
@@ -658,16 +761,26 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "the Event log tells the story of the Run from the label to the finish",
     story ===
       "run.started run.checkout_issued run.activity run.activity gate.requested " +
-        "run.awaiting_input gate.approved run.answered run.checkout_issued issue.link_added " +
-        "run.pull_request_opened gate.requested run.awaiting_input run.activity comment.created " +
-        "gate.approved run.answered run.checkout_issued run.completed",
+        "run.awaiting_input gate.ruling_refused identity.linked gate.approved run.answered " +
+        "run.checkout_issued issue.link_added run.pull_request_opened gate.requested " +
+        "run.awaiting_input run.activity comment.created gate.ruling_refused gate.approved " +
+        "run.answered run.checkout_issued run.completed",
     story,
   );
-  // Five of these are a Human's, and each for the right reason: `run.started`
-  // records the Member whose label routed the work, `gate.approved` the Ruling,
-  // and `run.answered` that Ruling reaching the Run. Everything else is the
-  // Agent acting as itself.
-  const humans = new Set(["run.started", "gate.approved", "gate.rejected", "run.answered"]);
+  // These are a Human's or the tracker's, each for the right reason:
+  // `run.started` records the Member whose label routed the work,
+  // `gate.approved` the Ruling, `run.answered` that Ruling reaching the Run.
+  // Everything else is the Agent acting as itself.
+  const humans = new Set([
+    "run.started",
+    "gate.approved",
+    "gate.rejected",
+    "run.answered",
+    // The tracker's, not the Agent's: a comment deevy could not count, and an
+    // account it came to know. Neither is anything the Agent did.
+    "gate.ruling_refused",
+    "identity.linked",
+  ]);
   check(
     "the Agent is the actor throughout, and the Human exactly one hop away",
     events.every((event) =>

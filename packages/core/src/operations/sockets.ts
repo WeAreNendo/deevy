@@ -289,6 +289,13 @@ export const sockets = {
       /** `paused` keeps everything and stops acting on what the tool says. */
       status: z.enum(socketStatuses).exclude(["removed"]).optional(),
       pollMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+      /**
+       * Take the address a tool reports as proof of which Member commented,
+       * matched against one a Member verified. For a tool with nothing better
+       * to offer — Notion — and off by default, because everywhere else an
+       * account id is the proof and an address is a weaker one (ADR-0025).
+       */
+      identityByEmail: z.boolean().optional(),
     }),
     output: SocketSchema,
     handler: async ({ input, context }) => {
@@ -302,9 +309,13 @@ export const sockets = {
         ...(input.status === undefined ? {} : { status: input.status }),
         ...(input.pollMinutes === undefined ? {} : { pollMinutes: input.pollMinutes }),
       };
+      const config =
+        input.identityByEmail === undefined
+          ? null
+          : { ...found.config, identityByEmail: input.identityByEmail };
       const [row] = await context.db
         .update(socketTable)
-        .set({ ...changes, updatedAt: new Date() })
+        .set({ ...changes, ...(config ? { config } : {}), updatedAt: new Date() })
         .where(eq(socketTable.id, found.id))
         .returning();
       if (!row) throw new Error("sockets.update: the update returned no row");
@@ -313,7 +324,13 @@ export const sockets = {
         kind: "socket.updated",
         subjectType: "socket",
         subjectId: row.id,
-        payload: { name: row.name, ...changes },
+        payload: {
+          name: row.name,
+          ...changes,
+          ...(input.identityByEmail === undefined
+            ? {}
+            : { identityByEmail: input.identityByEmail }),
+        },
       });
       return socketOut(row);
     },

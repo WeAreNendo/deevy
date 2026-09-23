@@ -220,14 +220,21 @@ export function signInProviders(env: Pick<AuthEnv, "providers">): SignInProvider
  * option is deprecated on its way to being unconditional, and a value written
  * down now is a value to delete later.
  *
- * `allowDifferentEmails: false`: a link is one address at both ends. Two
- * addresses are two Humans until deevy has a screen that says otherwise.
+ * `allowDifferentEmails: true`, because deevy has the screen that says two
+ * addresses are one Human: Settings › Identities, where a Human who signed in
+ * with Google links the GitHub account they rule from (ADR-0025). Better Auth
+ * reads this in exactly one place — the explicit link a signed-in session
+ * starts with `link-social` — and nowhere a sign-in could reach. That path
+ * still wants the provider to say the second address is verified, and still
+ * refuses an account already linked to somebody else; what it stops refusing
+ * is a Human whose work address is not their GitHub address, which is most of
+ * them. Signing in on an address somebody else holds links nothing, as before.
  */
 export function accountLinkingOf(_env: Pick<AuthEnv, "providers">) {
   return {
     enabled: true,
     trustedProviders: [],
-    allowDifferentEmails: false,
+    allowDifferentEmails: true,
   };
 }
 

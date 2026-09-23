@@ -56,6 +56,12 @@ export interface ExternalActor {
   id: string;
   /** Whether this is a machine — including deevy's own Socket, whose comments rule nothing. */
   isBot: boolean;
+  /**
+   * The address the tool reports for them, where it reports one. Matched only
+   * on a Socket whose admin allowed it, and only against an address a Member
+   * has verified: for a tool with nothing better to offer (ADR-0025).
+   */
+  email?: string;
 }
 
 /** Names one record inside a scope. */
@@ -213,9 +219,26 @@ export interface SetupInput {
   params: Record<string, string>;
 }
 
+/**
+ * Where this tool's accounts live, which is what an Identity is keyed by
+ * (ADR-0025).
+ *
+ * `instance` tells two of one kind apart — github.com and a GitHub Enterprise
+ * Server, a Linear organisation, a Slack team — because an account id means
+ * nothing without the place that issued it. `signInProvider` says the accounts
+ * here are the same accounts deevy signs people in with, so a Human who signed
+ * in to deevy with one rules from here with no linking step.
+ */
+export interface IdentityScope {
+  instance: string;
+  signInProvider?: "github" | "gitlab";
+}
+
 export interface SocketModule {
   provider: SocketProvider;
   capabilities: ReadonlySet<SocketCapability>;
+  /** Where its accounts live. Absent, the provider's name is the instance and nothing is shared. */
+  identityScope?: IdentityScope;
   /** Proves the credential at connect, and is what `sockets.test` re-asks. */
   identity(): Promise<SocketIdentity>;
   /**
@@ -238,6 +261,28 @@ export interface SocketModuleInput {
   /** Injected, so a provider test reaches a fixture rather than the network. */
   fetch: typeof fetch;
   now: () => Date;
+}
+
+/**
+ * Whether a comment is a Ruling, and which: the first line and nothing else,
+ * `/approve`, or `/reject <why>`, with the rest of the comment as the note
+ * (ADR-0025). A comment that merely mentions the word is a comment.
+ *
+ * One parser for every tracker, because the command is deevy's rather than
+ * any tool's, and a Human who rules from GitHub and from Linear should not
+ * learn two grammars.
+ */
+export function parseRulingCommand(
+  body: string,
+): { decision: "approved" | "rejected"; note: string | null } | null {
+  const [first = "", ...rest] = body.trim().split("\n");
+  const match = /^\/(approve|reject)\b\s*(.*)$/i.exec(first.trim());
+  if (!match) return null;
+  const note = [match[2] ?? "", ...rest].join("\n").trim();
+  return {
+    decision: match[1]?.toLowerCase() === "approve" ? "approved" : "rejected",
+    note: note || null,
+  };
 }
 
 /** What an entry hands `createApp`: the providers this deployment can speak. */

@@ -7015,6 +7015,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "identityByEmail": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -7794,6 +7797,285 @@
                     "updatedAt",
                     "hasCredentials",
                     "hasWebhookSecret"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identities": {
+      "get": {
+        "operationId": "identities.list",
+        "summary": "Your accounts on the tools, and which of them may rule as you",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "instance": {
+                            "type": "string"
+                          },
+                          "externalLogin": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "verifiedBy": {
+                            "type": "string",
+                            "enum": [
+                              "sign_in",
+                              "oauth",
+                              "link_code",
+                              "email"
+                            ]
+                          },
+                          "linkedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-native-type": "date"
+                          },
+                          "revokedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "provider",
+                          "instance",
+                          "externalLogin",
+                          "verifiedBy",
+                          "linkedAt",
+                          "revokedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "signIns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "linkable": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "identities",
+                    "signIns",
+                    "linkable"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identities/{identityId}/revoke": {
+      "post": {
+        "operationId": "identities.revoke",
+        "summary": "Stop one of your accounts ruling as you",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "identityId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "externalLogin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "verifiedBy": {
+                      "type": "string",
+                      "enum": [
+                        "sign_in",
+                        "oauth",
+                        "link_code",
+                        "email"
+                      ]
+                    },
+                    "linkedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "revokedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "instance",
+                    "externalLogin",
+                    "verifiedBy",
+                    "linkedAt",
+                    "revokedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identities/{identityId}/restore": {
+      "post": {
+        "operationId": "identities.restore",
+        "summary": "Let an account you unlinked rule as you again",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "identityId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "externalLogin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "verifiedBy": {
+                      "type": "string",
+                      "enum": [
+                        "sign_in",
+                        "oauth",
+                        "link_code",
+                        "email"
+                      ]
+                    },
+                    "linkedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "revokedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "instance",
+                    "externalLogin",
+                    "verifiedBy",
+                    "linkedAt",
+                    "revokedAt"
                   ],
                   "additionalProperties": false
                 }
@@ -9583,6 +9865,22 @@
                               }
                             ]
                           },
+                          "verifiedBy": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "sign_in",
+                                  "oauth",
+                                  "link_code",
+                                  "email"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -9596,6 +9894,7 @@
                           "note",
                           "via",
                           "socket",
+                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -9865,6 +10164,22 @@
                               }
                             ]
                           },
+                          "verifiedBy": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "sign_in",
+                                  "oauth",
+                                  "link_code",
+                                  "email"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -9878,6 +10193,7 @@
                           "note",
                           "via",
                           "socket",
+                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -10213,6 +10529,22 @@
                                     }
                                   ]
                                 },
+                                "verifiedBy": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "sign_in",
+                                        "oauth",
+                                        "link_code",
+                                        "email"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
                                 "createdAt": {
                                   "type": "string",
                                   "format": "date-time",
@@ -10226,6 +10558,7 @@
                                 "note",
                                 "via",
                                 "socket",
+                                "verifiedBy",
                                 "createdAt"
                               ],
                               "additionalProperties": false
@@ -10517,6 +10850,22 @@
                               }
                             ]
                           },
+                          "verifiedBy": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "sign_in",
+                                  "oauth",
+                                  "link_code",
+                                  "email"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -10530,6 +10879,7 @@
                           "note",
                           "via",
                           "socket",
+                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -10814,6 +11164,22 @@
                               }
                             ]
                           },
+                          "verifiedBy": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "sign_in",
+                                  "oauth",
+                                  "link_code",
+                                  "email"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -10827,6 +11193,7 @@
                           "note",
                           "via",
                           "socket",
+                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false

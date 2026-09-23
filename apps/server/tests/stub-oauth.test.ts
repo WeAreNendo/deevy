@@ -560,3 +560,79 @@ describe("the stub's providers", () => {
     expect(profile.email_verified).toBeUndefined();
   });
 });
+
+/**
+ * Linking a second account from inside deevy (Settings › Identities, ADR-0025).
+ *
+ * A Human who signed in with Google rules from GitHub by linking the GitHub
+ * account from a signed-in session, through Better Auth's own `link-social`.
+ * Their GitHub address is usually not their work address, so the link takes an
+ * account whose address differs — and only that link does: a sign-in on an
+ * address somebody else holds still links nothing.
+ */
+/** Cookies as a browser keeps them: by name, the newest winning, the expired gone. */
+function jar(...headers: string[]): string {
+  const kept = new Map<string, string>();
+  for (const pair of headers.flatMap((header) => header.split("; "))) {
+    const at = pair.indexOf("=");
+    if (at <= 0) continue;
+    const name = pair.slice(0, at);
+    const value = pair.slice(at + 1);
+    if (value) kept.set(name, value);
+    else kept.delete(name);
+  }
+  return [...kept].map(([name, value]) => `${name}=${value}`).join("; ");
+}
+
+describe("linking the account a Human rules from", () => {
+  const work = "ada@example.com";
+  const personal = "ada.lovelace@example.org";
+
+  it("takes a GitHub account with another address onto the Human who asked", async () => {
+    const { app, db, close } = stubbedServer({ adminEmail: work });
+    const cookie = await signIn(app, "google", work);
+
+    const started = await app.request("/api/auth/link-social", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ provider: "github", callbackURL: "/settings/identities" }),
+    });
+    const { url } = (await started.json()) as { url?: string };
+    const state = new URL(url ?? "http://x").searchParams.get("state") ?? "";
+    const linked = await app.request(
+      `/api/auth/callback/github?state=${encodeURIComponent(state)}&code=${encodeURIComponent(personal)}`,
+      // The browser's jar: the session, and the state cookie the link just set
+      // in place of the one the sign-in's callback expired.
+      { headers: { cookie: jar(cookie, cookiesOf(started)) }, redirect: "manual" },
+    );
+
+    expect(linked.headers.get("location") ?? "").not.toContain("error");
+    const [ada] = await db.query.user.findMany();
+    const accounts = await db.query.account.findMany({ where: { userId: ada?.id } });
+    // The GitHub account is keyed by its own id — which the stub makes the
+    // address it was given — and that is what a comment on GitHub carries.
+    const pairs = accounts.map((row) => [row.providerId, row.accountId]);
+    expect(pairs.sort((a, b) => String(a[0]).localeCompare(String(b[0])))).toEqual([
+      ["github", personal],
+      ["google", work],
+    ]);
+    expect(await db.query.user.findMany()).toHaveLength(1);
+    close();
+  });
+
+  it("still links nothing when somebody signs in on an address another Human holds", async () => {
+    const { app, db, close } = stubbedServer({ adminEmail: work });
+    await signIn(app, "google", work);
+
+    // The GitHub account arrives on its own, not from Ada's session: that is a
+    // sign-in, and a sign-in on a different address is a different Human.
+    await signIn(app, "github", personal);
+
+    const users = await db.query.user.findMany();
+    expect(users.map((row) => row.email).sort()).toEqual([personal, work]);
+    const [ada] = users.filter((row) => row.email === work);
+    const accounts = await db.query.account.findMany({ where: { userId: ada?.id } });
+    expect(accounts.map((row) => row.providerId)).toEqual(["google"]);
+    close();
+  });
+});

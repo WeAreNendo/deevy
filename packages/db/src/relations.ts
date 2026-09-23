@@ -35,6 +35,7 @@ import {
 } from "./schema/gate.ts";
 import { project } from "./schema/project.ts";
 import { inboundDelivery, socket } from "./schema/socket.ts";
+import { memberIdentity } from "./schema/identity.ts";
 import { member, workspace } from "./schema/workspace.ts";
 
 export const tables = {
@@ -57,6 +58,7 @@ export const tables = {
   allowlistRule,
   invitation,
   socket,
+  memberIdentity,
   inboundDelivery,
   project,
   checkpoint,
@@ -103,6 +105,10 @@ const appRelations = defineRelationsPart(tables, (r) => ({
       from: r.member.id.through(r.projectGrant.memberId),
       to: r.project.id.through(r.projectGrant.projectId),
     }),
+    identities: r.many.memberIdentity({ from: r.member.id, to: r.memberIdentity.memberId }),
+  },
+  memberIdentity: {
+    member: r.one.member({ from: r.memberIdentity.memberId, to: r.member.id, optional: false }),
   },
   socket: {
     workspace: r.one.workspace({ from: r.socket.workspaceId, to: r.workspace.id, optional: false }),

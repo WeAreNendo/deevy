@@ -2,6 +2,7 @@ import {
   activity as activityTable,
   gateDecision as gateDecisionTable,
   gateRequest as gateRequestTable,
+  identityVerifications,
   type GateDecision,
   type GateRequest,
   type Member,
@@ -227,6 +228,12 @@ export const GateDecisionSchema = z.object({
    * (ADR-0025).
    */
   socket: z.object({ id: z.string(), provider: z.string(), name: z.string() }).nullable(),
+  /**
+   * How deevy knew the Human behind a Ruling made outside it, or null for one
+   * made in deevy. `email` is the weak one, and a screen says so wherever the
+   * Ruling is shown (ADR-0025).
+   */
+  verifiedBy: z.enum(identityVerifications).nullable(),
   createdAt: z.date(),
 });
 
@@ -266,6 +273,12 @@ export const GateRequestSchema = z.object({
 });
 
 export type GateRequestView = z.infer<typeof GateRequestSchema>;
+
+/** What a Ruling from outside recorded about how its author was known (sockets/rulings.ts). */
+function verifiedByOf(ref: unknown): (typeof identityVerifications)[number] | null {
+  const said = (ref as { verifiedBy?: unknown } | null)?.verifiedBy;
+  return identityVerifications.find((one) => one === said) ?? null;
+}
 
 /** A Ruling, with the tool it came through where it came through one. */
 export type GateDecisionRow = GateDecision & {
@@ -325,6 +338,7 @@ export function gateView({
       socket: row.socket
         ? { id: row.socket.id, provider: row.socket.provider, name: row.socket.name }
         : null,
+      verifiedBy: verifiedByOf(row.externalRef),
       createdAt: row.createdAt,
     })),
     approvals: decisions.filter((row) => row.decision === "approved").length,

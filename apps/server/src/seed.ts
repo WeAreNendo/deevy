@@ -20,8 +20,8 @@ import { API_PATH } from "@deevy/core";
 import { buildContext } from "@deevy/core/app";
 import { router } from "@deevy/core/router";
 import {
+  applyInbound,
   discardingJobQueue,
-  recordRuling,
   routeIssueTo,
   sweepStaleRuns,
   upsertProjection,
@@ -170,7 +170,9 @@ const store = openStubStore({ id: "seed", login: "deevy" });
 const socket = await admin.api.sockets.connect({
   provider: "stub",
   name: "Example tracker",
-  config: { storeId: store.id },
+  // Its accounts are the ones the seeded Humans sign in with, as github.com's
+  // are, so a comment by one of them rules as them (ADR-0025).
+  config: { storeId: store.id, signInProvider: "github" },
 });
 console.log(`socket      ${socket.name} as @${socket.identity.login}`);
 
@@ -472,9 +474,9 @@ const decidedGate = await planner.api.gates.request({
 await admin.api.gates.approve({ requestId: decidedGate.id, note: "Yes, and keep it to one line." });
 
 // And one a Human ruled on where they read it, which is the other half of
-// ADR-0025: the Ruling is the same Ruling, and the record says where it came
-// from. Slice 9 is what resolves an account to a Member; the seed knows who
-// wrote it, so it records what that resolution would have found.
+// ADR-0025: a comment on the record, from the GitHub account Grace signs in
+// with, through the same door a delivery comes in by. The Ruling is the same
+// Ruling, and the record says where it came from.
 const outside = await record({
   container: "acme/deevy",
   project: dev,
@@ -482,7 +484,7 @@ const outside = await record({
   routeTo: builder.member.id,
 });
 const outsideRun = await runOn(builder, outside);
-const outsideGate = await builder.api.gates.request({
+await builder.api.gates.request({
   runId: outsideRun.id,
   checkpoint: "plan",
   proposal: [
@@ -492,18 +494,39 @@ const outsideGate = await builder.api.gates.request({
     "signed and is not a replay, and rule as the Human whose account wrote it.",
   ].join("\n"),
 });
-await recordRuling(
-  { db, workspace: { id: admin.member.workspaceId }, member: grace.member, jobs },
-  {
-    requestId: outsideGate.id,
-    memberId: grace.member.id,
-    decision: "approved",
-    note: "Approved from the tracker, where I was reading it anyway.",
-    via: "socket",
-    socketId: socket.id,
-    externalRef: { externalId: "c1", url: `${outside.url}#comment-1` },
-  },
-);
+const socketRow = await db.query.socket.findFirst({ where: { id: socket.id } });
+if (!socketRow) throw new Error("the seeded Socket is gone");
+const stubModule = sockets.stub?.({
+  config: socketRow.config,
+  credentials: {},
+  fetch: globalThis.fetch,
+  now: () => new Date(),
+});
+await applyInbound({
+  db,
+  workspace: { id: admin.member.workspaceId },
+  socket: socketRow,
+  jobs,
+  ...(stubModule?.identityScope ? { identityScope: stubModule.identityScope } : {}),
+  events: [
+    {
+      kind: "ruling",
+      scopeKey: "acme/deevy",
+      issueExternalId: outside.externalId,
+      comment: {
+        externalId: "c1",
+        url: `${outside.url}#comment-1`,
+        body: "/approve Approved from the tracker, where I was reading it anyway.",
+        // The stub signs a Human in with their address as their GitHub id
+        // (apps/web/scripts/stub-oauth.js), which is what a comment carries.
+        author: { login: "grace", id: graceEmail, isBot: false },
+        createdAt: new Date(),
+      },
+      decision: "approved",
+      note: "Approved from the tracker, where I was reading it anyway.",
+    },
+  ],
+});
 
 // ----------------------------------------------------------------- delivery
 

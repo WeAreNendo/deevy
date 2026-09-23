@@ -143,6 +143,9 @@ export function GatePage({ requestId, focused = true }: { requestId: string; foc
                             : decision.via === "slack"
                               ? "in Slack"
                               : `via ${providerLabel(decision.socket?.provider, decision.socket?.name)}`}
+                          {/* The weak proof, said wherever the Ruling is shown:
+                              the tool only reported an address (ADR-0025). */}
+                          {decision.verifiedBy === "email" ? " (email)" : ""}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {ago(decision.createdAt)}

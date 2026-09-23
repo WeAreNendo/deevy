@@ -108,6 +108,28 @@ describe("a connected tool", () => {
     expect(kinds.filter((kind) => kind === "socket.updated")).toHaveLength(2);
   });
 
+  it("takes an address as proof of who commented only where an admin says so", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda } = await admin(db);
+    const connected = await asAda.sockets.connect({
+      provider: "stub",
+      name: "Example tracker",
+      config: { storeId: "kept" },
+    });
+    expect(connected.config).toEqual({ storeId: "kept" });
+
+    // For a tool with nothing better to offer (ADR-0025), and said in the log
+    // because it weakens what a Ruling from there is worth.
+    const allowed = await asAda.sockets.update({ socketId: connected.id, identityByEmail: true });
+
+    expect(allowed.config).toEqual({ storeId: "kept", identityByEmail: true });
+    const updated = (await db.query.event.findMany({})).filter(
+      (event) => event.kind === "socket.updated",
+    );
+    expect(updated.at(-1)?.payload).toMatchObject({ identityByEmail: true });
+  });
+
   it("mints a new webhook secret, and says it exactly once", async () => {
     const { db, close } = testDb();
     closers.push(close);

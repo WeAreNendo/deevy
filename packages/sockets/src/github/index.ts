@@ -10,6 +10,7 @@ import type {
   InboundCheck,
   InboundEvent,
   InboundInput,
+  IdentityScope,
   IssueDraft,
   IssuePage,
   IssueQuery,
@@ -120,6 +121,21 @@ function numberFrom(ref: ExternalRef): string {
   return match[1];
 }
 
+/**
+ * Where a GitHub Socket's accounts live: the host its API is on.
+ *
+ * `api.github.com` is github.com, and github.com's accounts are the ones deevy
+ * signs people in with — Better Auth's GitHub provider knows no other host — so
+ * a Human who signed in with GitHub rules from github.com with no linking step.
+ * A GitHub Enterprise Server is a different set of accounts with the same ids
+ * in it, and shares nothing (ADR-0025).
+ */
+export function githubIdentityScope(api: string): IdentityScope {
+  const host = new URL(api).hostname;
+  const instance = host === "api.github.com" ? "github.com" : host;
+  return instance === "github.com" ? { instance, signInProvider: "github" } : { instance };
+}
+
 export function createGithubSocket({
   config,
   credentials,
@@ -211,6 +227,7 @@ export function createGithubSocket({
   return {
     provider: "github",
     capabilities: new Set(["tracker", "forge"] as const),
+    identityScope: githubIdentityScope(api),
 
     /**
      * Who deevy is on GitHub: the App's own bot account. The loop guard reads

@@ -215,6 +215,45 @@ describe("the Events a Socket causes", () => {
  * own union rather than listed here, so a kind added there and forgotten here
  * fails rather than printing its dotted name at somebody in the Event log.
  */
+describe("a Ruling made in the tracker", () => {
+  it("says why one counted for nothing, as the reply in the tracker did", () => {
+    expect(
+      describeEvent({
+        kind: "gate.ruling_refused",
+        payload: { externalActor: "carol-gh", reason: "unknown_identity" },
+      })?.text,
+    ).toBe(
+      "@carol-gh ruled from the tracker and it counted for nothing: an account nobody here has linked",
+    );
+    expect(
+      describeEvent({
+        kind: "gate.ruling_refused",
+        payload: {
+          externalActor: "ada",
+          reason: "refused",
+          message: "The ship Checkpoint wants somebody other than the Human this Run is for",
+        },
+      })?.text,
+    ).toContain("wants somebody other than the Human this Run is for");
+  });
+
+  it("says how an account came to rule as somebody, and folds it away", () => {
+    expect(
+      describeEvent({
+        kind: "identity.linked",
+        payload: { login: "bob", instance: "github.com", verifiedBy: "sign_in" },
+      }),
+    ).toMatchObject({
+      text: "linked @bob on github.com, from the account they sign in with",
+      routine: true,
+    });
+    expect(
+      describeEvent({ kind: "identity.revoked", payload: { login: "bob", instance: "github.com" } })
+        ?.text,
+    ).toBe("unlinked @bob on github.com");
+  });
+});
+
 describe("every EventKind the core can append", () => {
   it("has a sentence, rather than falling through to its raw name", async () => {
     // Read as text by the bundler, so this needs no filesystem and no node types.

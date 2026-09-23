@@ -14,7 +14,7 @@ Cloudflare account, no GitHub OAuth App, no GitHub App, no tunnel and no reposit
 vp run agent#acceptance
 ```
 
-Fifty-three checks, twenty-six against each deployment plus one comparing them. CI runs it after the Workers
+Sixty-three checks, thirty-one against each deployment plus one comparing them. CI runs it after the Workers
 smoke.
 
 ## Why it needs nothing outside this machine
@@ -88,29 +88,36 @@ either deployment this script starts is the remaining manual step, and the only 
    asked for.)
 6. **A pass over a Run nobody has ruled on** reports it and does not work it. A Run waiting on a Human is not
    the runtime's, however long it waits.
-7. **The Human rules**, with a note. The next pass resumes the Run — because deevy moved it back to `active`
-   and told the Agent so — and the resumed session's prompt carries the decision and the note. That session
-   pushes its own branch, opens the pull request through deevy, and stops at the `ship` Gate.
-8. **Four eyes.** The Human the Run is for is refused at that Checkpoint, in the words the Checkpoint uses.
-   Somebody else rules, the Run comes back a second time, and it finishes.
+7. **The Human rules from the tracker**, where they read the Proposal. First an account nobody linked
+   comments `/approve`: it rules nothing, the Gate stays open, and deevy answers on the record with where to
+   link it. Then the admin comments `/approve` with a note from the GitHub account they signed in to deevy
+   with — no linking step — and the Gate records the Ruling `via: socket`. The next pass resumes the Run,
+   because deevy moved it back to `active` and told the Agent so, and the resumed session's prompt carries
+   the decision and the note. That session pushes its own branch, opens the pull request through deevy, and
+   stops at the `ship` Gate.
+8. **Four eyes, from both doors.** The Human the Run is for is refused at that Checkpoint in deevy, and from
+   the tracker, in the same words. Somebody else rules in deevy, the Run comes back a second time, and it
+   finishes.
 9. **The evidence.** The branch the session pushed is on the remote and `main` is untouched; there is exactly
    one pull request, opened in the tracker rather than by the runtime, attached to the record and attributed
    to the Run that produced it; and the ruling is said back in the tracker too.
 10. **The record.** The Event log reads
     `run.started run.checkout_issued run.activity run.activity gate.requested run.awaiting_input
-gate.approved run.answered run.checkout_issued issue.link_added run.pull_request_opened gate.requested
-run.awaiting_input run.activity comment.created gate.approved run.answered run.checkout_issued
-run.completed`, with the Agent as actor throughout and the Human exactly one hop away at the Events that
-    are theirs — the label that routed the work, the two rulings, and each ruling reaching the Run.
+gate.ruling_refused identity.linked gate.approved run.answered run.checkout_issued issue.link_added
+run.pull_request_opened gate.requested run.awaiting_input run.activity comment.created gate.ruling_refused
+gate.approved run.answered run.checkout_issued run.completed`, with the Agent as actor throughout and the
+    Human exactly one hop away at the Events that are theirs — the label that routed the work, the two
+    rulings, and each ruling reaching the Run — and the tracker's own at the two refusals and the account it
+    came to know.
 11. **The same walk on the other deployment**, and the two Event logs are compared to each other.
 
-## What is not here, and why
+## Whose account is whose
 
-A Ruling made **in the tracker** — `/approve` on the record, by the Human whose account wrote it — is the
-other half of [ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md) and is slice 9's, not
-this one. `applyInbound` says so in as many words: deevy cannot yet tell whose account wrote a comment,
-so a Ruling it cannot attribute is one it will not take. The walk rules in deevy, which is the canonical
-door, and slice 9 adds the tracker's to this same script.
+The stub's accounts are GitHub's sign-in accounts because the walk connects it with
+`config: { signInProvider: "github" }`, which is how github.com's Socket behaves and a GitHub Enterprise
+Server's does not. The sign-in stub gives a Human their address as their GitHub account id, so the admin's
+`/approve` carries `ada@example.com` as its author id, and that is what Better Auth's `account` row holds.
+A login is never matched, which is why the stranger in step 7 is named by an id nobody signed in with.
 
 ## Running it against something else
 

@@ -337,7 +337,9 @@ describe("one Human, one Member", () => {
     expect(accountLinkingOf({ providers: { github } })).toEqual({
       enabled: true,
       trustedProviders: [],
-      allowDifferentEmails: false,
+      // Read only by the link a signed-in session asks for (Settings ›
+      // Identities), never by a sign-in: see accountLinkingOf.
+      allowDifferentEmails: true,
     });
     expect(accountLinkingOf({})).toMatchObject({ trustedProviders: [] });
   });
@@ -357,7 +359,7 @@ describe("one Human, one Member", () => {
     // `context.trustedProviders` is what handleOAuthUserInfo consults; the
     // option alone would be a value nothing had resolved.
     expect((await auth.$context).trustedProviders).toEqual([]);
-    expect(auth.options.account?.accountLinking).toMatchObject({ allowDifferentEmails: false });
+    expect(auth.options.account?.accountLinking).toMatchObject({ allowDifferentEmails: true });
   });
 
   it("adds no second Member when another account joins a Human who has one", async () => {
