@@ -75,12 +75,13 @@ describe("the command line a session runs under", () => {
       "mcp__deevy__runs_get",
       "mcp__deevy__runs_start",
       "mcp__deevy__issues_get",
-      "mcp__deevy__documents_get",
-      "mcp__deevy__documents_write",
-      "mcp__deevy__runs_post_activity",
-      "mcp__deevy__runs_request_approval",
-      "mcp__deevy__links_add",
+      "mcp__deevy__issues_create",
       "mcp__deevy__comments_create",
+      "mcp__deevy__runs_post_activity",
+      "mcp__deevy__gates_request",
+      "mcp__deevy__gates_get",
+      "mcp__deevy__pulls_open",
+      "mcp__deevy__links_add",
       "mcp__deevy__runs_finish",
       // No repository, so no shell and no denylist: a session with nothing to
       // run has no use for one, and the tool surface follows the configuration
@@ -181,12 +182,11 @@ describe("what the session may read from disk", () => {
     const shipped = await readInstructions();
 
     expect(shipped).toContain("## Working an Issue in deevy");
-    expect(shipped).toContain("runs_request_approval");
     // What it is now free to do, and what its own words are used for.
     expect(shipped).toContain("git");
     expect(shipped).toContain("what a reviewer reads");
     // The one thing an Agent must not try, in the file that tells it so.
-    expect(shipped).toContain("do not approve one");
+    expect(shipped).toContain("Do not rule on it yourself");
   });
 });
 

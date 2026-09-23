@@ -50,6 +50,28 @@ export const pulls = {
       assertOwnRun(context, run);
       const binding = requireForgeBinding(project);
 
+      /*
+       * One pull request per Run, whoever asks. Two callers reach here on the
+       * same Run by design: the Agent is told to open it
+       * (apps/agent/src/instructions.md), and the supervisor opens one for a
+       * branch a session pushed and left (apps/agent/src/work.ts). A second
+       * pull request for one attempt is noise a reviewer has to resolve, and
+       * asking twice is not a mistake worth a refusal — so the one that exists
+       * is the answer.
+       */
+      const already = await context.db.query.issueLink.findFirst({
+        where: { runId: run.id, kind: "pull_request" },
+      });
+      if (already) {
+        // Read back out of the title deevy wrote below rather than off the
+        // URL, whose shape is the provider's and not deevy's to rely on.
+        return {
+          url: already.url,
+          number: Number(/#(\d+)/.exec(already.title ?? "")?.[1] ?? 0),
+          link: already,
+        };
+      }
+
       const socket = await requireSocket(context, binding.socketId);
       const forge = requireForge(await socketModuleFor(context, socket));
       const opened = await forge.openPullRequest(binding.scope, {

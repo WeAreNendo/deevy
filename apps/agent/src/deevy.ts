@@ -52,13 +52,42 @@ export interface Notification {
  * What a Human decided about the Gate a Run stopped at.
  *
  * `awaiting` means nobody has: the question is asked and the answer is a
- * Human's to give, however long that takes (docs/agent-loop.md).
+ * Human's to give, however long that takes (docs/agent-loop.md). A Gate the
+ * Agent superseded by asking again is awaiting too — nothing was decided about
+ * it, and what is open is the newer question.
  */
 export interface Ruling {
   status: "awaiting" | "approved" | "rejected";
-  stateName: string;
+  /** The Checkpoint the Run asked to pass: `plan`, `ship`, whatever it is called. */
+  checkpoint: string;
   note: string | null;
   decidedByMemberId: string | null;
+}
+
+/**
+ * What a Run works in, issued per Run by deevy from the Project's forge Socket
+ * (ADR-0024).
+ *
+ * The runtime asks for this over HTTP and keeps it: `runs.checkout` is
+ * deliberately not an MCP tool, because a credential in a model's context is a
+ * credential in a transcript (ADR-0014). The token reaches git through the
+ * supervisor's proxy and nothing else (ADR-0019).
+ */
+export interface Checkout {
+  cloneUrl: string;
+  baseBranch: string;
+  /** The branch this Run works on. deevy names it so nobody invents one. */
+  headBranch: string;
+  /** The user the token goes with, where the provider wants one. */
+  username: string;
+  token: string;
+  /** When it dies, as the wire carries it. A resumed Run asks again. */
+  expiresAt: string | null;
+}
+
+export interface PullRequest {
+  url: string;
+  number: number;
 }
 
 /**
@@ -96,22 +125,35 @@ export interface Deevy {
   startRun(issue: string): Promise<Run>;
   postActivity(runId: string, kind: ActivityKind, body: string): Promise<void>;
   finishRun(runId: string, status: "completed" | "failed", summary: string): Promise<void>;
-  /** Asks about the Gate this Run stopped at, and reports what was decided. */
-  requestApproval(runId: string): Promise<Ruling>;
+  /**
+   * What was decided about the Gate this Run stopped at, or null when it has
+   * asked for none. Reading rather than asking: the Agent asks for its own
+   * Gate over MCP, and this is the supervisor finding out how it went.
+   */
+  gate(runId: string): Promise<Ruling | null>;
+  /**
+   * The repository this Run works in, or null when its Project is bound to no
+   * repository — which is an ordinary Run that writes no code, not a failure.
+   */
+  checkout(runId: string): Promise<Checkout | null>;
+  /**
+   * Opens the pull request for a branch the Run pushed, through the Project's
+   * forge Socket. deevy attaches it to the record itself, so the runtime does
+   * not (packages/core/src/operations/pulls.ts).
+   */
+  openPull(input: { runId: string; head?: string; summary?: string }): Promise<PullRequest>;
   /** Says something to the Humans watching the Issue, in prose. */
   comment(issue: string, body: string): Promise<void>;
-  /** Attaches evidence to the Issue, attributed to the Run that produced it. */
-  addLink(
-    issue: string,
-    link: {
-      url: string;
-      kind: "pull_request" | "commit" | "branch" | "url";
-      title: string;
-      runId: string;
-    },
-  ): Promise<void>;
   unread(): Promise<Notification[]>;
   markRead(ids: string[]): Promise<number>;
+}
+
+/** A Gate as `gates.list` answers it, narrowed to what the supervisor reads. */
+interface GateView {
+  id: string;
+  checkpoint: string;
+  status: "open" | "approved" | "rejected" | "superseded";
+  decisions: Array<{ memberId: string; decision: string; note: string | null }>;
 }
 
 export interface DeevyOptions {
@@ -183,14 +225,37 @@ export function createDeevy({ config, fetch = globalThis.fetch }: DeevyOptions):
     async finishRun(runId, status, summary) {
       await post(`/runs/${encodeURIComponent(runId)}/finish`, { status, summary });
     },
-    async requestApproval(runId) {
-      return (await post(`/runs/${encodeURIComponent(runId)}/request-approval`)) as Ruling;
+    async gate(runId) {
+      // Newest first, and no `limit`: a page is one query whatever it carries,
+      // and a Run that asked twice has its second question at the front.
+      const page = await call<{ gates: GateView[] }>(`/gates?runId=${encodeURIComponent(runId)}`);
+      const [gate] = page.gates;
+      if (!gate) return null;
+      // The last Ruling on it is the one that settled it, and an open Gate has
+      // none: deevy refuses a second Ruling by the same Human, so "the last" is
+      // "the one that reached the threshold".
+      const decision = gate.decisions.at(-1) ?? null;
+      return {
+        status: gate.status === "approved" || gate.status === "rejected" ? gate.status : "awaiting",
+        checkpoint: gate.checkpoint,
+        note: decision?.note ?? null,
+        decidedByMemberId: decision?.memberId ?? null,
+      };
+    },
+    async checkout(runId) {
+      // Null where the Project is bound to no repository. deevy answers rather
+      // than refusing, because this is asked of every Run and a Project with
+      // no code is ordinary (packages/core/src/operations/runs.ts).
+      return (await post(`/runs/${encodeURIComponent(runId)}/checkout`)) as Checkout | null;
+    },
+    async openPull({ runId, head, summary }) {
+      return (await post(`/runs/${encodeURIComponent(runId)}/pull`, {
+        ...(head ? { head } : {}),
+        ...(summary ? { summary } : {}),
+      })) as PullRequest;
     },
     async comment(issue, body) {
       await post(`/issues/${encodeURIComponent(issue)}/comments`, { body });
-    },
-    async addLink(issue, link) {
-      await post(`/issues/${encodeURIComponent(issue)}/links`, link);
     },
     async unread() {
       const page = await call<{ notifications: Notification[] }>("/inbox?unreadOnly=true");

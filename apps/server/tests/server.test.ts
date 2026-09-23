@@ -183,3 +183,45 @@ describe("the development OAuth stub", () => {
     expect(existsSync(new URL("../../web/scripts/stub-oauth.js", import.meta.url))).toBe(true);
   });
 });
+
+/**
+ * The provider that is not a tool (ADR-0024).
+ *
+ * Its own flag rather than the sign-in stub's, because the two are different
+ * decisions: a developer with a real GitHub App and no OAuth App wants one, and
+ * the acceptance walk wants the other. It is the entry that refuses it in
+ * production, because a module that decides where it may run cannot be tested
+ * anywhere (packages/sockets/src/index.ts).
+ */
+describe("the development Socket stub", () => {
+  it("is off unless asked for, and health.ping says so", async () => {
+    expect(readEnv({}).devStubSockets).toBe(false);
+    const { app, close } = testServer();
+    const body = (await (await app.request("/api/health/ping")).json()) as {
+      devSockets: boolean;
+    };
+    expect(body.devSockets).toBe(false);
+    close();
+  });
+
+  it("registers the stub for DEEVY_DEV_STUB_SOCKETS=1, and health.ping says so", async () => {
+    const env = readEnv({ DEEVY_DEV_STUB_SOCKETS: "1" });
+    expect(env.devStubSockets).toBe(true);
+    const { app, close } = buildServer({
+      ...env,
+      databasePath: ":memory:",
+      migrationsFolder,
+      baseURL: "http://localhost:3000",
+      secret: "test-secret-test-secret-test-secret-1234",
+    });
+    const body = (await (await app.request("/api/health/ping")).json()) as { devSockets: boolean };
+    expect(body.devSockets).toBe(true);
+    close();
+  });
+
+  it("is refused in production rather than ignored", () => {
+    expect(() => readEnv({ DEEVY_DEV_STUB_SOCKETS: "1", NODE_ENV: "production" })).toThrow(
+      /production/,
+    );
+  });
+});

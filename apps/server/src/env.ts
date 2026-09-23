@@ -46,6 +46,20 @@ export interface ServerEnv {
    * believe is on.
    */
   devStubOAuth: boolean;
+  /**
+   * Register the in-process Socket stub, so a developer can connect a tool,
+   * bind a Project and watch a delivery arrive without a GitHub App, a tunnel
+   * or an account anywhere (packages/sockets/src/stub). It is what the seed
+   * and the acceptance walk play.
+   *
+   * Its own flag rather than the sign-in stub's: a developer with a real
+   * GitHub App and no OAuth App wants one of them and not the other. Refused
+   * under `NODE_ENV=production` for the same reason as the other — a flag that
+   * is silently dropped is a flag somebody will one day believe is on.
+   */
+  devStubSockets: boolean;
+  /** What that stub's tracker holds: `name[=cloneUrl]`, separated by commas. */
+  devStubContainers?: string;
 }
 
 /** A positive number from the environment, or the default when it is absent or nonsense. */
@@ -115,6 +129,12 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
       "DEEVY_DEV_STUB_OAUTH replaces every sign-in provider and cannot be set in production",
     );
   }
+  const devStubSockets = env.DEEVY_DEV_STUB_SOCKETS === "1";
+  if (devStubSockets && env.NODE_ENV === "production") {
+    throw new Error(
+      "DEEVY_DEV_STUB_SOCKETS registers a Socket provider that is not a tool and cannot be set in production",
+    );
+  }
   const providers: AuthProviders = {
     github: {
       clientId: env.GITHUB_CLIENT_ID ?? "",
@@ -163,5 +183,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     sweepIntervalSeconds: positive(env.DEEVY_SWEEP_INTERVAL_SECONDS, 60),
     gateReminderHours: positive(env.DEEVY_GATE_REMINDER_HOURS, 4),
     devStubOAuth,
+    devStubSockets,
+    devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
   };
 }

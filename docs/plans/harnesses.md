@@ -515,7 +515,7 @@ does not, the decision is recorded, and somebody outside this repository can add
   the four in-tree recipes are the ones this repository runs on every commit and the rest are the
   community's. `agent-loop.md` keeps its `claude` example and gains one sentence saying the runtime now
   drives that CLI, and any of three others, from a program.
-- **Release.** Changeset, version, the four images pushed and pulled anonymously, `m4-acceptance.md` amended
+- **Release.** Changeset, version, the four images pushed and pulled anonymously, `sockets-acceptance.md` amended
   to say the walk now runs once per harness.
 
 **Acceptance test.** `vp run agent#acceptance` walks both deployments times four harnesses with the scripted

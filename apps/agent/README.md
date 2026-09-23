@@ -99,26 +99,26 @@ CI never sets it. A milestone whose suite needs a paid key is a milestone nobody
 
 ## The files
 
-| File                             | What it is                                                                                                                        |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `src/config.ts`                  | Everything it reads from the environment, once, never at module scope.                                                            |
-| `src/deevy.ts`                   | deevy over HTTP, hand-written, narrow: the operations the supervisor itself calls.                                                |
-| `src/proxy.ts`                   | deevy's MCP endpoint as the session sees it: loopback, no credential, the tool list enforced.                                     |
-| `src/session.ts`                 | The seam, and the five events the supervisor has an opinion about.                                                                |
-| `src/harness/contract.ts`        | What a recipe is: binary, environment, strip list, `prepare`, argv, parser, bounds.                                               |
-| `src/harness/run.ts`             | The one way a harness runs: the subprocess, the session's home, the strip, the timeout, the `done` an exit code implies.          |
-| `src/harness/claude-code.ts`     | Claude Code on `claude -p`. Also `opencode.ts`, `cursor.ts`, `copilot.ts`; `index.ts` is the registry.                            |
-| `src/instructions.md`            | What the session is told about working an Issue. The original of the snippet in [`docs/agent-loop.md`](../../docs/agent-loop.md). |
-| `src/work.ts`                    | One pass and one Run: discovery, the claim, the envelope, the resume.                                                             |
-| `src/workspace.ts`               | A clone per Run, and the credential the session never sees.                                                                       |
-| `src/deliver.ts`, `src/forge.ts` | The branch, the push, and the pull request.                                                                                       |
-| `src/loop.ts`                    | Staying up: a sequential loop, backoff, and a stop that finishes the sentence.                                                    |
-| `src/receiver.ts`                | `/healthz`, and deevy's signed deliveries.                                                                                        |
-| `src/main.ts`                    | The process.                                                                                                                      |
-| `src/index.ts`                   | What the package exports, for the acceptance script and for anyone embedding it.                                                  |
-| `harness.sh`                     | Installs one CLI at a pinned version; the Dockerfile's `HARNESS` build argument names which.                                      |
-| `scripts/acceptance.ts`          | The milestone's own walk, on both deployments, with nothing outside this machine. Out of CI for now — see below.                  |
-| `scripts/boot.ts`                | Starting deevy on either deployment locally, with the outside world stubbed.                                                      |
+| File                         | What it is                                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `src/config.ts`              | Everything it reads from the environment, once, never at module scope.                                                            |
+| `src/deevy.ts`               | deevy over HTTP, hand-written, narrow: the operations the supervisor itself calls.                                                |
+| `src/proxy.ts`               | deevy's MCP endpoint as the session sees it: loopback, no credential, the tool list enforced.                                     |
+| `src/session.ts`             | The seam, and the five events the supervisor has an opinion about.                                                                |
+| `src/harness/contract.ts`    | What a recipe is: binary, environment, strip list, `prepare`, argv, parser, bounds.                                               |
+| `src/harness/run.ts`         | The one way a harness runs: the subprocess, the session's home, the strip, the timeout, the `done` an exit code implies.          |
+| `src/harness/claude-code.ts` | Claude Code on `claude -p`. Also `opencode.ts`, `cursor.ts`, `copilot.ts`; `index.ts` is the registry.                            |
+| `src/instructions.md`        | What the session is told about working an Issue. The original of the snippet in [`docs/agent-loop.md`](../../docs/agent-loop.md). |
+| `src/work.ts`                | One pass and one Run: discovery, the claim, the envelope, the resume.                                                             |
+| `src/workspace.ts`           | A clone per Run, and the credential the session never sees.                                                                       |
+| `src/deliver.ts`             | The branch, the push, and the pull request deevy opens for it.                                                                    |
+| `src/loop.ts`                | Staying up: a sequential loop, backoff, and a stop that finishes the sentence.                                                    |
+| `src/receiver.ts`            | `/healthz`, and deevy's signed deliveries.                                                                                        |
+| `src/main.ts`                | The process.                                                                                                                      |
+| `src/index.ts`               | What the package exports, for the acceptance script and for anyone embedding it.                                                  |
+| `harness.sh`                 | Installs one CLI at a pinned version; the Dockerfile's `HARNESS` build argument names which.                                      |
+| `scripts/acceptance.ts`      | The milestone's own walk, on both deployments, with nothing outside this machine. CI runs it.                                     |
+| `scripts/boot.ts`            | Starting deevy on either deployment locally, with the outside world stubbed.                                                      |
 
 ## Copying it into your own repository
 
@@ -141,10 +141,7 @@ It is meant to be copied. Two things need doing when you do:
 - [`docs/harnesses.md`](../../docs/harnesses.md) — the four recipes, and how to add a fifth.
 - [`docs/plans/m4.md`](../../docs/plans/m4.md) and [`docs/plans/harnesses.md`](../../docs/plans/harnesses.md)
   — the slices this was built in, each with what building it found.
-- [`docs/m4-acceptance.md`](../../docs/m4-acceptance.md) — the acceptance walk, which is a script:
-  `vp run agent#acceptance`. **It does not run, and CI no longer calls it.** The walk drives the Documents
-  and the Gate that v1's tracker supplied, and an Issue is a projection of a record in a Socket now
-  ([ADR-0024](../../docs/adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)). There is no honest
-  intermediate between the two shapes, so the script is rewritten — around a Socket the walk plays, a
-  Checkpoint and a Proposal — and put back in CI in slice 8 of
-  [`docs/plans/sockets.md`](../../docs/plans/sockets.md).
+- [`docs/sockets-acceptance.md`](../../docs/sockets-acceptance.md) — the acceptance walk, which is a script:
+  `vp run agent#acceptance`. A record in a stubbed tracker becomes a Run, a Proposal, a ruling, a branch, a
+  pull request and a finish, on both deployments, with nothing outside this machine. CI runs it on every
+  commit, and what it found is written down there.

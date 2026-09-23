@@ -5,9 +5,9 @@ import type { Run } from "../src/deevy.ts";
 /**
  * A Run stopped at a Gate and handed back when a Human rules on it.
  *
- * The walk itself — ask, wait, rule, resume — has no operation to ask with
- * until a Gate is a request on a Run (docs/plans/sockets.md, slice 2), so what
- * is left here is the half that is pure: the prompt a resumed Run is given.
+ * The walk itself — ask, wait, rule, resume — is the acceptance script's
+ * (docs/sockets-acceptance.md); what is here is the half that is pure: the
+ * prompt a resumed Run is given.
  */
 describe("the prompt a resumed Run gets", () => {
   const run = {
@@ -20,12 +20,12 @@ describe("the prompt a resumed Run gets", () => {
   it("says what happened while it was stopped, and nothing about how to work", () => {
     const approved = promptFor(run, {
       status: "approved",
-      stateName: "Plan",
+      checkpoint: "plan",
       note: "go on",
       decidedByMemberId: "m1",
     });
 
-    expect(approved).toContain("approved the Plan Gate");
+    expect(approved).toContain("approved the plan Gate");
     expect(approved).toContain('They said: "go on"');
     // Everything else is in the instructions, which every session carries.
     expect(approved).not.toContain("runs_post_activity");
@@ -34,7 +34,7 @@ describe("the prompt a resumed Run gets", () => {
   it("says nothing about a note nobody wrote", () => {
     const bare = promptFor(run, {
       status: "approved",
-      stateName: "Plan",
+      checkpoint: "plan",
       note: null,
       decidedByMemberId: "m1",
     });

@@ -1,11 +1,10 @@
-import { DeevyError, isOpen, type Deevy, type Ruling, type Run } from "./deevy.ts";
-import { deliver, titleFor, type Delivery, type DeliverOptions } from "./deliver.ts";
-import type { Forge } from "./forge.ts";
-import type { GitProxy } from "./git-proxy.ts";
+import { DeevyError, isOpen, type Checkout, type Deevy, type Ruling, type Run } from "./deevy.ts";
+import { branchFor, deliver, openPull, type Delivery, type DeliverOptions } from "./deliver.ts";
+import { openGitProxy, type GitProxy } from "./git-proxy.ts";
 import type { Proxy } from "./proxy.ts";
 import { branchesPushed, movedRefs, refsFrom, sentenceFor } from "./refs.ts";
 import type { Session, SessionEvent, Usage } from "./session.ts";
-import { openWorkspace, type Workspace } from "./workspace.ts";
+import { openWorkspace, type RepoConfig, type Workspace } from "./workspace.ts";
 
 export interface WorkResult {
   runId: string;
@@ -41,22 +40,31 @@ export interface WorkOptions {
    */
   proxy: (options: { onDenied: (name: string) => Promise<void> }) => Promise<Proxy>;
   /**
-   * git as the session reaches it: a loopback proxy that holds the credential
-   * and forwards to the real remote (src/git-proxy.ts). Absent, or answering
-   * null, the session's `origin` is the remote itself and only the supervisor
-   * can push to it — which is what a runtime with no repository has anyway.
+   * What this Run works in: the repository, the branch and the credential
+   * deevy issues from the Project's forge Socket (ADR-0024). Defaults to
+   * asking deevy; a runtime working a repository deevy has no Socket for
+   * answers with its own (src/main.ts).
    */
-  gitProxy?: () => Promise<GitProxy | null>;
+  checkout?: (run: Run) => Promise<Checkout | null>;
+  /**
+   * git as the session reaches it: a loopback proxy that holds the credential
+   * and forwards to the real remote (src/git-proxy.ts). Answering null leaves
+   * the session's `origin` the remote itself, and only the supervisor can push
+   * to it — which is what a runtime with no repository has anyway.
+   */
+  gitProxy?: (checkout: Checkout) => Promise<GitProxy | null>;
   /** Aborted when the process is stopping, on top of each Run's own timeout. */
   signal?: AbortSignal;
   runTimeoutMs: number;
   /**
-   * The working directory a Run gets. Defaults to an empty one, and a runtime
-   * with a repository configured passes one that holds a clone of it.
+   * The working directory a Run gets: a clone of what its checkout named, or
+   * an empty one for a Run with no repository.
    */
-  workspace?: (options: { runId: string; originUrl?: string }) => Promise<Workspace>;
-  /** Where a pull request is opened, when the repository has one. */
-  forge?: Forge | null;
+  workspace?: (options: {
+    runId: string;
+    repo: RepoConfig | null;
+    originUrl?: string;
+  }) => Promise<Workspace>;
   /** How a Run's work becomes a branch and a pull request. */
   deliver?: (options: DeliverOptions) => Promise<Delivery | null>;
   /** Who a commit is by. Defaults to the Agent, since everything it does is its own. */
@@ -75,26 +83,26 @@ export function promptFor(run: Run, ruling?: Ruling): string {
     return [
       `Work Run ${run.id} on Issue ${run.issueKey}.`,
       `It was opened by a ${run.trigger} trigger.`,
-      "Read the Issue and the Document its State asks for before you write anything.",
+      "Read the record and what has been said on it before you write anything.",
     ].join(" ");
   }
   // A resumed Run gets a fresh session, so the prompt says what happened while
-  // it was stopped and nothing else: the Issue, its Documents and the Run's own
-  // feed are all in deevy, and reading them back is the model's first job
-  // (docs/plans/m4.md).
+  // it was stopped and nothing else: the record, what has been said on it and
+  // the Run's own feed are all in deevy, and reading them back is the model's
+  // first job (docs/plans/m4.md).
   const note = ruling.note ? ` They said: "${ruling.note}"` : "";
   if (ruling.status === "rejected") {
     return [
       `Carry on with Run ${run.id} on Issue ${run.issueKey}.`,
-      `A Human rejected the ${ruling.stateName} Gate.${note}`,
-      "Read the note, read the Document it is about, and revise it.",
-      "Ask for the Gate again only once you have written a new version.",
+      `A Human rejected the ${ruling.checkpoint} Gate.${note}`,
+      "Read the note, and write a new Proposal that answers it.",
+      "Ask for the Gate again only once you have.",
     ].join(" ");
   }
   return [
     `Carry on with Run ${run.id} on Issue ${run.issueKey}.`,
-    `A Human approved the ${ruling.stateName} Gate.${note}`,
-    "Read the Issue for the State it is in now, and do what that State asks for.",
+    `A Human approved the ${ruling.checkpoint} Gate.${note}`,
+    "Do what you said you would do in the Proposal they approved.",
   ].join(" ");
 }
 
@@ -131,10 +139,10 @@ export async function runOnce(options: WorkOptions): Promise<Pass> {
  *
  * deevy moved the Run from `awaiting_input` to `active` when the ruling landed
  * and told the Agent so, which is what `run_answered` exists for. So the
- * runtime never polls a Gate: it is told once, per ruling, and asking
- * `requestApproval` here is how it learns which way and with what note — the
- * same call the worked example gives the model, answering rather than asking
- * because the question is already settled.
+ * runtime never polls a Gate: it is told once, per ruling, and reading the
+ * Gate here is how it learns which way and with what note — the same Gate the
+ * model asked for, read rather than asked about because the question is
+ * already settled (ADR-0024).
  */
 export async function resumeRun(options: WorkOptions, runId: string): Promise<WorkResult> {
   const { deevy } = options;
@@ -142,8 +150,8 @@ export async function resumeRun(options: WorkOptions, runId: string): Promise<Wo
   if (run.status !== "active") {
     return { runId: run.id, issueKey: run.issueKey, status: run.status };
   }
-  const ruling = await deevy.requestApproval(run.id);
-  if (ruling.status === "awaiting") {
+  const ruling = await deevy.gate(run.id);
+  if (!ruling || ruling.status === "awaiting") {
     // Nobody has decided after all. Leave it: a Run waiting on a Human does not
     // time out, and deevy asks the approvers again on its own.
     return { runId: run.id, issueKey: run.issueKey, status: run.status };
@@ -231,14 +239,21 @@ export async function workRun(
   // Before the session, so a repository that cannot be cloned fails the Run
   // with a reason rather than handing the model an empty directory and letting
   // it improvise about why nothing is there.
-  // Before the workspace, because the clone's `origin` is set to it: the
-  // session pushes to loopback and the supervisor carries it out with the
-  // credential (docs/plans/agent-owns-git.md).
-  const git = (await options.gitProxy?.()) ?? null;
+  //
+  // The checkout comes first of all, because it is what says whether there is
+  // a repository at all: deevy holds the Socket, mints the credential and
+  // names the branch (ADR-0024). Then the git proxy, because the clone's
+  // `origin` is set to it — the session pushes to loopback and the supervisor
+  // carries it out with the credential (docs/plans/agent-owns-git.md).
+  let git: GitProxy | null = null;
+  let checkout: Checkout | null = null;
   let workspace: Workspace;
   try {
+    checkout = await (options.checkout ?? ((one: Run) => deevy.checkout(one.id)))(run);
+    git = checkout ? await (options.gitProxy ?? defaultGitProxy)(checkout) : null;
     workspace = await (options.workspace ?? openWorkspace)({
       runId: run.id,
+      repo: repoFor(checkout),
       ...(git ? { originUrl: git.url } : {}),
     });
   } catch (error) {
@@ -328,12 +343,13 @@ export async function workRun(
         const said = (await deevy.run(run.id).catch(() => null))?.summary ?? undefined;
         delivered =
           own.length > 0
-            ? await attribute(own, workspace, options, run, said)
+            ? await attribute(own, options, run, said)
             : await (options.deliver ?? deliver)({
                 workspace,
-                forge: options.forge ?? null,
+                deevy,
                 issueKey: run.issueKey,
                 runId: run.id,
+                branch: checkout?.headBranch ?? branchFor(run.issueKey, run.id),
                 author: options.author ?? {
                   name: "deevy Agent",
                   email: "agent@deevy.invalid",
@@ -386,28 +402,38 @@ export async function workRun(
   };
 }
 
+/** The repository a checkout names, as the workspace and the proxy want it. */
+function repoFor(checkout: Checkout | null): RepoConfig | null {
+  if (!checkout) return null;
+  return {
+    url: checkout.cloneUrl,
+    token: checkout.token,
+    username: checkout.username,
+    baseBranch: checkout.baseBranch,
+  };
+}
+
+/** git on loopback, in front of whatever the checkout named. */
+function defaultGitProxy(checkout: Checkout): Promise<GitProxy> {
+  return openGitProxy({
+    upstream: checkout.cloneUrl,
+    token: checkout.token,
+    username: checkout.username,
+  });
+}
+
 /**
- * The evidence, attributed to the attempt that produced it.
+ * What a Human reads on the record, once there is a branch to name.
  *
  * A comment rather than an Activity, and that is forced rather than chosen: the
  * model finishes its own Run, and a finished Run takes no more Activities, so
- * by the time there is a branch to name the feed is closed. The Link is the
- * structured record and carries `runId`, which is what makes "this pull request
- * came from that attempt" a fact rather than a coincidence (docs/plans/m3.md,
- * slice 1); the comment is what a Human reads on the Issue.
+ * by the time there is a branch to name the feed is closed. The Link is not
+ * written here — `pulls.open` attaches it as it opens the pull request, so
+ * evidence is attributed to the attempt that produced it whoever asked for it
+ * (packages/core/src/operations/pulls.ts).
  */
 async function attach(deevy: Deevy, run: Run, delivered: Delivery): Promise<void> {
   const { branch, pullRequest } = delivered;
-  if (pullRequest) {
-    await deevy
-      .addLink(run.issueKey, {
-        url: pullRequest.url,
-        kind: "pull_request",
-        title: `#${pullRequest.number} from ${branch}`,
-        runId: run.id,
-      })
-      .catch(() => undefined);
-  }
   const said = pullRequest
     ? `Run \`${run.id}\` pushed \`${branch}\` and opened ${pullRequest.url}`
     : `Run \`${run.id}\` pushed \`${branch}\`; no pull request was opened for this repository`;
@@ -492,26 +518,14 @@ async function movedSince(
  */
 async function attribute(
   own: Array<{ branch: string; commit: string }>,
-  workspace: Workspace,
   options: WorkOptions,
   run: Run,
   summary?: string,
 ): Promise<Delivery> {
   const [first] = own;
-  const forge = options.forge ?? null;
-  const pullRequest = forge
-    ? await forge.open({
-        branch: first.branch,
-        base: workspace.repo?.baseBranch ?? "main",
-        title: titleFor(run.issueKey, summary),
-        body: [
-          ...(summary ? [summary.trim(), ""] : []),
-          `Opened by a deevy Agent working ${run.issueKey}, on the branch it pushed itself.`,
-          "",
-          `The Run that produced it is \`${run.id}\`, and its Activity feed in deevy is the account`,
-          "of how it got here, including every ref it moved. A Human decides whether this ships.",
-        ].join("\n"),
-      })
-    : null;
+  const pullRequest = await openPull(
+    { deevy: options.deevy, runId: run.id, ...(summary ? { summary } : {}) },
+    first.branch,
+  );
   return { branch: first.branch, commit: first.commit, pullRequest };
 }

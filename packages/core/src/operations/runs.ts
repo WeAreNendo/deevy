@@ -27,7 +27,7 @@ import {
   parseRunCursor,
   QueryFlag,
   resolveIssueRef,
-  requireForgeBinding,
+  forgeBindingOf,
   requireRun,
   runView,
 } from "./shared.ts";
@@ -144,8 +144,11 @@ export const runs = {
         payload: { issueId: issue.id, activityId: id, activityKind: input.kind },
       });
       // An elicitation is the Agent asking a Human something, so it is its own
-      // Event: that is what a Notification and the live feed hang off.
-      if (status === "awaiting_input") {
+      // Event: that is what a Notification and the live feed hang off. Only
+      // where it begins the wait — something said to a Run that is already
+      // waiting is not a second question, and a second Notification about one
+      // Gate is a Human told twice (apps/agent/src/work.ts).
+      if (status === "awaiting_input" && run.status !== "awaiting_input") {
         await appendEvent(context, {
           kind: "run.awaiting_input",
           subjectType: "run",
@@ -218,22 +221,31 @@ export const runs = {
     // supervisor calls this over HTTP and keeps the token to itself. The
     // runtime's own allowlist is the second fence.
     input: z.object({ runId: z.string() }),
-    output: z.object({
-      cloneUrl: z.string(),
-      /** What to clone from, and what to push back to. */
-      baseBranch: z.string(),
-      /** The branch this Run works on. deevy names it so nobody invents one. */
-      headBranch: z.string(),
-      /** The user the token goes with, where the provider wants one. */
-      username: z.string(),
-      token: z.string(),
-      /** When it dies. A Run resumed after a Gate asks again (ADR-0019). */
-      expiresAt: z.date().nullable(),
-    }),
+    /**
+     * Null where the Project is bound to no repository, which is an ordinary
+     * Project rather than a mistake: the supervisor asks this of every Run it
+     * takes up, and a refusal would put a 404 in an operator's log every pass
+     * (apps/agent/src/work.ts).
+     */
+    output: z
+      .object({
+        cloneUrl: z.string(),
+        /** What to clone from, and what to push back to. */
+        baseBranch: z.string(),
+        /** The branch this Run works on. deevy names it so nobody invents one. */
+        headBranch: z.string(),
+        /** The user the token goes with, where the provider wants one. */
+        username: z.string(),
+        token: z.string(),
+        /** When it dies. A Run resumed after a Gate asks again (ADR-0019). */
+        expiresAt: z.date().nullable(),
+      })
+      .nullable(),
     handler: async ({ input, context }) => {
       const { run, project, key } = await requireRun(context, input.runId);
       assertOwnRun(context, run);
-      const binding = requireForgeBinding(project);
+      const binding = forgeBindingOf(project);
+      if (!binding) return null;
 
       const socket = await requireSocket(context, binding.socketId);
       const forge = requireForge(await socketModuleFor(context, socket));

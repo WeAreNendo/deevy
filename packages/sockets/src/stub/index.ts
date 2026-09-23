@@ -81,6 +81,37 @@ export function resetStubStores(): void {
   stores.clear();
 }
 
+/** The store a deployment's own dev stub uses, named so a Socket row can find it. */
+export const DEV_STUB_STORE = "dev";
+
+/**
+ * The containers a stubbed deployment offers, from one string.
+ *
+ * `acme/deevy=/srv/repos/deevy.git,acme/ops` — a name, and optionally a
+ * repository a Run can clone. An entry that is already there is left alone,
+ * because this runs where the entry is built and an entry rebuilt would drop
+ * every record the store holds.
+ *
+ * It exists because a store lives in the process deevy runs in: a developer
+ * driving a stubbed instance from outside — a browser, the acceptance walk —
+ * has no other way to say what the tracker contains
+ * (docs/sockets-acceptance.md).
+ */
+export function openDevStubStore(spec = "", id: string = DEV_STUB_STORE): StubStore {
+  const store = openStubStore({ id });
+  const wanted = spec
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  for (const entry of wanted.length > 0 ? wanted : ["acme/deevy"]) {
+    const [scopeKey = "", cloneUrl] = entry.split("=");
+    if (scopeKey && !store.containers.has(scopeKey)) {
+      addContainer(store, { scopeKey, cloneUrl: cloneUrl ?? null });
+    }
+  }
+  return store;
+}
+
 export interface AddContainerOptions {
   scopeKey: string;
   name?: string;
@@ -195,9 +226,31 @@ export async function signDelivery(
   };
 }
 
+/**
+ * The clocks a delivery lost on the way through JSON.
+ *
+ * A provider's `normalize` reads a parsed body and answers deevy's own types,
+ * and two of those are Dates: the core compares them to decide a reordered
+ * delivery and writes them to integer columns. A stub that handed back strings
+ * would be a stub that only worked in a test that never wrote one down.
+ */
+function reviveDates(event: unknown): InboundEvent {
+  const one = event as Record<string, Record<string, unknown> | undefined>;
+  if (one.issue && typeof one.issue.updatedAt === "string") {
+    one.issue = { ...one.issue, updatedAt: new Date(one.issue.updatedAt) };
+  }
+  if (one.comment && typeof one.comment.createdAt === "string") {
+    one.comment = { ...one.comment, createdAt: new Date(one.comment.createdAt) };
+  }
+  return one as unknown as InboundEvent;
+}
+
 export function createStubSocket({ config, now }: SocketModuleInput): SocketModule {
+  // A Socket connected with no configuration finds the store the deployment
+  // seeded, which is the only one anybody outside this process can fill
+  // (`openDevStubStore`). A test or a seed that wants its own names it.
   const store = openStubStore({
-    id: typeof config.storeId === "string" ? config.storeId : "default",
+    id: typeof config.storeId === "string" ? config.storeId : DEV_STUB_STORE,
   });
 
   return {
@@ -220,7 +273,7 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
 
       normalize(_eventName: string, payload: unknown): InboundEvent[] {
         const events = (payload as { events?: unknown } | null)?.events;
-        return Array.isArray(events) ? (events as InboundEvent[]) : [];
+        return Array.isArray(events) ? events.map(reviveDates) : [];
       },
 
       getIssue(scope: Scope, ref: ExternalRef): Promise<ExternalIssue> {

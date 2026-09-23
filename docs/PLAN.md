@@ -208,7 +208,7 @@ Human rules, and delivers a branch and a pull request linked back to the Run tha
 deevy over HTTP and MCP like any third party — no `packages/core` import, no `workspace:*` dependency — which
 is what makes it a test of ADR-0005's surfaces rather than a second view of them. Built in ten slices from
 [m4.md](./plans/m4.md), with operator docs for both targets in [OPERATIONS.md](./OPERATIONS.md) and its own
-acceptance walk in [m4-acceptance.md](./m4-acceptance.md) — a script rather than a runbook, which walks both
+acceptance walk in [sockets-acceptance.md](./sockets-acceptance.md) — a script rather than a runbook, which walks both
 deployments on this machine with no account, no OAuth App and no repository on the internet, and runs on
 every commit.
 

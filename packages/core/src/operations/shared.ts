@@ -289,10 +289,18 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
           })
         ).map((run) => run.issueId),
   );
+  // What this Project asks a Run to stop at. One query, on the read where the
+  // answer is part of the brief rather than on every list (schemas.ts).
+  const checkpoints = await context.db.query.checkpoint.findMany({
+    where: { projectId: found.projectId },
+    columns: { name: true },
+    orderBy: { name: "asc" },
+  });
   return {
     ...found,
     parent: found.parent && projectVisible(context, found.parent.projectId) ? found.parent : null,
     children: shown.map((child) => ({ ...child, hasOpenRun: working.has(child.id) })),
+    checkpoints: checkpoints.map((row) => row.name),
   };
 }
 
@@ -368,17 +376,33 @@ export async function requireRun(context: ContextFor<"member">, runId: string) {
  * behind it is a perfectly good Project — so this is a `NOT_FOUND` about the
  * repository rather than an error about the Project (docs/plans/sockets.md).
  */
-export function requireForgeBinding(project: Project): {
+export interface ForgeBinding {
   socketId: string;
   scope: Record<string, unknown>;
   baseBranch: string;
-} {
-  if (!project.forgeSocketId || !project.forgeScope) {
-    throw new ORPCError("NOT_FOUND", { message: "This Project has no repository" });
-  }
+}
+
+/**
+ * Where a Project's code is, or null when it has none.
+ *
+ * A Project bound to a tracker and nothing else is ordinary: its Runs read,
+ * decide and say things, and write no code (ADR-0024). So this answers rather
+ * than refuses, and the caller decides whether the absence is a problem.
+ */
+export function forgeBindingOf(project: Project): ForgeBinding | null {
+  if (!project.forgeSocketId || !project.forgeScope) return null;
   const scope = project.forgeScope;
   const baseBranch = typeof scope.baseBranch === "string" ? scope.baseBranch : "main";
   return { socketId: project.forgeSocketId, scope, baseBranch };
+}
+
+/** The same, for the caller that asked for something only a repository can give. */
+export function requireForgeBinding(project: Project): ForgeBinding {
+  const binding = forgeBindingOf(project);
+  if (!binding) {
+    throw new ORPCError("NOT_FOUND", { message: "This Project has no repository" });
+  }
+  return binding;
 }
 
 export interface IssueLinkInput {

@@ -104,6 +104,16 @@ export const IssueDetailSchema = IssueSummarySchema.extend({
   parent: IssueSummarySchema.nullable(),
   children: z.array(IssueSummarySchema),
   /**
+   * The Checkpoints this Project asks a Run to stop at, by name.
+   *
+   * Here rather than on the Project because this is the read an Agent makes
+   * before it plans anything, and where to stop is part of the brief: it has
+   * thirteen tools and none of them is a way to list a Project's policy
+   * (apps/agent/src/tools.ts). The arithmetic behind each one is a Human's
+   * business and stays on the Gate.
+   */
+  checkpoints: z.array(z.string()),
+  /**
    * The conversation, read from the tracker at the moment of asking, or null
    * where the caller did not ask. deevy stores no comments (ADR-0024), so this
    * is a request to somebody else's API and never a column.

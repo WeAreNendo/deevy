@@ -6,7 +6,7 @@
  * packed bundle, and workerd from the built Worker on a local D1. Neither needs
  * an account, and sign-in is an OAuth stub prepended to the bundle — the same
  * trick `apps/web/scripts/smoke-workers.ts` uses, and the reason this walk
- * needs no OAuth App either (docs/m4-acceptance.md).
+ * needs no OAuth App either (docs/sockets-acceptance.md).
  */
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
@@ -24,12 +24,33 @@ const childEnv = { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" };
 export interface Deployment {
   name: string;
   origin: string;
+  /**
+   * Makes this deployment do the background work it owes: the Socket mirror
+   * that says a Gate is waiting, and the sweeps beside it.
+   *
+   * Node runs it on a timer this walk sets to a second, so there is nothing to
+   * do; workerd's Cron Trigger does not fire under `wrangler dev`, so it is
+   * poked. The walk waits for what the work produces either way, which is why
+   * one of these can do nothing at all (apps/web/scripts/smoke-workers.ts).
+   */
+  tick(): Promise<void>;
   stop(): void;
 }
 
 /** The email `DEEVY_ADMIN_EMAIL` names, whose first sign-in bootstraps the Workspace. */
 export const adminEmail = "ada@example.com";
 export const secret = "acceptance-secret-acceptance-secret-32";
+/** What a Socket's credentials and its webhook secret are sealed with (secrets.ts). */
+export const sealingSecret = "acceptance-sealing-acceptance-sealing-32";
+
+export interface StartOptions {
+  /**
+   * What the stubbed tracker holds: `name[=cloneUrl]`, separated by commas.
+   * A store lives inside the deevy process, so this is the only way a walk
+   * outside it can say what the tracker contains (packages/sockets/src/stub).
+   */
+  containers: string;
+}
 
 /** A port nothing is on, taken and released, so a sign-in origin can be named up front. */
 export function freePort(): Promise<number> {
@@ -72,7 +93,7 @@ async function stubbed(bundle: string, into: string): Promise<string> {
 }
 
 /** deevy as the Docker image runs it: one Node process, SQLite on disk. */
-export async function startNode(): Promise<Deployment> {
+export async function startNode({ containers }: StartOptions): Promise<Deployment> {
   const dist = join(root, "apps/server/dist");
   const entry = await stubbed(join(dist, "index.mjs"), join(dist, "index.acceptance.mjs"));
   const port = await freePort();
@@ -90,10 +111,23 @@ export async function startNode(): Promise<Deployment> {
       GITHUB_CLIENT_ID: "acceptance",
       GITHUB_CLIENT_SECRET: "acceptance",
       DEEVY_ADMIN_EMAIL: adminEmail,
+      DEEVY_SECRET: sealingSecret,
+      // The provider that is not a tool, and what it holds (ADR-0024).
+      DEEVY_DEV_STUB_SOCKETS: "1",
+      DEEVY_DEV_STUB_CONTAINERS: containers,
+      // The background runner, as often as it can: what a Gate says back in
+      // the tracker is a delivery it sends, and the walk waits for it.
+      DEEVY_SWEEP_INTERVAL_SECONDS: "1",
     },
   });
   await waitForReady(child, "the Node server", /deevy listening on/);
-  return { name: "node", origin, stop: () => child.kill("SIGTERM") };
+  return {
+    name: "node",
+    origin,
+    // Nothing: the runner's own timer is the tick here.
+    tick: () => Promise.resolve(),
+    stop: () => child.kill("SIGTERM"),
+  };
 }
 
 function runToCompletion(command: string, args: string[]): Promise<void> {
@@ -110,7 +144,7 @@ function runToCompletion(command: string, args: string[]): Promise<void> {
 }
 
 /** deevy on workerd, with a local D1. `wrangler dev --local` needs no account. */
-export async function startWorkers(): Promise<Deployment> {
+export async function startWorkers({ containers }: StartOptions): Promise<Deployment> {
   const built = join(root, "apps/web/dist/deevy");
   await stubbed(join(built, "index.js"), join(built, "index.acceptance.js"));
   const config = join(built, "wrangler.acceptance.json");
@@ -144,6 +178,9 @@ export async function startWorkers(): Promise<Deployment> {
     GITHUB_CLIENT_ID: "acceptance",
     GITHUB_CLIENT_SECRET: "acceptance",
     DEEVY_ADMIN_EMAIL: adminEmail,
+    DEEVY_SECRET: sealingSecret,
+    DEEVY_DEV_STUB_SOCKETS: "1",
+    DEEVY_DEV_STUB_CONTAINERS: containers,
   };
 
   const child = spawn(
@@ -164,5 +201,24 @@ export async function startWorkers(): Promise<Deployment> {
     { stdio: ["ignore", "pipe", "pipe"], env: childEnv },
   );
   await waitForReady(child, "wrangler dev", /Ready on https?:\/\//);
-  return { name: "workers", origin, stop: () => child.kill("SIGTERM") };
+  return {
+    name: "workers",
+    origin,
+    /*
+     * One Cron Trigger, waited for: workerd holds the invocation open for
+     * `ctx.waitUntil`, so a 200 is the pass having finished.
+     *
+     * `/cdn-cgi/handler/scheduled` rather than `--test-scheduled`'s
+     * `/__scheduled`, which a Worker that also serves assets answers with the
+     * SPA's index.html and a 200 that ran nothing — the same trap
+     * `apps/web/scripts/smoke-workers.ts` documents.
+     */
+    tick: async () => {
+      const fired = await fetch(
+        `${origin}/cdn-cgi/handler/scheduled?cron=${encodeURIComponent("* * * * *")}`,
+      );
+      await fired.text();
+    },
+    stop: () => child.kill("SIGTERM"),
+  };
 }

@@ -72,6 +72,31 @@ describe("what the stub signs", () => {
     expect(tracker.normalize("events", null)).toEqual([]);
     expect(tracker.normalize("events", { events: "not a list" })).toEqual([]);
   });
+
+  it("gives a delivery its clocks back, because JSON has none", () => {
+    resetStubStores();
+    const tracker = socketFor("clocks").tracker;
+    if (!tracker) throw new Error("the stub is a tracker");
+    const updatedAt = new Date("2026-09-23T10:00:00Z");
+
+    // What a delivery carries is what `JSON.parse` left behind: a string where
+    // a provider's own `normalize` answers a Date. The core compares that clock
+    // to decide a reordered delivery and writes it to an integer column, so a
+    // string reaches `getTime` and throws on the first record deevy is told
+    // about (packages/core/src/issues.ts).
+    const [event] = tracker.normalize("events", {
+      events: [
+        {
+          kind: "issue",
+          scopeKey: "acme/deevy",
+          actor: null,
+          issue: { externalId: "1", updatedAt: updatedAt.toISOString() },
+        },
+      ],
+    });
+
+    expect(event).toMatchObject({ kind: "issue", issue: { updatedAt } });
+  });
 });
 
 describe("the tracker it plays", () => {

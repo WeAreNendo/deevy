@@ -11,7 +11,7 @@
  */
 import type { SocketModules } from "@deevy/core/sockets";
 import { createGithubSocket } from "./github/index.ts";
-import { createStubSocket } from "./stub/index.ts";
+import { createStubSocket, openDevStubStore } from "./stub/index.ts";
 
 export * from "./stub/index.ts";
 export { createGithubSocket, resetGithubTokens } from "./github/index.ts";
@@ -29,6 +29,13 @@ export interface SocketModulesOptions {
   /** Whether this deployment may register the in-process stub. */
   devStub?: boolean;
   /**
+   * The containers that stub offers, as `name[=cloneUrl]` separated by commas
+   * (`DEEVY_DEV_STUB_CONTAINERS`). A store lives in this process, so this is
+   * the only way an operator or a walk outside it can say what the stubbed
+   * tracker contains (src/stub).
+   */
+  devStubContainers?: string;
+  /**
    * GitHub's REST root for every Socket that names none of its own
    * (`DEEVY_GITHUB_API`): a GitHub Enterprise Server, or the acceptance walk's
    * stand-in. A Socket may still carry its own, which is what a deployment
@@ -39,8 +46,12 @@ export interface SocketModulesOptions {
 
 export function socketModules({
   devStub = false,
+  devStubContainers,
   githubApiBase,
 }: SocketModulesOptions = {}): SocketModules {
+  // Once, where the registry is built rather than per request: a store rebuilt
+  // is a store that forgot every record it held (src/stub).
+  if (devStub) openDevStubStore(devStubContainers);
   return {
     github: (input) =>
       createGithubSocket(

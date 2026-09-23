@@ -22,6 +22,8 @@ export interface GitProxyOptions {
   upstream: string;
   /** The credential, added on the way out. The session never holds it. */
   token?: string;
+  /** The user the token goes with, as the provider that minted it named it. */
+  username?: string;
 }
 
 export interface GitProxy {
@@ -113,7 +115,9 @@ async function forward(
   if (options.token) {
     // The same credential the supervisor clones with, in the form git uses for
     // a token (src/workspace.ts), added here and nowhere the session can read.
-    const basic = Buffer.from(`x-access-token:${options.token}`).toString("base64");
+    const basic = Buffer.from(`${options.username ?? "x-access-token"}:${options.token}`).toString(
+      "base64",
+    );
     headers.set("authorization", `Basic ${basic}`);
   }
   const target = `${options.upstream.replace(/\/+$/, "")}${path}${query ? `?${query}` : ""}`;
@@ -152,7 +156,7 @@ export function repositoryName(upstream: string): string {
  * `git http-backend` is what every git server runs behind its HTTP endpoint, so
  * a path remote and an origin on the internet reach the session as the same
  * protocol — which is what keeps this one code path rather than two, and what
- * lets the acceptance walk stay on this machine (docs/m4-acceptance.md).
+ * lets the acceptance walk stay on this machine (docs/sockets-acceptance.md).
  */
 async function serveLocally(
   upstream: string,

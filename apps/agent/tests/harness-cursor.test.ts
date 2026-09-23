@@ -120,9 +120,8 @@ describe("the command line a session runs under", () => {
 
     expect(prompt.startsWith(shipped.trim())).toBe(true);
     expect(shipped).toContain("## Working an Issue in deevy");
-    expect(shipped).toContain("runs_request_approval");
     // The one thing an Agent must not try, in the text that tells it so.
-    expect(shipped).toContain("do not approve one");
+    expect(shipped).toContain("Do not rule on it yourself");
   });
 
   it("does not read the effort, because Cursor has no flag for it", () => {
@@ -170,12 +169,13 @@ describe("what prepare writes into the session's home", () => {
           "Mcp(deevy:runs_get)",
           "Mcp(deevy:runs_start)",
           "Mcp(deevy:issues_get)",
-          "Mcp(deevy:documents_get)",
-          "Mcp(deevy:documents_write)",
-          "Mcp(deevy:runs_post_activity)",
-          "Mcp(deevy:runs_request_approval)",
-          "Mcp(deevy:links_add)",
+          "Mcp(deevy:issues_create)",
           "Mcp(deevy:comments_create)",
+          "Mcp(deevy:runs_post_activity)",
+          "Mcp(deevy:gates_request)",
+          "Mcp(deevy:gates_get)",
+          "Mcp(deevy:pulls_open)",
+          "Mcp(deevy:links_add)",
           "Mcp(deevy:runs_finish)",
           "Read(**)",
           "Write(**)",

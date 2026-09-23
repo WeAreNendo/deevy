@@ -12,7 +12,7 @@ Worker in `docs/OPERATIONS.md`. Current milestone: M1 (Humans) done, in thirteen
 in `docs/m3-acceptance.md` and executed; M4 (Reference runtime) done, in ten slices from `docs/plans/m4.md`,
 shipping `apps/agent`, whose acceptance walk is a script (`vp run agent#acceptance`) that runs
 both deployments locally on every commit — no Cloudflare account, no OAuth App, no repository on the internet
-(`docs/m4-acceptance.md`); the harness spike then made the runtime `apps/agent`, driving Claude Code,
+(`docs/sockets-acceptance.md`, which M4's walk became); the harness spike then made the runtime `apps/agent`, driving Claude Code,
 OpenCode, Cursor CLI or Copilot CLI as a subprocess behind one contract (`docs/plans/harnesses.md`,
 `docs/harnesses.md`, ADR-0018), and the agent-owns-git work then gave each session its own user and put git
 behind a loopback proxy that holds the credential, so an Agent pushes where it likes and every ref it moved

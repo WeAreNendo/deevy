@@ -1,3 +1,8 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import { createApp } from "@deevy/core/app";
 import type {
@@ -51,7 +56,17 @@ export const testConfig: Config = {
  * with no port to bind and no process to wait for. Slice 4's container test is
  * where a real socket gets exercised (docs/plans/m4.md).
  */
-export async function instance() {
+export interface InstanceOptions {
+  /**
+   * A repository the Project's forge Socket hands out a credential for: the
+   * path of a bare repository on disk, which is what a Run clones. Absent, the
+   * Project is bound to a tracker and nothing else, which is a Project whose
+   * Runs write no code.
+   */
+  repo?: string;
+}
+
+export async function instance({ repo }: InstanceOptions = {}) {
   const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
   const auth = createAuth({
     db,
@@ -61,7 +76,7 @@ export async function instance() {
       providers: { github: { clientId: "id", clientSecret: "secret" } },
     },
   });
-  const tracker = fakeTracker();
+  const tracker = fakeTracker(repo);
   const app = createApp({ db, auth, baseURL, sockets: tracker.sockets });
 
   const ada = await insertMember(db, { name: "Ada", role: "admin", kind: "human" });
@@ -79,6 +94,12 @@ export async function instance() {
     slug: "acme-deevy",
     name: "deevy",
     tracker: { socketId: socket.id, scope: { scopeKey: CONTAINER } },
+    // A Project with a repository is what `runs.checkout` and `pulls.open`
+    // need: both refuse a Project that is bound to a tracker and nothing else
+    // (docs/plans/sockets.md, slice 6).
+    ...(repo
+      ? { forge: { socketId: socket.id, scope: { scopeKey: CONTAINER, baseBranch: "main" } } }
+      : {}),
   });
 
   const planner = await insertMember(db, { name: "Planner", role: "member", kind: "agent" });
@@ -185,6 +206,30 @@ export async function instance() {
 /** The container every test's Project is bound to. */
 export const CONTAINER = "acme/deevy";
 
+const git = promisify(execFile);
+
+/**
+ * A bare repository with one commit on `main`: what a Project's forge Socket
+ * hands a Run a credential for.
+ *
+ * Real git and no network. What a Run pushed is only a fact on the remote, and
+ * only git can settle it. The caller removes the directory it is in.
+ */
+export async function bareRepo(): Promise<{ path: string; dir: string }> {
+  const dir = await mkdtemp(join(tmpdir(), "deevy-remote-"));
+  const path = join(dir, "origin.git");
+  const seed = join(dir, "seed");
+  await git("git", ["init", "--bare", "--initial-branch", "main", "--quiet", path]);
+  await git("git", ["clone", "--quiet", path, seed]);
+  await git("git", ["-C", seed, "config", "user.email", "seed@deevy.test"]);
+  await git("git", ["-C", seed, "config", "user.name", "seed"]);
+  await writeFile(join(seed, "README.md"), "# a repository\n");
+  await git("git", ["-C", seed, "add", "-A"]);
+  await git("git", ["-C", seed, "commit", "--quiet", "-m", "first"]);
+  await git("git", ["-C", seed, "push", "--quiet", "origin", "main"]);
+  return { path, dir };
+}
+
 export interface FakeTracker {
   sockets: SocketModules;
   /** What the tracker holds, by external id. */
@@ -193,6 +238,8 @@ export interface FakeTracker {
   comments: Map<string, ExternalComment[]>;
   /** The labels deevy asked the tracker to set, in order. */
   labelled: Array<{ externalId: string; add: string[]; remove: string[] }>;
+  /** Every pull request deevy opened through it, in order. */
+  pulls: Array<{ head: string; base: string; title: string; body: string }>;
 }
 
 /**
@@ -203,15 +250,16 @@ export interface FakeTracker {
  * something on one needs a provider behind the Socket. Small and local rather
  * than `@deevy/sockets`: what these tests need of a tracker is that it answers.
  */
-export function fakeTracker(): FakeTracker {
+export function fakeTracker(repo?: string): FakeTracker {
   const records = new Map<string, ExternalIssue>();
   const comments = new Map<string, ExternalComment[]>();
   const labelled: FakeTracker["labelled"] = [];
+  const pulls: FakeTracker["pulls"] = [];
   let opened = 0;
 
   const module = (): SocketModule => ({
     provider: "stub",
-    capabilities: new Set(["tracker"] as const),
+    capabilities: new Set(repo ? (["tracker", "forge"] as const) : (["tracker"] as const)),
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
     tracker: {
       verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "" }),
@@ -264,9 +312,32 @@ export function fakeTracker(): FakeTracker {
       listContainers: () =>
         Promise.resolve([{ scope: { scopeKey: CONTAINER }, scopeKey: CONTAINER, name: CONTAINER }]),
     },
+    // The half a Run needs to write code: a credential to clone with, and
+    // somewhere to open what it pushed (ADR-0024). The credential is a real
+    // path on disk, because what these tests clone is a real repository.
+    ...(repo
+      ? {
+          forge: {
+            credential: () =>
+              Promise.resolve({
+                cloneUrl: repo,
+                username: "x-access-token",
+                secret: "tracker-token",
+                expiresAt: null,
+              }),
+            openPullRequest: (_scope, draft) => {
+              pulls.push(draft);
+              return Promise.resolve({
+                url: `https://tracker.test/${CONTAINER}/pull/${String(pulls.length)}`,
+                number: pulls.length,
+              });
+            },
+          },
+        }
+      : {}),
   });
 
-  return { sockets: { stub: module }, records, comments, labelled };
+  return { sockets: { stub: module }, records, comments, labelled, pulls };
 }
 
 async function insertMember(

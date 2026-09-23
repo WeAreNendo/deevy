@@ -119,4 +119,7 @@ export {
   scopeKeyOf,
   socketModuleFor,
 } from "./sockets/registry.ts";
+// The one policy function every door to a Ruling goes through (ADR-0025), so a
+// seed can record one that came from a tracker without a tracker (seed.ts).
+export { recordRuling, type RulingInput, type RulingResult } from "./gates.ts";
 export type * from "./sockets/port.ts";

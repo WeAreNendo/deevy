@@ -40,7 +40,8 @@ const runner = startRunner({
   // The same registry the app was built with, so the pass can ask a tool what
   // changed on an instance no tool can reach (ADR-0024).
   sockets: socketModules({
-    devStub: env.devStubOAuth,
+    devStub: env.devStubSockets,
+    ...(env.devStubContainers ? { devStubContainers: env.devStubContainers } : {}),
     ...(env.githubApi ? { githubApiBase: env.githubApi } : {}),
   }),
   ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),

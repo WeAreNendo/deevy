@@ -154,13 +154,11 @@ jobs:
       - name: Migrations build the schema on D1
         run: vp run db#check:d1
 
-      # M4's acceptance walk is out of CI for now. It walks Documents and a
-      # Gate through a Workflow, and both went with the tracker (ADR-0024);
-      # there is no honest intermediate, so it comes back — rewritten around a
-      # Socket, a Checkpoint and a Proposal — in slice 8 of
-      # docs/plans/sockets.md, and proves the milestone there.
-      # - name: The reference runtime works an Issue end to end, on both deployments
-      #   run: vp run agent#acceptance
+      # The milestone's own walk, on both deployments, with nothing outside this
+      # machine: a label in a stubbed tracker becomes a Run, a Proposal, a
+      # ruling, a branch, a pull request and a finish (docs/sockets-acceptance.md).
+      - name: The reference runtime works a record end to end, on both deployments
+        run: vp run agent#acceptance
 
   # Both images in one job: the runtime smoke needs a deevy to talk to, and
   # building that image twice in two jobs is the same minute spent twice. This
