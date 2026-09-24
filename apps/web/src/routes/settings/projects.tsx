@@ -10,6 +10,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { BindProject } from "@/components/bind-project";
 import { SettingsPage } from "@/components/settings-page";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -48,7 +49,7 @@ export function ProjectsSettingsPage({ selected, onSelect }: ProjectsSettingsPag
     : all;
 
   return (
-    <SettingsPage title="Projects">
+    <SettingsPage title="Projects" actions={<BindProject onBound={onSelect} />}>
       {projects.isError ? (
         <p className="text-sm text-destructive">{projects.error.message}</p>
       ) : null}
@@ -63,7 +64,8 @@ export function ProjectsSettingsPage({ selected, onSelect }: ProjectsSettingsPag
               </EmptyMedia>
               <EmptyTitle>No Projects yet</EmptyTitle>
               <EmptyDescription>
-                A Project binds a container in one of your tools to the Agents that work it.
+                A Project binds a container in one of your tools to the Agents that work it. Connect
+                a tool under Sockets, then bind one of its containers here.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

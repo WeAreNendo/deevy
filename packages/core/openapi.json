@@ -4917,27 +4917,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -5181,27 +5174,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -5447,27 +5433,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -6189,6 +6168,70 @@
                     "sponsorId",
                     "createdAt",
                     "suspendedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/providers": {
+      "get": {
+        "operationId": "sockets.providers",
+        "summary": "The tools this deevy was built to speak",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "github",
+                              "linear",
+                              "gitlab",
+                              "notion",
+                              "slack",
+                              "stub"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "capabilities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "tracker",
+                                "forge",
+                                "docs",
+                                "chat"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "capabilities"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "providers"
                   ],
                   "additionalProperties": false
                 }
@@ -7832,27 +7875,20 @@
                             ]
                           },
                           "routing": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
+                            "type": "object",
+                            "properties": {
+                              "labelPrefix": {
+                                "type": "string"
                               },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
+                              "mention": {
+                                "type": "boolean"
                               }
-                            ]
+                            },
+                            "required": [
+                              "labelPrefix",
+                              "mention"
+                            ],
+                            "additionalProperties": false
                           },
                           "mirror": {
                             "type": "string",
@@ -8163,27 +8199,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -8400,27 +8429,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -8535,6 +8557,48 @@
                       "off",
                       "gates",
                       "runs"
+                    ]
+                  },
+                  "forge": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "socketId": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "socketId",
+                          "scope"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "routing": {
+                    "type": "object",
+                    "properties": {
+                      "labelPrefix": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      "mention": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "labelPrefix",
+                      "mention"
                     ]
                   }
                 }
@@ -8676,27 +8740,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -8923,27 +8980,20 @@
                       ]
                     },
                     "routing": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
+                      "type": "object",
+                      "properties": {
+                        "labelPrefix": {
+                          "type": "string"
                         },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
+                        "mention": {
+                          "type": "boolean"
                         }
-                      ]
+                      },
+                      "required": [
+                        "labelPrefix",
+                        "mention"
+                      ],
+                      "additionalProperties": false
                     },
                     "mirror": {
                       "type": "string",
@@ -11222,27 +11272,20 @@
                           ]
                         },
                         "routing": {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
+                          "type": "object",
+                          "properties": {
+                            "labelPrefix": {
+                              "type": "string"
                             },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
+                            "mention": {
+                              "type": "boolean"
                             }
-                          ]
+                          },
+                          "required": [
+                            "labelPrefix",
+                            "mention"
+                          ],
+                          "additionalProperties": false
                         },
                         "mirror": {
                           "type": "string",
@@ -12882,27 +12925,20 @@
                           ]
                         },
                         "routing": {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
+                          "type": "object",
+                          "properties": {
+                            "labelPrefix": {
+                              "type": "string"
                             },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
+                            "mention": {
+                              "type": "boolean"
                             }
-                          ]
+                          },
+                          "required": [
+                            "labelPrefix",
+                            "mention"
+                          ],
+                          "additionalProperties": false
                         },
                         "mirror": {
                           "type": "string",

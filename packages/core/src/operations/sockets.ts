@@ -90,7 +90,59 @@ const ConnectedSocketSchema = SocketSchema.extend({
   webhookSecret: z.string().nullable(),
 });
 
+/**
+ * What each provider is called on screen, and what a Socket of that kind can
+ * be asked for. A screen reads this rather than carrying its own list, so a
+ * build without a provider offers no button whose only outcome is a refusal.
+ */
+const providerLabels: Record<string, string> = {
+  github: "GitHub",
+  linear: "Linear",
+  gitlab: "GitLab",
+  notion: "Notion",
+  slack: "Slack",
+  stub: "the stub tracker",
+};
+
 export const sockets = {
+  providers: defineOperation({
+    name: "sockets.providers",
+    summary: "The tools this deevy was built to speak",
+    method: "GET",
+    path: "/sockets/providers",
+    auth: "admin",
+    input: z.object({}),
+    output: z.object({
+      providers: z.array(
+        z.object({
+          id: z.enum(socketProviders),
+          label: z.string(),
+          capabilities: z.array(z.enum(["tracker", "forge", "docs", "chat"])),
+        }),
+      ),
+    }),
+    handler: ({ context }) => {
+      const built = Object.keys(context.sockets ?? {}) as (typeof socketProviders)[number][];
+      return Promise.resolve({
+        providers: built.sort().map((id) => {
+          // Built with nothing in it, only to be asked what it can do: a
+          // module says its own capabilities, and no Socket row is touched.
+          const module = context.sockets?.[id]?.({
+            config: {},
+            credentials: {},
+            fetch: globalThis.fetch,
+            now: () => new Date(),
+          });
+          return {
+            id,
+            label: providerLabels[id] ?? id,
+            capabilities: [...(module?.capabilities ?? [])],
+          };
+        }),
+      });
+    },
+  }),
+
   list: defineOperation({
     name: "sockets.list",
     summary: "The tools this Workspace is connected to",

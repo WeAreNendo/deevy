@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { CheckpointPolicy } from "@/components/checkpoint-policy";
+import { ProjectBinding } from "@/components/project-binding";
 import { useAutosave } from "@/lib/autosave";
 import { orpc } from "@/lib/orpc";
 
@@ -14,8 +16,8 @@ import { orpc } from "@/lib/orpc";
  * slice 8). The detail pane of Settings › Projects, which is where a Project is
  * configured; it was a tab on the Project itself until 2026-09-11. Every field saves itself (docs/plans/ui-redesign-2.md slice G):
  * text on blur or Enter, each sending only what changed; one status line says
- * Saving, Saved, or what went wrong. What the Project is bound to is not here:
- * the binding editor arrives with the Sockets screens (docs/plans/sockets.md).
+ * Saving, Saved, or what went wrong. Beneath it are the two things a Project
+ * now is: what it is bound to, and what it asks at a Checkpoint (ADR-0024).
  */
 export function ProjectSettingsForm({ projectSlug }: { projectSlug: string }) {
   const queryClient = useQueryClient();
@@ -118,6 +120,9 @@ export function ProjectSettingsForm({ projectSlug }: { projectSlug: string }) {
           {autosave.status === "idle" ? "Changes save as you make them." : null}
         </p>
       </form>
+
+      <ProjectBinding projectSlug={projectSlug} />
+      <CheckpointPolicy projectSlug={projectSlug} />
 
       {admin && !project.data.archivedAt ? (
         <section className="flex flex-col gap-2 rounded-md border border-destructive/30 p-4">

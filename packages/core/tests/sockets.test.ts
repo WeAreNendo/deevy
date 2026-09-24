@@ -166,3 +166,21 @@ describe("a connected tool", () => {
     });
   });
 });
+
+describe("what this deevy can speak", () => {
+  it("is the providers it was built with, so a screen offers no tool it cannot connect", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda } = await admin(db);
+
+    const offered = await asAda.sockets.providers({});
+
+    // The registry is what the entry handed `createApp`, and a build without
+    // a provider refuses that Socket rather than failing to compile
+    // (ADR-0024). A settings page that offered one anyway would be a button
+    // whose only outcome is a refusal.
+    expect(offered.providers).toEqual([
+      { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
+    ]);
+  });
+});

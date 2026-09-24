@@ -31,7 +31,12 @@ export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
   },
   {
     group: "Work",
-    pages: [{ label: "Projects", to: "/settings/projects" }],
+    pages: [
+      // The tools first: a Project is a binding to one, so there is nothing to
+      // configure until something is connected (ADR-0024).
+      { label: "Sockets", to: "/settings/sockets" },
+      { label: "Projects", to: "/settings/projects" },
+    ],
   },
   {
     group: "Agents and delivery",

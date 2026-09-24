@@ -276,3 +276,42 @@ describe("projects.archive", () => {
     });
   });
 });
+
+describe("the rest of a Project's binding", () => {
+  it("names where its code is, and takes it back off", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, socket, bind } = await withSocket(db);
+    await client.projects.create({ slug: "deevy", name: "deevy", tracker: bind("acme/deevy") });
+
+    const bound = await client.projects.update({
+      slug: "deevy",
+      forge: { socketId: socket.id, scope: { scopeKey: "acme/deevy", baseBranch: "main" } },
+    });
+
+    expect(bound.forgeSocketId).toBe(socket.id);
+    expect(bound.forgeScope).toMatchObject({ scopeKey: "acme/deevy", baseBranch: "main" });
+
+    // Null, not absent: a Project whose code moved elsewhere is one a Run
+    // should stop trying to clone (docs/plans/sockets.md, slice 6).
+    const unbound = await client.projects.update({ slug: "deevy", forge: null });
+    expect(unbound.forgeSocketId).toBeNull();
+    expect(unbound.forgeScope).toBeNull();
+  });
+
+  it("says how a record names the Agent it is for", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, bind } = await withSocket(db);
+    await client.projects.create({ slug: "deevy", name: "deevy", tracker: bind("acme/deevy") });
+
+    const routed = await client.projects.update({
+      slug: "deevy",
+      routing: { labelPrefix: "for:", mention: false },
+    });
+
+    expect(routed.routing).toEqual({ labelPrefix: "for:", mention: false });
+    const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
+    expect(kinds.filter((kind) => kind === "project.updated")).toHaveLength(1);
+  });
+});

@@ -82,6 +82,20 @@ export const projects = {
       /** Who gets an open record no label and no mention named. */
       defaultAgentMemberId: z.string().nullish(),
       mirror: z.enum(["off", "gates", "runs"]).optional(),
+      /**
+       * Where its code is, or null to say it has none here. The tracker
+       * binding is not changeable: a Project is the container its records come
+       * from, and pointing it at another one would orphan every projection
+       * under it (ADR-0024).
+       */
+      forge: BindingInput.nullish(),
+      /** How a record says which Agent it is for: a label prefix, a mention, or neither. */
+      routing: z
+        .object({
+          labelPrefix: z.string().trim().max(40),
+          mention: z.boolean(),
+        })
+        .optional(),
     }),
     output: ProjectSchema,
     handler: async ({ input, context }) => {
@@ -106,6 +120,18 @@ export const projects = {
       if (input.mirror !== undefined && input.mirror !== found.mirror) {
         changes.mirror = { from: found.mirror, to: input.mirror };
       }
+      if (input.forge !== undefined) {
+        // A forge Socket has to exist and be connected before a Run is sent to
+        // clone from it.
+        if (input.forge) await requireSocket(context, input.forge.socketId);
+        changes.forge = {
+          from: found.forgeSocketId,
+          to: input.forge?.socketId ?? null,
+        };
+      }
+      if (input.routing !== undefined) {
+        changes.routing = { from: found.routing, to: input.routing };
+      }
       if (Object.keys(changes).length === 0) return loadProject(context.db, found.id);
 
       await context.db
@@ -117,6 +143,12 @@ export const projects = {
             ? {}
             : { defaultAgentMemberId: input.defaultAgentMemberId ?? null }),
           ...(input.mirror === undefined ? {} : { mirror: input.mirror }),
+          ...(input.forge === undefined
+            ? {}
+            : input.forge
+              ? { forgeSocketId: input.forge.socketId, forgeScope: input.forge.scope }
+              : { forgeSocketId: null, forgeScope: null }),
+          ...(input.routing === undefined ? {} : { routing: input.routing }),
         })
         .where(eq(projectTable.id, found.id));
       await appendEvent(context, {
