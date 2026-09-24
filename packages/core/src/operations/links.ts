@@ -1,13 +1,11 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { issueLink as issueLinkTable, issueLinkKinds } from "@deevy/db";
-import { parseLink } from "../links.ts";
 import { IssueLinkSchema } from "../schemas.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import { defineOperation } from "./registry.ts";
-import { assertProjectVisible, requireRun, resolveIssueRef } from "./shared.ts";
-import { newId } from "../ids.ts";
+import { assertProjectVisible, requireRun, resolveIssueRef, addIssueLink } from "./shared.ts";
 
 export const links = {
   list: defineOperation({
@@ -59,34 +57,14 @@ export const links = {
           throw new ORPCError("BAD_REQUEST", { message: "That Run is on another Issue" });
         }
       }
-      const parsed = parseLink(input.url);
-
-      const id = newId("link");
-      await context.db.insert(issueLinkTable).values({
-        id,
-        issueId: issue.id,
-        kind: input.kind ?? parsed.kind,
+      return addIssueLink(context, {
+        issue,
+        project,
         url: input.url,
         title: input.title ?? null,
-        ref: parsed.ref,
+        ...(input.kind ? { kind: input.kind } : {}),
         runId: input.runId ?? null,
-        createdBy: context.member.id,
       });
-      await appendEvent(context, {
-        kind: "issue.link_added",
-        subjectType: "issue",
-        subjectId: issue.id,
-        projectId: project.id,
-        payload: {
-          linkId: id,
-          kind: input.kind ?? parsed.kind,
-          url: input.url,
-          ...(input.runId ? { runId: input.runId } : {}),
-        },
-      });
-      const row = await context.db.query.issueLink.findFirst({ where: { id } });
-      if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
-      return row;
     },
   }),
 

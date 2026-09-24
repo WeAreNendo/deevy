@@ -294,3 +294,60 @@ describe("writing to a repository", () => {
     expect(writes[0]?.body).toEqual({ labels: ["deevy:awaiting-approval"] });
   });
 });
+
+describe("the repository behind a Project", () => {
+  it("mints a credential a Run can clone with, and says when it dies", async () => {
+    const { module, asked } = githubReturning({
+      ...credentials,
+      "GET /repos/acme/deevy": { clone_url: "https://github.com/acme/deevy.git" },
+    });
+    if (!module.forge) throw new Error("a GitHub Socket is a forge");
+
+    const credential = await module.forge.credential(scope);
+
+    expect(credential).toMatchObject({
+      cloneUrl: "https://github.com/acme/deevy.git",
+      // GitHub's own name for an installation token used over HTTPS.
+      username: "x-access-token",
+      secret: "ghs_installation_token_for_acme",
+    });
+    expect(credential.expiresAt?.toISOString()).toBe("2026-09-21T11:00:00.000Z");
+    // The same token the API calls use: one mint, one hour, one repository.
+    expect(asked.filter((one) => one.url.includes("access_tokens"))).toHaveLength(1);
+  });
+
+  it("opens the pull request, and answers where it is", async () => {
+    const { module, asked } = githubReturning({
+      ...credentials,
+      "POST /repos/acme/deevy/pulls": {
+        html_url: "https://github.com/acme/deevy/pull/7",
+        number: 7,
+      },
+    });
+    if (!module.forge) throw new Error("a GitHub Socket is a forge");
+
+    const opened = await module.forge.openPullRequest(scope, {
+      head: "deevy/acme-deevy-42-run_abc1",
+      base: "main",
+      title: "acme/deevy#42: cap the coupon",
+      body: "Closes https://github.com/acme/deevy/issues/42",
+    });
+
+    expect(opened).toEqual({ url: "https://github.com/acme/deevy/pull/7", number: 7 });
+    expect(asked.at(-1)?.body).toMatchObject({
+      head: "deevy/acme-deevy-42-run_abc1",
+      base: "main",
+    });
+  });
+
+  it("repeats GitHub's own refusal, which is the one a Human can act on", async () => {
+    const { module } = githubReturning(credentials);
+    if (!module.forge) throw new Error("a GitHub Socket is a forge");
+
+    // No `pulls` answer: GitHub 404s, and what comes back says so rather than
+    // "something went wrong".
+    await expect(
+      module.forge.openPullRequest(scope, { head: "x", base: "main", title: "t", body: "b" }),
+    ).rejects.toThrow(/404/);
+  });
+});

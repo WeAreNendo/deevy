@@ -1,5 +1,7 @@
 import type {
   Container,
+  ForgeCredential,
+  PullRequestDraft,
   SetupInput,
   SetupResult,
   ExternalComment,
@@ -185,16 +187,21 @@ export function createGithubSocket({
   }
 
   /** A token for an installation deevy already knows the id of. */
-  async function tokenForInstallation(id: string): Promise<string> {
+  async function mintedFor(id: string): Promise<Minted> {
     const cacheKey = `${settings.appId}:${id}`;
     const held = tokens.get(cacheKey);
-    if (held && held.expiresAt - TOKEN_SLACK_MS > now().getTime()) return held.token;
+    if (held && held.expiresAt - TOKEN_SLACK_MS > now().getTime()) return held;
     const minted = await asApp<{ token: string; expires_at: string }>(
       `/app/installations/${id}/access_tokens`,
       { method: "POST" },
     );
-    tokens.set(cacheKey, { token: minted.token, expiresAt: new Date(minted.expires_at).getTime() });
-    return minted.token;
+    const fresh = { token: minted.token, expiresAt: new Date(minted.expires_at).getTime() };
+    tokens.set(cacheKey, fresh);
+    return fresh;
+  }
+
+  async function tokenForInstallation(id: string): Promise<string> {
+    return (await mintedFor(id)).token;
   }
 
   async function installationToken(scopeKey: string): Promise<string> {
@@ -446,6 +453,54 @@ export function createGithubSocket({
           }
         }
         return containers;
+      },
+    },
+
+    /**
+     * The repository behind a Project (ADR-0014, ADR-0019).
+     *
+     * A Run clones with an installation token that lives an hour and reaches
+     * one repository: it is minted per Run, it never touches `.git/config`,
+     * and a Run resumed after a Gate mints another. The pull request is opened
+     * by deevy rather than by the Agent's session, so the credential never has
+     * to be one that could open one.
+     */
+    forge: {
+      async credential(scope: Scope): Promise<ForgeCredential> {
+        const { owner, repo, scopeKey } = repositoryOf(scope);
+        const minted = await mintedFor(await installationIdFor(scopeKey));
+        const repository = await call<{ clone_url: string }>(`/repos/${owner}/${repo}`, {
+          token: minted.token,
+        });
+        return {
+          cloneUrl: repository.clone_url,
+          // GitHub's own name for an installation token used over HTTPS. The
+          // token is the password; this is the user it goes with.
+          username: "x-access-token",
+          secret: minted.token,
+          expiresAt: new Date(minted.expiresAt),
+        };
+      },
+
+      async openPullRequest(
+        scope: Scope,
+        draft: PullRequestDraft,
+      ): Promise<{ url: string; number: number }> {
+        const { owner, repo, scopeKey } = repositoryOf(scope);
+        const opened = await asInstallation<{ html_url: string; number: number }>(
+          scopeKey,
+          `/repos/${owner}/${repo}/pulls`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              head: draft.head,
+              base: draft.base,
+              title: draft.title,
+              body: draft.body,
+            }),
+          },
+        );
+        return { url: opened.html_url, number: opened.number };
       },
     },
   };

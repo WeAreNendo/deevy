@@ -19,6 +19,7 @@ import { links } from "./links.ts";
 import { members } from "./members.ts";
 import { oauthClients } from "./oauth-clients.ts";
 import { preferences } from "./preferences.ts";
+import { pulls } from "./pulls.ts";
 import { projects } from "./projects.ts";
 import { routing } from "./routing.ts";
 import { runs } from "./runs.ts";
@@ -42,6 +43,7 @@ export const router = {
   checkpoints,
   gates,
   issues,
+  pulls,
   comments,
   links,
   inbox,
@@ -70,6 +72,7 @@ export {
   members,
   oauthClients,
   preferences,
+  pulls,
   sockets,
   projects,
   routing,

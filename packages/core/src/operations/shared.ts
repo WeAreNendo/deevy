@@ -5,12 +5,20 @@
  */
 import { and, count, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
-import { allowlistRuleKinds, member as memberTable } from "@deevy/db";
+import {
+  allowlistRuleKinds,
+  issueLink as issueLinkTable,
+  issueLinkKinds,
+  member as memberTable,
+} from "@deevy/db";
 import { loadAgent } from "../agents.ts";
+import { appendEvent } from "../events.ts";
+import { newId } from "../ids.ts";
 import { parseIssueRef } from "../issues.ts";
+import { parseLink } from "../links.ts";
 import { ProjectSlugPattern } from "../projects.ts";
 import { ORPCError } from "@orpc/server";
-import type { Issue, Run } from "@deevy/db";
+import type { Issue, Project, Run } from "@deevy/db";
 import type { AppContext, ContextFor } from "./registry.ts";
 
 /** The Member an admin operation names, or NOT_FOUND. Scoped to the Workspace. */
@@ -351,6 +359,73 @@ export async function requireRun(context: ContextFor<"member">, runId: string) {
     project: found.issue.project,
     key: found.issue.externalKey,
   };
+}
+
+/**
+ * Where a Project's code is, or the refusal that says it has none.
+ *
+ * A Project without a forge binding is ordinary — a tracker with no repository
+ * behind it is a perfectly good Project — so this is a `NOT_FOUND` about the
+ * repository rather than an error about the Project (docs/plans/sockets.md).
+ */
+export function requireForgeBinding(project: Project): {
+  socketId: string;
+  scope: Record<string, unknown>;
+  baseBranch: string;
+} {
+  if (!project.forgeSocketId || !project.forgeScope) {
+    throw new ORPCError("NOT_FOUND", { message: "This Project has no repository" });
+  }
+  const scope = project.forgeScope;
+  const baseBranch = typeof scope.baseBranch === "string" ? scope.baseBranch : "main";
+  return { socketId: project.forgeSocketId, scope, baseBranch };
+}
+
+export interface IssueLinkInput {
+  issue: { id: string };
+  project: { id: string };
+  url: string;
+  title?: string | null;
+  kind?: (typeof issueLinkKinds)[number];
+  /** The Run that produced it, so evidence is attributed to the attempt. */
+  runId?: string | null;
+}
+
+/**
+ * Attaches evidence to a record, and says so in the log.
+ *
+ * One path for `links.add` and for the pull request `pulls.open` opens, so a
+ * link looks the same whoever attached it and the Event carries the Run either
+ * way (docs/plans/sockets.md, slice 6).
+ */
+export async function addIssueLink(context: ContextFor<"member">, input: IssueLinkInput) {
+  const parsed = parseLink(input.url);
+  const id = newId("link");
+  await context.db.insert(issueLinkTable).values({
+    id,
+    issueId: input.issue.id,
+    kind: input.kind ?? parsed.kind,
+    url: input.url,
+    title: input.title ?? null,
+    ref: parsed.ref,
+    runId: input.runId ?? null,
+    createdBy: context.member.id,
+  });
+  await appendEvent(context, {
+    kind: "issue.link_added",
+    subjectType: "issue",
+    subjectId: input.issue.id,
+    projectId: input.project.id,
+    payload: {
+      linkId: id,
+      kind: input.kind ?? parsed.kind,
+      url: input.url,
+      ...(input.runId ? { runId: input.runId } : {}),
+    },
+  });
+  const row = await context.db.query.issueLink.findFirst({ where: { id } });
+  if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
+  return row;
 }
 
 /**
