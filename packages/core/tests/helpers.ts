@@ -236,9 +236,16 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
     title: string;
     body: string;
   }> = [];
-  const module = (): SocketModule => ({
+  const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
     provider: "stub",
     capabilities: new Set(["tracker", "forge"] as const),
+    // Its accounts are GitHub's sign-in accounts where the Socket's
+    // configuration says so, which is how a test plays a Human who signed in
+    // to deevy with GitHub and rules from the tracker (ADR-0025).
+    identityScope: {
+      instance: "stub:test",
+      ...(config.signInProvider === "github" ? { signInProvider: "github" as const } : {}),
+    },
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
     tracker: {
       // Not real cryptography — that is the stub provider's own test

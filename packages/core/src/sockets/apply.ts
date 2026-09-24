@@ -13,8 +13,9 @@ import { appendEvent, type EventSource } from "../events.ts";
 import type { JobQueue } from "../jobs.ts";
 import { routeIssueTo, upsertProjection } from "../issues.ts";
 import { resolveMentions } from "../mentions.ts";
-import type { InboundEvent } from "./port.ts";
+import type { IdentityScope, InboundEvent } from "./port.ts";
 import { scopeKeyOf } from "./registry.ts";
+import { applyRuling } from "./rulings.ts";
 
 /**
  * What a tracker saying something does inside deevy (ADR-0024).
@@ -39,6 +40,12 @@ export interface ApplyInboundOptions {
   events: InboundEvent[];
   /** Where the Events this writes nudge their deliveries (jobs.ts). */
   jobs?: JobQueue;
+  /**
+   * Where the tool's accounts live, which is what a Ruling's author is looked
+   * up in (identities.ts). The provider module knows; absent, the provider's
+   * own name is the instance and nothing is shared with sign-in.
+   */
+  identityScope?: IdentityScope;
   now?: () => Date;
 }
 
@@ -63,6 +70,7 @@ export async function applyInbound({
   socket,
   events,
   jobs,
+  identityScope,
   now = () => new Date(),
 }: ApplyInboundOptions): Promise<ApplyInboundResult> {
   const source: EventSource = { db, workspace, member: null, ...(jobs ? { jobs } : {}) };
@@ -71,8 +79,9 @@ export async function applyInbound({
   const projects = new Map<string, Project | null>();
   const result: ApplyInboundResult = { applied: 0, skipped: [] };
 
+  const scope = identityScope ?? { instance: socket.provider };
   for (const event of events) {
-    const why = await applyOne({ db, socket, source, projects, now }, event);
+    const why = await applyOne({ db, socket, source, projects, scope, now }, event);
     if (why === null) result.applied += 1;
     else result.skipped.push(why);
   }
@@ -84,6 +93,7 @@ interface Applying {
   socket: Socket;
   source: EventSource;
   projects: Map<string, Project | null>;
+  scope: IdentityScope;
   now: () => Date;
 }
 
@@ -93,10 +103,12 @@ async function applyOne(applying: Applying, event: InboundEvent): Promise<string
   if (event.kind === "comment") return applyComment(applying, event);
   if (event.kind === "installation") return applyInstallation(applying, event);
   if (event.kind === "ruling") {
-    // The Gate is there to be ruled on now; what is missing is the Identity
-    // that says which Member wrote the comment, and a Ruling deevy cannot
-    // attribute is one it will not take (ADR-0025, slice 9).
-    return "deevy cannot yet tell whose account wrote that, so it rules nothing";
+    return applyRuling({
+      source: applying.source,
+      socket: applying.socket,
+      scope: applying.scope,
+      event,
+    });
   }
   return event.why;
 }

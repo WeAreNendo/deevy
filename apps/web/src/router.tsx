@@ -34,6 +34,7 @@ import { NotificationsPage } from "./routes/settings/notifications.tsx";
 import { WebhooksPage } from "./routes/settings/webhooks.tsx";
 import { WorkspacePage } from "./routes/settings/workspace.tsx";
 import { McpClientsPage } from "./routes/settings/mcp-clients.tsx";
+import { IdentitiesPage } from "./routes/settings/identities.tsx";
 import { MembersPage } from "./routes/settings/members.tsx";
 import { AgentsPage } from "./routes/settings/agents.tsx";
 import { AgentPage } from "./routes/settings/agent.tsx";
@@ -245,6 +246,11 @@ const allowlistRoute = createRoute({
     throw redirect({ to: "/settings/workspace" });
   },
 });
+const identitiesRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "identities",
+  component: IdentitiesPage,
+});
 const mcpClientsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "mcp-clients",
@@ -314,6 +320,7 @@ const routeTree = rootRoute.addChildren([
     webhooksRoute,
     notificationsRoute,
     allowlistRoute,
+    identitiesRoute,
     mcpClientsRoute,
     eventLogRoute,
   ]),

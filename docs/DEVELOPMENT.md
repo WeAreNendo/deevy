@@ -141,6 +141,12 @@ one ruled in deevy, one ruled `via: socket` — Links, a Slack Channel, routing 
 operations, so the inbox and the Event log fill themselves. Point a runtime at the printed key
 (`DEEVY_AGENT_KEY`) and it will find Planner's pending Runs.
 
+`.claude/launch.json` has a third configuration, `seeded`, for when the `.env` of the checkout you are in
+carries real addresses or a real client pair: it seeds `apps/server/data/seeded.sqlite` and serves the built
+bundle and SPA on one port with a clean environment — nothing from `.env`, every identity at example.com, the
+stubbed sign-in and the stubbed tracker both on. Build first (`vp run -r build`); it reseeds every time it
+starts.
+
 ### Running without a GitHub App
 
 `DEEVY_DEV_STUB_SOCKETS=1` registers the Socket provider that is not a tool

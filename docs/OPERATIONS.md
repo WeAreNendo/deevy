@@ -851,6 +851,31 @@ A Gate short of its threshold appends a `gate.approval` Event carrying how many 
 `gate.approved` is appended only when the last one lands and the Issue actually leaves. Webhook subscribers
 receive the new kind, and anything switching on kinds ignores it.
 
+## Ruling from the tracker
+
+A Human can approve or reject a Gate by commenting `/approve` or `/reject <why>` on the record in the tracker,
+where deevy's own comment asked for the ruling
+([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)). It is the same Ruling as the button
+in deevy — the same Checkpoint policy, the same refusals in the same words — recorded with where it came from.
+
+It counts only when deevy can prove which Member wrote the comment, and deevy never matches a login: those are
+renamed and reused. What it matches is the tool's own account id, against one of:
+
+- **The account the Human signs in to deevy with.** A Human who signs in with GitHub rules from github.com with
+  no further step. A GitHub Enterprise Server's accounts are not github.com's and are not matched this way.
+- **An account they linked** under **Settings › Identities**, from a signed-in session — how a Human who signs
+  in with Google rules from GitHub. The linked account may carry a different address from theirs; that link is
+  the only place deevy accepts one.
+- **The address the tool reports**, matched to one a Member has verified — only on a Socket where an admin
+  turned it on (`sockets.update` with `identityByEmail`), because it is a weaker proof. It is meant for a tool
+  with nothing better to offer, and every Ruling it makes says "(email)" wherever it is shown.
+
+A comment by an account deevy cannot place rules nothing, and deevy says so on the record with a link to
+Settings › Identities; so does a comment the Checkpoint refuses, and one on a record with nothing waiting. A
+comment by a bot — deevy's own included — rules nothing and is not answered. A Human who unlinks an account
+under Settings › Identities stays unlinked: nothing links it again until they do. Every link and every refusal
+is in the Event log (`identity.linked`, `identity.revoked`, `gate.ruling_refused`).
+
 ## How far an Agent may split work up
 
 An Agent can open sub-issues and hand them to other Agents

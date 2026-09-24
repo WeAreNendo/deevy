@@ -1,8 +1,9 @@
-import { member as memberTable } from "@deevy/db";
+import { account, member as memberTable, socket as socketTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
+import { newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
 import type { InboundEvent } from "../src/sockets/port.ts";
 import {
@@ -302,6 +303,86 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
     expect(await response.json()).toMatchObject({ status: "applied" });
     expect(statements.length).toBe(delivery);
     expect(delivery).toBeLessThan(d1StatementsPerInvocation);
+  });
+});
+
+/**
+ * What a Ruling from the tracker costs, the first time its author is seen
+ * (ADR-0025).
+ *
+ * The delivery's own rows, the record and its open Gate, the Identity looked
+ * up and — the first time — found through the account the Human signs in with,
+ * written down and said in the log; then `recordRuling`'s whole cost as the web
+ * pays it. Every later comment by the same Human skips the account read, the
+ * write and its Event.
+ */
+const rulingFromTracker = 30;
+
+describe(`the D1 request budget: a Ruling from the tracker costs ${String(rulingFromTracker)}`, () => {
+  it("is under D1's cap the first time deevy meets the account", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    await db.insert(account).values({
+      id: newId("account"),
+      accountId: "1002",
+      providerId: "github",
+      userId: bob.member.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const secret = "a-secret-the-tracker-and-deevy-share";
+    const seeded = await seedProject(db, ada.workspace.id, { webhookSecret: secret });
+    await db
+      .update(socketTable)
+      .set({ config: { signInProvider: "github" } })
+      .where(eq(socketTable.id, seeded.socketId));
+    const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+    const run = await asPlanner.runs.start({ issue: issue.url });
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "ship", proposal: "Ship it" });
+    const { sockets } = fakeSockets();
+    const app = createApp({ db, sockets, socketSecret: testSealingSecret });
+    const events: InboundEvent[] = [
+      {
+        kind: "ruling",
+        scopeKey: "acme/deevy",
+        issueExternalId: "42",
+        comment: {
+          externalId: "c1",
+          url: "https://github.test/acme/deevy/issues/42#c1",
+          body: "/approve",
+          author: { login: "bob", id: "1002", isBot: false },
+          createdAt: new Date(),
+        },
+        decision: "approved",
+        note: null,
+      },
+    ];
+    const body = JSON.stringify({ events });
+
+    statements.length = 0;
+    const response = await app.request(`/hooks/${seeded.socketId}`, {
+      method: "POST",
+      headers: {
+        "x-test-event": "events",
+        "x-test-delivery": "delivery-1",
+        "x-test-signature": `${secret}:${String(body.length)}`,
+      },
+      body,
+    });
+
+    expect(await response.json()).toMatchObject({ status: "applied" });
+    expect(statements.length).toBe(rulingFromTracker);
+    expect(rulingFromTracker).toBeLessThan(d1StatementsPerInvocation);
   });
 });
 

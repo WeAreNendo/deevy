@@ -149,6 +149,7 @@ async function applyDelivery(
       socket,
       events,
       ...(options.jobs ? { jobs: options.jobs } : {}),
+      ...(module.identityScope ? { identityScope: module.identityScope } : {}),
       now: options.now,
     });
     return {

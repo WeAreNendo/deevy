@@ -164,6 +164,7 @@ export function stubClient(overrides: StubOverrides = {}): never {
         ok: true,
         time: new Date(0).toISOString(),
         devSignIn: false,
+        devSockets: false,
         providers: [{ id: "github", label: "GitHub", kind: "social" }],
       }),
     },
@@ -178,6 +179,9 @@ export function stubClient(overrides: StubOverrides = {}): never {
     oauthClients: {
       list: async () => ({ clients: [] }),
       revoke: async () => ({ revoked: true }),
+    },
+    identities: {
+      list: async () => ({ identities: [], signIns: [], linkable: [] }),
     },
     workspace: {
       get: async () => ({

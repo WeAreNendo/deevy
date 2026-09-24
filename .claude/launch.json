@@ -28,6 +28,16 @@
         "DEEVY_DATABASE_PATH": "./data/stub.sqlite",
         "DEEVY_PORT": "3010"
       }
+    },
+    {
+      "name": "seeded",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/server && clean() { env -i PATH=\"$PATH\" HOME=\"$HOME\" DEEVY_DATABASE_PATH=./data/seeded.sqlite DEEVY_ADMIN_EMAIL=ada@example.com BETTER_AUTH_URL=\"http://localhost:${PORT:-3020}\" BETTER_AUTH_SECRET=seeded-secret-seeded-secret-seeded-12 DEEVY_SECRET=seeded-sealing-seeded-sealing-seed-12 \"$@\"; }; clean node dist/seed.mjs --force && clean DEEVY_PORT=\"${PORT:-3020}\" DEEVY_DEV_STUB_OAUTH=1 DEEVY_DEV_STUB_SOCKETS=1 DEEVY_WEB_DIST=../web/dist node dist/index.mjs"
+      ],
+      "port": 3020,
+      "autoPort": true
     }
   ]
 }

@@ -279,6 +279,46 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
         str(p.note),
         "destructive",
       );
+    case "gate.ruling_refused": {
+      // Somebody ruled from the tracker and it did not count. Said here as it
+      // was said there, so the two records agree about what happened (ADR-0025).
+      const who = str(p.externalActor);
+      const why =
+        str(p.reason) === "unknown_identity"
+          ? "an account nobody here has linked"
+          : str(p.reason) === "nothing_waiting"
+            ? "nothing was waiting on a ruling"
+            : (str(p.message) ?? "the Checkpoint would not take it");
+      return say(
+        `${who ? `@${who}` : "somebody"} ruled from the tracker and it counted for nothing: ${why}`,
+        null,
+        "muted",
+      );
+    }
+    case "identity.linked": {
+      const login = str(p.login);
+      const how =
+        str(p.verifiedBy) === "email"
+          ? "by the address it reports"
+          : str(p.verifiedBy) === "sign_in"
+            ? "from the account they sign in with"
+            : null;
+      return say(
+        `linked ${login ? `@${login}` : "an account"} on ${str(p.instance) ?? "a tool"}${how ? `, ${how}` : ""}`,
+        null,
+        "muted",
+        true,
+      );
+    }
+    case "identity.revoked": {
+      const login = str(p.login);
+      return say(
+        `unlinked ${login ? `@${login}` : "an account"} on ${str(p.instance) ?? "a tool"}`,
+        null,
+        "muted",
+        true,
+      );
+    }
     case "socket.connected": {
       const provider = str(p.provider);
       const named = str(p.name) ?? "a Socket";

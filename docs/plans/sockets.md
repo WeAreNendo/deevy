@@ -811,6 +811,36 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 9, as built.** A Human rules by commenting `/approve` where they read the Proposal, and deevy
+proves who wrote it from the tool's own account id: an Identity already written down, the account they sign
+in to deevy with, or — only on a Socket an admin allowed it — an address they verified. The acceptance walk
+does it on both deployments, the stranger and the requester included. A ruling from the tracker costs 30
+statements the first time its author is seen.
+
+Five things came out differently from the sketch.
+
+- **No `/api/identities/*` routes yet.** Every provider this slice can link — GitHub, and GitLab's accounts
+  once its Socket lands — is a sign-in provider, and linking one is Better Auth's own `link-social` from a
+  signed-in session, which writes the `account` row the resolver already reads. The routes come with the
+  first tool whose accounts are not a sign-in's: Linear's user-scope OAuth in slice 11. Slack's link code is
+  slice 10's.
+- **`allowDifferentEmails` is on.** The sign-in work set it off because "two addresses are two Humans until
+  deevy has a screen that says otherwise", and Settings › Identities is that screen. Better Auth reads it
+  only on the explicit link a signed-in session starts, which still wants a verified address and still
+  refuses an account linked to somebody else; a sign-in on another Human's address links nothing, and a test
+  through the real callback says so.
+- **Unlinking needed a way back.** A revoked Identity is what stops the account a Human signs in with from
+  linking them again behind their back — so nothing else can undo it, and `identities.restore` is how the
+  Human does.
+- **Which accounts are worth linking is the server's to say.** The screen first offered every sign-in
+  provider whose accounts could rule anywhere, which on a stubbed instance meant a GitLab button with no
+  GitLab Socket behind it. `identities.list` now answers `linkable` from the connected Sockets' own
+  `identityScope`, which is also where github.com and a GitHub Enterprise Server are told apart.
+- **The words are the mirror's.** A refused Ruling appends `gate.ruling_refused`, and the reply on the record
+  is rendered from it at send time like every other mirrored comment, so a Project that mirrors nothing
+  answers nothing — and still takes the Ruling. The confirmation needed no new code: the arithmetic ("1 of
+  2, still waiting") was already how slice 7 says a `gate.approval`.
+
 **Slice 8, as built.** The walk is the point of this slice, and running it found five defects that every
 test in the tree had missed. They are written up in
 [`docs/sockets-acceptance.md`](../sockets-acceptance.md); the two that matter most are a Run at a Gate being

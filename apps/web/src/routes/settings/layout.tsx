@@ -50,6 +50,7 @@ export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
     group: "You",
     pages: [
       { label: "Notifications", to: "/settings/notifications" },
+      { label: "Identities", to: "/settings/identities" },
       { label: "MCP clients", to: "/settings/mcp-clients" },
     ],
   },

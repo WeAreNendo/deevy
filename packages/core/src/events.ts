@@ -104,6 +104,19 @@ export type EventKind =
   | "gate.approval"
   | "gate.approved"
   | "gate.rejected"
+  /**
+   * A Ruling made in a tracker that ruled nothing, and why: an account deevy
+   * cannot place, a Human the Checkpoint will not take, nothing waiting
+   * (ADR-0025). Said back in the tracker as a reply, because the Human who
+   * wrote it is reading there and not here.
+   */
+  | "gate.ruling_refused"
+  /**
+   * An account on a tool is now somebody's here, or no longer is: the
+   * Identity a Ruling from outside deevy is attributed through (ADR-0025).
+   */
+  | "identity.linked"
+  | "identity.revoked"
   /** A Run and what the Agent does inside it (docs/plans/m2.md). */
   | "run.started"
   | "run.activity"

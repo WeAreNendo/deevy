@@ -119,7 +119,11 @@ export {
   scopeKeyOf,
   socketModuleFor,
 } from "./sockets/registry.ts";
-// The one policy function every door to a Ruling goes through (ADR-0025), so a
-// seed can record one that came from a tracker without a tracker (seed.ts).
-export { recordRuling, type RulingInput, type RulingResult } from "./gates.ts";
+// What a tracker saying something does inside deevy, so a seed can play a
+// delivery — a Ruling from the tracker included — without a network (seed.ts).
+export {
+  applyInbound,
+  type ApplyInboundOptions,
+  type ApplyInboundResult,
+} from "./sockets/apply.ts";
 export type * from "./sockets/port.ts";

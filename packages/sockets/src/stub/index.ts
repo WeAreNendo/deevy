@@ -256,6 +256,17 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
   return {
     provider: "stub",
     capabilities: new Set(["tracker", "forge"] as const),
+    // Its own accounts, unless its configuration says they are the ones deevy
+    // signs people in with: that is how the acceptance walk and the seed play a
+    // Human who signed in with GitHub and rules from the tracker with no
+    // linking step (ADR-0025). The stub is refused in production, so saying so
+    // vouches for nobody real.
+    identityScope: {
+      instance: `stub:${store.id}`,
+      ...(config.signInProvider === "github" || config.signInProvider === "gitlab"
+        ? { signInProvider: config.signInProvider }
+        : {}),
+    },
     identity: () => Promise.resolve(store.identity),
 
     tracker: {

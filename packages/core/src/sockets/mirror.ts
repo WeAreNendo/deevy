@@ -26,6 +26,9 @@ const gateKinds: ReadonlySet<string> = new Set<EventKind>([
   "gate.approval",
   "gate.approved",
   "gate.rejected",
+  // A Ruling made in the tracker that ruled nothing is answered where it was
+  // made, because that is where its author is reading (ADR-0025).
+  "gate.ruling_refused",
 ]);
 
 /** And the ones it adds when a Project mirrors Runs as well. */
@@ -193,6 +196,24 @@ export function mirrorFor(
         .join("\n"),
       // Whatever was decided, nothing is waiting on this record any more.
       labels: { add: [], remove: [AWAITING_LABEL] },
+    };
+  }
+
+  if (event.kind === "gate.ruling_refused") {
+    const who = text("externalActor");
+    const origin = subject.origin ?? "";
+    const why =
+      text("reason") === "unknown_identity"
+        ? `This account isn't linked to anybody in deevy yet: link it at ${origin}/settings/identities, then say it again.`
+        : text("reason") === "nothing_waiting"
+          ? "Nothing on this record is waiting on a ruling."
+          : text("message") || "deevy would not take it.";
+    return {
+      comment: [`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "", "— deevy"].join(
+        "\n",
+      ),
+      // Nothing changed, so nothing about the record's labels does either.
+      labels: { add: [], remove: [] },
     };
   }
 

@@ -17,6 +17,7 @@ const calls = vi.hoisted(() => ({
 
 const state = vi.hoisted(() => ({
   you: { mayRule: true, hasRuled: false, why: null as string | null },
+  verifiedBy: "sign_in" as "sign_in" | "oauth" | "link_code" | "email" | null,
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -43,6 +44,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
               note: "Reads right",
               via: "socket",
               socket: { id: "sock_1", provider: "github", name: "acme on GitHub" },
+              verifiedBy: state.verifiedBy,
               createdAt: new Date("2026-09-20T09:00:00Z"),
             },
           ],
@@ -129,6 +131,16 @@ describe("the Gate a Human opens", () => {
     expect(within(ruled).getByText(/Bob Bell/)).toBeTruthy();
     expect(within(ruled).getByText(/via GitHub/)).toBeTruthy();
     expect(within(ruled).getByText(/Reads right/)).toBeTruthy();
+  });
+
+  it("says so when all deevy knew of the Human was their address", async () => {
+    state.you = { mayRule: true, hasRuled: false, why: null };
+    state.verifiedBy = "email";
+    await mountAt("/gates/gate_stub00000");
+
+    const ruled = await screen.findByRole("list", { name: "Gate decisions" });
+    expect(within(ruled).getByText(/via GitHub \(email\)/)).toBeTruthy();
+    state.verifiedBy = "sign_in";
   });
 
   it("rules by keyboard: ⇧A chooses, ⌘↵ commits, and the Note goes with it", async () => {

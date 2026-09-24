@@ -1,8 +1,9 @@
-import type {
-  ExternalActor,
-  ExternalComment,
-  ExternalIssue,
-  InboundEvent,
+import {
+  parseRulingCommand,
+  type ExternalActor,
+  type ExternalComment,
+  type ExternalIssue,
+  type InboundEvent,
 } from "@deevy/core/sockets";
 
 /**
@@ -123,22 +124,6 @@ export function commentOf(comment: unknown): ExternalComment | null {
   };
 }
 
-/**
- * Whether a comment is a Ruling, and which. The first line and nothing else:
- * `/approve`, or `/reject <why>`, with the rest of the comment as the note
- * (ADR-0025). A comment that merely mentions the word is a comment.
- */
-export function rulingIn(body: string): { decision: "approved" | "rejected"; note: string } | null {
-  const [first = "", ...rest] = body.trim().split("\n");
-  const match = /^\/(approve|reject)\b\s*(.*)$/i.exec(first.trim());
-  if (!match) return null;
-  const trailing = [match[2] ?? "", ...rest].join("\n").trim();
-  return {
-    decision: match[1]?.toLowerCase() === "approve" ? "approved" : "rejected",
-    note: trailing,
-  };
-}
-
 /** The actions deevy acts on. Everything else is a delivery it says nothing about. */
 const issueActions = new Set([
   "opened",
@@ -182,7 +167,7 @@ export function normalizeGithub(eventName: string, payload: unknown): InboundEve
     if (!comment || !issue) {
       return [{ kind: "ignored", why: "an issue_comment delivery with no comment in it" }];
     }
-    const ruling = rulingIn(comment.body);
+    const ruling = parseRulingCommand(comment.body);
     const scopeKey = repositoryOf(body);
     if (ruling) {
       return [
@@ -192,7 +177,7 @@ export function normalizeGithub(eventName: string, payload: unknown): InboundEve
           issueExternalId: issue.externalId,
           comment,
           decision: ruling.decision,
-          note: ruling.note || null,
+          note: ruling.note,
         },
       ];
     }
