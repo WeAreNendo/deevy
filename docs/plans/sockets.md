@@ -811,6 +811,16 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 7, as built.** The derivation reads one row the plan had not counted: an Event of a mirrorable kind
+has to ask its Project what it mirrors, so a Gate's ask and its ruling each cost two more statements — the
+read and the delivery row. The busy paths pay nothing, because `couldMirror` is a pure check on the kind
+and `issue.synced`, `comment.created` and the rest never reach the query. The budgets are 19 for a Gate and
+24 for an inbound delivery that opens a Run, still half of D1's cap.
+
+The `issue.link_added` row of the plan's table is not here. On GitHub it was always "nothing", and the
+providers it is a comment on — Linear and Notion — are slices 11 and 13; a mirror arm with no provider to
+exercise it would have been written blind. It goes in with the first of them.
+
 **Slice 6, as built.** Nothing in the plan's shape changed, and two things were tightened on the way past.
 `links.add` and `pulls.open` now attach evidence through one function, so a link looks the same whoever
 attached it and the `runId` reaches the Event either way — the plan had them as separate writes, which is

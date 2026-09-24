@@ -2,6 +2,7 @@ import { event, type Db, type Event, type Member, type Workspace } from "@deevy/
 import type { JobQueue } from "./jobs.ts";
 import { deriveNotifications } from "./notifications.ts";
 import { triggersFor } from "./triggers.ts";
+import { deriveSocketMirrors } from "./sockets/mirror.ts";
 import { deriveWebhookDeliveries } from "./webhooks.ts";
 
 /**
@@ -79,6 +80,12 @@ export type EventKind =
    * grows after the connecting, and a delivery is how deevy hears about it.
    */
   | "socket.installation_added"
+  /**
+   * deevy could not say back in the tracker what happened here, and has
+   * stopped trying (ADR-0003's shape, ADR-0024's reason). The Workspace's
+   * record and the tracker's have drifted, and this is the line that says so.
+   */
+  | "socket.mirror_exhausted"
   | "agent.created"
   | "agent.updated"
   | "agent.key_issued"
@@ -175,6 +182,10 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
   // for the same reason: the durable row is what makes a trigger reliable
   // whether or not anything is running to send it (ADR-0003).
   const owed = await deriveWebhookDeliveries(source.db, row);
+  // And what the tracker is owed, which is deevy saying back where the work
+  // lives (ADR-0024). Same shape, same row, same sweep: a Project that mirrors
+  // nothing pays one pure check and no query at all (sockets/mirror.ts).
+  owed.push(...(await deriveSocketMirrors(source.db, row)));
 
   // Then, and only then, the nudge: a job names a row that is already durable,
   // so a deployment with a queue sends it now instead of at the next sweep and

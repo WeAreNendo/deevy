@@ -221,8 +221,14 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
   records: Map<string, ExternalIssue>;
   /** Every pull request this fake was asked to open, for a test to read back. */
   pulls: Array<{ scopeKey: string; head: string; base: string; title: string; body: string }>;
+  /** Every comment deevy wrote through it, which is what a mirror is. */
+  comments: Array<{ externalId: string; body: string }>;
+  /** And every label change, which is the other half of what a mirror does. */
+  labels: Array<{ externalId: string; add: string[]; remove: string[] }>;
 } {
   let opened = 0;
+  const comments: Array<{ externalId: string; body: string }> = [];
+  const labels: Array<{ externalId: string; add: string[]; remove: string[] }> = [];
   const pulls: Array<{
     scopeKey: string;
     head: string;
@@ -297,9 +303,17 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
         records.set(made.externalId, made);
         return Promise.resolve({ ...made, parentLinked: draft.parent !== null });
       },
-      createComment: (_scope, ref) =>
-        Promise.resolve({ externalId: `c${String(records.size)}`, url: `${ref.url}#c` }),
-      setLabels: () => Promise.resolve(),
+      createComment: (_scope, ref, body) => {
+        comments.push({ externalId: ref.externalId, body });
+        return Promise.resolve({
+          externalId: `c${String(comments.length)}`,
+          url: `${ref.url}#c${String(comments.length)}`,
+        });
+      },
+      setLabels: (_scope, ref, change) => {
+        labels.push({ externalId: ref.externalId, ...change });
+        return Promise.resolve();
+      },
       listContainers: () =>
         Promise.resolve([
           { scope: { scopeKey: "acme/deevy" }, scopeKey: "acme/deevy", name: "acme/deevy" },
@@ -327,7 +341,7 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
       },
     },
   });
-  return { sockets: { stub: module }, records, pulls };
+  return { sockets: { stub: module }, records, pulls, comments, labels };
 }
 
 /** JSON has no clock: what a provider's own `normalize` answers has Dates. */

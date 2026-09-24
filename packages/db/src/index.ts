@@ -35,5 +35,6 @@ export type Issue = typeof import("./schema/issue.ts").issue.$inferSelect;
 export type Checkpoint = typeof import("./schema/gate.ts").checkpoint.$inferSelect;
 export type GateRequest = typeof import("./schema/gate.ts").gateRequest.$inferSelect;
 export type GateDecision = typeof import("./schema/gate.ts").gateDecision.$inferSelect;
+export type SocketMirror = typeof import("./schema/gate.ts").socketMirror.$inferSelect;
 export type Notification = typeof import("./schema/notification.ts").notification.$inferSelect;
 export type IssueLink = typeof import("./schema/link.ts").issueLink.$inferSelect;
