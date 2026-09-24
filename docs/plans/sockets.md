@@ -829,6 +829,21 @@ Written before the work, to be answered after it.
 One delivery that opens a Run costs **23 statements**, inside the twenty-to-twenty-five the plan predicted
 and half of D1's cap. `budget.test.ts` asserts it exactly.
 
+**Slice 2, as built.** Two departures, both small.
+
+- The policy split out of `gates.ts` into `checkpoints.ts`. `notifications.ts` has to know who may rule —
+  that is who a Gate asks — and it is imported by `appendEvent`, so anything it reads has to sit below the
+  Event log rather than beside it. `gates.ts` keeps the request, the Ruling and the view; `checkpoints.ts`
+  holds the policy, the requester and the approvers, and appends nothing.
+- `gate.requested` notifies nobody. `run.awaiting_input` is the Event that asks, carrying `gateRequestId`,
+  exactly as the plan said — which means the reminder, the Slack rules and the preference matrix all work
+  unchanged, and what decides between `gate_awaiting` and `run_awaiting_input` is one field read off the
+  row. `gate.requested` stays as the log's record that the Agent asked.
+
+The tool set is **seventeen**: `gates_request` is `runs_request_approval` come back, and `gates_get` beside
+it is the polling half for a client that cannot take an elicitation, which is every client today. Asking
+costs **17 statements** and ruling **17**, both a third of D1's cap.
+
 - Whether a Proposal in a comment is enough for a Human to rule on from the tracker, or whether the Gate
   screen in deevy stays the place people actually decide. The mirror is built so the tracker is enough;
   the Event log's `via` column will say what people did.

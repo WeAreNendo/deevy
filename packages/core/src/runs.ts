@@ -112,21 +112,3 @@ export async function setRunStatus(
     })
     .where(eq(runTable.id, current.id));
 }
-
-/**
- * What a Run is told when it asks a Human to decide the Gate its Issue is in.
- * `awaiting` is the answer while nobody has ruled; after that it carries the
- * ruling itself, so an Agent that lost its elicitation still learns the
- * outcome by asking again (docs/plans/m2.md).
- */
-/**
- * Who may rule on a Gate.
- *
- * It was an array of Member ids whose emptiness carried the rule: none named
- * meant every active Human could decide, which is what M1 shipped and what
- * `gateRecipients` still does. Nothing said so on the wire, so an Agent that
- * read `approverMemberIds: []` reported that its request had reached nobody
- * and would sit there for ever, while every Human in the Workspace had in fact
- * been notified. One field cannot carry two rules; this one says which
- * (docs/plans/m3.md).
- */

@@ -508,6 +508,22 @@ describe("a real token and the sessionOnly rule", () => {
     expect((await consents.json()) as { message: string }).toMatchObject({
       message: "Only a Human signed in to deevy can do that",
     });
+
+    /*
+     * And it cannot rule on a Gate, which is the decision ADR-0010 is about: a
+     * Human's own MCP client holds this token, and a program acting for them
+     * is not them. Refused by the middleware, before any handler, which is why
+     * a Gate that does not exist is refused in the same words.
+     */
+    const ruling = await app.request("/api/gates/gate_000000000000/approve", {
+      method: "POST",
+      headers: { ...bearer, "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(ruling.status).toBe(403);
+    expect((await ruling.json()) as { message: string }).toMatchObject({
+      message: "Only a Human signed in to deevy can do that",
+    });
   });
 });
 

@@ -93,9 +93,10 @@ async function applyOne(applying: Applying, event: InboundEvent): Promise<string
   if (event.kind === "comment") return applyComment(applying, event);
   if (event.kind === "installation") return applyInstallation(applying, event);
   if (event.kind === "ruling") {
-    // Slice 2 gives a Gate somewhere to be ruled on; until then a `/approve`
-    // typed on the tracker is a comment deevy has nothing to do with.
-    return "deevy has no Gate to rule on yet";
+    // The Gate is there to be ruled on now; what is missing is the Identity
+    // that says which Member wrote the comment, and a Ruling deevy cannot
+    // attribute is one it will not take (ADR-0025, slice 9).
+    return "deevy cannot yet tell whose account wrote that, so it rules nothing";
   }
   return event.why;
 }

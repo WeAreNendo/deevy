@@ -86,6 +86,17 @@ export type EventKind =
   | "agent.sponsor_changed"
   | "agent.project_granted"
   | "agent.project_revoked"
+  /**
+   * A Run's request to pass a Checkpoint, and what Humans ruled on it
+   * (ADR-0024). `gate.approval` is one approval short of the threshold, which
+   * is the Event four-eyes is visible in: it says how many of how many.
+   * `gate.superseded` is the Agent changing its mind about what it is asking.
+   */
+  | "gate.requested"
+  | "gate.superseded"
+  | "gate.approval"
+  | "gate.approved"
+  | "gate.rejected"
   /** A Run and what the Agent does inside it (docs/plans/m2.md). */
   | "run.started"
   | "run.activity"

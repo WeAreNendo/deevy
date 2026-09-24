@@ -67,6 +67,46 @@ async function mcp(
   return (await res.json()) as JsonRpcAnswer;
 }
 
+/** One request whose client declares the capabilities a test is about. */
+async function mcpWith(
+  app: App,
+  key: string | null,
+  capabilities: Record<string, unknown>,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<JsonRpcAnswer> {
+  const res = await app.request("/mcp", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      "mcp-protocol-version": modern,
+      "mcp-method": method,
+      ...(typeof params.name === "string" ? { "mcp-name": params.name } : {}),
+      ...(key ? { authorization: `Bearer ${key}` } : {}),
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: {
+        ...params,
+        _meta: { ...envelope, "io.modelcontextprotocol/clientCapabilities": capabilities },
+      },
+    }),
+  });
+  if (res.status !== 200) throw new Error(`${res.status} ${await res.text()}`);
+  return (await res.json()) as JsonRpcAnswer;
+}
+
+/** The one text block a tool answer carries, which is the operation's output as JSON. */
+function textOf(answer: JsonRpcAnswer): string {
+  const content = (answer.result?.content ?? []) as Array<{ text?: string }>;
+  const text = content[0]?.text;
+  if (typeof text !== "string") throw new Error(`no text in ${JSON.stringify(answer)}`);
+  return text;
+}
+
 /** The names a tools/list answer advertises. */
 function toolNames(answer: JsonRpcAnswer): string[] {
   return ((answer.result?.tools ?? []) as Array<{ name: string }>).map((tool) => tool.name);
@@ -258,6 +298,59 @@ describe("a tool call authenticated with an Agent's key", () => {
     expect(answer.result?.content).toEqual([
       { type: "text", text: `No such Issue: ${ungranted.externalKey}` },
     ]);
+  });
+});
+
+/**
+ * What an Agent that reaches a Checkpoint is handed (ADR-0004, ADR-0024).
+ *
+ * The elicitation is offered only to a client that said it can take one; every
+ * other client gets the same URL in an ordinary answer, which is what a
+ * polling Agent has always needed and did not get until it was found by
+ * walking a deployed instance (mcp/elicitation.ts, canElicitUrl).
+ */
+describe("asking to pass a Checkpoint over MCP", () => {
+  async function askedAGate(capabilities: Record<string, unknown>) {
+    const { app, key, issue } = await workspaceWithAgent();
+    const started = await mcp(app, key, "tools/call", {
+      name: "runs_start",
+      arguments: { issue: issue.url },
+    });
+    const run = JSON.parse(textOf(started)) as { id: string };
+    const asked = await mcpWith(app, key, capabilities, "tools/call", {
+      name: "gates_request",
+      arguments: { runId: run.id, checkpoint: "plan", proposal: "Rewrite the totals" },
+    });
+    return { asked, run };
+  }
+
+  it("is a URL for a Human to open, where the client can take one", async () => {
+    const { asked } = await askedAGate({ elicitation: { url: {} } });
+
+    const result = asked.result as {
+      resultType?: string;
+      requestState?: string;
+      inputRequests?: Record<
+        string,
+        { method?: string; params?: { url?: string; message?: string } }
+      >;
+    };
+    expect(result.resultType).toBe("input_required");
+    expect(result.inputRequests?.approval?.method).toBe("elicitation/create");
+    expect(result.inputRequests?.approval?.params?.url).toMatch(/\/gates\/gate_/);
+    expect(result.inputRequests?.approval?.params?.message).toContain("plan Checkpoint");
+    // The retry is bound to the principal that asked and expires (ADR-0010).
+    expect(result.requestState).toMatch(/^v1\./);
+  });
+
+  it("is the request itself, where the client cannot", async () => {
+    const { asked } = await askedAGate({});
+
+    const answer = JSON.parse(textOf(asked)) as { status: string; url: string; checkpoint: string };
+    // The same URL, in an answer the model can read out: a client with no
+    // elicitation support is the ordinary case, not the exception.
+    expect(answer).toMatchObject({ status: "open", checkpoint: "plan" });
+    expect(answer.url).toMatch(/\/gates\/gate_/);
   });
 });
 

@@ -61,6 +61,13 @@ describe("the Agent capability rule", () => {
       // Saying something goes to the tracker the Project is bound to; deevy
       // stores no comments and an Agent authors none of the record (ADR-0024).
       "comments.create",
+      // Asking to pass a Checkpoint, reading what was ruled, and seeing what
+      // it has asked for: an Agent asks and never decides (ADR-0004, ADR-0020).
+      // `gates.approve` and `gates.reject` are not here, and could not be:
+      // they are `sessionOnly`, so even a Human's own token is refused.
+      "gates.get",
+      "gates.list",
+      "gates.request",
       "inbox.list",
       // Its own inbox, scoped to the caller in the same statement it updates
       // with, so a loop that polls `unreadOnly` can stop finding the same work

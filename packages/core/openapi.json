@@ -8757,6 +8757,1485 @@
         }
       }
     },
+    "/projects/{projectSlug}/checkpoints": {
+      "get": {
+        "operationId": "checkpoints.list",
+        "summary": "What a Project asks of a Run before it goes past each Checkpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "projectSlug",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkpoints": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "approvalsRequired": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "excludeRequester": {
+                            "type": "boolean"
+                          },
+                          "approverMemberIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "approvalsRequired",
+                          "excludeRequester",
+                          "approverMemberIds"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "checkpoints"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "checkpoints.set",
+        "summary": "Set what a Project asks at each Checkpoint, replacing what it asked before",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "projectSlug",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "checkpoints": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9][a-z0-9-]*$"
+                        },
+                        "approvalsRequired": {
+                          "default": 1,
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 20
+                        },
+                        "excludeRequester": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "approverMemberIds": {
+                          "default": [],
+                          "maxItems": 50,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "checkpoints"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkpoints": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "approvalsRequired": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "excludeRequester": {
+                            "type": "boolean"
+                          },
+                          "approverMemberIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "approvalsRequired",
+                          "excludeRequester",
+                          "approverMemberIds"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "checkpoints"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{runId}/gates": {
+      "post": {
+        "operationId": "gates.request",
+        "summary": "Ask the Humans to let this Run past a Checkpoint, with what you intend to do",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "runId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "checkpoint": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "pattern": "^[a-z0-9][a-z0-9-]*$"
+                  },
+                  "proposal": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100000
+                  },
+                  "links": {
+                    "default": [],
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "title"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "checkpoint",
+                  "proposal"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "checkpoint": {
+                      "type": "string"
+                    },
+                    "proposal": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url",
+                          "title"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "requestedBy": {
+                      "type": "string"
+                    },
+                    "visit": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "approved",
+                        "rejected",
+                        "superseded"
+                      ]
+                    },
+                    "askedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "decidedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "approvalsRequired": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "excludeRequester": {
+                          "type": "boolean"
+                        },
+                        "approverMemberIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "approvalsRequired",
+                        "excludeRequester",
+                        "approverMemberIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "decisions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "memberId": {
+                            "type": "string"
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "via": {
+                            "type": "string",
+                            "enum": [
+                              "web",
+                              "socket",
+                              "slack"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-native-type": "date"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "memberId",
+                          "decision",
+                          "note",
+                          "via",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "approvals": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "run": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "issueKey": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "issueKey"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "runId",
+                    "issueId",
+                    "projectId",
+                    "checkpoint",
+                    "proposal",
+                    "links",
+                    "requestedBy",
+                    "visit",
+                    "status",
+                    "askedAt",
+                    "decidedAt",
+                    "url",
+                    "policy",
+                    "decisions",
+                    "approvals",
+                    "run"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gates/{requestId}": {
+      "get": {
+        "operationId": "gates.get",
+        "summary": "What has been ruled on a Gate, for an Agent waiting or a Human reading",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "requestId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "checkpoint": {
+                      "type": "string"
+                    },
+                    "proposal": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url",
+                          "title"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "requestedBy": {
+                      "type": "string"
+                    },
+                    "visit": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "approved",
+                        "rejected",
+                        "superseded"
+                      ]
+                    },
+                    "askedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "decidedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "approvalsRequired": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "excludeRequester": {
+                          "type": "boolean"
+                        },
+                        "approverMemberIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "approvalsRequired",
+                        "excludeRequester",
+                        "approverMemberIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "decisions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "memberId": {
+                            "type": "string"
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "via": {
+                            "type": "string",
+                            "enum": [
+                              "web",
+                              "socket",
+                              "slack"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-native-type": "date"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "memberId",
+                          "decision",
+                          "note",
+                          "via",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "approvals": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "run": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "issueKey": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "issueKey"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "runId",
+                    "issueId",
+                    "projectId",
+                    "checkpoint",
+                    "proposal",
+                    "links",
+                    "requestedBy",
+                    "visit",
+                    "status",
+                    "askedAt",
+                    "decidedAt",
+                    "url",
+                    "policy",
+                    "decisions",
+                    "approvals",
+                    "run"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gates": {
+      "get": {
+        "operationId": "gates.list",
+        "summary": "Gates in this Workspace: open ones, or the ones waiting on you",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "mine",
+            "schema": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "approved",
+                "rejected",
+                "superseded"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "projectSlug",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "runId": {
+                            "type": "string"
+                          },
+                          "issueId": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "checkpoint": {
+                            "type": "string"
+                          },
+                          "proposal": {
+                            "type": "string"
+                          },
+                          "links": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "url": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "url",
+                                "title"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "requestedBy": {
+                            "type": "string"
+                          },
+                          "visit": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "approved",
+                              "rejected",
+                              "superseded"
+                            ]
+                          },
+                          "askedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-native-type": "date"
+                          },
+                          "decidedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "policy": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "approvalsRequired": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "excludeRequester": {
+                                "type": "boolean"
+                              },
+                              "approverMemberIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "approvalsRequired",
+                              "excludeRequester",
+                              "approverMemberIds"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "decisions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "memberId": {
+                                  "type": "string"
+                                },
+                                "decision": {
+                                  "type": "string",
+                                  "enum": [
+                                    "approved",
+                                    "rejected"
+                                  ]
+                                },
+                                "note": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "via": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "socket",
+                                    "slack"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "memberId",
+                                "decision",
+                                "note",
+                                "via",
+                                "createdAt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "approvals": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "run": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "issueKey": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "issueKey"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "runId",
+                          "issueId",
+                          "projectId",
+                          "checkpoint",
+                          "proposal",
+                          "links",
+                          "requestedBy",
+                          "visit",
+                          "status",
+                          "askedAt",
+                          "decidedAt",
+                          "url",
+                          "policy",
+                          "decisions",
+                          "approvals",
+                          "run"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "gates"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gates/{requestId}/approve": {
+      "post": {
+        "operationId": "gates.approve",
+        "summary": "Let this Run past the Checkpoint it stopped at",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "requestId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 10000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "checkpoint": {
+                      "type": "string"
+                    },
+                    "proposal": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url",
+                          "title"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "requestedBy": {
+                      "type": "string"
+                    },
+                    "visit": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "approved",
+                        "rejected",
+                        "superseded"
+                      ]
+                    },
+                    "askedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "decidedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "approvalsRequired": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "excludeRequester": {
+                          "type": "boolean"
+                        },
+                        "approverMemberIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "approvalsRequired",
+                        "excludeRequester",
+                        "approverMemberIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "decisions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "memberId": {
+                            "type": "string"
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "via": {
+                            "type": "string",
+                            "enum": [
+                              "web",
+                              "socket",
+                              "slack"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-native-type": "date"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "memberId",
+                          "decision",
+                          "note",
+                          "via",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "approvals": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "run": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "issueKey": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "issueKey"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "runId",
+                    "issueId",
+                    "projectId",
+                    "checkpoint",
+                    "proposal",
+                    "links",
+                    "requestedBy",
+                    "visit",
+                    "status",
+                    "askedAt",
+                    "decidedAt",
+                    "url",
+                    "policy",
+                    "decisions",
+                    "approvals",
+                    "run"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gates/{requestId}/reject": {
+      "post": {
+        "operationId": "gates.reject",
+        "summary": "Send this Run back from the Checkpoint it stopped at, with what to change",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "requestId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 10000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "projectId": {
+                      "type": "string"
+                    },
+                    "checkpoint": {
+                      "type": "string"
+                    },
+                    "proposal": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url",
+                          "title"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "requestedBy": {
+                      "type": "string"
+                    },
+                    "visit": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "approved",
+                        "rejected",
+                        "superseded"
+                      ]
+                    },
+                    "askedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "decidedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "approvalsRequired": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "excludeRequester": {
+                          "type": "boolean"
+                        },
+                        "approverMemberIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "approvalsRequired",
+                        "excludeRequester",
+                        "approverMemberIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "decisions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "memberId": {
+                            "type": "string"
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "via": {
+                            "type": "string",
+                            "enum": [
+                              "web",
+                              "socket",
+                              "slack"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-native-type": "date"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "memberId",
+                          "decision",
+                          "note",
+                          "via",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "approvals": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "run": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "issueKey": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "issueKey"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "runId",
+                    "issueId",
+                    "projectId",
+                    "checkpoint",
+                    "proposal",
+                    "links",
+                    "requestedBy",
+                    "visit",
+                    "status",
+                    "askedAt",
+                    "decidedAt",
+                    "url",
+                    "policy",
+                    "decisions",
+                    "approvals",
+                    "run"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/issues": {
       "post": {
         "operationId": "issues.create",

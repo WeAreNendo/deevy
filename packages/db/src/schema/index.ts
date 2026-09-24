@@ -7,6 +7,7 @@ export * from "./socket.ts";
 export * from "./project.ts";
 export * from "./agent.ts";
 export * from "./run.ts";
+export * from "./gate.ts";
 export * from "./issue.ts";
 export * from "./link.ts";
 export * from "./notification.ts";

@@ -26,6 +26,7 @@ import { event } from "./schema/event.ts";
 import { notification } from "./schema/notification.ts";
 import { issueLink } from "./schema/link.ts";
 import { issue } from "./schema/issue.ts";
+import { checkpoint, checkpointApprover, gateDecision, gateRequest } from "./schema/gate.ts";
 import { project } from "./schema/project.ts";
 import { inboundDelivery, socket } from "./schema/socket.ts";
 import { member, workspace } from "./schema/workspace.ts";
@@ -52,6 +53,10 @@ export const tables = {
   socket,
   inboundDelivery,
   project,
+  checkpoint,
+  checkpointApprover,
+  gateRequest,
+  gateDecision,
   issue,
   issueLink,
   notification,
@@ -133,8 +138,54 @@ const appRelations = defineRelationsPart(tables, (r) => ({
     runs: r.many.run({ from: r.issue.id, to: r.run.issueId }),
     links: r.many.issueLink({ from: r.issue.id, to: r.issueLink.issueId }),
   },
+  checkpoint: {
+    project: r.one.project({ from: r.checkpoint.projectId, to: r.project.id, optional: false }),
+    approvers: r.many.checkpointApprover({
+      from: r.checkpoint.id,
+      to: r.checkpointApprover.checkpointId,
+    }),
+  },
+  checkpointApprover: {
+    checkpoint: r.one.checkpoint({
+      from: r.checkpointApprover.checkpointId,
+      to: r.checkpoint.id,
+      optional: false,
+    }),
+    member: r.one.member({
+      from: r.checkpointApprover.memberId,
+      to: r.member.id,
+      optional: false,
+    }),
+  },
+  gateRequest: {
+    run: r.one.run({ from: r.gateRequest.runId, to: r.run.id, optional: false }),
+    issue: r.one.issue({ from: r.gateRequest.issueId, to: r.issue.id, optional: false }),
+    project: r.one.project({ from: r.gateRequest.projectId, to: r.project.id, optional: false }),
+    checkpointPolicy: r.one.checkpoint({
+      from: r.gateRequest.checkpointId,
+      to: r.checkpoint.id,
+    }),
+    requester: r.one.member({
+      from: r.gateRequest.requestedBy,
+      to: r.member.id,
+      optional: false,
+    }),
+    decisions: r.many.gateDecision({
+      from: r.gateRequest.id,
+      to: r.gateDecision.gateRequestId,
+    }),
+  },
+  gateDecision: {
+    request: r.one.gateRequest({
+      from: r.gateDecision.gateRequestId,
+      to: r.gateRequest.id,
+      optional: false,
+    }),
+    member: r.one.member({ from: r.gateDecision.memberId, to: r.member.id, optional: false }),
+  },
   run: {
     issue: r.one.issue({ from: r.run.issueId, to: r.issue.id, optional: false }),
+    gates: r.many.gateRequest({ from: r.run.id, to: r.gateRequest.runId }),
     agent: r.one.member({ from: r.run.agentMemberId, to: r.member.id, optional: false }),
     triggeredBy: r.one.member({ from: r.run.triggeredByMemberId, to: r.member.id }),
     activities: r.many.activity({ from: r.run.id, to: r.activity.runId }),
