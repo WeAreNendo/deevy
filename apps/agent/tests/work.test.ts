@@ -1,14 +1,21 @@
+import { execFile } from "node:child_process";
+import { rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { openProxy } from "../src/proxy.ts";
 import { deevyToolNames } from "../src/tools.ts";
 import { runOnce, workRun } from "../src/work.ts";
 import type { Delivery } from "../src/deliver.ts";
 import type { Session, SessionEvent } from "../src/session.ts";
-import { finished, instance, scripted } from "./helpers.ts";
+import { bareRepo, finished, instance, scripted } from "./helpers.ts";
 
+const run = promisify(execFile);
 const closers: Array<() => void> = [];
-afterEach(() => {
+const scratch: string[] = [];
+afterEach(async () => {
   for (const close of closers.splice(0)) close();
+  for (const dir of scratch.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
 async function deevyWithAnAssignedIssue(title = "Ship it") {
@@ -386,9 +393,23 @@ describe("a tool the session may not call", () => {
 });
 
 describe("the evidence a Run leaves on the Issue", () => {
-  /** A working directory that is already a repository with something in it. */
+  /**
+   * A Run whose Project has a repository, without the repository: the checkout
+   * is deevy's answer and the working directory is a stand-in, so a test about
+   * what is recorded does not have to clone anything.
+   */
   function delivering(delivered: Delivery | null) {
     return {
+      checkout: () =>
+        Promise.resolve({
+          cloneUrl: "https://github.com/owner/repo.git",
+          baseBranch: "main",
+          headBranch: "deevy/acme-deevy-1-abcd1234",
+          username: "x-access-token",
+          token: "unused",
+          expiresAt: null,
+        }),
+      gitProxy: () => Promise.resolve(null),
       workspace: () =>
         Promise.resolve({
           cwd: "/tmp/unused",
@@ -396,50 +417,51 @@ describe("the evidence a Run leaves on the Issue", () => {
           git: () => Promise.resolve(""),
           release: () => Promise.resolve(),
         }),
-      forge: null,
       delivered,
     };
   }
 
-  it("attaches the pull request to the Run that produced it", async () => {
-    const it = await deevyWithAnAssignedIssue();
+  it("is the pull request deevy opened, attributed to the Run that produced it", async () => {
+    const repo = await bareRepo();
+    scratch.push(repo.dir);
+    const it = await instance({ repo: repo.path });
+    closers.push(it.close);
+    await it.assign("Give the runtime a health endpoint");
     const [waiting] = await it.deevy.runs("pending");
-    const shipped: Delivery = {
-      branch: "deevy/dev-1-run-abcd",
-      commit: "a".repeat(40),
-      pullRequest: { url: "https://github.com/owner/repo/pull/7", number: 7 },
-    };
 
     const pass = await runOnce({
       ...options,
-      ...delivering(shipped),
       deevy: it.deevy,
       proxy: it.proxy,
-      deliver: () => Promise.resolve(shipped),
       session: scripted([
-        async () => {
-          await it.deevy.finishRun(waiting.id, "completed", "Wrote the code");
+        // The session writes a file and says nothing about git: what it leaves
+        // behind is committed and pushed for it (docs/plans/agent-owns-git.md).
+        async (input) => {
+          await writeFile(join(input.cwd, "health.ts"), "export const ok = true;\n");
+          await it.deevy.finishRun(waiting.id, "completed", "Added a health endpoint");
         },
         finished,
       ]),
     });
 
-    expect(pass.worked[0]).toMatchObject({ status: "completed", delivered: shipped });
+    const branch = pass.worked[0]?.delivered?.branch ?? "";
+    expect(branch).toBe("deevy/acme-deevy-1-" + waiting.id.replace("run_", "").slice(0, 8));
+    // On the remote, which is the only place a branch counts.
+    const remote = await run("git", ["-C", repo.path, "branch", "--list"]);
+    expect(remote.stdout).toContain(branch);
+    // And through the Socket, which is the only way deevy opens one.
+    expect(it.tracker.pulls).toMatchObject([{ head: branch, base: "main" }]);
+
+    // deevy attached it as it opened it, so there is exactly one Link and it
+    // names the attempt (packages/core/src/operations/pulls.ts).
     const links = await it.asAda.links.list({ issue: "acme/deevy#1" });
     expect(links.links).toHaveLength(1);
-    expect(links.links[0]).toMatchObject({
-      url: "https://github.com/owner/repo/pull/7",
-      kind: "pull_request",
-      runId: waiting.id,
-    });
+    expect(links.links[0]).toMatchObject({ kind: "pull_request", runId: waiting.id });
     // A comment rather than an Activity, because the model closed its own Run
     // before there was a branch to name and a closed Run takes no more.
-    // The comment is the tracker's: deevy stores none of them, and signs each
-    // one with the Member who wrote it (ADR-0024).
+    // The comment is the tracker's: deevy stores none of them (ADR-0024).
     const said = it.tracker.comments.get("1") ?? [];
-    expect(said.at(-1)?.body).toContain(
-      `Run \`${waiting.id}\` pushed \`deevy/dev-1-run-abcd\` and opened https://github.com/owner/repo/pull/7`,
-    );
+    expect(said.at(-1)?.body).toContain(`Run \`${waiting.id}\` pushed \`${branch}\` and opened`);
   });
 
   it("attaches nothing when the Run changed nothing", async () => {

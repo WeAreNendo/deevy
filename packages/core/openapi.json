@@ -602,45 +602,52 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "cloneUrl": {
-                      "type": "string"
-                    },
-                    "baseBranch": {
-                      "type": "string"
-                    },
-                    "headBranch": {
-                      "type": "string"
-                    },
-                    "username": {
-                      "type": "string"
-                    },
-                    "token": {
-                      "type": "string"
-                    },
-                    "expiresAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "cloneUrl": {
+                          "type": "string"
                         },
-                        {
-                          "type": "null"
+                        "baseBranch": {
+                          "type": "string"
+                        },
+                        "headBranch": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "x-native-type": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
-                      ]
+                      },
+                      "required": [
+                        "cloneUrl",
+                        "baseBranch",
+                        "headBranch",
+                        "username",
+                        "token",
+                        "expiresAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
                     }
-                  },
-                  "required": [
-                    "cloneUrl",
-                    "baseBranch",
-                    "headBranch",
-                    "username",
-                    "token",
-                    "expiresAt"
-                  ],
-                  "additionalProperties": false
+                  ]
                 }
               }
             }
@@ -1267,6 +1274,9 @@
                     "devSignIn": {
                       "type": "boolean"
                     },
+                    "devSockets": {
+                      "type": "boolean"
+                    },
                     "providers": {
                       "type": "array",
                       "items": {
@@ -1298,6 +1308,7 @@
                     "ok",
                     "time",
                     "devSignIn",
+                    "devSockets",
                     "providers"
                   ],
                   "additionalProperties": false
@@ -12015,6 +12026,12 @@
                         "additionalProperties": false
                       }
                     },
+                    "checkpoints": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "comments": {
                       "anyOf": [
                         {
@@ -12099,6 +12116,7 @@
                     "project",
                     "parent",
                     "children",
+                    "checkpoints",
                     "comments"
                   ],
                   "additionalProperties": false
@@ -13668,6 +13686,12 @@
                         "additionalProperties": false
                       }
                     },
+                    "checkpoints": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "comments": {
                       "anyOf": [
                         {
@@ -13752,6 +13776,7 @@
                     "project",
                     "parent",
                     "children",
+                    "checkpoints",
                     "comments"
                   ],
                   "additionalProperties": false

@@ -58,6 +58,16 @@ export interface WorkerBindings {
   DEEVY_SOCKET_CATCHUP_MINUTES?: string;
   /** GitHub's REST root for a Socket that names none (GitHub Enterprise Server). */
   DEEVY_GITHUB_API?: string;
+  /**
+   * Register the Socket provider that is not a tool, and the containers it
+   * offers (packages/sockets/src/stub). A Worker has no `NODE_ENV` to refuse
+   * this by, so what protects a deployment is that both are vars somebody has
+   * to set on purpose, and `health.ping` says when they are: the acceptance
+   * walk runs on workerd as well as on Node, and ADR-0006's claim is that the
+   * runtime cannot tell them apart (docs/sockets-acceptance.md).
+   */
+  DEEVY_DEV_STUB_SOCKETS?: string;
+  DEEVY_DEV_STUB_CONTAINERS?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
@@ -97,6 +107,9 @@ export interface WorkerEnv {
   socketCatchupMinutes?: number;
   /** GitHub's REST root for a Socket that names none (`DEEVY_GITHUB_API`). */
   githubApi?: string;
+  /** Whether this deployment registered the Socket stub, and what it holds. */
+  devStubSockets: boolean;
+  devStubContainers?: string;
   webOrigin?: string;
   /**
    * The sign-in providers this instance offers, one optional entry each, read
@@ -134,6 +147,8 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
     secret: env.BETTER_AUTH_SECRET,
     socketSecret: env.DEEVY_SECRET,
     githubApi: env.DEEVY_GITHUB_API,
+    devStubSockets: env.DEEVY_DEV_STUB_SOCKETS === "1",
+    devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
     ...(env.DEEVY_SOCKET_CATCHUP_MINUTES
       ? { socketCatchupMinutes: Number(env.DEEVY_SOCKET_CATCHUP_MINUTES) }
       : {}),

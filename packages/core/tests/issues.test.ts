@@ -354,6 +354,32 @@ describe("issues.list", () => {
   });
 });
 
+describe("what a Project asks of a Run", () => {
+  it("is on the record an Agent reads, because that is where it plans the whole Run", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, record } = await withProject(db);
+    const issue = await record({ externalId: "42", title: "Ship the Event log" });
+
+    // Before anything is set, nothing is asked: a Project with no Checkpoints
+    // is one where an Agent plans, builds and finishes without stopping.
+    expect((await client.issues.get({ issue: issue.url })).checkpoints).toEqual([]);
+
+    await client.checkpoints.set({
+      projectSlug: "deevy",
+      checkpoints: [
+        { name: "ship", approvalsRequired: 1 },
+        { name: "plan", approvalsRequired: 1 },
+      ],
+    });
+
+    // The names only, and in a settled order. The arithmetic behind each one is
+    // a Human's business; what an Agent needs is which ones exist, so it knows
+    // where to stop (apps/agent/src/instructions.md).
+    expect((await client.issues.get({ issue: issue.url })).checkpoints).toEqual(["plan", "ship"]);
+  });
+});
+
 describe("reading the conversation", () => {
   it("is the tracker's to answer, and only when somebody asks for it", async () => {
     const { db, close } = testDb();

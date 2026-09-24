@@ -64,10 +64,13 @@ export function buildServer(env: ServerEnv) {
     ...(env.webOrigin ? { webURL: env.webOrigin } : {}),
     secret: env.secret,
     devSignIn: env.devStubOAuth,
+    devSockets: env.devStubSockets,
     // The tools this build can speak (ADR-0024). A stub Socket is a development
-    // fixture, so it is offered only where the dev stub is already allowed.
+    // fixture, so it is registered only where the entry says it may be, which
+    // `readEnv` refuses to be production.
     sockets: socketModules({
-      devStub: env.devStubOAuth,
+      devStub: env.devStubSockets,
+      ...(env.devStubContainers ? { devStubContainers: env.devStubContainers } : {}),
       ...(env.githubApi ? { githubApiBase: env.githubApi } : {}),
     }),
     // And what their credentials are sealed with. Without it a tool that holds

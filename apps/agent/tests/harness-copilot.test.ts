@@ -91,17 +91,19 @@ describe("the command line a session runs under", () => {
       "--allow-tool",
       "deevy(issues_get)",
       "--allow-tool",
-      "deevy(documents_get)",
+      "deevy(issues_create)",
       "--allow-tool",
-      "deevy(documents_write)",
+      "deevy(comments_create)",
       "--allow-tool",
       "deevy(runs_post_activity)",
       "--allow-tool",
-      "deevy(runs_request_approval)",
+      "deevy(gates_request)",
+      "--allow-tool",
+      "deevy(gates_get)",
+      "--allow-tool",
+      "deevy(pulls_open)",
       "--allow-tool",
       "deevy(links_add)",
-      "--allow-tool",
-      "deevy(comments_create)",
       "--allow-tool",
       "deevy(runs_finish)",
       // No repository, so no file or shell grant and no git denials: a session
@@ -177,12 +179,13 @@ describe("the files the session is given", () => {
             "runs_get",
             "runs_start",
             "issues_get",
-            "documents_get",
-            "documents_write",
-            "runs_post_activity",
-            "runs_request_approval",
-            "links_add",
+            "issues_create",
             "comments_create",
+            "runs_post_activity",
+            "gates_request",
+            "gates_get",
+            "pulls_open",
+            "links_add",
             "runs_finish",
           ],
         },
@@ -195,7 +198,7 @@ describe("the files the session is given", () => {
     // The instructions the worked example writes out reach the session.
     expect(agent).toContain("---\nname: deevy");
     expect(agent).toContain("## Working an Issue in deevy");
-    expect(agent).toContain("do not approve one");
+    expect(agent).toContain("Do not rule on it yourself");
   });
 
   it("puts no header and no secret anywhere in the configuration it writes", async () => {

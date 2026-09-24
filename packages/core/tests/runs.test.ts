@@ -87,6 +87,33 @@ describe("the Run lifecycle", () => {
     expect(forTheAgent.notifications).toHaveLength(0);
   });
 
+  it("keeps waiting when something is said to it, because nobody has answered", async () => {
+    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
+    const run = await asAgent.runs.start({ issue: issue.url });
+    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which one?" });
+
+    const said = await asAgent.runs.postActivity({
+      runId: run.id,
+      kind: "action",
+      body: "Pushed the branch while I wait",
+    });
+
+    /*
+     * A Run at a Gate waits and never goes stale (docs/plans/sockets.md), and
+     * only a Human un-waits it: `runs.answer`, or a Ruling on the Gate. An
+     * Activity that moved it back to `active` would put it under the stale
+     * sweep, and a Human watching would be told it is working when it is
+     * waiting on them. The supervisor writes one of these itself, after the
+     * session that asked has ended, which is how this was found
+     * (apps/agent/src/work.ts).
+     */
+    expect(said.run.status).toBe("awaiting_input");
+    // And nobody is told twice about one question: `run.awaiting_input` is the
+    // Run beginning to wait, not the Run still waiting.
+    const events = await asAdmin.events.list({ limit: 50 });
+    expect(events.events.filter((event) => event.kind === "run.awaiting_input")).toHaveLength(1);
+  });
+
   it("comes back to active when a Human answers, with the answer where the Agent reads", async () => {
     const { asAdmin, asAgent, issue } = await workspaceWithAgent();
     const run = await asAgent.runs.start({ issue: issue.url });

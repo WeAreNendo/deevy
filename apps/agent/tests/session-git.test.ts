@@ -1,15 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { openGitProxy } from "../src/git-proxy.ts";
-import type { Forge, PullRequest, PullRequestDraft } from "../src/forge.ts";
-import type { RepoConfig } from "../src/workspace.ts";
-import { openWorkspace } from "../src/workspace.ts";
+import type { Checkout } from "../src/deevy.ts";
 import { runOnce } from "../src/work.ts";
-import { finished, instance, scripted } from "./helpers.ts";
+import { bareRepo, finished, instance, scripted } from "./helpers.ts";
 
 const run = promisify(execFile);
 const scratch: string[] = [];
@@ -19,72 +16,46 @@ afterEach(async () => {
   for (const dir of scratch.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-/** A bare repository with one commit on `main`, and no server in front of it. */
-async function remote(): Promise<RepoConfig> {
-  const dir = await mkdtemp(join(tmpdir(), "deevy-remote-"));
-  scratch.push(dir);
-  const bare = join(dir, "origin.git");
-  const seed = join(dir, "seed");
-  await run("git", ["init", "--bare", "--initial-branch", "main", "--quiet", bare]);
-  await run("git", ["clone", "--quiet", bare, seed]);
-  await run("git", ["-C", seed, "config", "user.email", "seed@deevy.test"]);
-  await run("git", ["-C", seed, "config", "user.name", "seed"]);
-  await writeFile(join(seed, "README.md"), "# a repository\n");
-  await run("git", ["-C", seed, "add", "-A"]);
-  await run("git", ["-C", seed, "commit", "--quiet", "-m", "first"]);
-  await run("git", ["-C", seed, "push", "--quiet", "origin", "main"]);
-  return { url: bare, baseBranch: "main" };
-}
-
-async function refsOn(repo: RepoConfig): Promise<string> {
-  const { stdout } = await run("git", ["ls-remote", repo.url]);
+async function refsOn(repo: string): Promise<string> {
+  const { stdout } = await run("git", ["ls-remote", repo]);
   return stdout;
 }
 
-/** deevy with one Issue assigned to the Agent, ready to be worked. */
+/**
+ * deevy with one record assigned to the Agent and a repository behind it.
+ *
+ * The Project is bound to a forge Socket, so the checkout every Run gets — the
+ * clone URL, the branch and the credential — is deevy's answer rather than
+ * this test's invention (ADR-0024).
+ */
 async function assigned() {
-  const deevy = await instance();
+  const repo = await bareRepo();
+  scratch.push(repo.dir);
+  const deevy = await instance({ repo: repo.path });
   closers.push(deevy.close);
   await deevy.assign("Ship it");
-  return deevy;
-}
-
-/** A forge that says what it was asked to open. */
-function stubForge(): Forge & { opened: PullRequestDraft[] } {
-  const opened: PullRequestDraft[] = [];
-  return {
-    opened,
-    open: (draft) => {
-      opened.push(draft);
-      return Promise.resolve<PullRequest>({
-        url: "https://forge.test/pull/1",
-        number: 1,
-      });
-    },
-  };
+  return { ...deevy, repo: repo.path };
 }
 
 /** What `workRun` is given, with the git proxy the session pushes through. */
-function work(deevy: Awaited<ReturnType<typeof instance>>, repo: RepoConfig, forge?: Forge) {
+function work(deevy: Awaited<ReturnType<typeof assigned>>) {
   return {
-    ...(forge ? { forge } : {}),
     deevy: deevy.deevy,
     proxy: deevy.proxy,
     runTimeoutMs: 20_000,
-    gitProxy: async () => {
-      const proxy = await openGitProxy({ upstream: repo.url });
+    // The proxy deevy's own checkout named, closed by the test rather than by
+    // the supervisor: a test that leaves a listener behind hangs the run.
+    gitProxy: async (checkout: Checkout) => {
+      const proxy = await openGitProxy({ upstream: checkout.cloneUrl, token: checkout.token });
       closers.push(() => proxy.close());
       return proxy;
     },
-    workspace: (options: { runId: string; originUrl?: string }) =>
-      openWorkspace({ ...options, repo }),
   };
 }
 
 describe("a session that runs its own git", () => {
   it("pushes the branch it chose, and the remote has it", async () => {
     const deevy = await assigned();
-    const repo = await remote();
 
     let pushedTo = "";
     const session = scripted([
@@ -108,9 +79,9 @@ describe("a session that runs its own git", () => {
       finished,
     ]);
 
-    await runOnce({ ...work(deevy, repo), session });
+    await runOnce({ ...work(deevy), session });
 
-    expect(await refsOn(repo)).toContain("refs/heads/the-branch-it-chose");
+    expect(await refsOn(deevy.repo)).toContain("refs/heads/the-branch-it-chose");
     // And it went through the supervisor rather than straight to the remote,
     // which is the only way it could have carried a credential.
     expect(pushedTo).toMatch(/^http:\/\/127\.0\.0\.1:/);
@@ -118,7 +89,6 @@ describe("a session that runs its own git", () => {
 
   it("carries the supervisor's own delivery through the proxy as well", async () => {
     const deevy = await assigned();
-    const repo = await remote();
 
     // A session that writes a file and runs no git: the supervisor branches,
     // commits and pushes for it — through the same proxy, which is what a
@@ -130,7 +100,7 @@ describe("a session that runs its own git", () => {
       finished,
     ]);
 
-    const pass = await runOnce({ ...work(deevy, repo), session });
+    const pass = await runOnce({ ...work(deevy), session });
 
     // Named after the attempt, from the key the tracker wrote. The shape of
     // that name moves to the core with `runs.checkout` (docs/plans/sockets.md,
@@ -138,13 +108,14 @@ describe("a session that runs its own git", () => {
     // branch and said which one.
     const branch = pass.worked[0]?.delivered?.branch ?? "";
     expect(branch.startsWith("deevy/")).toBe(true);
-    expect(await refsOn(repo)).toContain(`refs/heads/${branch}`);
+    expect(await refsOn(deevy.repo)).toContain(`refs/heads/${branch}`);
   });
 
   it("never holds the credential that made the push possible", async () => {
     const deevy = await assigned();
-    const repo = { ...(await remote()), token: "ghp_the_supervisors_own" };
     let sawInConfig = "";
+    // The token deevy's forge Socket mints for this Run (tests/helpers.ts).
+    const secret = "tracker-token";
 
     const session = scripted([
       async (input) => {
@@ -154,17 +125,16 @@ describe("a session that runs its own git", () => {
       finished,
     ]);
 
-    await runOnce({ ...work(deevy, repo), session });
+    await runOnce({ ...work(deevy), session });
 
     // The clone was made with the credential and the session inherits a
     // loopback address: there is nothing in its checkout to find.
-    expect(sawInConfig).not.toContain("ghp_the_supervisors_own");
+    expect(sawInConfig).not.toContain(secret);
     expect(sawInConfig).toContain("127.0.0.1");
   });
 
   it("says in the Run's feed what the session pushed", async () => {
     const deevy = await assigned();
-    const repo = await remote();
 
     const session = scripted([
       async (input) => {
@@ -178,7 +148,7 @@ describe("a session that runs its own git", () => {
       finished,
     ]);
 
-    const pass = await runOnce({ ...work(deevy, repo), session });
+    const pass = await runOnce({ ...work(deevy), session });
     const feed = await deevy.asAda.runs.get({ runId: pass.worked[0].runId });
 
     expect(feed.activities.map((activity) => activity.body).join("\n")).toMatch(
@@ -188,7 +158,6 @@ describe("a session that runs its own git", () => {
 
   it("says plainly when the session rewrote the branch everything is built on", async () => {
     const deevy = await assigned();
-    const repo = await remote();
 
     // The thing no Gate stands in the way of, and the reason the record exists
     // (ADR-0019): an Agent is free to do this, and a Human must be able to see
@@ -213,7 +182,7 @@ describe("a session that runs its own git", () => {
       finished,
     ]);
 
-    const pass = await runOnce({ ...work(deevy, repo), session });
+    const pass = await runOnce({ ...work(deevy), session });
     const feed = await deevy.asAda.runs.get({ runId: pass.worked[0].runId });
 
     expect(feed.activities.map((activity) => activity.body).join("\n")).toMatch(
@@ -223,8 +192,6 @@ describe("a session that runs its own git", () => {
 
   it("attaches the branch the session pushed rather than pushing one of its own", async () => {
     const deevy = await assigned();
-    const repo = await remote();
-    const forge = stubForge();
 
     const session = scripted([
       async (input) => {
@@ -238,24 +205,22 @@ describe("a session that runs its own git", () => {
       finished,
     ]);
 
-    const pass = await runOnce({ ...work(deevy, repo, forge), session });
+    const pass = await runOnce({ ...work(deevy), session });
 
     // The Run delivered what the session pushed: no second branch of the
     // supervisor's own, a pull request for the agent's, and a Link that says
     // which attempt produced it.
-    expect(await refsOn(repo)).not.toContain("refs/heads/deevy/");
-    expect(forge.opened.map((draft) => draft.branch)).toEqual(["its-own-branch"]);
+    expect(await refsOn(deevy.repo)).not.toContain("refs/heads/deevy/");
+    expect(deevy.tracker.pulls.map((draft) => draft.head)).toEqual(["its-own-branch"]);
     expect(pass.worked[0]?.delivered?.branch).toBe("its-own-branch");
     const links = await deevy.asAda.links.list({ issue: "acme/deevy#1" });
     expect(links.links.map((link) => [link.url, link.runId])).toEqual([
-      ["https://forge.test/pull/1", pass.worked[0].runId],
+      [`https://tracker.test/acme/deevy/pull/1`, pass.worked[0].runId],
     ]);
   });
 
   it("puts what the Agent said when it finished onto the pull request", async () => {
     const deevy = await assigned();
-    const repo = await remote();
-    const forge = stubForge();
 
     const session = scripted([
       async (input) => {
@@ -270,9 +235,11 @@ describe("a session that runs its own git", () => {
       finished,
     ]);
 
-    await runOnce({ ...work(deevy, repo, forge), session });
+    await runOnce({ ...work(deevy), session });
 
-    expect(forge.opened[0]).toMatchObject({
+    // deevy writes the title from the same summary the Agent finished with,
+    // which is what reaches the code review (packages/core/src/forge.ts).
+    expect(deevy.tracker.pulls[0]).toMatchObject({
       title: "acme/deevy#1: Added a health endpoint, and a smoke that proves it answers.",
     });
   });

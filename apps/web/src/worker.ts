@@ -93,10 +93,20 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // The buttons the sign-in page draws, from the same entries Better Auth
       // was just registered with (docs/plans/sign-in.md).
       signInProviders: signInProviders(authEnv),
+      devSockets: env.devStubSockets,
       // The tools this build can speak (ADR-0024). The stub is registered only
-      // where the entry says it may be, which is never in production.
-      // A Worker is never the deployment a stub belongs in.
-      sockets: socketModules(env.githubApi ? { githubApiBase: env.githubApi } : {}),
+      // where a var says so, which is a deployment somebody made a stubbed one
+      // on purpose — the acceptance walk runs here too, and the whole of its
+      // claim is that the runtime cannot tell the two runtimes apart (src/env.ts).
+      sockets: socketModules({
+        ...(env.githubApi ? { githubApiBase: env.githubApi } : {}),
+        ...(env.devStubSockets
+          ? {
+              devStub: true,
+              ...(env.devStubContainers ? { devStubContainers: env.devStubContainers } : {}),
+            }
+          : {}),
+      }),
       // What their credentials are sealed with. A Worker without it can serve
       // a Socket that holds none and refuses to connect one that does.
       ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
@@ -184,9 +194,17 @@ export default {
             : {}),
           // And the tools this build can speak, so a Workspace whose tracker
           // cannot reach this Worker is still asked (ADR-0024).
-          sockets: socketModules(
-            isolate.env.githubApi ? { githubApiBase: isolate.env.githubApi } : {},
-          ),
+          sockets: socketModules({
+            ...(isolate.env.githubApi ? { githubApiBase: isolate.env.githubApi } : {}),
+            ...(isolate.env.devStubSockets
+              ? {
+                  devStub: true,
+                  ...(isolate.env.devStubContainers
+                    ? { devStubContainers: isolate.env.devStubContainers }
+                    : {}),
+                }
+              : {}),
+          }),
           ...(isolate.env.socketSecret ? { socketSecret: isolate.env.socketSecret } : {}),
         }),
       ),

@@ -151,7 +151,11 @@ describe("polling a tool deevy was not told about", () => {
       .set({ lastPolledAt: null })
       .where(eq(projectTable.id, seeded.project.id));
 
-    const result = await sync();
+    // An hour later, and said rather than assumed: a poll's delivery id is the
+    // Project and the millisecond, so two polls inside one millisecond are one
+    // delivery and the second claims nothing. That is the right behaviour and
+    // the wrong clock for a test that means to poll twice.
+    const result = await sync({ now: new Date("2026-09-20T12:00:00Z") });
 
     // One record, not two: the one the tracker changed after the watermark.
     expect(result).toMatchObject({ scanned: 1, applied: 1 });

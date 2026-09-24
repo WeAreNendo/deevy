@@ -72,6 +72,8 @@ export interface AppContext {
    * `health.ping` reads it, so a signed-out SPA can offer the dev form.
    */
   devSignIn?: boolean;
+  /** True where this instance registered the Socket provider that is not a tool. */
+  devSockets?: boolean;
   /**
    * The providers this deployment can speak (ADR-0024). Injected by the entry,
    * so the core holds the port and never a provider.

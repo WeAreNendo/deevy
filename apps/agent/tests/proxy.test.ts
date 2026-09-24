@@ -79,14 +79,18 @@ describe("the key stays with the supervisor", () => {
     const names = (message?.result?.tools ?? []).map((tool) => tool.name).sort();
 
     // The runtime's list is an allowlist, not a demand: it is intersected with
-    // what deevy offers, and `documents_get`, `documents_write` and
-    // `runs_request_approval` are not offered until a Gate is a request on a
-    // Run (docs/plans/sockets.md, slice 2).
+    // what deevy offers, so this is the whole job an Agent has here — read the
+    // work, narrate it, ask at a Checkpoint, split it, open the pull request,
+    // finish (src/tools.ts).
     expect(names).toEqual([
       "comments_create",
+      "gates_get",
+      "gates_request",
       "inbox_list",
+      "issues_create",
       "issues_get",
       "links_add",
+      "pulls_open",
       "runs_finish",
       "runs_get",
       "runs_list",

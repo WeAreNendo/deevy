@@ -45,9 +45,12 @@ const d1StatementsPerInvocation = 50;
  * Issue and no version row under it, no second `appendEvent` tail for the
  * `document.created` that followed, no State to read and no Gate standing to
  * work out, and no numbering statement. What replaced them costs nothing here,
- * because opening the record is a call to the Socket rather than a write.
+ * because opening the record is a call to the Socket rather than a write. Then
+ * one more for the Checkpoints on the answer: `issues.create` reads the record
+ * back the way `issues.get` does, and what a Project asks a Run to stop at is
+ * part of that read now (operations/shared.ts).
  */
-const budget = 7;
+const budget = 8;
 
 describe(`the D1 request budget: ${String(budget)} statements, under D1's ${String(d1StatementsPerInvocation)}`, () => {
   it("is what creating an Issue with one mention, one Slack Channel and one webhook subscription costs", async () => {
@@ -154,9 +157,10 @@ describe("reading an Issue with children", () => {
  * until the Sockets cut, which took the Document and its Event tail out of the
  * same write; then one more for the mirror derivation, which reads the
  * Project a `run.started` belongs to before deciding it has nothing to say
- * (sockets/mirror.ts).
+ * (sockets/mirror.ts), and one more for the Project's Checkpoints, which the
+ * record an Agent reads back carries (operations/shared.ts).
  */
-const delegating = 35;
+const delegating = 36;
 
 describe(`the D1 request budget: an Agent opening a sub-issue costs ${String(delegating)}`, () => {
   it("stays under D1's cap at the deepest tree the Workspace allows", async () => {

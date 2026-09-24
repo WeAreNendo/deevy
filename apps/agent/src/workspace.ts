@@ -11,6 +11,12 @@ export interface RepoConfig {
   url: string;
   /** The credential, held by the runtime and never by the session. */
   token?: string;
+  /**
+   * The user the token goes with. GitHub wants `x-access-token`, GitLab wants
+   * `oauth2`, and the provider is what knows — so it comes with the credential
+   * rather than being assumed here (ADR-0024).
+   */
+  username?: string;
   /** The branch a Run starts from. */
   baseBranch: string;
 }
@@ -35,9 +41,9 @@ export interface Workspace {
  * credential at all — which is the whole point of the supervisor owning git
  * (docs/plans/m4.md).
  */
-export function authArgs(token: string | undefined): string[] {
+export function authArgs(token: string | undefined, username = "x-access-token"): string[] {
   if (!token) return [];
-  const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
+  const basic = Buffer.from(`${username}:${token}`).toString("base64");
   return ["-c", `http.extraHeader=Authorization: Basic ${basic}`];
 }
 
@@ -70,7 +76,7 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
   const base = options.root ?? tmpdir();
   const cwd = await mkdtemp(join(base, `deevy-${options.runId.slice(0, 8)}-`));
   const repo = options.repo ?? null;
-  const auth = authArgs(repo?.token);
+  const auth = authArgs(repo?.token, repo?.username);
 
   // `safe.directory` because the session owns this tree and the supervisor
   // does not: git refuses a repository owned by another user unless told, and

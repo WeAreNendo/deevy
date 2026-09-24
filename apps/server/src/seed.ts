@@ -19,8 +19,20 @@ import { existsSync, unlinkSync } from "node:fs";
 import { API_PATH } from "@deevy/core";
 import { buildContext } from "@deevy/core/app";
 import { router } from "@deevy/core/router";
-import { discardingJobQueue, routeIssueTo, sweepStaleRuns, upsertProjection } from "@deevy/core";
-import { addContainer, openStubStore, putIssue, type StubContainer } from "@deevy/sockets";
+import {
+  discardingJobQueue,
+  recordRuling,
+  routeIssueTo,
+  sweepStaleRuns,
+  upsertProjection,
+} from "@deevy/core";
+import {
+  addContainer,
+  openStubStore,
+  putIssue,
+  socketModules,
+  type StubContainer,
+} from "@deevy/sockets";
 import { createRouterClient } from "@orpc/server";
 import { readEnv, stubbedProviders } from "./env.ts";
 import { buildServer } from "./server.ts";
@@ -31,7 +43,15 @@ const read = readEnv();
 // whatever the flag says — the stub itself is imported below on the same
 // grounds. A `.env` with no client pair in it would otherwise leave nothing
 // registered for the seed to sign its Humans in with (docs/DEVELOPMENT.md).
-const env = { ...read, providers: stubbedProviders(read.providers), devStubOAuth: true };
+// Every provider is the stub here, whatever the environment configured, and
+// so is the tracker: the seed's records come from a Socket, and the stub is
+// the only provider that needs no App and no network (ADR-0024).
+const env = {
+  ...read,
+  providers: stubbedProviders(read.providers),
+  devStubOAuth: true,
+  devStubSockets: true,
+};
 if (!env.adminEmail)
   throw new Error("DEEVY_ADMIN_EMAIL must be set: it names the admin the seed signs in as");
 if (!env.baseURL || !env.secret)
@@ -64,22 +84,40 @@ function cookiesOf(response: Response): string {
     .join("; ");
 }
 
+/**
+ * One Human signing in, as the browser would do it and as the acceptance walk
+ * does it (apps/agent/scripts/acceptance.ts).
+ *
+ * The authorization page itself is not stubbed and could not usefully be: it
+ * is where a person would click. What the stub answers is everything after the
+ * `code`, and the `code` is the email address — so the seed plays the click by
+ * calling the callback with the state the sign-in just minted.
+ */
 async function signIn(email: string): Promise<string> {
   const start = await app.request("/api/auth/sign-in/social", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ provider: "github", callbackURL: "/", email }),
+    body: JSON.stringify({ provider: "github", callbackURL: "/" }),
   });
-  const { url } = (await start.json()) as { url: string };
-  const authorized = await fetch(url, { redirect: "manual" });
-  const back = authorized.headers.get("location");
-  if (!back) throw new Error(`the stub did not redirect for ${email}`);
-  const finished = await app.request(back, {
-    headers: { cookie: cookiesOf(start) },
-    redirect: "manual",
-  });
-  return cookiesOf(finished);
+  const { url } = (await start.json()) as { url?: string };
+  const state = url ? (new URL(url).searchParams.get("state") ?? "") : "";
+  if (!state) throw new Error(`no authorization URL for ${email}`);
+  const finished = await app.request(
+    `/api/auth/callback/github?state=${encodeURIComponent(state)}&code=${encodeURIComponent(email)}`,
+    { headers: { cookie: cookiesOf(start) }, redirect: "manual" },
+  );
+  const cookie = cookiesOf(finished);
+  if (!cookie) throw new Error(`sign-in refused for ${email}`);
+  return cookie;
 }
+
+/**
+ * The tools this seed can speak, which is one: the provider that is not a tool
+ * (packages/sockets/src/stub). `buildContext` builds what a request carries and
+ * the registry is the entry's, so a caller assembled here passes its own — the
+ * same one `buildServer` gave the app above.
+ */
+const sockets = socketModules({ devStub: true });
 
 async function caller(headers: HeadersInit) {
   // Seeding signs in with a cookie, so the audience decides nothing; the API
@@ -88,7 +126,14 @@ async function caller(headers: HeadersInit) {
   if (!context.member) throw new Error("that credential is not a Member");
   return {
     member: context.member,
-    api: createRouterClient(router, { context: { ...context, jobs } }),
+    api: createRouterClient(router, {
+      context: {
+        ...context,
+        jobs,
+        sockets,
+        ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
+      },
+    }),
   };
 }
 
@@ -110,6 +155,12 @@ await admin.api.allowlist.add({ kind: "email_domain", value: domain });
 const graceEmail = `grace@${domain}`;
 const grace = await asHuman(graceEmail);
 console.log(`member      ${graceEmail} (@${grace.member.handle ?? "?"})`);
+// A third, because a Checkpoint that wants two approvals and excludes the
+// Human the work is for needs three people to be reachable at all
+// (packages/core/src/checkpoints.ts).
+const omarEmail = `omar@${domain}`;
+const omar = await asHuman(omarEmail);
+console.log(`member      ${omarEmail} (@${omar.member.handle ?? "?"})`);
 
 // ------------------------------------------------------------------- sockets
 
@@ -135,6 +186,11 @@ const dev = await admin.api.projects.create({
   name: "deevy",
   description: "The product itself: Humans and Agents on the same records.",
   tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
+  // Bound to a repository as well, so the binding screen shows both halves and
+  // a Run has somewhere to push. The stub hands out no credential for it, which
+  // is what a Project bound to a tool nobody has connected the code half of
+  // looks like (packages/sockets/src/stub).
+  forge: { socketId: socket.id, scope: { scopeKey: "acme/deevy", baseBranch: "main" } },
 });
 const ops = await admin.api.projects.create({
   slug: "operations",
@@ -325,6 +381,40 @@ await record({
   stateName: "Done",
 });
 
+/*
+ * The rest of the backlog, so the Work list is a list rather than a handful
+ * and the filters have something to filter. Nothing is routed: this is what a
+ * team's tracker looks like on the day they connect it, and what the Agents
+ * above are working is the part somebody labelled.
+ */
+const backlog: Array<[keyof typeof containers, { id: string }, string, string[]?]> = [
+  ["acme/deevy", dev, "Cursor paging on the Event log", ["backend"]],
+  ["acme/deevy", dev, "The Gate screen on a phone", ["frontend"]],
+  ["acme/deevy", dev, "Say which Socket a Ruling came through", ["frontend"]],
+  ["acme/deevy", dev, "Retry a webhook that answered 500", ["backend"]],
+  ["acme/deevy", dev, "An Agent's key, shown once and never again", ["security"]],
+  ["acme/deevy", dev, "Mirror less on a Project that says so", ["backend"]],
+  ["acme/deevy", dev, "Sub-issues in the tracker that has no parent", ["backend"]],
+  ["acme/deevy", dev, "Drop the second query on the inbox count", ["performance"]],
+  ["acme/deevy", dev, "A Proposal longer than the screen", ["frontend"]],
+  ["acme/deevy", dev, "Name the Human who rejected, not just the note", ["frontend"]],
+  ["acme/deevy", dev, "Poll a tracker that rate-limits us", ["backend"]],
+  ["acme/deevy", dev, "The empty state on a Workspace with no Sockets", ["frontend"]],
+  ["acme/deevy", dev, "Time a Run spent waiting, on the Run", ["frontend"]],
+  ["acme/deevy", dev, "Refuse a Checkpoint nobody could ever pass", ["backend"]],
+  ["acme/ops", ops, "Back up the sealing secret with the volume", ["docs"]],
+  ["acme/ops", ops, "Alert when a Socket has said nothing for a day"],
+  ["acme/ops", ops, "Pin the harness CLIs in the image", ["docs"]],
+  ["acme/ops", ops, "Move the nightly image build off the free runner"],
+  ["acme/ops", ops, "One D1 per environment, named for it"],
+  ["acme/ops", ops, "Rotate the Agent keys the demo Workspace holds", ["security"]],
+  ["acme/ops", ops, "Turn the Cron Trigger down out of hours"],
+  ["acme/ops", ops, "A runbook for a tracker that goes away"],
+];
+for (const [container, project, title, labels] of backlog) {
+  await record({ container, project, title, ...(labels ? { labels } : {}) });
+}
+
 // -------------------------------------------------------------------- gates
 
 // What the Project asks before an Agent goes past a Checkpoint, and one Run
@@ -355,6 +445,66 @@ await planner.api.gates.request({
   links: [{ url: "https://github.com/acme/deevy/pull/412", title: "Draft: cursor paging" }],
 });
 
+// One a Human already ruled on, in deevy, so the Gate screen has a decided
+// Gate to show beside the open one and the Run carried on.
+const decided = await record({
+  container: "acme/deevy",
+  project: dev,
+  title: "Sign every mirrored comment with the Run that wrote it",
+  routeTo: planner.member.id,
+});
+const decidedRun = await runOn(planner, decided);
+await planner.api.runs.postActivity({
+  runId: decidedRun.id,
+  kind: "thought",
+  body: "The tracker shows deevy's own App as the author, so the Agent has to say who it is.",
+});
+const decidedGate = await planner.api.gates.request({
+  runId: decidedRun.id,
+  checkpoint: "plan",
+  proposal: [
+    "## What I will do",
+    "",
+    "End every comment deevy writes with the Agent, the Run and `via deevy`, so",
+    "a reader of the tracker can tell which Agent said it and go and look.",
+  ].join("\n"),
+});
+await admin.api.gates.approve({ requestId: decidedGate.id, note: "Yes, and keep it to one line." });
+
+// And one a Human ruled on where they read it, which is the other half of
+// ADR-0025: the Ruling is the same Ruling, and the record says where it came
+// from. Slice 9 is what resolves an account to a Member; the seed knows who
+// wrote it, so it records what that resolution would have found.
+const outside = await record({
+  container: "acme/deevy",
+  project: dev,
+  title: "Take a ruling from the tracker, not just from deevy",
+  routeTo: builder.member.id,
+});
+const outsideRun = await runOn(builder, outside);
+const outsideGate = await builder.api.gates.request({
+  runId: outsideRun.id,
+  checkpoint: "plan",
+  proposal: [
+    "## What I will do",
+    "",
+    "Read `/approve` and `/reject <note>` off a comment, check the delivery was",
+    "signed and is not a replay, and rule as the Human whose account wrote it.",
+  ].join("\n"),
+});
+await recordRuling(
+  { db, workspace: { id: admin.member.workspaceId }, member: grace.member, jobs },
+  {
+    requestId: outsideGate.id,
+    memberId: grace.member.id,
+    decision: "approved",
+    note: "Approved from the tracker, where I was reading it anyway.",
+    via: "socket",
+    socketId: socket.id,
+    externalRef: { externalId: "c1", url: `${outside.url}#comment-1` },
+  },
+);
+
 // ----------------------------------------------------------------- delivery
 
 const slack = await admin.api.channels.create({
@@ -381,7 +531,9 @@ console.log(`Projects    ${dev.name} and ${ops.name}, both bound to ${socket.nam
 console.log(`Records     ${String(opened)} projected from the tracker`);
 console.log(`Inbox       ${String(inbox.unread)} unread for the admin`);
 console.log("");
-console.log("Sign in with DEEVY_DEV_STUB_OAUTH=1 as either Human. The Agents' keys, shown once:");
+console.log(
+  "Sign in with DEEVY_DEV_STUB_OAUTH=1 as any of the three Humans. The Agents' keys, shown once:",
+);
 console.log(`  Planner   ${planner.key}`);
 console.log(`  Builder   ${builder.key}`);
 close();

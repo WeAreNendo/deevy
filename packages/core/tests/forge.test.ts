@@ -76,8 +76,8 @@ describe("what a Run is told to clone", () => {
     });
     // The core names the branch so the runtime never has to invent one, and
     // two attempts at one record cannot collide (docs/plans/sockets.md).
-    expect(checkout.headBranch).toMatch(/^deevy\/acme-deevy-42-/);
-    expect(checkout.headBranch).toContain(run.id.slice(4, 12));
+    expect(checkout?.headBranch).toMatch(/^deevy\/acme-deevy-42-/);
+    expect(checkout?.headBranch).toContain(run.id.slice(4, 12));
   });
 
   it("puts the credential in no Event, no read and no answer but its own", async () => {
@@ -99,7 +99,7 @@ describe("what a Run is told to clone", () => {
     expect(reads).not.toContain("stub-token");
   });
 
-  it("is refused for another Agent's Run, and where there is no repository", async () => {
+  it("is refused for another Agent's Run, and is nothing where there is no repository", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const { ada, asPlanner, run, seeded } = await workspace(db);
@@ -117,14 +117,14 @@ describe("what a Run is told to clone", () => {
       code: "FORBIDDEN",
     });
 
+    // A Project bound to a tracker and nothing else is ordinary, and the
+    // supervisor asks this of every Run it takes up: a refusal here would put
+    // a 404 in an operator's log on nothing going wrong (apps/agent/src/work.ts).
     await db
       .update(projectTable)
       .set({ forgeSocketId: null, forgeScope: null })
       .where(eq(projectTable.id, seeded.project.id));
-    await expect(asPlanner.runs.checkout({ runId: run.id })).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      message: "This Project has no repository",
-    });
+    expect(await asPlanner.runs.checkout({ runId: run.id })).toBeNull();
   });
 });
 
@@ -154,6 +154,24 @@ describe("the pull request a Run opens", () => {
     const linked = events.find((event) => event.kind === "issue.link_added");
     expect(linked?.payload).toMatchObject({ runId: run.id });
     expect(issue.url).toBeTruthy();
+  });
+
+  it("is one per Run, however many times it is asked for", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asPlanner, run } = await workspace(db);
+
+    // The instructions tell an Agent to open it (apps/agent/src/instructions.md)
+    // and the supervisor opens one for any branch a session pushed and did not
+    // (apps/agent/src/work.ts). Both happen on the same Run, and a reviewer
+    // with two pull requests for one attempt has to work out which is real.
+    const first = await asPlanner.pulls.open({ runId: run.id, head: "deevy/acme-deevy-42-abcd" });
+    const again = await asPlanner.pulls.open({ runId: run.id, head: "deevy/acme-deevy-42-abcd" });
+
+    expect(again).toMatchObject({ url: first.url, number: first.number });
+    expect(await db.query.issueLink.findMany({})).toHaveLength(1);
+    const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
+    expect(kinds.filter((kind) => kind === "run.pull_request_opened")).toHaveLength(1);
   });
 
   it("is refused where the Project has no repository", async () => {

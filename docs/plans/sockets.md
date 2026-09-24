@@ -811,6 +811,36 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 8, as built.** The walk is the point of this slice, and running it found five defects that every
+test in the tree had missed. They are written up in
+[`docs/sockets-acceptance.md`](../sockets-acceptance.md); the two that matter most are a Run at a Gate being
+un-waited by the supervisor's own narration — which put it under the stale sweep, the exact thing a Gate is
+promised never to suffer — and two pull requests for one attempt, because the instructions tell the Agent to
+open one and the supervisor opens one for any branch a session pushed and left.
+
+Three departures from the plan's list.
+
+- **The Ruling from the tracker is not in this walk.** The plan's acceptance for this slice asks for
+  `/approve` by the admin's GitHub id, and `applyInbound` says in as many words that deevy cannot yet tell
+  whose account wrote a comment — that resolver is slice 9's, and this slice depends on 6 and 7, not on 9.
+  The walk rules in deevy, which is the canonical door, and slice 9 adds the tracker's to the same script.
+  The refusals the plan asks for are there: the four-eyes one in the Checkpoint's own words, and
+  `runs_checkout` refused at the proxy.
+- **The runtime's tool list stayed at thirteen, and `issues.get` grew a field.** The instructions tell an
+  Agent to stop at the Checkpoints its Project lists, and nothing in those thirteen could say which those
+  are — `projects_get` is not among them and `checkpoints.list` is not a tool at all. Rather than widen the
+  list, the record an Agent reads carries `checkpoints`: it is read once, at the moment the whole Run is
+  being planned, and it costs one query on the read that already assembles the brief.
+- **The label half of the mirror cannot be asserted from outside.** `issues.get` answers deevy's projection,
+  whose labels are whatever the tracker last said rather than what deevy last asked for, so the walk proves
+  the comment and `packages/core/tests/mirror.test.ts` proves the label against the tracker's own state.
+
+The stub grew one thing it should always have had: `normalize` gives a delivery its clocks back. A provider's
+`normalize` answers deevy's own types, two of which are Dates, and the core compares one to decide a
+reordered delivery and writes it to an integer column — so a stub that handed back JSON's strings only worked
+in a test that never wrote one down. The seed found a second: its sign-in was reaching the real github.com,
+because the stub answers everything after the OAuth `code` and not the authorization page a person clicks.
+
 **Slice 7, as built.** The derivation reads one row the plan had not counted: an Event of a mirrorable kind
 has to ask its Project what it mirrors, so a Gate's ask and its ruling each cost two more statements — the
 read and the delivery row. The busy paths pay nothing, because `couldMirror` is a pure check on the kind

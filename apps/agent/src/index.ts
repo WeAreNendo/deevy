@@ -4,8 +4,10 @@ export {
   DeevyError,
   isOpen,
   type ActivityKind,
+  type Checkout,
   type Deevy,
   type Notification,
+  type PullRequest,
   type Ruling,
   type Run,
 } from "./deevy.ts";
@@ -53,16 +55,14 @@ export {
   type GitProxy,
   type GitProxyOptions,
 } from "./git-proxy.ts";
-export { deliver, type Delivery, type DeliverOptions } from "./deliver.ts";
 export {
-  forgeFor,
-  githubForge,
-  githubSlug,
-  type Forge,
-  type ForgeConfig,
-  type PullRequest,
-  type PullRequestDraft,
-} from "./forge.ts";
+  branchFor,
+  deliver,
+  openPull,
+  titleFor,
+  type Delivery,
+  type DeliverOptions,
+} from "./deliver.ts";
 export { startLoop, type Loop, type LoopOptions } from "./loop.ts";
 export {
   authArgs,

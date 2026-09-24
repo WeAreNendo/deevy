@@ -39,6 +39,14 @@ export async function openRunFor(
  * Where an Activity of each kind leaves the Run. An elicitation is the Agent
  * asking a Human something, so the Run waits; everything else is work, so it
  * runs. Posting to a finished Run is refused rather than silently reopening it.
+ *
+ * A Run that is already waiting keeps waiting, whatever is said to it. Only a
+ * Human un-waits one — `runs.answer`, or a Ruling on its Gate — because a Run
+ * moved back to `active` is a Run the stale sweep may take, and a Gate that
+ * went stale would strand the answer a Human was about to give
+ * (docs/plans/sockets.md). The supervisor writes such an Activity itself: it
+ * says what refs the session moved, after the session that asked for the Gate
+ * has ended (apps/agent/src/work.ts).
  */
 export function statusAfterActivity(current: RunStatus, kind: ActivityKind): RunStatus {
   if (!isOpen(current)) {
@@ -46,6 +54,7 @@ export function statusAfterActivity(current: RunStatus, kind: ActivityKind): Run
       message: `This Run is ${current}; start another to carry on`,
     });
   }
+  if (current === "awaiting_input") return "awaiting_input";
   return kind === "elicitation" ? "awaiting_input" : "active";
 }
 

@@ -133,12 +133,28 @@ DEEVY_DATABASE_PATH=./data/stub.sqlite vp run server#seed          # refuses a d
 DEEVY_DATABASE_PATH=./data/stub.sqlite vp run server#seed -- --force  # removes the file first
 ```
 
-The seed (`apps/server/src/seed.ts`, a second `vp pack` entry beside the server) signs the admin and
-`grace@<the admin's domain>` in through the stub, creates the Agents `Planner` and `Builder` with the admin as
-Sponsor and prints their keys once, and then creates two Projects, some thirty-five Issues, Documents, comments
-with mentions, Runs in every status, Gate rulings, Links, a Slack Channel, routing and a webhook — all through
-the operations, so the inbox and the Event log fill themselves. Point a runtime at the printed key
+The seed (`apps/server/src/seed.ts`, a second `vp pack` entry beside the server) signs the admin,
+`grace@example.com` and `omar@example.com` in through the stub, connects a stub Socket, and creates the
+Agents `Planner` and `Builder` with the admin as Sponsor, printing their keys once. Then two Projects bound
+to that Socket, thirty-odd records projected from it, Runs in every status, Gates with Proposals — one open,
+one ruled in deevy, one ruled `via: socket` — Links, a Slack Channel, routing and a webhook, all through the
+operations, so the inbox and the Event log fill themselves. Point a runtime at the printed key
 (`DEEVY_AGENT_KEY`) and it will find Planner's pending Runs.
+
+### Running without a GitHub App
+
+`DEEVY_DEV_STUB_SOCKETS=1` registers the Socket provider that is not a tool
+(`packages/sockets/src/stub`): a tracker and a forge deevy talks to exactly as it will talk to GitHub, in
+this process, with no App, no tunnel and no network. Connect it under Settings, Sockets — it needs no
+credential — bind a Project to one of its containers, and everything else works as it will in production:
+deliveries at `/hooks/:socketId`, routing, Gates, mirrored comments, a checkout and a pull request.
+
+What it holds is `DEEVY_DEV_STUB_CONTAINERS`, `name[=cloneUrl]` separated by commas — `acme/deevy`, or
+`acme/deevy=/tmp/origin.git` for a container a Run can actually clone and push to. The default is one
+container called `acme/deevy` with no repository. A store lives in the process deevy runs in, so this is the
+only way to say what the tracker contains from outside it; that is also how the acceptance walk fills one
+(`docs/sockets-acceptance.md`). `readEnv` refuses the flag under `NODE_ENV=production`, and `health.ping`
+reports it as `devSockets` the way it reports `devSignIn`.
 
 ## Everyday commands
 

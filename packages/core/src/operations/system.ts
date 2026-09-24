@@ -16,6 +16,13 @@ export const health = {
       /** True when this instance signs in through the development GitHub stub. */
       devSignIn: z.boolean(),
       /**
+       * True when it also registered the Socket provider that is not a tool, so
+       * a tool can be connected with no App and no tunnel (ADR-0024). Public
+       * for the same reason as the rest of this: it says what this deployment
+       * can do, not what anyone may do with it.
+       */
+      devSockets: z.boolean(),
+      /**
        * The sign-in providers this deployment configured, in the order the
        * sign-in page renders them. Public on purpose: an instance that cannot
        * say what it offers cannot render its own sign-in page, and "this
@@ -41,6 +48,7 @@ export const health = {
       ok: true as const,
       time: new Date().toISOString(),
       devSignIn: context.devSignIn === true,
+      devSockets: context.devSockets === true,
       providers: context.signInProviders ?? [],
     }),
   }),

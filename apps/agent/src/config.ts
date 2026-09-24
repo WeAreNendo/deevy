@@ -29,12 +29,14 @@ export interface Config {
   /** A backstop on a session that will not stop. The timeout is the real bound. */
   maxTurns: number;
   /**
-   * The repository this runtime works in, or null.
+   * A repository to work in when deevy names none, or null.
    *
-   * It is the runtime's configuration and not deevy's data: deevy's Repository
-   * rows exist so an Issue can point at code, they carry no credential, and
-   * they are not a checkout instruction. One service works one repository,
-   * which is also how a coding agent is actually deployed (docs/plans/m4.md).
+   * deevy is asked first, every Run: a Project bound to a forge Socket answers
+   * with the repository, the branch and a credential minted for that Run
+   * (`runs.checkout`, ADR-0024). This is the override for the other case — a
+   * repository deevy has no Socket for — and it is the runtime's own
+   * configuration, credential and all, which is why it is three environment
+   * variables and not a row in deevy.
    */
   repo: RepoConfig | null;
   /** Where per-Run working directories are made. */
@@ -57,10 +59,6 @@ export interface Config {
    */
   sessionUid: number;
   sessionGid: number;
-  /** The GitHub API root, when it is not github.com's. */
-  githubApi?: string;
-  /** `owner/name`, when it cannot be read off the clone URL. */
-  githubRepo?: string;
   /**
    * Environment variables to pass through to the session on top of the
    * allowlist — a proxy, a private registry, a custom CA.
@@ -121,8 +119,6 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     listenPort: positive(env.DEEVY_AGENT_PORT, 8787),
     sessionUid: user(env.DEEVY_AGENT_SESSION_UID, 10002),
     sessionGid: user(env.DEEVY_AGENT_SESSION_GID, 10002),
-    ...(env.DEEVY_AGENT_GITHUB_API ? { githubApi: env.DEEVY_AGENT_GITHUB_API } : {}),
-    ...(env.DEEVY_AGENT_GITHUB_REPO ? { githubRepo: env.DEEVY_AGENT_GITHUB_REPO } : {}),
     ...(env.DEEVY_AGENT_PASS_ENV
       ? {
           passEnv: env.DEEVY_AGENT_PASS_ENV.split(",")

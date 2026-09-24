@@ -68,6 +68,12 @@ export interface AppOptions {
    */
   devSignIn?: boolean;
   /**
+   * Whether this deployment registered the in-process Socket stub. Reported on
+   * `health.ping` like `devSignIn`, so a developer can tell a stubbed instance
+   * from a real one without reading its environment (packages/sockets/src/stub).
+   */
+  devSockets?: boolean;
+  /**
    * The providers this deployment can speak, built by the entry from
    * `@deevy/sockets` (ADR-0024). The core holds the port and never a provider,
    * so a build without one refuses the Socket rather than failing to compile.
@@ -135,6 +141,7 @@ export function createApp({
   jobs = discardingJobQueue(),
   onError: report = console.error,
   devSignIn = false,
+  devSockets = false,
   sockets,
   socketSecret,
   signInProviders = [],
@@ -248,6 +255,7 @@ export function createApp({
     ...(webURL ? { webURL } : {}),
     jobs,
     devSignIn,
+    devSockets,
     ...(sockets ? { sockets } : {}),
     ...(socketSecret ? { socketSecret } : {}),
     ...(secret ? { secret } : {}),

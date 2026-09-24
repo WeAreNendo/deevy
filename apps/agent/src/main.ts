@@ -1,9 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readConfig } from "./config.ts";
-import { DeevyError, createDeevy } from "./deevy.ts";
-import { forgeFor } from "./forge.ts";
-import { openGitProxy } from "./git-proxy.ts";
+import { DeevyError, createDeevy, type Checkout, type Run } from "./deevy.ts";
+import { branchFor } from "./deliver.ts";
 import { harnessFor, missingFor } from "./harness/index.ts";
 import { sessionUserFor } from "./session-user.ts";
 import { buildSession } from "./harness/run.ts";
@@ -12,7 +11,7 @@ import { startLoop } from "./loop.ts";
 import { openProxy } from "./proxy.ts";
 import { deevyToolNames } from "./tools.ts";
 import { runOnce } from "./work.ts";
-import { openWorkspace } from "./workspace.ts";
+import { openWorkspace, type RepoConfig } from "./workspace.ts";
 
 /**
  * The reference runtime, as a process.
@@ -75,6 +74,28 @@ console.log(
 );
 
 const deevy = createDeevy({ config });
+
+/**
+ * The repository configured here, as a checkout, for a Run deevy names none
+ * for.
+ *
+ * deevy is asked first and answers for every Project bound to a forge Socket
+ * (ADR-0024). This is the override, and it names its own branch — nobody else
+ * is going to, and two attempts at one record still cannot collide.
+ */
+function override(run: Run): Checkout | null {
+  const repo = config.repo;
+  if (!repo) return null;
+  return {
+    cloneUrl: repo.url,
+    baseBranch: repo.baseBranch,
+    headBranch: branchFor(run.issueKey, run.id),
+    username: "x-access-token",
+    token: repo.token ?? "",
+    expiresAt: null,
+  };
+}
+
 const work = {
   deevy,
   session: buildSession(config, harness),
@@ -82,20 +103,9 @@ const work = {
   proxy: (options: { onDenied: (name: string) => Promise<void> }) =>
     openProxy({ url: config.url, key: config.key, tools: deevyToolNames, ...options }),
   runTimeoutMs: config.runTimeoutSeconds * 1000,
-  forge: forgeFor(config),
-  gitProxy: () =>
-    config.repo
-      ? openGitProxy({
-          upstream: config.repo.url,
-          ...(config.repo.token ? { token: config.repo.token } : {}),
-        })
-      : Promise.resolve(null),
-  workspace: (options: { runId: string; originUrl?: string }) =>
-    openWorkspace({
-      ...options,
-      repo: config.repo,
-      ...(config.workdir ? { root: config.workdir } : {}),
-    }),
+  checkout: async (run: Run) => (await deevy.checkout(run.id)) ?? override(run),
+  workspace: (options: { runId: string; repo: RepoConfig | null; originUrl?: string }) =>
+    openWorkspace({ ...options, ...(config.workdir ? { root: config.workdir } : {}) }),
 };
 
 /**
