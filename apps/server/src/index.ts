@@ -43,6 +43,7 @@ const runner = startRunner({
     devStub: env.devStubSockets,
     ...(env.devStubContainers ? { devStubContainers: env.devStubContainers } : {}),
     ...(env.githubApi ? { githubApiBase: env.githubApi } : {}),
+    ...(env.providers.gitlab?.issuer ? { gitlabSignInIssuer: env.providers.gitlab.issuer } : {}),
   }),
   ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
   socketCatchupMinutes: env.socketCatchupMinutes,

@@ -3,6 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Cable, ChevronRight } from "lucide-react";
 import { ConnectGithub } from "@/components/connect-github";
+import { ConnectGitlab } from "@/components/connect-gitlab";
 import { ConnectLinear } from "@/components/connect-linear";
 import { ConnectSlack } from "@/components/connect-slack";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
@@ -131,6 +132,13 @@ export function SocketsPage() {
           </DialogHeader>
           {connecting === "github" ? (
             <ConnectGithub
+              onConnected={() => {
+                setConnecting(null);
+                void client.invalidateQueries({ queryKey: orpc.sockets.key() });
+              }}
+            />
+          ) : connecting === "gitlab" ? (
+            <ConnectGitlab
               onConnected={() => {
                 setConnecting(null);
                 void client.invalidateQueries({ queryKey: orpc.sockets.key() });

@@ -28,3 +28,21 @@ export function sameText(a: string, b: string): boolean {
     differ |= a.charCodeAt(index) ^ b.charCodeAt(index);
   return differ === 0;
 }
+
+/**
+ * HMAC-SHA256 of `message` under a raw key, as standard base64: what Standard
+ * Webhooks signs with, which GitLab's signing token follows.
+ */
+export async function hmacBase64(key: Uint8Array<ArrayBuffer>, message: string): Promise<string> {
+  const imported = await crypto.subtle.importKey(
+    "raw",
+    key,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", imported, encoder.encode(message)));
+  let binary = "";
+  for (const byte of mac) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}

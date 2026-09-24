@@ -72,6 +72,7 @@ export function buildServer(env: ServerEnv) {
       devStub: env.devStubSockets,
       ...(env.devStubContainers ? { devStubContainers: env.devStubContainers } : {}),
       ...(env.githubApi ? { githubApiBase: env.githubApi } : {}),
+      ...(env.providers.gitlab?.issuer ? { gitlabSignInIssuer: env.providers.gitlab.issuer } : {}),
     }),
     // And what their credentials are sealed with. Without it a tool that holds
     // one cannot be connected at all (packages/core/src/secrets.ts).

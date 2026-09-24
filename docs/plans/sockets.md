@@ -811,6 +811,39 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 12, as built.** An issue labelled on GitLab becomes a Run, the Proposal is a comment on it, a Human
+who signs in to deevy with GitLab approves it by commenting with no linking step, and the Run clones with the
+Socket's token and opens one merge request that closes the issue — the real module behind the real route, with
+only GitLab's REST API replaced, and slice 6's forge assertions run against it
+(`packages/sockets/tests/gitlab-deevy.test.ts`). As with Linear, the OPERATIONS.md section ("Working in
+GitLab") has **not** been walked against a real GitLab.
+
+Five things came out differently from the sketch.
+
+- **A Socket is a GitLab user and its access token, not a GitLab application.** An OAuth application's tokens
+  last two hours and rotate their refresh token, which is the writer Linear's slice found a module does not
+  have, and GitLab has no client-credentials grant to fall back on. A personal, project or group access token
+  is exactly "the user deevy acts as", and connecting proves it with `GET /user`.
+- **So the forge credential is the Socket's own token.** GitHub mints a one-repository token per Run; GitLab
+  mints nothing narrower from a token, so a Run clones with the Socket's, as `oauth2`, with no expiry deevy
+  knows. ADR-0014 and ADR-0019 still hold — it lives in the supervisor and nowhere else — and OPERATIONS.md
+  says to give the user Developer on the projects it works and no more.
+- **Two ways to prove a delivery.** `X-Gitlab-Token` in constant time, as planned, and GitLab 19's signing
+  token — Standard Webhooks' `webhook-signature` over the id, the timestamp and the body, refused past five
+  minutes — which the connect dialog takes in place of the secret deevy mints. The delivery id is
+  `Idempotency-Key`, which GitLab keeps across its own retries, before `X-Gitlab-Event-UUID`.
+- **Whose accounts a GitLab Socket shares is the deployment's to say.** GitHub's sign-in only knows
+  github.com, but GitLab's is wherever `GITLAB_ISSUER` points, so the registry takes `gitlabSignInIssuer` from
+  each entry and a Socket on that instance — and only that one — rules by sign-in.
+- **A pull request's link is named in the forge's words.** The link on the record said "Pull request #7" for
+  a GitLab merge request; `openPullRequest` may now answer a `label` ("Merge request !7"), and `pulls.open`
+  reads a number back out of either.
+
+What is not here: deevy does not add the webhook to a project itself. It could, through the same token, when
+a Project is bound — but that is a write to somebody else's settings hidden inside a binding, and the dialog
+says what to add instead. An Agent's sub-issue is related to its parent (`relates_to`), since GitLab has no
+parent for an issue, and deevy keeps the tree as it does on a GitHub Enterprise Server without sub-issues.
+
 **Slice 11, as built.** An issue labelled in Linear becomes a Run, the Agent's Proposal is the app's comment
 on it, and a Human who linked their Linear account rules by commenting `/approve` — the real module behind
 the real route, with only Linear's API replaced (`packages/sockets/tests/linear-deevy.test.ts`). The setup

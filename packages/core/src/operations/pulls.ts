@@ -64,10 +64,11 @@ export const pulls = {
       });
       if (already) {
         // Read back out of the title deevy wrote below rather than off the
-        // URL, whose shape is the provider's and not deevy's to rely on.
+        // URL, whose shape is the provider's and not deevy's to rely on:
+        // `Pull request #7`, or GitLab's `Merge request !7`.
         return {
           url: already.url,
-          number: Number(/#(\d+)/.exec(already.title ?? "")?.[1] ?? 0),
+          number: Number(/[#!](\d+)/.exec(already.title ?? "")?.[1] ?? 0),
           link: already,
         };
       }
@@ -93,7 +94,7 @@ export const pulls = {
         issue,
         project,
         url: opened.url,
-        title: `Pull request #${String(opened.number)}`,
+        title: opened.label ?? `Pull request #${String(opened.number)}`,
         kind: "pull_request",
         runId: run.id,
       });
