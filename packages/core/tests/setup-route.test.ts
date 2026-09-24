@@ -22,15 +22,21 @@ afterEach(() => {
  * provider's redirect lands on `/hooks/<id>/setup`, and what the provider
  * hands back is sealed exactly as a pasted credential would be.
  */
-function setupSockets(result: SetupResult, asked: { params?: Record<string, string> } = {}) {
+function setupSockets(
+  result: SetupResult,
+  asked: { params?: Record<string, string>; redirectUri?: string } = {},
+) {
   const module = (): SocketModule => ({
     provider: "stub",
     capabilities: new Set(["tracker"] as const),
     identity: () => Promise.resolve({ login: "deevy", id: "1", mentionHandle: "@deevy" }),
-    setup: ({ params }) => {
+    setup: ({ params, redirectUri }) => {
       asked.params = params;
+      if (redirectUri) asked.redirectUri = redirectUri;
       return Promise.resolve(result);
     },
+    install: ({ redirectUri, state }) =>
+      `https://tracker.test/install?${new URLSearchParams({ redirect_uri: redirectUri, state }).toString()}`,
   });
   return { stub: module } satisfies SocketModules;
 }
@@ -73,6 +79,9 @@ describe("a Socket that is not connected yet", () => {
     expect(begun.hasCredentials).toBe(false);
     expect(begun.inboundUrl).toBe(`https://deevy.test/hooks/${begun.id}`);
     expect(begun.setupUrl).toBe(`https://deevy.test/hooks/${begun.id}/setup`);
+    // And where a Human comes back to after linking their own account on the
+    // tool, which the tool's OAuth app has to list beside the setup route.
+    expect(begun.accountCallbackUrl).toBe("https://deevy.test/api/identities/stub/callback");
     // What GitHub echoes back, so the redirect that lands can be shown to have
     // come from the flow this deevy started.
     expect(begun.state).toMatch(/^[0-9]+\.[A-Za-z0-9_-]+$/);
@@ -85,7 +94,7 @@ describe("the redirect that finishes it", () => {
   it("seals what the provider handed back and makes the Socket live", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const asked: { params?: Record<string, string> } = {};
+    const asked: { params?: Record<string, string>; redirectUri?: string } = {};
     const { asAda, app } = await workspace(db, setupSockets(converted, asked));
     const begun = await asAda.sockets.begin({ provider: "stub", name: "acme on GitHub" });
 
@@ -96,6 +105,8 @@ describe("the redirect that finishes it", () => {
     expect(landed.status).toBe(302);
     expect(landed.headers.get("location")).toBe(`https://deevy.test/settings/sockets/${begun.id}`);
     expect(asked.params).toMatchObject({ code: "abc123" });
+    // An OAuth code is traded naming the address it was sent to, exactly.
+    expect(asked.redirectUri).toBe(`https://deevy.test/hooks/${begun.id}/setup`);
 
     const row = await db.query.socket.findFirst({ where: { id: begun.id } });
     expect(row).toMatchObject({
@@ -152,5 +163,68 @@ describe("the redirect that finishes it", () => {
     const row = await db.query.socket.findFirst({ where: { id: begun.id } });
     expect(row?.config).toMatchObject({ installations: [{ id: "61892041", account: "acme" }] });
     expect(row?.status).toBe("active");
+  });
+});
+
+/**
+ * Giving a connected tool's app more than pasting its credential could:
+ * Linear's install as an agent, which only a workspace admin can consent to,
+ * on Linear's own page (ADR-0024).
+ */
+describe("a connected tool's own install", () => {
+  it("starts on the tool's page and comes back to the setup route, which takes it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, app } = await workspace(
+      db,
+      setupSockets({ config: { assignable: true }, summary: "deevy can be assigned" }),
+    );
+    const begun = await asAda.sockets.begin({ provider: "stub", name: "Acme on Linear" });
+    await db.update(socketTable).set({ status: "active" }).where(eq(socketTable.id, begun.id));
+
+    const { url } = await asAda.sockets.install({ socketId: begun.id });
+    const search = new URL(url).searchParams;
+    expect(search.get("redirect_uri")).toBe(`https://deevy.test/hooks/${begun.id}/setup`);
+
+    const landed = await app.request(
+      `/hooks/${begun.id}/setup?code=install-code&state=${encodeURIComponent(search.get("state") ?? "")}`,
+    );
+
+    expect(landed.status).toBe(302);
+    expect(await db.query.socket.findFirst({ where: { id: begun.id } })).toMatchObject({
+      config: { assignable: true },
+    });
+  });
+
+  it("is an admin's to start", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda } = await workspace(db, setupSockets(converted));
+    const begun = await asAda.sockets.begin({ provider: "stub", name: "Acme on Linear" });
+    const bob = await memberContext(db, { name: "Bob" });
+
+    await expect(
+      createRouterClient(router, {
+        context: { ...bob, sockets: setupSockets(converted), secret: testSealingSecret },
+      }).sockets.install({ socketId: begun.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("is not offered by a tool that has none", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const plain = {
+      stub: (): SocketModule => ({
+        provider: "stub",
+        capabilities: new Set(["tracker"] as const),
+        identity: () => Promise.resolve({ login: "deevy", id: "1", mentionHandle: "@deevy" }),
+      }),
+    } satisfies SocketModules;
+    const { asAda } = await workspace(db, plain);
+    const begun = await asAda.sockets.begin({ provider: "stub", name: "Plain" });
+
+    await expect(asAda.sockets.install({ socketId: begun.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });

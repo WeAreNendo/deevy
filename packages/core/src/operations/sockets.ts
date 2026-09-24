@@ -8,6 +8,7 @@ import {
   socketStatuses,
   type Socket,
 } from "@deevy/db";
+import { accountCallbackUrl } from "../account-links.ts";
 import { InboundDeliverySchema, SocketSchema } from "../schemas.ts";
 import { requireSealingSecret, sealSecret, signState } from "../secrets.ts";
 import {
@@ -175,6 +176,12 @@ export const sockets = {
       /** Where the provider sends the operator back to, code in hand. */
       setupUrl: z.string(),
       /**
+       * Where the tool sends a Human back to after they link their own account
+       * on it, for a tool that links accounts through its own consent page
+       * (account-links.ts). Its OAuth app has to list this beside `setupUrl`.
+       */
+      accountCallbackUrl: z.string(),
+      /**
        * What the provider must echo back on that redirect. Signed with this
        * instance's own secret and good for an hour, so what lands can be shown
        * to have started here (secrets.ts).
@@ -204,8 +211,42 @@ export const sockets = {
         ...socketOut(row),
         inboundUrl: inboundUrl(context, row.id),
         setupUrl: `${inboundUrl(context, row.id)}/setup`,
+        accountCallbackUrl: accountCallbackUrl(context, row.provider),
         webhookSecret: null,
         state: await signState(requireInstanceSecret(context), row.id),
+      };
+    },
+  }),
+
+  install: defineOperation({
+    name: "sockets.install",
+    summary: "Give a connected tool's app more than its credential could, on the tool's own page",
+    method: "POST",
+    path: "/sockets/{socketId}/install",
+    auth: "admin",
+    input: z.object({ socketId: z.string() }),
+    output: z.object({
+      /** Where to send the admin's browser. It comes back to the setup route. */
+      url: z.string(),
+    }),
+    handler: async ({ input, context }) => {
+      const socket = await context.db.query.socket.findFirst({
+        where: { id: input.socketId, workspaceId: context.workspace.id },
+      });
+      if (!socket || socket.status === "removed") {
+        throw new ORPCError("NOT_FOUND", { message: "No such Socket" });
+      }
+      const module = await socketModuleFor(context, socket);
+      if (!module.install) {
+        throw new ORPCError("NOT_FOUND", { message: `${socket.name} has nothing to install` });
+      }
+      // Signed for this Socket, as `sockets.begin`'s is: the setup route will
+      // spend the code it comes back with only on a state it can verify.
+      return {
+        url: module.install({
+          redirectUri: `${inboundUrl(context, socket.id)}/setup`,
+          state: await signState(requireInstanceSecret(context), socket.id),
+        }),
       };
     },
   }),

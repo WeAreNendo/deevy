@@ -901,6 +901,48 @@ Slack signs every request with a timestamp, and one older than five minutes is r
 Slack's signing secret is rotated in Slack; paste the new one with `sockets.update` (`webhookSecret`) and
 deevy keeps taking the old one for a day, so the two can be changed in either order.
 
+## Working in Linear
+
+A Linear workspace is a Socket: connect it under **Settings › Sockets › Connect Linear**. deevy acts in Linear
+as an OAuth application of your own, so the first step is making one, and deevy starts the Socket before you
+do so that it can show you the three addresses the application needs with their real values:
+
+1. In Linear, **Settings › API › New OAuth application**. Call it deevy; that is the name every comment
+   deevy writes appears under.
+2. Under **Callback URLs**, both addresses deevy shows, one per line: where a Human comes back after linking
+   their Linear account (`/api/identities/linear/callback`), and where an admin comes back after installing
+   deevy as an agent (`/hooks/<socket>/setup`).
+3. Turn on **Client credentials**. This is how deevy works as the application rather than as whoever
+   connected it: it mints its own token from the client id and secret, and mints another when Linear stops
+   taking one. Linear's other tokens last a day and change their refresh token on every use, which is why
+   deevy does not hold one.
+4. Turn on **Webhooks**, paste the webhook URL, and choose **Issues** and **Comments**. Leave **Agent session
+   events** off: deevy does not answer them.
+5. Paste the **client ID**, the **client secret** and the webhook's **signing secret** back into deevy.
+   Connecting asks Linear who deevy is there — the application's own user — and in which workspace, and a
+   credential that cannot answer is refused rather than stored.
+
+Bind a Project to a team under **Settings › Projects**. A label `agent:<handle>` on an issue in that team
+routes it to that Agent, by the label's name, as on GitHub; deevy makes its `deevy:awaiting-approval` label
+in the team the first time it needs it. An issue in a state of type _completed_ or _canceled_ is closed,
+whatever the team named the state, and a deleted issue is closed too. An Agent's sub-issues are Linear's
+own. Linear signs the moment it sent a delivery, and one more than a minute old is refused however it is
+signed. A Project that mirrors Runs also gets a comment when an Agent opens a pull request, because Linear
+cannot see a repository it is not; GitHub's issues show one without being told.
+
+**Assigning an issue to deevy** needs one more step, taken by a Linear admin: **Install deevy as an agent**,
+on the Socket's page in deevy (or right after connecting). It sends them to Linear's own install page and
+back. After that, assigning an issue to deevy in Linear makes the application the issue's _delegate_ — the
+Human who assigned it stays its assignee — and the Project's default Agent takes it. A Project with no
+default Agent routes nothing that way; a label still works.
+
+**Ruling from Linear** is the same `/approve` and `/reject <why>` as on GitHub
+([Ruling from the tracker](#ruling-from-the-tracker)). Linear's accounts are nobody's sign-in, so each Human
+links theirs once, under **Settings › Identities › Link Linear**: Linear asks them to consent on its own page,
+deevy reads which account and which workspace said yes, and gives the token back at once. An account in
+another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
+deevy minted with the old one; connect the Socket again with the new one.
+
 ## How far an Agent may split work up
 
 An Agent can open sub-issues and hand them to other Agents

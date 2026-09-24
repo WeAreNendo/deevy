@@ -175,7 +175,7 @@ async function applyIssue(
     });
   }
 
-  await route(applying, project, issue);
+  await route(applying, project, issue, external.delegateId ?? null);
   return null;
 }
 
@@ -210,15 +210,22 @@ function changedFields(before: Issue | undefined, after: Issue): string[] {
  *
  * A GitHub App cannot be an assignee and a Linear app is not a person, so the
  * tracker's own assignee is a fact deevy mirrors rather than the thing that
- * puts an Agent to work. What routes is a label an admin chose the prefix of,
- * and the Project's default Agent for anything nobody named.
+ * puts an Agent to work. What routes is a label an admin chose the prefix of;
+ * then the tracker handing the record to deevy itself — Linear's delegate,
+ * which is what assigning an issue to an app sets — which is the default
+ * Agent's to answer; and the Project's default Agent for anything nobody named.
  */
-async function route(applying: Applying, project: Project, issue: Issue): Promise<void> {
+async function route(
+  applying: Applying,
+  project: Project,
+  issue: Issue,
+  delegateId: string | null,
+): Promise<void> {
   // Closed is closed: there is no work to hand anybody, and a record that
   // closes while routed keeps who was on it for the feed to read.
   if (issue.state === "closed") return;
 
-  const target = await routedMember(applying, project, issue);
+  const target = await routedMember(applying, project, issue, delegateId);
   if (!target || target === issue.assigneeMemberId) return;
   if (!(await routeIssueTo(applying.db, issue.id, target))) return;
 
@@ -237,6 +244,7 @@ async function routedMember(
   applying: Applying,
   project: Project,
   issue: Issue,
+  delegateId: string | null,
 ): Promise<string | null> {
   const prefix = project.routing.labelPrefix;
   if (prefix) {
@@ -246,6 +254,11 @@ async function routedMember(
       const named = handle ? await grantedAgent(applying.db, project, handle) : null;
       if (named) return named;
     }
+  }
+  // Handed to deevy by name, in the tracker's own words: that takes it off
+  // whoever had it, the way a label does, and gives it to the default.
+  if (delegateId && delegateId === applying.socket.identity.id && project.defaultAgentMemberId) {
+    return project.defaultAgentMemberId;
   }
   // The default fills a gap rather than taking a record off somebody: a record
   // already routed keeps the Agent it has until a label says otherwise.

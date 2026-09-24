@@ -15,6 +15,16 @@ const calls = vi.hoisted(() => ({
   rotate: vi.fn(async (_input: { socketId: string }) => ({})),
   update: vi.fn(async (_input: Record<string, unknown>) => ({})),
   remove: vi.fn(async (_input: { socketId: string }) => ({})),
+  install: vi.fn(async (_input: { socketId: string }) => ({})),
+  left: [] as string[],
+}));
+
+// Leaving deevy for the tool's own page is a navigation jsdom cannot do, so the
+// one helper that does it is replaced by a list of where it would have gone.
+vi.mock("../src/lib/leave.ts", () => ({
+  leaveFor: (url: string) => {
+    calls.left.push(url);
+  },
 }));
 
 const state = vi.hoisted(() => ({ sockets: [] as unknown[], lastInboundAt: null as Date | null }));
@@ -27,6 +37,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
       providers: async () => ({
         providers: [
           { id: "github", label: "GitHub", capabilities: ["tracker", "forge"] },
+          { id: "linear", label: "Linear", capabilities: ["tracker"] },
           { id: "slack", label: "Slack", capabilities: ["chat"] },
           { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
         ],
@@ -44,6 +55,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
           hasWebhookSecret: false,
           inboundUrl: "https://deevy.test/hooks/sock_pending0000",
           setupUrl: "https://deevy.test/hooks/sock_pending0000/setup",
+          accountCallbackUrl: `https://deevy.test/api/identities/${input.provider}/callback`,
           webhookSecret: null,
           state: "1790000000000.abc",
         };
@@ -73,6 +85,10 @@ vi.mock("../src/lib/orpc.ts", async () => {
       remove: async (input: { socketId: string }) => {
         void calls.remove(input);
         return { ...stubSocket, status: "removed" };
+      },
+      install: async (input: { socketId: string }) => {
+        void calls.install(input);
+        return { url: "https://linear.app/oauth/authorize?actor=app" };
       },
       test: async () => ({ ok: true, identity: stubSocket.identity }),
       containers: async () => ({
@@ -117,7 +133,7 @@ describe("the tools this Workspace is connected to", () => {
     // was not built with would only ever produce a refusal.
     const connect = screen.getByRole("group", { name: "Connect a tool" });
     expect(within(connect).getByRole("button", { name: /GitHub/ })).toBeTruthy();
-    expect(within(connect).queryByRole("button", { name: /Linear/ })).toBeNull();
+    expect(within(connect).queryByRole("button", { name: /GitLab/ })).toBeNull();
   });
 
   it("starts the GitHub flow with a form GitHub itself takes", async () => {
@@ -232,7 +248,89 @@ describe("the tools this Workspace is connected to", () => {
   });
 });
 
+describe("connecting Linear", () => {
+  it("names the addresses Linear's app needs, then takes the app's own client", async () => {
+    state.sockets = [];
+    calls.begin.mockClear();
+    calls.connect.mockClear();
+    calls.install.mockClear();
+    calls.left = [];
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect Linear" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme on Linear" } });
+    fireEvent.click(screen.getByRole("button", { name: "Show the addresses" }));
+
+    // Where Linear sends deliveries, and the two places it sends a browser back
+    // to: a Human linking their account, and an admin installing the app.
+    expect(await screen.findByText("https://deevy.test/hooks/sock_pending0000")).toBeTruthy();
+    const callbacks = screen.getByLabelText("Callback URLs");
+    expect(callbacks.textContent).toContain("https://deevy.test/api/identities/linear/callback");
+    expect(callbacks.textContent).toContain("https://deevy.test/hooks/sock_pending0000/setup");
+
+    fireEvent.change(screen.getByLabelText("Client ID"), { target: { value: "lin_client_id" } });
+    fireEvent.change(screen.getByLabelText("Client secret"), {
+      target: { value: "lin_client_secret" },
+    });
+    fireEvent.change(screen.getByLabelText("Webhook signing secret"), {
+      target: { value: "lin_wh_signing_secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
+    expect(calls.connect.mock.calls[0]?.[0]).toEqual({
+      provider: "linear",
+      name: "Acme on Linear",
+      socketId: "sock_pending0000",
+      credentials: { clientId: "lin_client_id", clientSecret: "lin_client_secret" },
+      webhookSecret: "lin_wh_signing_secret",
+    });
+
+    // Connected, and one more thing an admin may want: letting people assign
+    // an issue to deevy, which is an install only Linear's own page can do.
+    fireEvent.click(await screen.findByRole("button", { name: "Install deevy as an agent" }));
+    await waitFor(() =>
+      expect(calls.left).toEqual(["https://linear.app/oauth/authorize?actor=app"]),
+    );
+    expect(calls.install.mock.calls[0]?.[0]).toEqual({ socketId: stubSocket.id });
+  });
+});
+
 describe("one Socket's own page", () => {
+  it("offers a Linear Socket's install until it is done, and says so after", async () => {
+    calls.install.mockClear();
+    calls.left = [];
+    state.sockets = [{ ...stubSocket, provider: "linear", name: "Acme on Linear", config: {} }];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Install deevy as an agent" }));
+
+    await waitFor(() => expect(calls.install).toHaveBeenCalledTimes(1));
+    expect(calls.left).toEqual(["https://linear.app/oauth/authorize?actor=app"]);
+  });
+
+  it("offers no install before the Socket is connected, since there is no client to install", async () => {
+    state.sockets = [
+      { ...stubSocket, provider: "linear", name: "Acme on Linear", status: "pending", config: {} },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+
+    expect(await screen.findByText("Not connected yet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Install deevy as an agent" })).toBeNull();
+  });
+
+  it("says a Linear Socket people can assign issues to, rather than offering it again", async () => {
+    state.sockets = [
+      { ...stubSocket, provider: "linear", name: "Acme on Linear", config: { assignable: true } },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+
+    expect(await screen.findByText(/People can assign an issue to deevy/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Install deevy as an agent" })).toBeNull();
+  });
+
   it("says when the tool last spoke, and what it said", async () => {
     state.sockets = [
       {

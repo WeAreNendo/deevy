@@ -811,6 +811,37 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 11, as built.** An issue labelled in Linear becomes a Run, the Agent's Proposal is the app's comment
+on it, and a Human who linked their Linear account rules by commenting `/approve` — the real module behind
+the real route, with only Linear's API replaced (`packages/sockets/tests/linear-deevy.test.ts`). The setup
+section in OPERATIONS.md ("Working in Linear") has **not** been walked against a real Linear workspace; that
+is the step this slice leaves, and the only one.
+
+Four things came out differently from the sketch.
+
+- **`actor=app` is the client-credentials grant, not the authorization-code install.** Linear made refresh
+  tokens mandatory on 2026-04-01: an authorization-code token lives a day and its refresh token changes on
+  every use, which needs something to write the new one back, and a provider module has no writer. A
+  client-credentials token is an app-actor token minted from the client id and secret the operator pasted,
+  cached per isolate like a GitHub installation token, and minted again when Linear stops taking it. The
+  authorization-code flow with `actor=app` is still there for the one thing only it gives — installing deevy
+  as an agent (`sockets.install`, `SocketModule.install`), which is what lets a Human assign an issue to it.
+- **Assigning is delegating.** Assigning a Linear issue to an app now makes the app its delegate and leaves
+  the Human its assignee. `ExternalIssue.delegateId` carries that, and is never stored; a record delegated to
+  the Socket's own identity goes to the default Agent even where a label had routed it elsewhere. That is
+  the plan's "the app user as an assignee routes to the default Agent", in Linear's current words.
+- **Linking starts in an operation, not a route.** `identities.begin` is `sessionOnly`, like
+  `identities.link`, and answers the consent URL; only `/api/identities/:provider/callback`, which answers a
+  browser mid-redirect, is a route. Its `state` is signed over the Socket and the Member, so a callback that
+  another Human's browser finishes links nothing, and there is still no table. The account must be in the
+  workspace the Socket reads.
+- **The pull-request row of the mirror table** lands here, as slice 7 said it would: a comment under `runs`
+  wherever the Project's tracker is not also its forge — the rule that "nothing on GitHub" was one case of.
+  A pull request's link costs one read more, for the Project's binding; any other link costs nothing.
+
+The HMAC helpers that GitHub, Slack and now Linear would each have carried a copy of are one file,
+`packages/sockets/src/signing.ts`.
+
 **Slice 10, as built.** A Gate posted to a Slack room or a linked Human's direct messages carries Approve
 and Reject; a click rules as the Human whose Slack account it is, through the same `recordRuling`, and the
 message changes through the outbox wherever the Ruling came from. The real module behind the real route

@@ -3,6 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Cable, ChevronRight } from "lucide-react";
 import { ConnectGithub } from "@/components/connect-github";
+import { ConnectLinear } from "@/components/connect-linear";
 import { ConnectSlack } from "@/components/connect-slack";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
@@ -119,7 +120,9 @@ export function SocketsPage() {
       </SettingsSection>
 
       <Dialog open={connecting !== null} onOpenChange={(open) => !open && setConnecting(null)}>
-        <DialogContent className="sm:max-w-xl">
+        {/* Scrolls inside the window rather than past it: Linear's names three
+            addresses and three secrets, which is taller than a laptop screen. */}
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Connect {providerLabel(connecting ?? undefined)}</DialogTitle>
             <DialogDescription>
@@ -128,6 +131,13 @@ export function SocketsPage() {
           </DialogHeader>
           {connecting === "github" ? (
             <ConnectGithub
+              onConnected={() => {
+                setConnecting(null);
+                void client.invalidateQueries({ queryKey: orpc.sockets.key() });
+              }}
+            />
+          ) : connecting === "linear" ? (
+            <ConnectLinear
               onConnected={() => {
                 setConnecting(null);
                 void client.invalidateQueries({ queryKey: orpc.sockets.key() });

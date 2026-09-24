@@ -6999,6 +6999,9 @@
                     "setupUrl": {
                       "type": "string"
                     },
+                    "accountCallbackUrl": {
+                      "type": "string"
+                    },
                     "state": {
                       "type": "string"
                     }
@@ -7024,7 +7027,55 @@
                     "inboundUrl",
                     "webhookSecret",
                     "setupUrl",
+                    "accountCallbackUrl",
                     "state"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/{socketId}/install": {
+      "post": {
+        "operationId": "sockets.install",
+        "summary": "Give a connected tool's app more than its credential could, on the tool's own page",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
                   ],
                   "additionalProperties": false
                 }
@@ -8016,12 +8067,81 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "socketId": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "socketId",
+                          "provider",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
                     "identities",
                     "signIns",
-                    "linkable"
+                    "linkable",
+                    "tools"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identities/begin": {
+      "post": {
+        "operationId": "identities.begin",
+        "summary": "Start linking your account on a tool, on that tool's own page",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "socketId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "socketId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
                   ],
                   "additionalProperties": false
                 }

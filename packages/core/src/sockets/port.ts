@@ -38,6 +38,13 @@ export interface ExternalIssue {
   assignees: { login: string; id: string }[];
   labels: string[];
   parentExternalId: string | null;
+  /**
+   * The account the tracker handed the record to on a Human's behalf, where
+   * the tool has such a thing: assigning a Linear issue to an app makes the
+   * app its delegate and leaves the Human its assignee. Read to route, never
+   * stored (ADR-0024).
+   */
+  delegateId?: string | null;
   /** The provider's clock, which is what decides a reordered delivery. */
   updatedAt: Date;
 }
@@ -327,6 +334,35 @@ export interface SetupResult {
 export interface SetupInput {
   /** The query the provider redirected with, as strings. */
   params: Record<string, string>;
+  /**
+   * The address the provider redirected to, which an OAuth code exchange has
+   * to name again exactly: Linear's install is one (ADR-0024).
+   */
+  redirectUri?: string;
+}
+
+/** An account on a tool, as the tool itself said whose it is (ADR-0025). */
+export interface LinkedAccount {
+  /** The tool's own id for the account: the only thing ever matched on. */
+  id: string;
+  /** What the tool calls them, for a screen. Never matched on. */
+  login: string;
+  /** Where the account lives, which must be where the Socket's accounts do. */
+  instance: string;
+}
+
+/**
+ * How a Human proves an account on this tool is theirs, where the tool has an
+ * OAuth grant of its own and is not a provider deevy signs people in with:
+ * Linear. The Human consents on the tool's own page, the tool sends them back
+ * with a code, and what the code answers is the proof — deevy keeps no token
+ * (ADR-0025).
+ */
+export interface AccountLink {
+  /** Where to send the Human's browser to consent, as themselves. */
+  authorizeUrl(input: { redirectUri: string; state: string }): string;
+  /** Spends the code once and answers whose account consented. */
+  account(input: { code: string; redirectUri: string }): Promise<LinkedAccount>;
 }
 
 /**
@@ -358,6 +394,14 @@ export interface SocketModule {
    * answers that it has nothing to finish.
    */
   setup?(input: SetupInput): Promise<SetupResult>;
+  /**
+   * Where an admin's browser goes to give the tool's app more than pasting
+   * its credential could — Linear's install as an agent, which is what lets
+   * people assign an issue to it — coming back to `setup` with a code.
+   */
+  install?(input: { redirectUri: string; state: string }): string;
+  /** Present where a Human links an account here through the tool's own OAuth. */
+  accountLink?: AccountLink;
   tracker?: TrackerSocket;
   forge?: ForgeSocket;
   docs?: DocsSocket;

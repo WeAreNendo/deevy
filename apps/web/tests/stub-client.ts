@@ -181,7 +181,7 @@ export function stubClient(overrides: StubOverrides = {}): never {
       revoke: async () => ({ revoked: true }),
     },
     identities: {
-      list: async () => ({ identities: [], signIns: [], linkable: [] }),
+      list: async () => ({ identities: [], signIns: [], linkable: [], tools: [] }),
     },
     workspace: {
       get: async () => ({

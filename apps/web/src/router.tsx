@@ -34,7 +34,7 @@ import { NotificationsPage } from "./routes/settings/notifications.tsx";
 import { WebhooksPage } from "./routes/settings/webhooks.tsx";
 import { WorkspacePage } from "./routes/settings/workspace.tsx";
 import { McpClientsPage } from "./routes/settings/mcp-clients.tsx";
-import { IdentitiesPage } from "./routes/settings/identities.tsx";
+import { IdentitiesPage, parseIdentitiesSearch } from "./routes/settings/identities.tsx";
 import { MembersPage } from "./routes/settings/members.tsx";
 import { AgentsPage } from "./routes/settings/agents.tsx";
 import { AgentPage } from "./routes/settings/agent.tsx";
@@ -249,7 +249,12 @@ const allowlistRoute = createRoute({
 const identitiesRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "identities",
-  component: IdentitiesPage,
+  // Where a tool's consent page sends the browser back to, saying what
+  // happened (account-links.ts).
+  validateSearch: (search: Record<string, unknown>) => parseIdentitiesSearch(search),
+  component: function IdentitiesRoute() {
+    return <IdentitiesPage search={identitiesRoute.useSearch()} />;
+  },
 });
 const mcpClientsRoute = createRoute({
   getParentRoute: () => settingsRoute,

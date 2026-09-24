@@ -158,6 +158,64 @@ describe("how much a Project says back", () => {
   });
 });
 
+/**
+ * A pull request, said on the record where the tracker cannot see it for
+ * itself (docs/plans/sockets.md, "Mirroring"). GitHub shows a pull request on
+ * the issue its body closes; Linear and Notion know nothing about a repository
+ * they are not.
+ */
+describe("a pull request on a Project that mirrors Runs", () => {
+  async function opened(db: Db, options: { forgeIsTracker: boolean; mirror?: "gates" | "runs" }) {
+    const mirrored = await mirroring(db, options.mirror ?? "runs");
+    if (options.forgeIsTracker) {
+      await db
+        .update(projectTable)
+        .set({ forgeSocketId: mirrored.seeded.socketId, forgeScope: { scopeKey: "acme/deevy" } })
+        .where(eq(projectTable.id, mirrored.seeded.project.id));
+    }
+    await mirrored.asPlanner.links.add({
+      issue: mirrored.issue.url,
+      url: "https://github.com/acme/deevy/pull/7",
+      title: "Cap the coupon at the basket total",
+      runId: mirrored.run.id,
+    });
+    return mirrored;
+  }
+
+  it("is a comment where the tracker is not where the code is", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { owed, send, fake, run } = await opened(db, { forgeIsTracker: false });
+    // The Run starting, and the pull request.
+    expect(await owed()).toHaveLength(2);
+
+    await send();
+
+    const said = fake.comments.find((comment) => comment.body.includes("pull request"));
+    expect(said?.body).toContain(
+      "[Cap the coupon at the basket total](https://github.com/acme/deevy/pull/7)",
+    );
+    // Signed like every mirrored comment, with the Run that opened it.
+    expect(said?.body).toContain(`— Planner · ${run.id} · via deevy`);
+  });
+
+  it("is nothing where the tracker is the forge too, which shows it already", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { owed } = await opened(db, { forgeIsTracker: true });
+
+    expect(await owed()).toHaveLength(1);
+  });
+
+  it("is nothing where a Project mirrors Gates alone", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { owed } = await opened(db, { forgeIsTracker: false, mirror: "gates" });
+
+    expect(await owed()).toEqual([]);
+  });
+});
+
 describe("a Socket that stops taking them", () => {
   it("retires what it was owed rather than trying for ever", async () => {
     const { db, close } = testDb();

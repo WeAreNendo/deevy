@@ -19,6 +19,7 @@ import type {
   SocketModule,
   SocketModuleInput,
 } from "@deevy/core/sockets";
+import { hmacHex, sameText } from "../signing.ts";
 import { appJwt, importAppKey } from "./keys.ts";
 import { commentOf, isPullRequest, issueOf, normalizeGithub } from "./payloads.ts";
 
@@ -77,26 +78,6 @@ const tokens = new Map<string, Minted>();
 
 /** Which installation covers a repository. Answered once, then remembered. */
 const installations = new Map<string, string>();
-
-function equal(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let same = 0;
-  for (let index = 0; index < a.length; index += 1)
-    same |= a.charCodeAt(index) ^ b.charCodeAt(index);
-  return same === 0;
-}
-
-async function hmacHex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signed = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return [...new Uint8Array(signed)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 /** `acme/deevy` out of a scope, which is how a Project names a repository. */
 function repositoryOf(scope: Scope): { owner: string; repo: string; scopeKey: string } {
@@ -311,7 +292,7 @@ export function createGithubSocket({
         const deliveryId = headers.get("x-github-delivery");
         const signature = headers.get("x-hub-signature-256") ?? "";
         const expected = `sha256=${await hmacHex(webhookSecret, rawBody)}`;
-        return { ok: equal(signature, expected), deliveryId, eventName };
+        return { ok: sameText(signature, expected), deliveryId, eventName };
       },
 
       normalize(eventName: string, payload: unknown): InboundEvent[] {

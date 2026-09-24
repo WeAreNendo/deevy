@@ -189,6 +189,22 @@ describe("createApp", () => {
     expect(body.providers.map((provider) => provider.id)).toEqual(["github"]);
   });
 
+  it("sends a browser that comes back from linking an account while signed out to say so", async () => {
+    // The route sits among the OpenAPI surface's paths, and a browser that
+    // lands on it must get a page rather than a JSON 404 (account-links.ts).
+    const context = anonymous();
+    const app = createApp({ db: context.db, baseURL: "https://deevy.test" });
+
+    const answer = await app.request(
+      "/api/identities/linear/callback?code=one-use&state=sock_x.1.forged",
+    );
+
+    expect(answer.status).toBe(302);
+    const location = new URL(answer.headers.get("location") ?? "");
+    expect(location.pathname).toBe("/settings/identities");
+    expect(location.searchParams.get("linkError")).toMatch(/Sign in to deevy/);
+  });
+
   it("rejects session and member operations for anonymous callers", async () => {
     const context = anonymous();
     const client = createRouterClient(router, { context });
