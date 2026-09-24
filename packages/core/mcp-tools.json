@@ -26,6 +26,32 @@
     }
   },
   {
+    "name": "docs_get",
+    "operation": "docs.get",
+    "summary": "Read a page from where this Project's documents live, as markdown",
+    "readOnly": true,
+    "agents": true,
+    "agentsOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
+        },
+        "page": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "project",
+        "page"
+      ]
+    }
+  },
+  {
     "name": "gates_get",
     "operation": "gates.get",
     "summary": "What has been ruled on a Gate, for an Agent waiting or a Human reading",

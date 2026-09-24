@@ -13,6 +13,7 @@ import type { SocketModules } from "@deevy/core/sockets";
 import { createGithubSocket } from "./github/index.ts";
 import { createGitlabSocket } from "./gitlab/index.ts";
 import { createLinearSocket } from "./linear/index.ts";
+import { createNotionSocket } from "./notion/index.ts";
 import { createSlackSocket } from "./slack/index.ts";
 import { createStubSocket, openDevStubStore } from "./stub/index.ts";
 
@@ -23,6 +24,8 @@ export { createGitlabSocket, gitlabIdentityScope } from "./gitlab/index.ts";
 export type { GitlabConfig, GitlabCredentials, GitlabOptions } from "./gitlab/index.ts";
 export { createLinearSocket, resetLinearTokens } from "./linear/index.ts";
 export type { LinearConfig, LinearCredentials } from "./linear/index.ts";
+export { createNotionSocket } from "./notion/index.ts";
+export type { NotionConfig, NotionCredentials } from "./notion/index.ts";
 export { createSlackSocket, normalizeSlack } from "./slack/index.ts";
 export type { SlackConfig, SlackCredentials } from "./slack/index.ts";
 
@@ -79,6 +82,7 @@ export function socketModules({
     gitlab: (input) =>
       createGitlabSocket(input, gitlabSignInIssuer ? { signInIssuer: gitlabSignInIssuer } : {}),
     linear: createLinearSocket,
+    notion: createNotionSocket,
     slack: createSlackSocket,
     ...(devStub ? { stub: createStubSocket } : {}),
   };

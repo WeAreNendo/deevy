@@ -10,6 +10,7 @@ import { agents } from "./agents.ts";
 import { allowlist } from "./allowlist.ts";
 import { channels } from "./channels.ts";
 import { comments } from "./comments.ts";
+import { docs } from "./docs.ts";
 import { events } from "./events.ts";
 import { checkpoints, gates } from "./gates.ts";
 import { identities } from "./identities.ts";
@@ -48,6 +49,7 @@ export const router = {
   pulls,
   comments,
   links,
+  docs,
   inbox,
   channels,
   routing,

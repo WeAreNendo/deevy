@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { pickOption } from "./select.ts";
+import { pickOption, selectedLabel } from "./select.ts";
 
 /**
  * A Project is a binding, and a policy (ADR-0024, ADR-0020).
@@ -43,7 +43,16 @@ vi.mock("../src/lib/orpc.ts", async () => {
     },
     sockets: {
       list: async () => ({
-        sockets: [{ ...stubSocket, provider: "github", name: "acme on GitHub" }],
+        sockets: [
+          { ...stubSocket, provider: "github", name: "acme on GitHub" },
+          {
+            ...stubSocket,
+            id: "sock_notion0000",
+            provider: "notion",
+            capabilities: ["tracker", "docs"],
+            name: "Acme's Notion",
+          },
+        ],
       }),
       containers: async () => ({
         containers: [
@@ -126,6 +135,26 @@ describe("what a Project is bound to", () => {
     });
   });
 
+  it("reads as words in every choice, never as the value behind it", async () => {
+    state.checkpoints = [];
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const binding = await screen.findByRole("region", { name: "Binding" });
+    // A Base UI trigger shows its raw value unless told what it is called,
+    // which once put `gates` and a Member id on this screen.
+    await waitFor(() =>
+      expect(selectedLabel(within(binding).getByRole("combobox", { name: "Mirror" }))).toBe(
+        "Gates and rulings",
+      ),
+    );
+    expect(selectedLabel(within(binding).getByRole("combobox", { name: "Default Agent" }))).toBe(
+      "Nobody",
+    );
+    expect(selectedLabel(within(binding).getByRole("combobox", { name: "Documents" }))).toBe(
+      "Nowhere deevy reads",
+    );
+  });
+
   it("says how much deevy writes back where the work lives", async () => {
     state.checkpoints = [];
     calls.update.mockClear();
@@ -136,6 +165,25 @@ describe("what a Project is bound to", () => {
 
     await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
     expect(calls.update.mock.calls[0]?.[0]).toMatchObject({ mirror: "off" });
+  });
+});
+
+describe("where a Project's documents live", () => {
+  it("is a tool that can read them, or nowhere", async () => {
+    state.checkpoints = [];
+    calls.update.mockClear();
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const binding = await screen.findByRole("region", { name: "Binding" });
+    const documents = within(binding).getByRole("combobox", { name: "Documents" });
+    await pickOption(documents, "Acme's Notion (Notion)");
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    // The tracker that is only a tracker is not offered: it has no pages to read.
+    expect(calls.update.mock.calls[0]?.[0]).toEqual({
+      slug: "acme-deevy",
+      docs: { socketId: "sock_notion0000", scope: {} },
+    });
   });
 });
 

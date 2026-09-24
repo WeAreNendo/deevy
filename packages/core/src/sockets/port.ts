@@ -30,8 +30,12 @@ export interface ExternalIssue {
   key: string;
   url: string;
   title: string;
-  /** Markdown. The core caps it on the way in; a provider need not. */
-  body: string | null;
+  /**
+   * Markdown. The core caps it on the way in; a provider need not. Absent where
+   * the tool's list does not carry it — Notion's query answers properties, not
+   * content — and then deevy keeps the body it had.
+   */
+  body?: string | null;
   state: "open" | "closed";
   /** The provider's own word: `open`, `Done`, `In Review`. */
   stateName: string;
@@ -93,6 +97,14 @@ export type InboundEvent =
       note: string | null;
     }
   | { kind: "installation"; installations: { id: string; account: string }[] }
+  /**
+   * A record changed, and the delivery says only which one: Notion's webhooks
+   * name what changed and carry none of it. deevy reads the record back
+   * through the Project's binding (`getIssue`) and applies it as an `issue`.
+   */
+  | { kind: "changed"; scopeKey: string; issueExternalId: string; actor: ExternalActor | null }
+  /** The same for a comment: which one, on which record, to be read back (`getComment`). */
+  | { kind: "commented"; issueExternalId: string; commentExternalId: string }
   | { kind: "ignored"; why: string };
 
 /** The answer to "is this delivery really from the tool, and which delivery is it?" */
@@ -146,6 +158,18 @@ export interface TrackerSocket {
   getIssue(scope: Scope, ref: ExternalRef): Promise<ExternalIssue>;
   listIssues(scope: Scope, query: IssueQuery): Promise<IssuePage>;
   listComments(scope: Scope, ref: ExternalRef, limit: number): Promise<ExternalComment[]>;
+  /**
+   * One comment by its id, for a tool whose deliveries only name it
+   * (`commented`). Null when it is gone.
+   */
+  getComment?(scope: Scope, ref: ExternalRef, commentId: string): Promise<ExternalComment | null>;
+  /**
+   * The signing secret a tool sends once, unsigned, to establish it: Notion's
+   * `verification_token`. Null for any other request. deevy keeps what it is
+   * given until a delivery signed with it proves it was the tool's, and not
+   * after (sockets/hooks.ts).
+   */
+  handshake?(rawBody: string): string | null;
   /** `parentLinked` is false where the provider has no native parent to set. */
   createIssue(scope: Scope, draft: IssueDraft): Promise<ExternalIssue & { parentLinked: boolean }>;
   createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef>;

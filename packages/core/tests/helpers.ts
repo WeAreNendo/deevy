@@ -13,6 +13,7 @@ import type {
   ChatInteraction,
   ChatMessage,
   ChatMessageRef,
+  ExternalComment,
   ExternalIssue,
   InboundEvent,
   SocketModule,
@@ -219,9 +220,14 @@ export function fakeApiKeys(): FakeApiKeys {
  * not `@deevy/sockets`: the core holds the port, and a test dependency on a
  * package that depends on the core is a cycle nobody needs.
  */
-export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
+export function fakeSockets(
+  records: Map<string, ExternalIssue> = new Map(),
+  remarks: Map<string, ExternalComment> = new Map(),
+): {
   sockets: SocketModules;
   records: Map<string, ExternalIssue>;
+  /** Comments the tracker knows by id, for a delivery that only names one (`getComment`). */
+  remarks: Map<string, ExternalComment>;
   /** Every pull request this fake was asked to open, for a test to read back. */
   pulls: Array<{ scopeKey: string; head: string; base: string; title: string; body: string }>;
   /** Every comment deevy wrote through it, which is what a mirror is. */
@@ -241,7 +247,7 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
   }> = [];
   const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
     provider: "stub",
-    capabilities: new Set(["tracker", "forge"] as const),
+    capabilities: new Set(["tracker", "forge", "docs"] as const),
     // Its accounts are GitHub's sign-in accounts where the Socket's
     // configuration says so, which is how a test plays a Human who signed in
     // to deevy with GitHub and rules from the tracker (ADR-0025).
@@ -308,6 +314,17 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
         });
       },
       listComments: () => Promise.resolve([]),
+      getComment: (_scope, _ref, commentId) => Promise.resolve(remarks.get(commentId) ?? null),
+      // Notion's shape: an unsigned body carrying the secret, sent once.
+      handshake: (rawBody) => {
+        try {
+          const token = (JSON.parse(rawBody) as { verification_token?: unknown })
+            .verification_token;
+          return typeof token === "string" ? token : null;
+        } catch {
+          return null;
+        }
+      },
       createIssue: (scope, draft) => {
         opened += 1;
         const container = typeof scope.scopeKey === "string" ? scope.scopeKey : "acme/deevy";
@@ -349,6 +366,23 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
         ]),
     },
 
+    // Documents, for a Project whose plans live somewhere an Agent reads them
+    // (`docs.get`). A page whose name says it is missing is one the tool will
+    // not show, the way Notion will not show a page nobody shared with it.
+    docs: {
+      readPage: (ref) => {
+        const named = "url" in ref ? ref.url : ref.externalId;
+        if (named.includes("missing")) {
+          return Promise.reject(new Error("Could not find that page. Is it shared with deevy?"));
+        }
+        return Promise.resolve({
+          title: "The plan",
+          markdown: `# The plan\n\nRead from ${named}.`,
+          url: "url" in ref ? ref.url : `https://tracker.test/pages/${ref.externalId}`,
+        });
+      },
+    },
+
     // A repository, for the half of a Run that is code (ADR-0014). The token
     // is a constant on purpose: every test about it is a test that it does not
     // come back out, and a constant is greppable.
@@ -370,7 +404,7 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
       },
     },
   });
-  return { sockets: { stub: module }, records, pulls, comments, labels };
+  return { sockets: { stub: module }, records, remarks, pulls, comments, labels };
 }
 
 /** JSON has no clock: what a provider's own `normalize` answers has Dates. */

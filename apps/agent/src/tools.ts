@@ -1,7 +1,7 @@
 /**
  * The deevy tools a session may call, by the names deevy gives them.
  *
- * Listed rather than wildcarded on purpose: deevy gaining a nineteenth tool
+ * Listed rather than wildcarded on purpose: deevy gaining a twentieth tool
  * must not silently widen what this program may do, and the list is short
  * enough to read as a description of the job (docs/agent-loop.md). Every name
  * is in `packages/core/mcp-tools.json`.
@@ -21,6 +21,7 @@ export const deevyToolNames: ReadonlyArray<string> = [
   "runs_get",
   "runs_start",
   "issues_get",
+  "docs_get",
   "issues_create",
   "comments_create",
   "runs_post_activity",

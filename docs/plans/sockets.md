@@ -811,6 +811,39 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 13, as built.** Notion verifies its webhook with the token deevy received, somebody tags a row
+`agent:planner`, deevy reads the row back and routes it, the Proposal is the integration's comment on it, a
+Human approves by commenting once an admin allows a verified address to vouch for them, and an Agent reads the
+plan with `docs_get` — the real module behind the real route, with only Notion's API replaced
+(`packages/sockets/tests/notion-deevy.test.ts`). The MCP tool set is nineteen, as the plan said. As with the
+other providers, "Working in Notion" has **not** been walked against a real workspace.
+
+Six things came out differently from the sketch.
+
+- **A Notion delivery is a signal, not a record.** An event names a page or a comment and carries none of it,
+  so the port grew two events that mean "read this back" — `changed` and `commented` — and `getComment`
+  beside `getIssue`, and `applyInbound` takes the tracker to read them with. A record is read through the
+  Project its data source is bound to, because the binding decides what its properties mean; what comes back
+  is applied exactly as an `issue`, `comment` or `ruling` event would have been.
+- **Notion sends its signing secret once, unsigned.** `TrackerSocket.handshake` takes it, and deevy keeps
+  what it is sent until a delivery signed with it proves it was Notion's (`config.webhookVerified`), after
+  which nothing unsigned replaces it; a secret an admin chose is never replaced at all. `sockets.handshake`
+  shows it to an admin, who pastes it into Notion's Verify, and stops showing it once it is proven.
+- **No block converter.** Notion's current API (2026-03-11) reads a page's content as markdown and takes
+  markdown for a new page and for a comment, so "turning blocks into markdown" is Notion's own and the module
+  asks for it. A poll's query answers properties and not content, so `ExternalIssue.body` may now be absent,
+  and deevy keeps the body it last read rather than fetching twenty pages a pass.
+- **The binding reads the schema.** `listContainers` answers each data source with what its properties mean
+  — the first status property and the statuses in its Complete group, the first multi-select as labels, the
+  first people property, a self-relation named like a parent, the ID property as the key — so an admin binds
+  a database without naming any of it. The integration among a row's people is the row handed to deevy,
+  which reuses Linear's delegate routing.
+- **`docs_get` is in the runtime's allowlist**, which is fourteen now. The plan left it out because it was
+  written before there was a document to read; a Project with its plans in Notion and a runtime that cannot
+  read them would have been a feature nothing used.
+- **A Project's documents can be bound after it is made**, from its settings (`projects.update` with `docs`),
+  whatever its tracker: a Linear Project with its plans in Notion is one binding each.
+
 **Slice 12, as built.** An issue labelled on GitLab becomes a Run, the Proposal is a comment on it, a Human
 who signs in to deevy with GitLab approves it by commenting with no linking step, and the Run clones with the
 Socket's token and opens one merge request that closes the issue — the real module behind the real route, with

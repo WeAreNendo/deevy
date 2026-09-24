@@ -169,6 +169,7 @@ describe("what prepare writes into the session's home", () => {
           "Mcp(deevy:runs_get)",
           "Mcp(deevy:runs_start)",
           "Mcp(deevy:issues_get)",
+          "Mcp(deevy:docs_get)",
           "Mcp(deevy:issues_create)",
           "Mcp(deevy:comments_create)",
           "Mcp(deevy:runs_post_activity)",

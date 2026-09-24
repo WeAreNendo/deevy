@@ -5,6 +5,7 @@ import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { socketStanding } from "@/routes/settings/sockets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,12 +62,20 @@ export function SocketPage({ socketId }: { socketId: string }) {
   const install = useMutation(
     orpc.sockets.install.mutationOptions({ onSuccess: ({ url }) => leaveFor(url) }),
   );
+  // Asked for only when somebody asks to see it: it is a secret, shown because
+  // Notion wants it pasted back and for no longer than that (hooks.ts).
+  const [revealing, setRevealing] = useState(false);
+  const handshake = useQuery({
+    ...orpc.sockets.handshake.queryOptions({ input: { socketId } }),
+    enabled: revealing,
+  });
 
   const socket = sockets.data?.sockets.find((row) => row.id === socketId);
   if (sockets.isPending) return <p className="text-muted-foreground">Loading the Socket…</p>;
   if (!socket) return <NotFoundPage what="Socket" />;
 
   const standing = socketStanding(socket);
+  const config = socket.config as Record<string, unknown>;
   const quiet = standing.tone === "quiet" && socket.status === "active";
   const columns: DataColumn<Delivery>[] = [
     {
@@ -142,13 +151,83 @@ export function SocketPage({ socketId }: { socketId: string }) {
         {check.error ? <p className="text-sm text-destructive">{check.error.message}</p> : null}
       </SettingsSection>
 
+      {socket.provider === "notion" ? (
+        <SettingsSection
+          aria-label="Verifying the webhook"
+          title="Verifying the webhook"
+          description="Notion sends a token when its webhook is made, and wants it pasted back."
+        >
+          {config.webhookVerified === true ? (
+            <p className="text-sm text-muted-foreground">
+              Notion has verified this webhook, and every delivery since is signed with its token.
+            </p>
+          ) : socket.hasWebhookSecret ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Notion sent its verification token. Paste it into Verify on the webhook in the
+                integration&apos;s settings; the first delivery signed with it settles it.
+              </p>
+              {handshake.data?.token ? (
+                <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
+                  {handshake.data.token}
+                </p>
+              ) : (
+                <div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={handshake.isFetching}
+                    onClick={() => setRevealing(true)}
+                  >
+                    Show the token
+                  </Button>
+                </div>
+              )}
+              {handshake.error ? (
+                <p className="text-sm text-destructive">{handshake.error.message}</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Waiting for Notion. Create a subscription in the integration&apos;s Webhooks, to this
+              Socket&apos;s address, and the token Notion sends appears here.
+            </p>
+          )}
+        </SettingsSection>
+      ) : null}
+
+      {socket.provider === "notion" ? (
+        <SettingsSection
+          aria-label="Who commented"
+          title="Who commented"
+          description="Notion has no account to link, so a ruling from a comment needs another proof."
+        >
+          <label className="flex items-center gap-3 text-sm">
+            {/* Named by the label around it, which Base UI points it at. */}
+            <Switch
+              checked={config.identityByEmail === true}
+              disabled={update.isPending}
+              onCheckedChange={(checked) =>
+                update.mutate({ socketId, identityByEmail: checked === true })
+              }
+            />
+            Take a verified address as proof
+          </label>
+          <p className="text-xs text-muted-foreground">
+            A comment counts as a Member&apos;s when Notion reports an address they verified in
+            deevy. That is weaker than a linked account, and every ruling it makes says
+            &ldquo;(email)&rdquo;.
+          </p>
+        </SettingsSection>
+      ) : null}
+
       {socket.provider === "linear" && socket.status !== "pending" ? (
         <SettingsSection
           aria-label="Assigning issues to deevy"
           title="Assigning issues to deevy"
           description="Each issue assigned to deevy goes to the Project's default Agent."
         >
-          {(socket.config as Record<string, unknown>).assignable === true ? (
+          {config.assignable === true ? (
             <p className="text-sm text-muted-foreground">
               People can assign an issue to deevy in Linear. It shows as the issue&apos;s delegate,
               and whoever assigned it stays its assignee.

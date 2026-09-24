@@ -39,7 +39,8 @@ describe("the committed tool manifest", () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
     /*
-     * Eighteen, now that deevy opens the pull request: `pulls_open` is a tool
+     * Nineteen, with `docs_get`: a Project's documents live in the team's own
+     * tool, and this is how an Agent reads one (ADR-0024). Eighteen, now that deevy opens the pull request: `pulls_open` is a tool
      * and `runs_checkout` deliberately is not, because it answers with a
      * credential (ADR-0014). Seventeen when a Gate became a request on a Run: `runs_request_approval`
      * came back as `gates_request`, and `gates_get` beside it is the polling
@@ -52,6 +53,8 @@ describe("the committed tool manifest", () => {
       // Socket-backed: it says something on the record where the record lives,
       // and what deevy keeps is the Event, because a mention is a trigger.
       "comments_create",
+      // A page of the Project's documents, read where the team keeps them.
+      "docs_get",
       // What an Agent asks when it reaches a Checkpoint, carrying the Proposal
       // a Human rules on, and how it reads the ruling when its client cannot
       // be handed a URL to open (ADR-0020, ADR-0024).

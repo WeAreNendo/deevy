@@ -79,6 +79,11 @@ export async function handleInbound(request: Request, options: InboundOptions): 
   }
 
   const module = await socketModuleFor(options, socket);
+  // A tool that establishes its signing secret by sending it, unsigned — which
+  // is why this comes before the signature check it will make possible.
+  const offered = module.tracker?.handshake?.(rawBody) ?? null;
+  if (offered !== null) return acceptHandshake(options, socket, offered, now);
+
   const secrets = await webhookSecretsOf(socket, options.socketSecret, now());
   if (secrets.length === 0) {
     return json({ error: "This Socket has no webhook secret to check a delivery against" }, 401);
@@ -112,6 +117,15 @@ export async function handleInbound(request: Request, options: InboundOptions): 
     .onConflictDoNothing()
     .returning();
   if (!claimed) return json({ status: "duplicate" }, 200);
+
+  // The first delivery signed with a secret the tool sent itself is the proof
+  // it was the tool's: from here nothing unsigned replaces it.
+  if (socket.config.webhookVerified === false) {
+    await db
+      .update(socketTable)
+      .set({ config: { ...socket.config, webhookVerified: true } })
+      .where(eq(socketTable.id, socket.id));
+  }
 
   const outcome = await applyDelivery({ ...options, now }, socket, rawBody, checked.eventName);
 
@@ -159,6 +173,8 @@ async function applyDelivery(
       workspace,
       socket,
       events,
+      // For a tool whose deliveries only name what changed (Notion's).
+      tracker,
       ...(options.jobs ? { jobs: options.jobs } : {}),
       ...(module.identityScope ? { identityScope: module.identityScope } : {}),
       now: options.now,
@@ -171,6 +187,62 @@ async function applyDelivery(
   } catch (error) {
     return { status: "failed", skipped: [String(error instanceof Error ? error.message : error)] };
   }
+}
+
+/**
+ * Keeps the signing secret a tool sent to establish its webhook — Notion's
+ * `verification_token` — which an admin then pastes back into the tool.
+ *
+ * Unsigned by nature, so it is taken only while nothing has proved otherwise:
+ * a Socket with no secret, or one whose secret came this way and has not yet
+ * signed a delivery (the tool's own "resend" replaces it). Once a signed
+ * delivery arrives, or where an admin chose the secret, an unsigned request
+ * changes nothing and is told so.
+ */
+async function acceptHandshake(
+  options: InboundOptions,
+  socket: Socket,
+  token: string,
+  now: () => Date,
+): Promise<Response> {
+  const provisional = socket.webhookSecret === null || socket.config.webhookVerified === false;
+  if (!provisional) {
+    return json(
+      { error: "This Socket already has its secret; connect it again to start over" },
+      409,
+    );
+  }
+  if (!options.socketSecret) {
+    return json({ error: "This deevy has no secret to seal a Socket's with" }, 503);
+  }
+  const { db } = options;
+  await db
+    .update(socketTable)
+    .set({
+      webhookSecret: await sealSecret(options.socketSecret, token),
+      config: { ...socket.config, webhookVerified: false },
+      updatedAt: now(),
+    })
+    .where(eq(socketTable.id, socket.id));
+  await appendEvent(
+    {
+      db,
+      workspace: { id: socket.workspaceId },
+      member: null,
+      ...(options.jobs ? { jobs: options.jobs } : {}),
+    },
+    {
+      kind: "socket.updated",
+      subjectType: "socket",
+      subjectId: socket.id,
+      payload: {
+        provider: socket.provider,
+        name: socket.name,
+        summary: "The tool sent the token that verifies its webhook",
+      },
+    },
+  );
+  return json({ status: "handshake" }, 200);
 }
 
 /**

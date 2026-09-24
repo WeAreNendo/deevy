@@ -19,6 +19,18 @@ import { providerLabel } from "@/lib/providers";
 
 /** Base UI wants a real value for "nobody", so the sentinel is a constant. */
 const NOBODY = "__nobody";
+/** And for "nowhere", when a Project keeps its documents in no tool deevy reads. */
+const NOWHERE = "__nowhere";
+
+/**
+ * What each mirror setting is called. A Base UI trigger shows the value it
+ * holds unless told what it is called, which put `gates` on the screen.
+ */
+const mirrorLabel: Record<string, string> = {
+  off: "Nothing",
+  gates: "Gates and rulings",
+  runs: "Runs as well",
+};
 
 /**
  * What a Project is bound to (ADR-0024).
@@ -59,6 +71,10 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
   };
   const container = text(bound.trackerScope, "scopeKey");
   const forgeScope = text(bound.forgeScope, "scopeKey");
+  // Only a tool that can read a page is somewhere documents can be read from.
+  const readers = (sockets.data?.sockets ?? []).filter(
+    (one) => one.capabilities.includes("docs") && one.status === "active",
+  );
   const baseBranch = text(bound.forgeScope, "baseBranch");
 
   return (
@@ -93,7 +109,12 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
           }
         >
           <SelectTrigger id="project-default-agent" aria-label="Default Agent" className="w-72">
-            <SelectValue />
+            <SelectValue>
+              {(selected: string) =>
+                (agents.data?.agents ?? []).find((agent) => agent.id === selected)?.user.name ??
+                "Nobody"
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
@@ -149,13 +170,15 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
             }
           >
             <SelectTrigger id="project-mirror" aria-label="Mirror" className="w-56">
-              <SelectValue />
+              <SelectValue>{(selected: string) => mirrorLabel[selected] ?? selected}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectItem value="off">Nothing</SelectItem>
-                <SelectItem value="gates">Gates and rulings</SelectItem>
-                <SelectItem value="runs">Runs as well</SelectItem>
+                {Object.entries(mirrorLabel).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectGroup>
             </SelectContent>
           </Select>
@@ -178,6 +201,48 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
             Nowhere yet. An Agent working this Project has no checkout until a repository is bound.
           </span>
         )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="project-docs">Documents</Label>
+        <Select
+          value={bound.docsSocketId ?? NOWHERE}
+          onValueChange={(next) =>
+            update.mutate({
+              slug: projectSlug,
+              docs: next === NOWHERE ? null : { socketId: next as string, scope: {} },
+            })
+          }
+        >
+          <SelectTrigger id="project-docs" aria-label="Documents" className="w-72">
+            <SelectValue>
+              {(selected: string) => {
+                const reader = readers.find((one) => one.id === selected);
+                return reader
+                  ? `${reader.name} (${providerLabel(reader.provider)})`
+                  : "Nowhere deevy reads";
+              }}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value={NOWHERE}>Nowhere deevy reads</SelectItem>
+            </SelectGroup>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>Tools that hold documents</SelectLabel>
+              {readers.map((reader) => (
+                <SelectItem key={reader.id} value={reader.id}>
+                  {reader.name} ({providerLabel(reader.provider)})
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">
+          Where this Project&apos;s plans live. An Agent working it reads a page there when a record
+          links one.
+        </span>
       </div>
 
       {update.error ? <p className="text-sm text-destructive">{update.error.message}</p> : null}

@@ -39,6 +39,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
           { id: "github", label: "GitHub", capabilities: ["tracker", "forge"] },
           { id: "gitlab", label: "GitLab", capabilities: ["tracker", "forge"] },
           { id: "linear", label: "Linear", capabilities: ["tracker"] },
+          { id: "notion", label: "Notion", capabilities: ["tracker", "docs"] },
           { id: "slack", label: "Slack", capabilities: ["chat"] },
           { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
         ],
@@ -87,6 +88,10 @@ vi.mock("../src/lib/orpc.ts", async () => {
         void calls.remove(input);
         return { ...stubSocket, status: "removed" };
       },
+      handshake: async () => ({
+        token: "secret_notion-verification-token-for-tests",
+        verified: false,
+      }),
       install: async (input: { socketId: string }) => {
         void calls.install(input);
         return { url: "https://linear.app/oauth/authorize?actor=app" };
@@ -134,7 +139,7 @@ describe("the tools this Workspace is connected to", () => {
     // was not built with would only ever produce a refusal.
     const connect = screen.getByRole("group", { name: "Connect a tool" });
     expect(within(connect).getByRole("button", { name: /GitHub/ })).toBeTruthy();
-    expect(within(connect).queryByRole("button", { name: /Notion/ })).toBeNull();
+    expect(within(connect).queryByRole("button", { name: /Jira/ })).toBeNull();
   });
 
   it("starts the GitHub flow with a form GitHub itself takes", async () => {
@@ -309,6 +314,32 @@ describe("connecting GitLab", () => {
   });
 });
 
+describe("connecting Notion", () => {
+  it("takes the integration's secret, then says where Notion sends its webhook", async () => {
+    state.sockets = [];
+    calls.connect.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect Notion" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme's Notion" } });
+    fireEvent.change(screen.getByLabelText("Internal integration secret"), {
+      target: { value: "ntn_pasted_secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
+    expect(calls.connect.mock.calls[0]?.[0]).toEqual({
+      provider: "notion",
+      name: "Acme's Notion",
+      credentials: { token: "ntn_pasted_secret" },
+    });
+    // Notion answers a subscription with a token of its own, which the
+    // Socket's page shows for pasting back.
+    expect(await screen.findByText("https://deevy.test/hooks/sock_stub00000")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open the Socket's page" })).toBeTruthy();
+  });
+});
+
 describe("connecting Linear", () => {
   it("names the addresses Linear's app needs, then takes the app's own client", async () => {
     state.sockets = [];
@@ -358,6 +389,50 @@ describe("connecting Linear", () => {
 });
 
 describe("one Socket's own page", () => {
+  it("shows the token Notion sent, to paste back, until a delivery proves it", async () => {
+    calls.update.mockClear();
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "notion",
+        name: "Acme's Notion",
+        hasWebhookSecret: true,
+        config: { webhookVerified: false },
+      },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const verifying = await screen.findByRole("region", { name: "Verifying the webhook" });
+    expect(within(verifying).queryByText("secret_notion-verification-token-for-tests")).toBeNull();
+    fireEvent.click(within(verifying).getByRole("button", { name: "Show the token" }));
+
+    expect(
+      await within(verifying).findByText("secret_notion-verification-token-for-tests"),
+    ).toBeTruthy();
+    // Notion has no account to link, so an admin may let a verified address
+    // vouch for who commented (ADR-0025).
+    fireEvent.click(screen.getByRole("switch", { name: "Take a verified address as proof" }));
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    expect(calls.update.mock.calls[0]?.[0]).toEqual({
+      socketId: stubSocket.id,
+      identityByEmail: true,
+    });
+  });
+
+  it("says Notion's webhook is verified once it is, and waits for the token before", async () => {
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "notion",
+        name: "Acme's Notion",
+        config: { webhookVerified: true },
+      },
+    ];
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    expect(await screen.findByText(/Notion has verified this webhook/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Show the token" })).toBeNull();
+  });
+
   it("offers a Linear Socket's install until it is done, and says so after", async () => {
     calls.install.mockClear();
     calls.left = [];

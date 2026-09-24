@@ -1,0 +1,18 @@
+{
+  "id": "c6780f24-10b7-4f42-a6fd-230b6cf7ad69",
+  "timestamp": "2026-09-24T10:21:17.854Z",
+  "workspace_id": "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9",
+  "workspace_name": "Acme",
+  "subscription_id": "29d75c0d-5546-4414-8459-7b7a92f1fc4b",
+  "integration_id": "0ef2e755-4912-8096-91c1-00376a88a5ca",
+  "type": "comment.created",
+  "authors": [{ "id": "c7c11cca-1d73-471d-9b6e-bdef51470190", "type": "person" }],
+  "accessible_by": [{ "id": "c7c11cca-1d73-471d-9b6e-bdef51470190", "type": "person" }],
+  "attempt_number": 1,
+  "api_version": "2026-03-11",
+  "entity": { "id": "27b104cd-477e-80ca-8f75-001d9e2b6839", "type": "comment" },
+  "data": {
+    "page_id": "27a104cd-477e-80a1-9c3d-e5f6a7b8c901",
+    "parent": { "id": "27a104cd-477e-80a1-9c3d-e5f6a7b8c901", "type": "page" }
+  }
+}

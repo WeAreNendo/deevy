@@ -84,6 +84,7 @@ describe("the key stays with the supervisor", () => {
     // finish (src/tools.ts).
     expect(names).toEqual([
       "comments_create",
+      "docs_get",
       "gates_get",
       "gates_request",
       "inbox_list",

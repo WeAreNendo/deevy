@@ -61,6 +61,9 @@ describe("the Agent capability rule", () => {
       // Saying something goes to the tracker the Project is bound to; deevy
       // stores no comments and an Agent authors none of the record (ADR-0024).
       "comments.create",
+      // Reading a page of its Project's documents where the team keeps them,
+      // never writing one (ADR-0024).
+      "docs.get",
       // Asking to pass a Checkpoint, reading what was ruled, and seeing what
       // it has asked for: an Agent asks and never decides (ADR-0004, ADR-0020).
       // `gates.approve` and `gates.reject` are not here, and could not be:

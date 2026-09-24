@@ -139,6 +139,7 @@ describe("the inline configuration", () => {
         deevy_runs_get: "allow",
         deevy_runs_start: "allow",
         deevy_issues_get: "allow",
+        deevy_docs_get: "allow",
         deevy_issues_create: "allow",
         deevy_comments_create: "allow",
         deevy_runs_post_activity: "allow",

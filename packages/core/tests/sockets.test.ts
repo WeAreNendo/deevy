@@ -202,7 +202,7 @@ describe("what this deevy can speak", () => {
     // (ADR-0024). A settings page that offered one anyway would be a button
     // whose only outcome is a refusal.
     expect(offered.providers).toEqual([
-      { id: "stub", label: "the stub tracker", capabilities: ["tracker", "forge"] },
+      { id: "stub", label: "the stub tracker", capabilities: ["tracker", "forge", "docs"] },
     ]);
   });
 });

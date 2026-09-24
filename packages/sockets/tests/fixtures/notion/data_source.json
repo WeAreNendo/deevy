@@ -1,0 +1,60 @@
+{
+  "object": "data_source",
+  "id": "248104cd-477e-80fd-b757-000b4bb3bda2",
+  "title": [{ "type": "text", "text": { "content": "Tasks" }, "plain_text": "Tasks" }],
+  "parent": { "type": "database_id", "database_id": "248104cd-477e-80af-bc30-000bd72bee7f" },
+  "properties": {
+    "Task name": { "id": "title", "name": "Task name", "type": "title", "title": {} },
+    "Status": {
+      "id": "XGe%40",
+      "name": "Status",
+      "type": "status",
+      "status": {
+        "options": [
+          { "id": "c7b6e8a1", "name": "Not started", "color": "default" },
+          { "id": "d2f9a3b4", "name": "In progress", "color": "blue" },
+          { "id": "e5c1b7d8", "name": "Done", "color": "green" },
+          { "id": "f8a4c2e6", "name": "Won't do", "color": "gray" }
+        ],
+        "groups": [
+          { "id": "g1", "name": "To-do", "color": "gray", "option_ids": ["c7b6e8a1"] },
+          { "id": "g2", "name": "In progress", "color": "blue", "option_ids": ["d2f9a3b4"] },
+          {
+            "id": "g3",
+            "name": "Complete",
+            "color": "green",
+            "option_ids": ["e5c1b7d8", "f8a4c2e6"]
+          }
+        ]
+      }
+    },
+    "Tags": {
+      "id": "bDf%5B",
+      "name": "Tags",
+      "type": "multi_select",
+      "multi_select": { "options": [{ "id": "a1", "name": "Bug", "color": "red" }] }
+    },
+    "Assignee": { "id": "DbAu", "name": "Assignee", "type": "people", "people": {} },
+    "Parent item": {
+      "id": "p%3Ab",
+      "name": "Parent item",
+      "type": "relation",
+      "relation": {
+        "data_source_id": "248104cd-477e-80fd-b757-000b4bb3bda2",
+        "type": "dual_property",
+        "dual_property": { "synced_property_name": "Sub-item", "synced_property_id": "s%3Ai" }
+      }
+    },
+    "Sub-item": {
+      "id": "s%3Ai",
+      "name": "Sub-item",
+      "type": "relation",
+      "relation": {
+        "data_source_id": "248104cd-477e-80fd-b757-000b4bb3bda2",
+        "type": "dual_property",
+        "dual_property": { "synced_property_name": "Parent item", "synced_property_id": "p%3Ab" }
+      }
+    },
+    "ID": { "id": "uid1", "name": "ID", "type": "unique_id", "unique_id": { "prefix": "TASK" } }
+  }
+}

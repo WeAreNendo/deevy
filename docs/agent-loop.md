@@ -64,7 +64,7 @@ touch nothing else runs with `--strict-mcp-config` and an explicit allowlist:
 claude -p "Work your next assigned Issue." \
   --strict-mcp-config --mcp-config .mcp.json \
   --allowedTools "mcp__deevy__inbox_list,mcp__deevy__runs_list,mcp__deevy__runs_get,\
-mcp__deevy__runs_start,mcp__deevy__issues_get,mcp__deevy__issues_create,\
+mcp__deevy__runs_start,mcp__deevy__issues_get,mcp__deevy__docs_get,mcp__deevy__issues_create,\
 mcp__deevy__comments_create,mcp__deevy__runs_post_activity,mcp__deevy__gates_request,\
 mcp__deevy__gates_get,mcp__deevy__pulls_open,mcp__deevy__links_add,mcp__deevy__runs_finish"
 ```
@@ -104,8 +104,10 @@ Work one Issue at a time, in this order.
    the rule is one _open_ Run per Issue and Agent, and a finished one is not open.
 3. **Read before you write.** `issues_get` with the Issue and `comments: true`, which answers with the record
    as the tracker last said it — title, body, state, labels — and with what has been said on it, live from
-   the tracker. That conversation is the brief. There is nothing else to read: no plan document, no spec, no
-   template. If the record does not say enough to act on, say so in a comment and ask.
+   the tracker. That conversation is the brief. Where it links a page the team keeps its plans in — a Notion
+   page — read it with `docs_get`, naming your Project by the `project.slug` the record came with and the page
+   by its URL; a Project with no documents bound says so, and then the record is all there is. If the record
+   does not say enough to act on, say so in a comment and ask.
 
    The same answer carries `checkpoints`: the names this Project asks a Run to stop at. It is usually `plan`,
    `ship`, both or neither, and it is what decides steps 5 and 10. A Project that asks for none is one where
