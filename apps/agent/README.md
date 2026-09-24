@@ -41,19 +41,19 @@ is assigned rather than at the next poll. `DEEVY_AGENT_HARNESS` picks the CLI; `
 `runs.list` with no arguments is the queue: for an Agent that means its own Runs, and `pending` is work to do.
 Nothing is remembered between passes, so a restarted container and a second host behave like the pass before.
 
-It takes up one Run at a time, gives the session a working directory — a fresh clone of the configured
-repository, or an empty directory when there is none — opens a loopback MCP proxy that holds the Agent's key
-and the tool list, and spawns the harness CLI in that directory with the proxy's URL and no credential. The
-model reads the Issue, writes the Document its State asks for, narrates through `runs_post_activity`, and
-stops at a Gate.
+It takes up one Run at a time, gives the session a working directory — a fresh clone of the repository deevy
+names for the Run (`runs.checkout`), or the override's, or an empty directory when there is none — opens a
+loopback MCP proxy that holds the Agent's key and the tool list, and spawns the harness CLI in that directory
+with the proxy's URL and no credential. The model reads the record and its conversation, narrates through
+`runs_post_activity`, and stops at the Checkpoints its Project lists.
 
 A Run stopped at a Gate is not the runtime's any more. deevy moves it back to `active` the moment a Human
 rules and tells the Agent so, and that Notification is what hands it back — so the runtime never polls a Gate
 and never asks the same question twice.
 
-A Run that changed files gets a branch named after the attempt, a commit, a push and a pull request, and the
-pull request's URL becomes a Link on the Issue carrying the Run's id. Nothing is ever pushed to the base
-branch.
+A Run that changed files gets a branch named after the attempt, a commit, a push and a pull request that deevy
+opens through the forge, and the pull request's URL becomes a Link on the record carrying the Run's id.
+Nothing is ever pushed to the base branch.
 
 Whatever the session does, the Run does not rot. One that crashes, hangs or simply stops gets an error
 Activity and a failed Run, because a Run left `active` and silent tells a Human nothing until deevy's sweep

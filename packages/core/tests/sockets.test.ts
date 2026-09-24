@@ -189,6 +189,65 @@ describe("a connected tool", () => {
   });
 });
 
+/**
+ * Where a tool delivers, when this deevy's address changes: a laptop behind a
+ * tunnel whose hostname moved. Every registered hook points at the old one,
+ * and polling is what keeps the loop alive meanwhile (docs/OPERATIONS.md).
+ */
+describe("a tool's delivery address", () => {
+  it("is said for every connected tool, so it can be pasted again", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda } = await admin(db);
+    const connected = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+
+    const listed = await asAda.sockets.list({});
+
+    expect(listed.sockets[0]?.inboundUrl).toBe(`https://deevy.test/hooks/${connected.id}`);
+  });
+
+  it("is told to a tool that lets deevy say where its webhook goes, and the log says so", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const fake = fakeSockets();
+    const asAda = createRouterClient(router, {
+      context: { ...ada, sockets: fake.sockets, socketSecret: testSealingSecret },
+    });
+    const connected = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+
+    const rewired = await asAda.sockets.rewire({ socketId: connected.id });
+
+    expect(rewired).toEqual({ inboundUrl: `https://deevy.test/hooks/${connected.id}` });
+    expect(fake.rewired).toEqual([`https://deevy.test/hooks/${connected.id}`]);
+    const updated = (await db.query.event.findMany({})).find(
+      (event) => event.kind === "socket.updated",
+    );
+    expect(updated?.payload).toMatchObject({ summary: expect.stringContaining("/hooks/") });
+  });
+
+  it("is the admin's to paste where the tool does not let deevy say it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const fake = fakeSockets();
+    const stub = fake.sockets.stub;
+    if (!stub) throw new Error("the fake is registered as the stub");
+    const plain = {
+      stub: (input: Parameters<typeof stub>[0]) => ({ ...stub(input), rewire: undefined }),
+    };
+    const asAda = createRouterClient(router, {
+      context: { ...ada, sockets: plain, socketSecret: testSealingSecret },
+    });
+    const connected = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+
+    await expect(asAda.sockets.rewire({ socketId: connected.id })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("paste"),
+    });
+  });
+});
+
 describe("what this deevy can speak", () => {
   it("is the providers it was built with, so a screen offers no tool it cannot connect", async () => {
     const { db, close } = testDb();

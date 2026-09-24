@@ -432,6 +432,12 @@ export interface SocketModule {
    * people assign an issue to it — coming back to `setup` with a code.
    */
   install?(input: { redirectUri: string; state: string }): string;
+  /**
+   * Points the tool's own webhook at deevy's address, where the tool lets deevy
+   * say it: a GitHub App's one webhook. For an instance whose address moved —
+   * a laptop behind a tunnel with a new hostname — so nobody retypes it.
+   */
+  rewire?(url: string): Promise<void>;
   /** Present where a Human links an account here through the tool's own OAuth. */
   accountLink?: AccountLink;
   tracker?: TrackerSocket;

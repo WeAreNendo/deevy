@@ -228,6 +228,8 @@ export function fakeSockets(
   records: Map<string, ExternalIssue>;
   /** Comments the tracker knows by id, for a delivery that only names one (`getComment`). */
   remarks: Map<string, ExternalComment>;
+  /** Every address the tool was told to deliver to (`rewire`). */
+  rewired: string[];
   /** Every pull request this fake was asked to open, for a test to read back. */
   pulls: Array<{ scopeKey: string; head: string; base: string; title: string; body: string }>;
   /** Every comment deevy wrote through it, which is what a mirror is. */
@@ -236,6 +238,7 @@ export function fakeSockets(
   labels: Array<{ externalId: string; add: string[]; remove: string[] }>;
 } {
   let opened = 0;
+  const rewired: string[] = [];
   const comments: Array<{ externalId: string; body: string }> = [];
   const labels: Array<{ externalId: string; add: string[]; remove: string[] }> = [];
   const pulls: Array<{
@@ -269,6 +272,12 @@ export function fakeSockets(
         const [id = "", instance = "stub:test"] = code.split("@");
         return Promise.resolve({ id, login: `user-${id}`, instance });
       },
+    },
+    // A tool whose own webhook deevy can point at its address, as a GitHub
+    // App's can be: what it was told is kept for a test to read back.
+    rewire: (url) => {
+      rewired.push(url);
+      return Promise.resolve();
     },
     install: ({ redirectUri, state }) =>
       `https://tracker.test/oauth/install?${new URLSearchParams({
@@ -404,7 +413,7 @@ export function fakeSockets(
       },
     },
   });
-  return { sockets: { stub: module }, records, remarks, pulls, comments, labels };
+  return { sockets: { stub: module }, records, remarks, rewired, pulls, comments, labels };
 }
 
 /** JSON has no clock: what a provider's own `normalize` answers has Dates. */

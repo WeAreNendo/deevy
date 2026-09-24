@@ -282,6 +282,18 @@ export function createGithubSocket({
       throw new Error("That redirect carried nothing to finish connecting with.");
     },
 
+    /**
+     * The App has one webhook, and GitHub lets the App itself say where it
+     * goes: what an instance whose address moved needs, rather than an
+     * operator retyping it in the App's settings (docs/OPERATIONS.md).
+     */
+    async rewire(url: string): Promise<void> {
+      await asApp("/app/hook/config", {
+        method: "PATCH",
+        body: JSON.stringify({ url, content_type: "json" }),
+      });
+    },
+
     tracker: {
       async verifyInbound({
         headers,

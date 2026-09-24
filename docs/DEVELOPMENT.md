@@ -29,11 +29,10 @@ or in `.claude/launch.json`, which is where the 3010 comes from. A sign-in page 
 this looks like when it is wrong — the page draws one button per provider `health.ping` reports, and a proxy
 pointing at something that is not deevy answers nothing.
 
-**A room is a websocket, and the proxy has to be told.** Live Documents open `/collab` on the same origin
-the page came from, so the session cookie travels with the upgrade; `apps/web/vite.config.ts` proxies it
-with `ws: true`, and without that the dev server answers the upgrade itself and every Document is quietly
-empty. The Node deployment serves the same route on the port it already listens on, so nothing else is
-needed in development (ADR-0021).
+**A tool's deliveries come through the proxy too.** A Socket's address is `<BETTER_AUTH_URL>/hooks/<socket>`,
+which in the dev loop is the SPA's origin, so `apps/web/vite.config.ts` forwards `/hooks` to the server with
+the rest. A tool on the internet reaches a laptop only through a tunnel pointed at that origin
+(docs/OPERATIONS.md, "Where a tool delivers"); without one, the catch-up poll is what brings records in.
 
 **And the SPA's own port follows the launcher.** Both configurations in `.claude/launch.json` set
 `autoPort`, so a busy 5173 does not stop the preview: the launcher picks a free port, hands it to the child
@@ -341,21 +340,28 @@ in the new `migration.sql` (a drizzle-kit rc regression), and `vp run db#check:m
 
 ```
 apps/web            React SPA; also the Cloudflare Worker entry (src/worker.ts) when DEEVY_TARGET=workers
-apps/server         Node entry (Hono on @hono/node-server), bundled by vp pack; Dockerfile
-packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory
+apps/server         Node entry (Hono on @hono/node-server), bundled by vp pack; the seed; Dockerfile
+apps/agent          the reference agent runtime, which talks to deevy as a stranger does
+apps/cli            the command line, generated from the operation registry
+packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory, the Socket port
+packages/sockets    one module per tool deevy speaks (github, linear, gitlab, notion, slack) and the stub
 packages/db         Drizzle schema, relations, migrations
 packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron) and workers/ (D1)
+tools/release       the changelog fold and the commit-message rules
 ```
 
-Rules that keep the two deployment targets honest (ADR-0006): `packages/core` and `packages/db` never import
-Node modules; anything runtime-specific lives in `packages/adapters`. The Worker build in CI is what catches a
+Rules that keep the two deployment targets honest (ADR-0006): `packages/core`, `packages/db` and
+`packages/sockets` never import Node modules; anything runtime-specific lives in `packages/adapters`. The core
+imports the Socket port's types and never a provider: the two entries build the registry and hand it to
+`createApp`. The Worker build in CI is what catches a
 leak.
 
 ## Background work
 
 Every piece of background work is a bounded function in `packages/core/src/work.ts` — one indexed SELECT with
-a LIMIT, one batched UPDATE, never a query per row — and `runDueWork` there is the five of them in order, the
-whole of one trigger. Both deployments call it and neither owns it. Node satisfies the `Cron` port in
+a LIMIT, one batched UPDATE, never a query per row — and `runDueWork` there is all of them in order, the
+whole of one trigger: stale Runs, Agents' schedules, Channel and webhook deliveries, Gate reminders, what the
+tools are owed (mirrored comments, chat messages), the catch-up poll, and forgetting old inbound deliveries. Both deployments call it and neither owns it. Node satisfies the `Cron` port in
 `packages/core/src/jobs.ts` with `createTimerCron()` from `@deevy/adapters/node`, and
 `apps/server/src/runner.ts` starts that schedule beside `serve()`, drains while a pass says there is more, and
 stops it on SIGINT and SIGTERM. Cloudflare owns its own schedule, so `apps/web/src/worker.ts` has a

@@ -62,6 +62,7 @@ export function SocketPage({ socketId }: { socketId: string }) {
   const install = useMutation(
     orpc.sockets.install.mutationOptions({ onSuccess: ({ url }) => leaveFor(url) }),
   );
+  const rewire = useMutation(orpc.sockets.rewire.mutationOptions());
   // Asked for only when somebody asks to see it: it is a secret, shown because
   // Notion wants it pasted back and for no longer than that (hooks.ts).
   const [revealing, setRevealing] = useState(false);
@@ -149,6 +150,45 @@ export function SocketPage({ socketId }: { socketId: string }) {
           <p className="text-sm text-muted-foreground">It answers {check.data.identity.login}.</p>
         ) : null}
         {check.error ? <p className="text-sm text-destructive">{check.error.message}</p> : null}
+      </SettingsSection>
+
+      <SettingsSection
+        aria-label="Where it delivers"
+        title="Where it delivers"
+        description="The address the tool sends what happens to. It is not a secret."
+      >
+        <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
+          {socket.inboundUrl}
+        </p>
+        {socket.provider === "github" ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              When this deevy&apos;s address changes — a tunnel with a new hostname — deevy can
+              point the App&apos;s webhook here itself.
+            </p>
+            <div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={rewire.isPending}
+                onClick={() => rewire.mutate({ socketId })}
+              >
+                Point GitHub at this address
+              </Button>
+            </div>
+            {rewire.isSuccess ? (
+              <p className="text-sm text-muted-foreground">GitHub delivers here now.</p>
+            ) : null}
+            {rewire.error ? (
+              <p className="text-sm text-destructive">{rewire.error.message}</p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            When this deevy&apos;s address changes, paste it into the tool&apos;s webhook settings
+            again. Until then deevy goes and asks the tool what changed, so nothing is lost.
+          </p>
+        )}
       </SettingsSection>
 
       {socket.provider === "notion" ? (
