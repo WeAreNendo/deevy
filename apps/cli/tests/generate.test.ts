@@ -68,6 +68,7 @@ describe("what the registry turns into", () => {
       "routing.set.rules",
       "runs.postActivity.payload",
       "sockets.connect.config",
+      "sockets.connect.credentials",
     ]);
   });
 

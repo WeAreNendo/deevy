@@ -811,6 +811,24 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 1, as built.** Three things came out differently from the sketch above.
+
+- `POST /hooks/:socketId/setup` is not in this slice. Both flows it exists for are GitHub's — the manifest
+  conversion and the installation callback — and the manifest one redirects before there is a Socket to
+  name in the path, so its shape is a decision about how a pending Socket is created rather than about
+  routing. It lands with the GitHub module in slice 4; `/hooks/*` is already in `run_worker_first`, so the
+  route costs nothing to add there.
+- A poll asks about **one Project per pass**, not one Socket per pass with every Project under it. Applying
+  one record costs about four statements, so a Socket with three Projects and a page of twenty would have
+  been three times over D1's cap in a single Cron invocation. `project.last_polled_at` is what makes the
+  choice one indexed read, and `more` brings the platform back for the next Project.
+- `sockets.connect` refuses **only when there is something to seal**. The sketch said it refuses without
+  `DEEVY_SECRET` at all, but the stub holds no credential, and a deployment that cannot seal one should
+  still be able to run the in-process provider the seed and the tests use.
+
+One delivery that opens a Run costs **23 statements**, inside the twenty-to-twenty-five the plan predicted
+and half of D1's cap. `budget.test.ts` asserts it exactly.
+
 - Whether a Proposal in a comment is enough for a Human to rule on from the tracker, or whether the Gate
   screen in deevy stays the place people actually decide. The mirror is built so the tracker is enough;
   the Event log's `via` column will say what people did.

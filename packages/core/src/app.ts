@@ -1,5 +1,6 @@
 import { projectGrant, type Db } from "@deevy/db";
 import type { SocketModules } from "./sockets/port.ts";
+import { handleInbound } from "./sockets/hooks.ts";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
 import { COMMON_ERROR_STATUS_MAP, DEFAULT_ERROR_STATUS, ORPCError, onError } from "@orpc/server";
@@ -73,6 +74,14 @@ export interface AppOptions {
    */
   sockets?: SocketModules;
   /**
+   * What this deployment seals a Socket's credentials with (`DEEVY_SECRET`,
+   * secrets.ts). Deliberately not Better Auth's secret: rotating that one
+   * invalidates sessions, which an operator may reasonably do, and it must not
+   * also mean every connected tool has to be connected again. Without it a
+   * Socket that holds a credential cannot be connected or used.
+   */
+  socketSecret?: string;
+  /**
    * Which providers this deployment offers a Human to sign in with, from
    * `signInProviders(env)` in the entry that built the identity configuration.
    * Reported on `health.ping`, so the sign-in page renders what the server
@@ -127,6 +136,7 @@ export function createApp({
   onError: report = console.error,
   devSignIn = false,
   sockets,
+  socketSecret,
   signInProviders = [],
   webURL,
 }: AppOptions) {
@@ -141,6 +151,21 @@ export function createApp({
   const app = new Hono<{ Variables: { ctx: AppContext } }>();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
+
+  // Before everything else, and outside every middleware that builds a
+  // session: the caller here is a tool with a signature over the raw body, and
+  // a framework that read the body first would have changed what it signed
+  // (ADR-0024). `/hooks/*` is in the Worker's `run_worker_first` list, which
+  // `worker-routes.test.ts` holds.
+  app.post("/hooks/:socketId", (c) =>
+    handleInbound(c.req.raw, {
+      db,
+      socketId: c.req.param("socketId"),
+      ...(sockets ? { sockets } : {}),
+      ...(socketSecret ? { socketSecret } : {}),
+      jobs,
+    }),
+  );
 
   if (auth) {
     app.use("/api/auth/*", cors({ origin, credentials: true }));
@@ -173,6 +198,7 @@ export function createApp({
     // The same registry the operation surfaces get: a tool that opens a record
     // in a tracker is refused without it (ADR-0024).
     ...(sockets ? { sockets } : {}),
+    ...(socketSecret ? { socketSecret } : {}),
     onError: reportUnexpected,
   });
   app.all("/mcp", (c) => mcp.fetch(c.req.raw));
@@ -208,6 +234,7 @@ export function createApp({
     jobs,
     devSignIn,
     ...(sockets ? { sockets } : {}),
+    ...(socketSecret ? { socketSecret } : {}),
     signInProviders: await offeredProviders(),
   });
   app.use("/rpc/*", async (c, next) => {

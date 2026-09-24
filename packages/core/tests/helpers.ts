@@ -8,7 +8,20 @@ import type { AppContext } from "../src/operations/registry.ts";
 import type { ApiKeys, ApiKeySummary } from "../src/keys.ts";
 import { newId } from "../src/ids.ts";
 import { upsertProjection } from "../src/issues.ts";
-import type { ExternalIssue, SocketModule, SocketModules } from "../src/sockets/port.ts";
+import { sealSecret } from "../src/secrets.ts";
+import type {
+  ExternalIssue,
+  InboundEvent,
+  SocketModule,
+  SocketModules,
+} from "../src/sockets/port.ts";
+
+/**
+ * What a test instance seals credentials with. Long enough to be a real one,
+ * because `requireSealingSecret` refuses a short one and a test that worked
+ * around that would not be testing the deployment anybody runs.
+ */
+export const testSealingSecret = "a-test-sealing-secret-of-at-least-32-chars";
 
 export const migrationsFolder = new URL("../../db/drizzle", import.meta.url).pathname;
 
@@ -213,14 +226,43 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
     capabilities: new Set(["tracker"] as const),
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
     tracker: {
-      verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "" }),
-      normalize: () => [],
+      // Not real cryptography — that is the stub provider's own test
+      // (packages/sockets/tests/stub.test.ts). What this has to be is a
+      // verifier that can say no: the route's behaviour on a bad signature is
+      // the thing these tests are about.
+      verifyInbound: ({ headers, rawBody, webhookSecret }) =>
+        Promise.resolve({
+          ok: headers.get("x-test-signature") === `${webhookSecret}:${String(rawBody.length)}`,
+          deliveryId: headers.get("x-test-delivery"),
+          eventName: headers.get("x-test-event") ?? "events",
+        }),
+      normalize: (_eventName, payload) => {
+        const events = (payload as { events?: unknown } | null)?.events;
+        // A provider's `normalize` reads a payload and answers deevy's own
+        // types, so the clocks come back as Dates rather than as the strings
+        // JSON left behind. A fake that skipped this would be proving the core
+        // against a shape no provider produces.
+        return Array.isArray(events) ? events.map(reviveDates) : [];
+      },
       getIssue: (_scope, ref) => {
         const found = records.get(ref.externalId);
         if (!found) throw new Error(`no record ${ref.externalId}`);
         return Promise.resolve(found);
       },
-      listIssues: () => Promise.resolve({ issues: [...records.values()], nextCursor: null }),
+      listIssues: (_scope, query) => {
+        // A real tracker answers a window, and the poll's whole shape depends
+        // on that: what changed since, in order, one page at a time.
+        const all = [...records.values()]
+          .filter((issue) => !query.updatedSince || issue.updatedAt > query.updatedSince)
+          .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+        const from = query.cursor ? Number(query.cursor) : 0;
+        const page = all.slice(from, from + query.limit);
+        const next = from + page.length;
+        return Promise.resolve({
+          issues: page,
+          nextCursor: next < all.length ? String(next) : null,
+        });
+      },
       listComments: () => Promise.resolve([]),
       createIssue: (scope, draft) => {
         opened += 1;
@@ -258,6 +300,18 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
   return { sockets: { stub: module }, records };
 }
 
+/** JSON has no clock: what a provider's own `normalize` answers has Dates. */
+function reviveDates(event: unknown): InboundEvent {
+  const one = event as Record<string, Record<string, unknown> | undefined>;
+  if (one.issue && typeof one.issue.updatedAt === "string") {
+    one.issue = { ...one.issue, updatedAt: new Date(one.issue.updatedAt) };
+  }
+  if (one.comment && typeof one.comment.createdAt === "string") {
+    one.comment = { ...one.comment, createdAt: new Date(one.comment.createdAt) };
+  }
+  return one as unknown as InboundEvent;
+}
+
 /** A record as a tracker would state one, for a test that only cares about a few fields. */
 export function externalIssue(
   over: Partial<ExternalIssue> & { externalId: string },
@@ -283,6 +337,8 @@ export interface SeededProject {
   project: Project;
   /** Projects one record and hands back the row, as a delivery would. */
   record: (over: Partial<ExternalIssue> & { externalId: string }) => Promise<Issue>;
+  /** Who gets a record no label and no mention named (ADR-0024). */
+  setDefaultAgent: (memberId: string | null) => Promise<void>;
 }
 
 /**
@@ -293,7 +349,13 @@ export interface SeededProject {
 export async function seedProject(
   db: Db,
   workspaceId: string,
-  options: { slug?: string; scopeKey?: string; defaultAgentMemberId?: string } = {},
+  options: {
+    slug?: string;
+    scopeKey?: string;
+    defaultAgentMemberId?: string;
+    /** Sealed as a real one is, so a test can sign a delivery with it. */
+    webhookSecret?: string;
+  } = {},
 ): Promise<SeededProject> {
   const slug = options.slug ?? "deevy";
   const scopeKey = options.scopeKey ?? "acme/deevy";
@@ -306,6 +368,9 @@ export async function seedProject(
     name: "Example tracker",
     identity: { login: "deevy", id: "bot-1", mentionHandle: "@deevy" },
     config: {},
+    ...(options.webhookSecret
+      ? { webhookSecret: await sealSecret(testSealingSecret, options.webhookSecret) }
+      : {}),
   });
   const [row] = await db
     .insert(project)
@@ -326,6 +391,12 @@ export async function seedProject(
   return {
     socketId,
     project: row,
+    setDefaultAgent: async (memberId) => {
+      await db
+        .update(project)
+        .set({ defaultAgentMemberId: memberId })
+        .where(eq(project.id, row.id));
+    },
     record: async (over) => {
       const { issue } = await upsertProjection(db, {
         projectId: row.id,

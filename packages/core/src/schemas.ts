@@ -1,6 +1,7 @@
 import {
   allowlistRule,
   event,
+  inboundDelivery,
   invitation,
   issue,
   issueLink,
@@ -47,7 +48,18 @@ export const SocketSchema = createSelectSchema(socket)
   .extend({
     identity: z.object({ login: z.string(), id: z.string(), mentionHandle: z.string() }),
     capabilities: z.array(z.enum(["tracker", "forge", "docs", "chat"])),
+    /**
+     * Whether each sealed column holds something. A settings page has to be
+     * able to say "this tool has a webhook secret" without being told what it
+     * is, and an operator looking at a Socket that hears nothing needs to know
+     * which half is missing.
+     */
+    hasCredentials: z.boolean(),
+    hasWebhookSecret: z.boolean(),
   });
+
+/** One delivery, as a settings page lists what a tool has said lately. */
+export const InboundDeliverySchema = createSelectSchema(inboundDelivery);
 
 export const ProjectSchema = createSelectSchema(project);
 

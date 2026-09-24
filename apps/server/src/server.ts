@@ -67,6 +67,9 @@ export function buildServer(env: ServerEnv) {
     // The tools this build can speak (ADR-0024). A stub Socket is a development
     // fixture, so it is offered only where the dev stub is already allowed.
     sockets: socketModules({ devStub: env.devStubOAuth }),
+    // And what their credentials are sealed with. Without it a tool that holds
+    // one cannot be connected at all (packages/core/src/secrets.ts).
+    ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
     // What the sign-in page draws its buttons from: the providers this
     // environment configured, decided where they are registered rather than in
     // the SPA (docs/plans/sign-in.md).

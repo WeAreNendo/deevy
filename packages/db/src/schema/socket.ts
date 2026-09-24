@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { member, workspace } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
@@ -64,4 +64,45 @@ export const socket = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).default(now).notNull(),
   },
   (table) => [index("socket_workspaceId_status_idx").on(table.workspaceId, table.status)],
+);
+
+/**
+ * What became of one delivery. `received` is the moment it was written down,
+ * before deevy had decided anything; a row left in it is a crash mid-apply.
+ */
+export const inboundStatuses = ["received", "applied", "skipped", "failed"] as const;
+
+/**
+ * One delivery from a tool, written down before it is acted on (ADR-0024).
+ *
+ * The provider's own delivery id is what makes a redelivery a no-op: every
+ * provider retries, GitHub has a button for it, and a record arriving twice
+ * must not open two Runs. Hence the unique index rather than a status check —
+ * the insert is the claim.
+ *
+ * It is also the only place a delivery that went wrong is recorded, because
+ * the route answers 200 either way: a provider that collects failures disables
+ * the hook, which is a worse outcome than deevy failing to place one record.
+ */
+export const inboundDelivery = sqliteTable(
+  "inbound_delivery",
+  {
+    id: text("id").primaryKey(),
+    socketId: text("socket_id")
+      .notNull()
+      .references(() => socket.id, { onDelete: "cascade" }),
+    /** The provider's id for it: `x-github-delivery`, `Linear-Delivery`, a poll's own. */
+    deliveryId: text("delivery_id").notNull(),
+    /** The provider's name for what happened, which `normalize` switches on. */
+    eventName: text("event_name").notNull(),
+    status: text("status", { enum: inboundStatuses }).notNull().default("received"),
+    /** Why it meant nothing, or what went wrong. Never a credential. */
+    error: text("error"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
+  },
+  (table) => [
+    uniqueIndex("inbound_delivery_uidx").on(table.socketId, table.deliveryId),
+    /** The sweep that forgets deliveries older than a month. */
+    index("inbound_delivery_createdAt_idx").on(table.createdAt),
+  ],
 );

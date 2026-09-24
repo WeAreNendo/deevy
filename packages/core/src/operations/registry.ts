@@ -78,6 +78,12 @@ export interface AppContext {
    */
   sockets?: SocketModules;
   /**
+   * What this deployment seals a Socket's credentials with (secrets.ts).
+   * Absent, an operation that would store one refuses rather than keeping a
+   * credential in plaintext.
+   */
+  socketSecret?: string;
+  /**
    * The sign-in providers this deployment configured, in the order the sign-in
    * page renders them. Only `health.ping` reads it, so a signed-out SPA knows
    * which buttons to draw; absent means this instance offers none

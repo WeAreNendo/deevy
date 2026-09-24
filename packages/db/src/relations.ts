@@ -27,7 +27,7 @@ import { notification } from "./schema/notification.ts";
 import { issueLink } from "./schema/link.ts";
 import { issue } from "./schema/issue.ts";
 import { project } from "./schema/project.ts";
-import { socket } from "./schema/socket.ts";
+import { inboundDelivery, socket } from "./schema/socket.ts";
 import { member, workspace } from "./schema/workspace.ts";
 
 export const tables = {
@@ -50,6 +50,7 @@ export const tables = {
   allowlistRule,
   invitation,
   socket,
+  inboundDelivery,
   project,
   issue,
   issueLink,
@@ -96,6 +97,15 @@ const appRelations = defineRelationsPart(tables, (r) => ({
     installer: r.one.member({ from: r.socket.installedBy, to: r.member.id }),
     /** The Projects bound to it, which is what a disconnect has to name. */
     projects: r.many.project({ from: r.socket.id, to: r.project.trackerSocketId }),
+    /** What it has said lately, which is what a settings page reports. */
+    deliveries: r.many.inboundDelivery({ from: r.socket.id, to: r.inboundDelivery.socketId }),
+  },
+  inboundDelivery: {
+    socket: r.one.socket({
+      from: r.inboundDelivery.socketId,
+      to: r.socket.id,
+      optional: false,
+    }),
   },
   project: {
     workspace: r.one.workspace({
