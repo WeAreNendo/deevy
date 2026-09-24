@@ -1,5 +1,11 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "@deevy/core/app";
+import type {
+  ExternalComment,
+  ExternalIssue,
+  SocketModule,
+  SocketModules,
+} from "@deevy/core/sockets";
 import { createAuth, type Session as AuthSession } from "@deevy/core/auth";
 import { router } from "@deevy/core/router";
 import { openDatabase } from "@deevy/adapters/node";
@@ -55,11 +61,25 @@ export async function instance() {
       providers: { github: { clientId: "id", clientSecret: "secret" } },
     },
   });
-  const app = createApp({ db, auth, baseURL });
+  const tracker = fakeTracker();
+  const app = createApp({ db, auth, baseURL, sockets: tracker.sockets });
 
   const ada = await insertMember(db, { name: "Ada", role: "admin", kind: "human" });
-  const asAda = createRouterClient(router, { context: contextFor(db, ada.member, ada.workspace) });
-  const project = await asAda.projects.create({ name: "deevy", key: "DEV" });
+  const asAda = createRouterClient(router, {
+    context: { ...contextFor(db, ada.member, ada.workspace), sockets: tracker.sockets },
+  });
+  // An Issue is a projection of a record in a tracker Socket (ADR-0024), so a
+  // Workspace with work in it starts with something to project from.
+  const socket = await asAda.sockets.connect({
+    provider: "stub",
+    name: "Example tracker",
+    config: {},
+  });
+  const project = await asAda.projects.create({
+    slug: "acme-deevy",
+    name: "deevy",
+    tracker: { socketId: socket.id, scope: { scopeKey: CONTAINER } },
+  });
 
   const planner = await insertMember(db, { name: "Planner", role: "member", kind: "agent" });
   await db.insert(agent).values({ memberId: planner.member.id });
@@ -84,6 +104,9 @@ export async function instance() {
     close,
     config,
     refused,
+    /** The tracker deevy projects from, for a test that reads what was written there. */
+    tracker,
+    project,
     deevy: createDeevy({
       config,
       fetch: async (input, init) => {
@@ -143,7 +166,107 @@ export async function instance() {
     asAda,
     ada: ada.member,
     planner: planner.member,
+    /**
+     * A record in the tracker, routed to the Agent — which is what opens a Run
+     * (`triggersFor`). The key comes back as the tracker wrote it, because that
+     * is the only key there is now.
+     */
+    assign: async (title = "Ship it") => {
+      const issue = await asAda.issues.create({
+        projectSlug: project.slug,
+        title,
+        assignAgent: planner.member.id,
+      });
+      return issue;
+    },
   };
+}
+
+/** The container every test's Project is bound to. */
+export const CONTAINER = "acme/deevy";
+
+export interface FakeTracker {
+  sockets: SocketModules;
+  /** What the tracker holds, by external id. */
+  records: Map<string, ExternalIssue>;
+  /** What was said on each record, by external id: the loop deevy writes into. */
+  comments: Map<string, ExternalComment[]>;
+  /** The labels deevy asked the tracker to set, in order. */
+  labelled: Array<{ externalId: string; add: string[]; remove: string[] }>;
+}
+
+/**
+ * A tracker that is not a tool.
+ *
+ * The runtime never speaks to one — it reaches deevy over HTTP and nothing else
+ * (docs/plans/m4.md) — but deevy does, so a test that opens a record or says
+ * something on one needs a provider behind the Socket. Small and local rather
+ * than `@deevy/sockets`: what these tests need of a tracker is that it answers.
+ */
+export function fakeTracker(): FakeTracker {
+  const records = new Map<string, ExternalIssue>();
+  const comments = new Map<string, ExternalComment[]>();
+  const labelled: FakeTracker["labelled"] = [];
+  let opened = 0;
+
+  const module = (): SocketModule => ({
+    provider: "stub",
+    capabilities: new Set(["tracker"] as const),
+    identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
+    tracker: {
+      verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "" }),
+      normalize: () => [],
+      getIssue: (_scope, ref) => {
+        const found = records.get(ref.externalId);
+        if (!found) throw new Error(`no record ${ref.externalId}`);
+        return Promise.resolve(found);
+      },
+      listIssues: () => Promise.resolve({ issues: [...records.values()], nextCursor: null }),
+      listComments: (_scope, ref, limit) =>
+        Promise.resolve((comments.get(ref.externalId) ?? []).slice(-limit)),
+      createIssue: (_scope, draft) => {
+        opened += 1;
+        const externalId = String(opened);
+        const key = `${CONTAINER}#${externalId}`;
+        const made: ExternalIssue = {
+          externalId,
+          key,
+          url: `https://tracker.test/${CONTAINER}/issues/${externalId}`,
+          title: draft.title,
+          body: draft.body,
+          state: "open",
+          stateName: "open",
+          assignees: [],
+          labels: draft.labels,
+          parentExternalId: draft.parent?.externalId ?? null,
+          updatedAt: new Date(),
+        };
+        records.set(externalId, made);
+        return Promise.resolve({ ...made, parentLinked: draft.parent !== null });
+      },
+      createComment: (_scope, ref, body) => {
+        const said = comments.get(ref.externalId) ?? [];
+        const comment: ExternalComment = {
+          externalId: `c${String(said.length + 1)}`,
+          url: `${ref.url}#c${String(said.length + 1)}`,
+          body,
+          author: { login: "deevy", id: "bot-1", isBot: true },
+          createdAt: new Date(),
+        };
+        said.push(comment);
+        comments.set(ref.externalId, said);
+        return Promise.resolve({ externalId: comment.externalId, url: comment.url });
+      },
+      setLabels: (_scope, ref, change) => {
+        labelled.push({ externalId: ref.externalId, ...change });
+        return Promise.resolve();
+      },
+      listContainers: () =>
+        Promise.resolve([{ scope: { scopeKey: CONTAINER }, scopeKey: CONTAINER, name: CONTAINER }]),
+    },
+  });
+
+  return { sockets: { stub: module }, records, comments, labelled };
 }
 
 async function insertMember(

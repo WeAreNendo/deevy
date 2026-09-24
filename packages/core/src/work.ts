@@ -275,7 +275,7 @@ export function scheduledIssuesQuery(
     .where(
       and(
         inArray(issueTable.assigneeMemberId, agentMemberIds),
-        isNull(issueTable.closedAt),
+        eq(issueTable.state, "open"),
         isNull(runTable.id),
       ),
     )
@@ -745,19 +745,13 @@ export async function deliverDueChannelMessages({
   ];
   const issues = issueIds.length
     ? await db
-        .select({
-          id: issueTable.id,
-          number: issueTable.number,
-          title: issueTable.title,
-          projectKey: projectTable.key,
-        })
+        // One table: the key is the tracker's and rides on the projection, so
+        // the Project join this used to need is one statement fewer.
+        .select({ id: issueTable.id, key: issueTable.externalKey, title: issueTable.title })
         .from(issueTable)
-        .innerJoin(projectTable, eq(projectTable.id, issueTable.projectId))
         .where(inArray(issueTable.id, issueIds))
     : [];
-  const issueById = new Map(
-    issues.map((row) => [row.id, { key: `${row.projectKey}-${row.number}`, title: row.title }]),
-  );
+  const issueById = new Map(issues.map((row) => [row.id, { key: row.key, title: row.title }]));
 
   // A delivery whose Channel or Event is gone can never be sent, so it is
   // retired rather than retried: the Channel was deleted after the Event.

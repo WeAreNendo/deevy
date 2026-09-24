@@ -8,11 +8,10 @@
     "./app": "./src/app.ts",
     "./auth": "./src/auth.ts",
     "./cimd": "./src/cimd.ts",
-    "./router": "./src/operations/index.ts",
     "./openapi": "./src/openapi.ts",
     "./package.json": "./package.json",
-    "./room-handshake": "./src/room-handshake.ts",
-    "./merge": "./src/merge.ts"
+    "./router": "./src/operations/index.ts",
+    "./sockets": "./src/sockets/port.ts"
   },
   "scripts": {
     "snapshot:openapi": "node scripts/snapshot-openapi.ts",
@@ -24,8 +23,6 @@
     "@better-auth/drizzle-adapter": "catalog:",
     "@better-auth/mcp": "catalog:",
     "@deevy/db": "workspace:*",
-    "@deevy/editor": "workspace:*",
-    "@hocuspocus/server": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
@@ -33,16 +30,12 @@
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
     "better-auth": "catalog:",
-    "diff": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
-    "y-protocols": "catalog:",
-    "yjs": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@deevy/adapters": "workspace:*",
-    "@hocuspocus/provider": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

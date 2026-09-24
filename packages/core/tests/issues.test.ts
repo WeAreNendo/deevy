@@ -1,445 +1,355 @@
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb, type MemberContext } from "./helpers.ts";
-import { newId } from "../src/ids.ts";
+import { routeIssueTo } from "../src/issues.ts";
+import {
+  agentContext,
+  fakeSockets,
+  memberContext,
+  seedProject,
+  testDb,
+  type MemberContext,
+} from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
   for (const close of closers.splice(0)) close();
 });
 
-/** An admin with one Project, the arrangement every Issue test starts from. */
-async function withProject(db: MemberContext["db"]) {
+/**
+ * An admin, a Socket and a Project bound to a container: the arrangement every
+ * Issue test starts from, because an Issue is a projection of a record in one
+ * and there is no other way to have an Issue (ADR-0024).
+ */
+async function withProject(db: MemberContext["db"], options: { scopeKey?: string } = {}) {
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const client = createRouterClient(router, { context: admin });
-  const project = await client.projects.create({ name: "deevy", key: "DEV" });
-  return { admin, client, project };
+  const seeded = await seedProject(db, admin.workspace.id, options);
+  const { sockets } = fakeSockets();
+  const context = { ...admin, sockets };
+  return { admin: context, client: createRouterClient(router, { context }), ...seeded };
 }
 
-describe("issues.create", () => {
-  it("gives the Issue a key, the first State, and the caller as creator", async () => {
+describe("a projection", () => {
+  it("is readable by its URL, by the tracker's key, and by its id", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { admin, client, project } = await withProject(db);
+    const { client, record } = await withProject(db);
 
-    const issue = await client.issues.create({ projectKey: "DEV", title: "Ship the Event log" });
+    const projected = await record({ externalId: "42", title: "Ship the Event log" });
 
-    expect(issue).toMatchObject({
-      key: "DEV-1",
-      number: 1,
+    // The three handles a caller may know it by, and the one row behind them.
+    const byUrl = await client.issues.get({ issue: projected.url });
+    const byKey = await client.issues.get({ issue: projected.externalKey });
+    const byId = await client.issues.get({ issue: projected.id });
+
+    expect(byUrl.id).toBe(projected.id);
+    expect(byKey.id).toBe(projected.id);
+    expect(byId.id).toBe(projected.id);
+    expect(byUrl).toMatchObject({
+      externalKey: "acme/deevy#42",
       title: "Ship the Event log",
-      createdBy: admin.member.id,
+      state: "open",
       assigneeMemberId: null,
       parentId: null,
       closedAt: null,
     });
-    expect(issue.state).toMatchObject({ name: "Intent", position: 0 });
-    expect(issue.projectId).toBe(project.id);
   });
 
-  it("records issue.created against the Project", async () => {
+  it("says what the tracker last said, and refuses to go backwards on it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, record } = await withProject(db);
+
+    const at = new Date("2026-09-20T10:00:00Z");
+    const first = await record({ externalId: "1", title: "First words", updatedAt: at });
+    // A delivery that arrives late and says something older. Providers reorder,
+    // so the provider's own clock decides rather than the order of arrival.
+    await record({
+      externalId: "1",
+      title: "Stale words",
+      updatedAt: new Date(at.getTime() - 60_000),
+    });
+
+    expect((await client.issues.get({ issue: first.url })).title).toBe("First words");
+
+    await record({
+      externalId: "1",
+      title: "Newer words",
+      updatedAt: new Date(at.getTime() + 60_000),
+    });
+    expect((await client.issues.get({ issue: first.url })).title).toBe("Newer words");
+  });
+
+  it("closes and reopens with the record, so open stays one question", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, record } = await withProject(db);
+
+    const issue = await record({ externalId: "1", updatedAt: new Date("2026-09-20T10:00:00Z") });
+    expect((await client.issues.get({ issue: issue.url })).closedAt).toBeNull();
+
+    await record({
+      externalId: "1",
+      state: "closed",
+      stateName: "Done",
+      updatedAt: new Date("2026-09-20T11:00:00Z"),
+    });
+    const closed = await client.issues.get({ issue: issue.url });
+    expect(closed.state).toBe("closed");
+    expect(closed.stateName).toBe("Done");
+    expect(closed.closedAt).not.toBeNull();
+  });
+
+  it("reports a handle nothing here knows as not found", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client } = await withProject(db);
+
+    await expect(client.issues.get({ issue: "acme/deevy#404" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(
+      client.issues.get({ issue: "https://tracker.test/nothing#1" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("refuses a key two Sockets both know, rather than picking one", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await memberContext(db, { role: "admin", name: "Ada" });
+    const one = await seedProject(db, admin.workspace.id, { slug: "one", scopeKey: "acme/deevy" });
+    const two = await seedProject(db, admin.workspace.id, { slug: "two", scopeKey: "acme/deevy" });
+    const client = createRouterClient(router, { context: admin });
+
+    // github.com and a GitHub Enterprise with the same organisation name: one
+    // key, two records. Picking one silently is how an Agent works somebody
+    // else's record, so the refusal names the way out.
+    await one.record({
+      externalId: "1",
+      key: "acme/deevy#1",
+      url: "https://one.test/acme/deevy/1",
+    });
+    await two.record({
+      externalId: "1",
+      key: "acme/deevy#1",
+      url: "https://two.test/acme/deevy/1",
+    });
+
+    await expect(client.issues.get({ issue: "acme/deevy#1" })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    // The URL is canonical, and it is unambiguous by construction.
+    const byUrl = await client.issues.get({ issue: "https://two.test/acme/deevy/1" });
+    expect(byUrl.externalKey).toBe("acme/deevy#1");
+  });
+});
+
+describe("issues.create", () => {
+  it("opens the record in the tracker and projects what came back", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const { admin, client, project } = await withProject(db);
 
-    const issue = await client.issues.create({ projectKey: "DEV", title: "Ship it" });
+    const issue = await client.issues.create({
+      projectSlug: project.slug,
+      title: "Ship the Event log",
+    });
 
-    const page = await client.events.list({ subjectType: "issue", subjectId: issue.id });
-    expect(page.events.filter((e) => e.kind === "issue.created")).toMatchObject([
-      {
-        kind: "issue.created",
-        actorMemberId: admin.member.id,
-        projectId: project.id,
-        payload: { key: "DEV-1", title: "Ship it", state: "Intent" },
-      },
-    ]);
+    expect(issue).toMatchObject({
+      externalKey: "acme/deevy#new-1",
+      title: "Ship the Event log",
+      state: "open",
+      createdBy: admin.member.id,
+      parentId: null,
+    });
+    expect(issue.url).toBe("https://tracker.test/acme/deevy#new-1");
+    expect(issue.projectId).toBe(project.id);
   });
-});
 
-describe("Issue numbers", () => {
-  it("run 1 to 20 with no gap when twenty calls race", async () => {
+  it("records issue.created against the Project, carrying the tracker's handles", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, project } = await withProject(db);
+
+    const issue = await client.issues.create({ projectSlug: project.slug, title: "Ship it" });
+    const { events } = await client.events.list({});
+    const created = events.find((event) => event.kind === "issue.created");
+
+    expect(created).toMatchObject({
+      subjectType: "issue",
+      subjectId: issue.id,
+      projectId: project.id,
+      actorMemberId: admin.member.id,
+    });
+    expect(created?.payload).toMatchObject({ key: issue.externalKey, url: issue.url });
+  });
+
+  it("needs a Project when there is no parent to take one from", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const { client } = await withProject(db);
 
-    const created = await Promise.all(
-      Array.from({ length: 20 }, (_, index) =>
-        client.issues.create({ projectKey: "DEV", title: `Issue ${index}` }),
-      ),
-    );
-
-    expect(created.map((issue) => issue.number).sort((a, b) => a - b)).toEqual(
-      Array.from({ length: 20 }, (_, index) => index + 1),
-    );
-  });
-});
-
-describe("issues.get", () => {
-  it("finds an Issue by its key, with its State, Assignee, parent and children", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { admin, client } = await withProject(db);
-    await client.issues.create({ projectKey: "DEV", title: "One" });
-    await client.issues.create({ projectKey: "DEV", title: "Two" });
-    const third = await client.issues.create({ projectKey: "DEV", title: "Three" });
-    await client.issues.create({ projectKey: "DEV", title: "Child", parentKey: "DEV-3" });
-
-    const found = await client.issues.get({ key: "dev-3" });
-
-    expect(found).toMatchObject({ key: "DEV-3", title: "Three", id: third.id });
-    expect(found.state.name).toBe("Intent");
-    expect(found.assignee).toBeNull();
-    expect(found.parent).toBeNull();
-    expect(found.children.map((child) => child.key)).toEqual(["DEV-4"]);
-    expect(admin.member.id).toBe(found.createdBy);
+    await expect(client.issues.create({ title: "Nowhere" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
   });
 
-  it("reports an unknown key as not found", async () => {
+  it("names the Agent it is for with the Project's routing label", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { client } = await withProject(db);
+    const { admin, client, project } = await withProject(db);
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: admin.member,
+      grants: [project.id],
+    });
 
-    await expect(client.issues.get({ key: "DEV-99" })).rejects.toMatchObject({
-      code: "NOT_FOUND",
+    const issue = await client.issues.create({
+      projectSlug: project.slug,
+      title: "Cut the work up",
+      assignAgent: planner.member.id,
     });
-    await expect(client.issues.get({ key: "NOPE-1" })).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
+
+    // The tracker says who the work is for, in the words deevy's own routing
+    // reads back: a label, exactly as a Human would write one.
+    expect(issue.labels).toContain(`agent:${planner.member.handle ?? ""}`);
+    expect(issue.assigneeMemberId).toBe(planner.member.id);
+  });
+
+  it("refuses to name a Human with a routing label", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, project } = await withProject(db);
+    const grace = await memberContext(db, { name: "Grace" });
+
+    await expect(
+      client.issues.create({
+        projectSlug: project.slug,
+        title: "For a person",
+        assignAgent: grace.member.id,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
 
 describe("issues.list", () => {
-  it("lists a Project's Issues in key order and pages by cursor", async () => {
+  it("reads as a feed, newest change first, and pages by cursor", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { client } = await withProject(db);
-    for (const title of ["One", "Two", "Three"]) {
-      await client.issues.create({ projectKey: "DEV", title });
+    const { client, record } = await withProject(db);
+
+    for (const n of [1, 2, 3]) {
+      await record({
+        externalId: String(n),
+        title: `Record ${String(n)}`,
+        updatedAt: new Date(`2026-09-2${String(n)}T10:00:00Z`),
+      });
     }
 
-    const first = await client.issues.list({ projectKey: "DEV", limit: 2 });
-    expect(first.issues.map((issue) => issue.key)).toEqual(["DEV-1", "DEV-2"]);
-    expect(first.nextCursor).toBe(2);
-
-    const second = await client.issues.list({ projectKey: "DEV", after: first.nextCursor ?? 0 });
-    expect(second.issues.map((issue) => issue.key)).toEqual(["DEV-3"]);
-    expect(second.nextCursor).toBe(3);
-  });
-
-  it("keeps the cursor when q names an Issue by key, so neither overrides the other", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    for (const title of ["One", "Two", "Three"]) {
-      await client.issues.create({ projectKey: "DEV", title });
-    }
-
-    const found = await client.issues.list({ projectKey: "DEV", after: 1, q: "DEV-2" });
-    expect(found.issues.map((issue) => issue.key)).toEqual(["DEV-2"]);
-    const behind = await client.issues.list({ projectKey: "DEV", after: 2, q: "DEV-2" });
-    expect(behind.issues).toEqual([]);
-    expect(behind.nextCursor).toBeNull();
-  });
-
-  it("ignores after without a projectKey, where a number cursor means nothing", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.projects.create({ name: "Operations", key: "OPS" });
-    await client.issues.create({ projectKey: "DEV", title: "One" });
-    await client.issues.create({ projectKey: "OPS", title: "Two" });
-
-    const all = await client.issues.list({ after: 5 });
-    expect(all.issues.map((issue) => issue.key).sort()).toEqual(["DEV-1", "OPS-1"]);
-    expect(all.nextCursor).toBeNull();
-  });
-
-  it("filters by State and by Assignee", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { admin, client, project } = await withProject(db);
-    const spec = project.states.find((state) => state.name === "Spec");
-    await client.issues.create({ projectKey: "DEV", title: "Unassigned" });
-    await client.issues.create({
-      projectKey: "DEV",
-      title: "Mine",
-      assigneeMemberId: admin.member.id,
-    });
-
-    expect(
-      (
-        await client.issues.list({ projectKey: "DEV", assigneeMemberId: admin.member.id })
-      ).issues.map((issue) => issue.title),
-    ).toEqual(["Mine"]);
-    expect((await client.issues.list({ projectKey: "DEV", stateId: spec?.id })).issues).toEqual([]);
-  });
-
-  it("returns every Issue for open: true while none is done", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.issues.create({ projectKey: "DEV", title: "One" });
-    await client.issues.create({ projectKey: "DEV", title: "Two" });
-
-    const open = await client.issues.list({ projectKey: "DEV", open: true });
-    expect(open.issues.map((issue) => issue.key)).toEqual(["DEV-1", "DEV-2"]);
-  });
-});
-
-describe("issues.list across the Workspace", () => {
-  it("lists every Project's Issues when none is named, newest change first, keyed per Project", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.projects.create({ name: "Operations", key: "OPS" });
-    await client.issues.create({ projectKey: "DEV", title: "First" });
-    const later = await client.issues.create({ projectKey: "OPS", title: "Second" });
-    // updatedAt has millisecond resolution, and the feed sorts by it: the
-    // touch must land in a later millisecond than the creation above.
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await client.issues.update({ key: "DEV-1", title: "First, touched" });
-
-    const all = await client.issues.list({});
-    expect(all.issues.map((issue) => issue.key)).toEqual(["DEV-1", later.key]);
-    expect(all.nextCursor).toBeNull();
-  });
-
-  it("finds an Issue by key, by number, or by a word of its title with q", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.projects.create({ name: "Operations", key: "OPS" });
-    await client.issues.create({ projectKey: "DEV", title: "Ship the Event log" });
-    await client.issues.create({ projectKey: "DEV", title: "Retry webhook deliveries" });
-    await client.issues.create({ projectKey: "OPS", title: "Rotate the OAuth secret" });
-
-    const keys = async (q: string) =>
-      (await client.issues.list({ q })).issues.map((issue) => issue.key).sort();
-    expect(await keys("dev-2")).toEqual(["DEV-2"]);
-    expect(await keys("1")).toEqual(["DEV-1", "OPS-1"]);
-    expect(await keys("event LOG")).toEqual(["DEV-1"]);
-    expect(await keys("the")).toEqual(["DEV-1", "OPS-1"]);
-    expect(await keys("nothing here")).toEqual([]);
-    expect(await keys("ZZZ-9")).toEqual([]);
-  });
-
-  it("reads a key no Project here has as a word of the title", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.issues.create({ projectKey: "DEV", title: "Read ADR-0015 before touching ids" });
-    await client.issues.create({ projectKey: "DEV", title: "Nothing to do with it" });
-
-    const found = await client.issues.list({ q: "ADR-0015" });
-    expect(found.issues.map((issue) => issue.key)).toEqual(["DEV-1"]);
-    // A key of a Project that does exist is still exactly that Issue.
-    expect((await client.issues.list({ q: "DEV-2" })).issues.map((issue) => issue.key)).toEqual([
-      "DEV-2",
+    const first = await client.issues.list({ limit: 2 });
+    expect(first.issues.map((issue) => issue.externalKey)).toEqual([
+      "acme/deevy#3",
+      "acme/deevy#2",
     ]);
+    expect(first.hasMore).toBe(true);
+
+    const next = await client.issues.list({ limit: 2, cursor: first.nextCursor ?? "" });
+    expect(next.issues.map((issue) => issue.externalKey)).toEqual(["acme/deevy#1"]);
+    expect(next.hasMore).toBe(false);
   });
 
-  it("filters by State name, by the Assignee's kind, by nobody, and by Sponsor", async () => {
+  it("finds a record by the tracker's key or by a word of its title", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { admin, client, project } = await withProject(db);
-    await client.projects.create({ name: "Operations", key: "OPS" });
-    const grace = await memberContext(db, { name: "Grace" });
-    const planner = await agentContext(db, { sponsor: admin.member, grants: [project.id] });
-    const builder = await agentContext(db, {
-      name: "Builder",
-      sponsor: grace.member,
-      grants: [project.id],
-    });
-    await client.issues.create({ projectKey: "DEV", title: "Nobody's" });
-    await client.issues.create({
-      projectKey: "DEV",
-      title: "Ada's",
-      assigneeMemberId: admin.member.id,
-    });
-    await client.issues.create({
-      projectKey: "DEV",
-      title: "Planner's",
-      assigneeMemberId: planner.member.id,
-    });
-    await client.issues.create({
-      projectKey: "OPS",
-      title: "Builder's",
-      assigneeMemberId: builder.member.id,
-    });
-    // Intent is a Gate, so a ruling is what moves DEV-2 on, into Spec.
-    await client.gates.approve({ key: "DEV-2" });
+    const { client, record } = await withProject(db);
 
-    const titles = async (input: Parameters<typeof client.issues.list>[0]) =>
-      (await client.issues.list(input)).issues.map((issue) => issue.title).sort();
-    expect(await titles({ stateName: "Spec" })).toEqual(["Ada's"]);
-    expect(await titles({ stateName: "Intent" })).toEqual(["Builder's", "Nobody's", "Planner's"]);
-    expect(await titles({ assigneeKind: "human" })).toEqual(["Ada's"]);
-    expect(await titles({ assigneeKind: "agent" })).toEqual(["Builder's", "Planner's"]);
-    expect(await titles({ unassigned: true })).toEqual(["Nobody's"]);
-    expect(await titles({ sponsorMemberId: admin.member.id })).toEqual(["Planner's"]);
-    expect(await titles({ sponsorMemberId: grace.member.id })).toEqual(["Builder's"]);
-    // The filters narrow together.
-    expect(await titles({ assigneeKind: "agent", stateName: "Intent", projectKey: "DEV" })).toEqual(
-      ["Planner's"],
-    );
-  });
+    await record({ externalId: "1", title: "Cursor-based paging" });
+    await record({ externalId: "2", title: "Something else" });
 
-  it("says when more matched than the page holds", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    for (const title of ["One", "Two", "Three"]) {
-      await client.issues.create({ projectKey: "DEV", title });
-    }
-
-    const short = await client.issues.list({ limit: 2 });
-    expect(short.issues).toHaveLength(2);
-    expect(short.hasMore).toBe(true);
-    const whole = await client.issues.list({ limit: 3 });
-    expect(whole.issues).toHaveLength(3);
-    expect(whole.hasMore).toBe(false);
-    // A Project's page says so too, beside its cursor.
-    const paged = await client.issues.list({ projectKey: "DEV", limit: 2 });
-    expect(paged).toMatchObject({ nextCursor: 2, hasMore: true });
-    expect(await client.issues.list({ projectKey: "DEV", after: 2, limit: 2 })).toMatchObject({
-      nextCursor: 3,
-      hasMore: false,
-    });
+    expect((await client.issues.list({ q: "acme/deevy#1" })).issues).toHaveLength(1);
+    expect((await client.issues.list({ q: "paging" })).issues[0]?.externalKey).toBe("acme/deevy#1");
+    // A key is matched whole, so #1 does not find #12.
+    await record({ externalId: "12", title: "Twelve" });
+    expect((await client.issues.list({ q: "acme/deevy#1" })).issues).toHaveLength(1);
   });
 
   it("takes % and _ in q literally, rather than as LIKE's wildcards", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { client } = await withProject(db);
-    await client.issues.create({ projectKey: "DEV", title: "Move 100% of traffic" });
-    await client.issues.create({ projectKey: "DEV", title: "Move 1000 users" });
-    await client.issues.create({ projectKey: "DEV", title: "snake_case names" });
-    await client.issues.create({ projectKey: "DEV", title: "snakeXcase names" });
-    await client.issues.create({ projectKey: "DEV", title: "A C:\\path\\to it" });
+    const { client, record } = await withProject(db);
 
-    const titles = async (q: string) =>
-      (await client.issues.list({ q })).issues.map((issue) => issue.title).sort();
-    expect(await titles("100%")).toEqual(["Move 100% of traffic"]);
-    expect(await titles("snake_case")).toEqual(["snake_case names"]);
-    expect(await titles("\\path")).toEqual(["A C:\\path\\to it"]);
+    await record({ externalId: "1", title: "Cover 100% of the branches" });
+    await record({ externalId: "2", title: "Cover 100 of them" });
+
+    const found = await client.issues.list({ q: "100%" });
+    expect(found.issues).toHaveLength(1);
+    expect(found.issues[0]?.title).toBe("Cover 100% of the branches");
+  });
+
+  it("filters by what the tracker says, and by who deevy routed it to", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, project, record } = await withProject(db);
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: admin.member,
+      grants: [project.id],
+    });
+
+    const mine = await record({ externalId: "1", title: "Routed" });
+    await record({ externalId: "2", title: "Closed", state: "closed", stateName: "Done" });
+    await routeIssueTo(db, mine.id, planner.member.id);
+
+    expect((await client.issues.list({ state: "closed" })).issues).toHaveLength(1);
+    expect((await client.issues.list({ open: true })).issues).toHaveLength(1);
+    expect((await client.issues.list({ assigneeMemberId: planner.member.id })).issues[0]?.id).toBe(
+      mine.id,
+    );
+    expect((await client.issues.list({ assigneeKind: "agent" })).issues).toHaveLength(1);
+    expect((await client.issues.list({ unassigned: true })).issues).toHaveLength(1);
+    expect((await client.issues.list({ sponsorMemberId: admin.member.id })).issues).toHaveLength(1);
+  });
+
+  it("filters by a label the tracker carries, matching the whole word", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, record } = await withProject(db);
+
+    await record({ externalId: "1", labels: ["bug"] });
+    await record({ externalId: "2", labels: ["debug"] });
+
+    const found = await client.issues.list({ label: "bug" });
+    expect(found.issues).toHaveLength(1);
+    expect(found.issues[0]?.externalKey).toBe("acme/deevy#1");
   });
 
   it("shows an Agent only the Projects it was granted", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { admin, client, project } = await withProject(db);
-    await client.projects.create({ name: "Operations", key: "OPS" });
-    await client.issues.create({ projectKey: "DEV", title: "Seen" });
-    await client.issues.create({ projectKey: "OPS", title: "Unseen" });
-    const agent = await agentContext(db, { sponsor: admin.member, grants: [project.id] });
-    const asAgent = createRouterClient(router, { context: agent });
-
-    const mine = await asAgent.issues.list({});
-    expect(mine.issues.map((issue) => issue.key)).toEqual(["DEV-1"]);
-    expect((await asAgent.issues.list({ q: "Unseen" })).issues).toEqual([]);
-  });
-});
-
-describe("issues.update", () => {
-  it("changes the title and description and records what changed", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    const issue = await client.issues.create({ projectKey: "DEV", title: "Draft" });
-
-    const updated = await client.issues.update({
-      key: "DEV-1",
-      title: "Ship the Event log",
-      description: "## Why\nBecause everything derives from it.",
+    const admin = await memberContext(db, { role: "admin", name: "Ada" });
+    const granted = await seedProject(db, admin.workspace.id, {
+      slug: "granted",
+      scopeKey: "acme/granted",
     });
-
-    expect(updated).toMatchObject({ title: "Ship the Event log" });
-    expect(updated.description).toContain("Because everything");
-    const page = await client.events.list({ subjectType: "issue", subjectId: issue.id });
-    expect(page.events.findLast((e) => e.kind === "issue.updated")).toMatchObject({
-      kind: "issue.updated",
-      payload: { title: { from: "Draft", to: "Ship the Event log" } },
+    const hidden = await seedProject(db, admin.workspace.id, {
+      slug: "hidden",
+      scopeKey: "acme/hidden",
     });
-  });
+    await granted.record({ externalId: "1", title: "Granted" });
+    await hidden.record({ externalId: "1", title: "Hidden" });
 
-  it("records an assignment as its own Event, carrying old and new", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { admin, client } = await withProject(db);
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const issue = await client.issues.create({ projectKey: "DEV", title: "Draft" });
-
-    await client.issues.update({ key: "DEV-1", assigneeMemberId: admin.member.id });
-    const reassigned = await client.issues.update({
-      key: "DEV-1",
-      assigneeMemberId: bob.member.id,
+    const planner = await agentContext(db, {
+      name: "Planner",
+      sponsor: admin.member,
+      grants: [granted.project.id],
     });
+    const asAgent = createRouterClient(router, { context: planner });
 
-    expect(reassigned.assignee).toMatchObject({ id: bob.member.id });
-    const page = await client.events.list({ subjectType: "issue", subjectId: issue.id });
-    expect(page.events.filter((e) => e.kind === "issue.assigned")).toHaveLength(2);
-    expect(page.events.findLast((e) => e.kind === "issue.assigned")).toMatchObject({
-      payload: { from: admin.member.id, to: bob.member.id },
-    });
-  });
-
-  it("refuses an Assignee who is not a Member", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.issues.create({ projectKey: "DEV", title: "Draft" });
-
-    await expect(
-      client.issues.update({ key: "DEV-1", assigneeMemberId: newId("member") }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("reparents an Issue and records issue.reparented", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    const parent = await client.issues.create({ projectKey: "DEV", title: "Epic" });
-    await client.issues.create({ projectKey: "DEV", title: "Child" });
-
-    const child = await client.issues.update({ key: "DEV-2", parentKey: "DEV-1" });
-
-    expect(child.parent).toMatchObject({ key: "DEV-1" });
-    const page = await client.events.list({ subjectType: "issue", subjectId: parent.id });
-    expect(page.events.map((e) => e.kind)).not.toContain("issue.reparented");
-    const childEvents = await client.events.list({ subjectType: "issue", subjectId: child.id });
-    expect(childEvents.events.findLast((e) => e.kind === "issue.reparented")).toMatchObject({
-      kind: "issue.reparented",
-      payload: { from: null, to: parent.id },
-    });
-  });
-
-  it("refuses a parent that is the Issue itself or one of its descendants", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.issues.create({ projectKey: "DEV", title: "Grandparent" });
-    await client.issues.create({ projectKey: "DEV", title: "Parent", parentKey: "DEV-1" });
-    await client.issues.create({ projectKey: "DEV", title: "Child", parentKey: "DEV-2" });
-
-    await expect(client.issues.update({ key: "DEV-1", parentKey: "DEV-1" })).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-    });
-    await expect(client.issues.update({ key: "DEV-1", parentKey: "DEV-3" })).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-    });
-  });
-
-  it("detaches a parent when passed null", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-    await client.issues.create({ projectKey: "DEV", title: "Epic" });
-    await client.issues.create({ projectKey: "DEV", title: "Child", parentKey: "DEV-1" });
-
-    expect(await client.issues.update({ key: "DEV-2", parentKey: null })).toMatchObject({
-      parent: null,
-      parentId: null,
+    const found = await asAgent.issues.list({});
+    expect(found.issues.map((issue) => issue.title)).toEqual(["Granted"]);
+    // An ungranted Project does not exist to it, rather than being refused.
+    await expect(asAgent.issues.get({ issue: "acme/hidden#1" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
     });
   });
 });

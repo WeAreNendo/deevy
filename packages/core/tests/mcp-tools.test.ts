@@ -32,35 +32,34 @@ describe("the committed tool manifest", () => {
     expect(await toolManifest()).toEqual(snapshot);
   });
 
-  it("carries the v1 tool set PLAN.md names", async () => {
+  it("carries the tool set the Sockets cut leaves", async () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
+    /*
+     * Fifteen. The plan predicted thirteen and was counting the runtime's own
+     * allowlist (docs/plans/sockets.md, slice 8), which is a different list:
+     * `links_list` and `links_remove` are tools an Agent may call and are not
+     * in the thirteen the supervisor grants a session. Out with the tracker
+     * went `documents_*`, `issues_move`, `issues_set_labels`, `issues_update`
+     * and `labels_*`; `runs_request_approval` comes back as `gates_request`
+     * when a Gate is a request on a Run.
+     */
     expect(names).toEqual([
+      // Socket-backed: it says something on the record where the record lives,
+      // and what deevy keeps is the Event, because a mention is a trigger.
       "comments_create",
-      "documents_get",
-      "documents_write",
-      // Added with live Documents (ADR-0021): the write an Agent usually
-      // means, which merges by construction because the rest of the Document
-      // is not in the payload.
-      "documents_write_section",
       "inbox_list",
+      // Opens the record in the tracker the Project is bound to, which is how
+      // an Agent cuts work up (ADR-0022, ADR-0024).
       "issues_create",
       "issues_get",
       "issues_list",
-      // The one thing a Human working an Issue from their own client does
-      // most, and an Agent's way to hand on an Issue it is done with. A Gate
-      // is still left by a ruling and never by a move (ADR-0016).
-      "issues_move",
-      "issues_set_labels",
-      "issues_update",
-      "labels_create",
-      "labels_list",
       "links_add",
       "links_list",
       // Removing one is bounded by the rule that an Agent may only take back
       // what its own Run attached (docs/plans/m3.md, slice 1).
       "links_remove",
-      // Where `issues_move` learns a State's id, and which States are Gates.
+      // Where an Agent learns what its Project is bound to.
       "projects_get",
       // The Human side of a Run: answering an Agent's question from the
       // client the Human read it in. Not an Agent's, and the manifest says so.
@@ -77,7 +76,6 @@ describe("the committed tool manifest", () => {
       // slice 9).
       "runs_list",
       "runs_post_activity",
-      "runs_request_approval",
       "runs_start",
     ]);
   });
@@ -100,12 +98,7 @@ describe("the committed tool manifest", () => {
 
     // The writing side of a Run is an Agent's alone: a Run is one Agent's
     // attempt on an Issue, and a Human is present for their own work (ADR-0016).
-    for (const name of [
-      "runs_start",
-      "runs_post_activity",
-      "runs_request_approval",
-      "runs_finish",
-    ]) {
+    for (const name of ["runs_start", "runs_post_activity", "runs_finish"]) {
       expect(facing(name)).toMatchObject({ agents: true, agentsOnly: true });
     }
     // Its reading side is anyone's, and answering is a Human's.
@@ -116,14 +109,15 @@ describe("the committed tool manifest", () => {
     for (const tool of manifest) if (tool.agentsOnly) expect(tool.agents).toBe(true);
   });
 
-  it("widens Labels and Links no further than that", async () => {
+  it("keeps a Socket and a ruling off the tool set", async () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
-    // A Label is Workspace-scoped, so a granted Agent renaming or deleting one
-    // reaches Projects it was never granted (docs/plans/m2.md), and a Gate is a
-    // Human's to rule on. Creating a Label is additive, so it ships.
-    expect(names).not.toContain("labels_update");
-    expect(names).not.toContain("labels_delete");
+    // Connecting a tool is an admin's, and it holds a credential (ADR-0024).
+    expect(names).not.toContain("sockets_connect");
+    expect(names).not.toContain("sockets_list");
+    // A Gate is a Human's to rule on, whatever credential asks (ADR-0004,
+    // ADR-0010). It is not a tool, and it does not become one in slice 2.
     expect(names).not.toContain("gates_approve");
+    expect(names).not.toContain("gates_reject");
   });
 });

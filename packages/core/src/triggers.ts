@@ -1,12 +1,11 @@
-import { issue as issueTable, run as runTable, type Db, type Event, type Run } from "@deevy/db";
-import { eq } from "drizzle-orm";
+import { run as runTable, type Db, type Event, type Run } from "@deevy/db";
 import type { EventInput } from "./events.ts";
 import { openRunFor } from "./runs.ts";
 import { newId } from "./ids.ts";
 
 /**
- * The four triggers (docs/PLAN.md) read the Event log rather than being spread
- * through the handlers that write it: this runs in `appendEvent`'s tail beside
+ * The triggers read the Event log rather than being spread through the handlers
+ * that write it: this runs in `appendEvent`'s tail beside
  * `deriveNotifications`, in the same request and right after the Event, and
  * reads only that Event. Nothing here decides what happened.
  *
@@ -36,26 +35,9 @@ export async function triggersFor(db: Db, event: Event): Promise<EventInput[]> {
     return startRuns(db, event, mentioned, "mention");
   }
 
-  // Where the Issue ended up, not how it got there: a State's rule fires on
-  // every arrival, including arriving by a Human's decision on a Gate.
-  // `gate.approval` is deliberately not one of these — a Gate short of its
-  // threshold has moved the Issue nowhere, so no State was entered and no rule
-  // fires (docs/plans/four-eyes-gates.md). It is the one kind `gate_awaiting`
-  // watches in notifications.ts that this does not.
-  if (
-    event.kind === "issue.created" ||
-    event.kind === "issue.moved" ||
-    event.kind === "gate.approved" ||
-    event.kind === "gate.rejected"
-  ) {
-    const events = await stateRule(db, event);
-    // A rejection has closed nothing: the Issue went back, and only arriving in
-    // a `done` State is a child finishing.
-    if (event.kind === "issue.moved" || event.kind === "gate.approved") {
-      events.push(...(await wakeParent(db, event)));
-    }
-    return events;
-  }
+  // A record the tracker closed is what finishes a piece of work now: `done`
+  // was a State's category, and there are no States (ADR-0024).
+  if (event.kind === "issue.closed") return wakeParent(db, event);
 
   return [];
 }
@@ -68,7 +50,7 @@ export async function triggersFor(db: Db, event: Event): Promise<EventInput[]> {
  *
  * Three ways this could loop, and what stops each. A parent that is itself a
  * child closes bottom-up, one wake per level, because each level is only
- * reached by its own child entering a `done` State. A parent that is already
+ * reached by its own child closing. A parent that is already
  * finished is not waiting for anything and is left alone. And a child reopened
  * and closed again cannot open a second Run, because at most one is open per
  * (issue, agent) and the first is still there.
@@ -76,26 +58,23 @@ export async function triggersFor(db: Db, event: Event): Promise<EventInput[]> {
 async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
   const child = await db.query.issue.findFirst({
     where: { id: event.subjectId },
-    columns: { id: true, parentId: true },
-    with: { state: { columns: { category: true } } },
+    columns: { id: true, parentId: true, state: true },
   });
-  if (!child?.parentId || child.state.category !== "done") return [];
+  if (!child?.parentId || child.state !== "closed") return [];
 
   const parent = await db.query.issue.findFirst({
     where: { id: child.parentId },
-    columns: { id: true, projectId: true },
-    with: { state: { columns: { category: true } } },
+    columns: { id: true, projectId: true, state: true },
   });
-  if (!parent || parent.state.category === "done") return [];
+  if (!parent || parent.state === "closed") return [];
 
-  // Across Projects: `done` is a State category and every Workflow has one, so
-  // a child in another Project finishing counts exactly as one here does.
+  // Across Projects and across Sockets: closed is closed, whoever said so, so
+  // a child in another tracker finishing counts exactly as one here does.
   const siblings = await db.query.issue.findMany({
     where: { parentId: parent.id },
-    columns: { id: true, createdBy: true },
-    with: { state: { columns: { category: true } } },
+    columns: { id: true, createdBy: true, state: true },
   });
-  if (siblings.some((one) => one.state.category !== "done")) return [];
+  if (siblings.some((one) => one.state !== "closed")) return [];
 
   /*
    * The Agent that opened them, and only where they agree on one: two Agents
@@ -155,49 +134,6 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
 async function grantedProject(db: Db, memberId: string, projectId: string): Promise<boolean> {
   const found = await db.query.projectGrant.findFirst({ where: { memberId, projectId } });
   return Boolean(found);
-}
-
-/**
- * Entering a State that names an Agent makes that Agent the Assignee and starts
- * a Run (PLAN.md's third trigger). The assignment is announced after the Run
- * exists, never before: the `issue.assigned` Event goes through this same tail,
- * and finding the Run already open is what stops it starting a second one.
- */
-async function stateRule(db: Db, event: Event): Promise<EventInput[]> {
-  const found = await db.query.issue.findFirst({
-    where: { id: event.subjectId },
-    columns: { id: true, assigneeMemberId: true },
-    with: { state: { columns: { triggerAgentMemberId: true } } },
-  });
-  const named = found?.state.triggerAgentMemberId;
-  if (!found || !named) return [];
-  const [agentMemberId] = await workingAgents(db, [named], event.workspaceId);
-  if (!agentMemberId) return [];
-
-  const events = await startRuns(db, event, [agentMemberId], "state_rule");
-  if (found.assigneeMemberId === agentMemberId) return events;
-
-  await db
-    .update(issueTable)
-    .set({ assigneeMemberId: agentMemberId, updatedAt: new Date() })
-    .where(eq(issueTable.id, found.id));
-  const agent = await db.query.member.findFirst({
-    where: { id: agentMemberId },
-    with: { user: true },
-  });
-  events.push({
-    kind: "issue.assigned",
-    subjectType: "issue",
-    subjectId: found.id,
-    projectId: event.projectId,
-    payload: {
-      from: found.assigneeMemberId,
-      to: agentMemberId,
-      toName: agent?.user.name ?? null,
-      byStateRule: true,
-    },
-  });
-  return events;
 }
 
 /**

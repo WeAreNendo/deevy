@@ -260,7 +260,7 @@ export function ChannelsPage() {
                       selected === anyValue
                         ? "Any"
                         : (projects.data?.projects.find((project) => project.id === selected)
-                            ?.key ?? selected)
+                            ?.slug ?? selected)
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -272,7 +272,7 @@ export function ChannelsPage() {
                   <SelectGroup>
                     {(projects.data?.projects ?? []).map((project) => (
                       <SelectItem key={project.id} value={project.id}>
-                        {project.key}
+                        {project.slug}
                       </SelectItem>
                     ))}
                   </SelectGroup>

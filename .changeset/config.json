@@ -20,7 +20,7 @@
       "@deevy/core",
       "@deevy/db",
       "@deevy/adapters",
-      "@deevy/editor",
+      "@deevy/sockets",
       "@deevy/web",
       "@deevy/server",
       "@deevy/agent",

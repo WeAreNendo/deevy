@@ -12,10 +12,11 @@ import type { Config } from "./config.ts";
  */
 export interface Run {
   id: string;
+  /** The tracker's own key for the record, which is what a Human reads. */
   issueKey: string;
   agentMemberId: string;
   triggeredByMemberId: string | null;
-  trigger: "assignment" | "mention" | "state_rule" | "schedule" | "manual";
+  trigger: "assignment" | "mention" | "schedule" | "manual" | "children_done";
   status: "pending" | "active" | "awaiting_input" | "completed" | "failed" | "stale";
   summary: string | null;
 }
@@ -42,7 +43,7 @@ export interface Notification {
     | "run_awaiting_input"
     | "run_finished"
     | "run_answered";
-  issue: { key: string } | null;
+  issue: { externalKey: string; url: string } | null;
   /** The Event it derives from. A `run.answered` names the Run in `subjectId`. */
   event: { kind: string; subjectType: string; subjectId: string };
 }
@@ -88,19 +89,20 @@ export interface Deevy {
    * ANDs the two filters, so the answer is exactly what the
    * one-open-Run-per-(Issue, Agent) rule is about.
    */
-  runsOn(issueKey: string): Promise<Run[]>;
+  /** An Issue is named by its id, its URL, or the key the tracker wrote (ADR-0024). */
+  runsOn(issue: string): Promise<Run[]>;
   run(runId: string): Promise<Run>;
   /** Opens a Run on an Issue. A `CONFLICT` means somebody already has one open. */
-  startRun(issueKey: string): Promise<Run>;
+  startRun(issue: string): Promise<Run>;
   postActivity(runId: string, kind: ActivityKind, body: string): Promise<void>;
   finishRun(runId: string, status: "completed" | "failed", summary: string): Promise<void>;
   /** Asks about the Gate this Run stopped at, and reports what was decided. */
   requestApproval(runId: string): Promise<Ruling>;
   /** Says something to the Humans watching the Issue, in prose. */
-  comment(issueKey: string, body: string): Promise<void>;
+  comment(issue: string, body: string): Promise<void>;
   /** Attaches evidence to the Issue, attributed to the Run that produced it. */
   addLink(
-    issueKey: string,
+    issue: string,
     link: {
       url: string;
       kind: "pull_request" | "commit" | "branch" | "url";
@@ -165,15 +167,15 @@ export function createDeevy({ config, fetch = globalThis.fetch }: DeevyOptions):
       const page = await call<{ runs: Run[] }>(`/runs?status=${status}`);
       return page.runs;
     },
-    async runsOn(issueKey) {
-      const page = await call<{ runs: Run[] }>(`/runs?issueKey=${encodeURIComponent(issueKey)}`);
+    async runsOn(issue) {
+      const page = await call<{ runs: Run[] }>(`/runs?issue=${encodeURIComponent(issue)}`);
       return page.runs;
     },
     run(runId) {
       return call<Run>(`/runs/${encodeURIComponent(runId)}`);
     },
-    async startRun(issueKey) {
-      return (await post(`/issues/${encodeURIComponent(issueKey)}/runs`)) as Run;
+    async startRun(issue) {
+      return (await post(`/issues/${encodeURIComponent(issue)}/runs`)) as Run;
     },
     async postActivity(runId, kind, body) {
       await post(`/runs/${encodeURIComponent(runId)}/activities`, { kind, body });
@@ -184,11 +186,11 @@ export function createDeevy({ config, fetch = globalThis.fetch }: DeevyOptions):
     async requestApproval(runId) {
       return (await post(`/runs/${encodeURIComponent(runId)}/request-approval`)) as Ruling;
     },
-    async comment(issueKey, body) {
-      await post(`/issues/${encodeURIComponent(issueKey)}/comments`, { body });
+    async comment(issue, body) {
+      await post(`/issues/${encodeURIComponent(issue)}/comments`, { body });
     },
-    async addLink(issueKey, link) {
-      await post(`/issues/${encodeURIComponent(issueKey)}/links`, link);
+    async addLink(issue, link) {
+      await post(`/issues/${encodeURIComponent(issue)}/links`, link);
     },
     async unread() {
       const page = await call<{ notifications: Notification[] }>("/inbox?unreadOnly=true");

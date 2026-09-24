@@ -1,16 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { mountSpa, openDatabase } from "@deevy/adapters/node";
-import {
-  API_PATH,
-  buildContext,
-  createApp,
-  createAuth,
-  createRoomServer,
-  liveRoomsOf,
-  signInProviders,
-  type AuthEnv,
-} from "@deevy/core";
+import { createApp, createAuth, signInProviders, type AuthEnv } from "@deevy/core";
+import { socketModules } from "@deevy/sockets";
 import { fetchClientMetadataResource } from "./cimd.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
@@ -57,17 +49,6 @@ export function buildServer(env: ServerEnv) {
   const origin = [env.webOrigin, env.baseURL].filter((o): o is string => Boolean(o));
   const identity = authEnv(env);
   const auth = createAuth({ db, env: identity });
-  // The rooms first: the app writes into them when an Agent writes a Document
-  // it has open, and on Node they are simply in the same process (ADR-0021).
-  const rooms = createRoomServer({
-    db,
-    // The room socket is the operations' live counterpart, so a bearer here is
-    // checked against the API resource. In practice a room is reached with a
-    // browser cookie and `roomAuthenticator` wants a Member, so this decides
-    // nothing today; it is said rather than defaulted because the day it does
-    // decide something, the default would have decided it quietly.
-    contextFrom: (request) => buildContext(db, auth, request.headers, env.baseURL, API_PATH),
-  });
   const app = createApp({
     // What this instance calls itself, in the API document a client discovers
     // it through, so a CLI can name the two versions that disagree rather than
@@ -76,7 +57,6 @@ export function buildServer(env: ServerEnv) {
     db,
     auth,
     origin,
-    liveRooms: liveRoomsOf(rooms),
     baseURL: env.baseURL,
     // Where a Human's browser finds this instance, when the SPA is somewhere
     // else: a Gate link and an invitation link are built on it, and the API's
@@ -84,17 +64,14 @@ export function buildServer(env: ServerEnv) {
     ...(env.webOrigin ? { webURL: env.webOrigin } : {}),
     secret: env.secret,
     devSignIn: env.devStubOAuth,
-    // The Node deployment always has rooms: the listener below serves them.
-    liveDocuments: true,
+    // The tools this build can speak (ADR-0024). A stub Socket is a development
+    // fixture, so it is offered only where the dev stub is already allowed.
+    sockets: socketModules({ devStub: env.devStubOAuth }),
     // What the sign-in page draws its buttons from: the providers this
     // environment configured, decided where they are registered rather than in
     // the SPA (docs/plans/sign-in.md).
     signInProviders: signInProviders(identity),
   });
   if (env.webDist) mountSpa(app, resolve(env.webDist));
-  // The rooms live beside the app rather than inside it: `createApp` builds
-  // request/response handlers, and an upgrade is neither (ADR-0021). The
-  // listener wires it — `serveRooms` in `rooms.ts` — the way the background
-  // runner is wired beside the listener rather than inside the app.
-  return { app, db, auth, rooms, close, authEnv: identity };
+  return { app, db, auth, close, authEnv: identity };
 }

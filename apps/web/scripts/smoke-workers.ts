@@ -366,13 +366,15 @@ function execute(persistTo: string, sql: string): Promise<void> {
  */
 function seedSilentRuns(persistTo: string, count: number): Promise<void> {
   const silentFor = 31 * 60 * 1000;
-  // An Issue each, because one Agent cannot hold two open Runs on one Issue and
+  // A record each, because one Agent cannot hold two open Runs on one Issue and
   // the database says so (`packages/db/src/schema/run.ts`). The sweep does not
-  // care which Issue a silent Run is on; what it needs is `count` of them.
+  // care which record a silent Run is on; what it needs is `count` of them.
   const issues = Array.from(
     { length: count },
     (_, at) =>
-      `('swept-issue-${String(at)}', 'swept-project', ${String(at + 1)}, 'Ship the thing', 'swept-state')`,
+      `('swept-issue-${String(at)}', 'swept-project', 'swept-socket', '${String(at)}', ` +
+      `'acme/sweep#${String(at)}', 'https://tracker.test/acme/sweep/${String(at)}', ` +
+      `'Ship the thing', 'open', 'Open', cast(unixepoch('subsecond') * 1000 as integer))`,
   ).join(", ");
   const runs = Array.from(
     { length: count },
@@ -386,9 +388,9 @@ function seedSilentRuns(persistTo: string, count: number): Promise<void> {
       `INSERT INTO user (id, name, email, kind) VALUES ('swept-user', 'Sweeper', 'sweeper@example.test', 'agent')`,
       `INSERT INTO member (id, workspace_id, user_id, role, kind) SELECT 'swept-member', id, 'swept-user', 'member', 'agent' FROM workspace LIMIT 1`,
       `INSERT INTO agent (member_id) VALUES ('swept-member')`,
-      `INSERT INTO project (id, workspace_id, key, name) SELECT 'swept-project', id, 'SWP', 'Sweeping' FROM workspace LIMIT 1`,
-      `INSERT INTO workflow_state (id, project_id, name, position, category) VALUES ('swept-state', 'swept-project', 'Doing', 1, 'active')`,
-      `INSERT INTO issue (id, project_id, number, title, state_id) VALUES ${issues}`,
+      `INSERT INTO socket (id, workspace_id, provider, capabilities, name, identity, config) SELECT 'swept-socket', id, 'stub', '["tracker"]', 'Sweeping', '{"login":"deevy","id":"bot","mentionHandle":"@deevy"}', '{}' FROM workspace LIMIT 1`,
+      `INSERT INTO project (id, workspace_id, slug, name, tracker_socket_id, tracker_scope, tracker_scope_key) SELECT 'swept-project', id, 'sweeping', 'Sweeping', 'swept-socket', '{"scopeKey":"acme/sweep"}', 'stub:acme/sweep' FROM workspace LIMIT 1`,
+      `INSERT INTO issue (id, project_id, socket_id, external_id, external_key, url, title, state, state_name, external_updated_at) VALUES ${issues}`,
       `INSERT INTO run (id, issue_id, agent_member_id, trigger, status, last_activity_at) VALUES ${runs}`,
     ].join("; "),
   );
@@ -593,24 +595,12 @@ async function liveUpdatesInsideAWorkersBudget(origin: string): Promise<void> {
   const admin = await signIn(origin, adminEmail);
   if (admin.cookie.length === 0) throw new Error(`the admin could not sign in: ${admin.location}`);
 
-  // An Issue somewhere it can be moved from. The default Workflow opens with
-  // three Gates, and an Issue only leaves a Gate by being approved through it,
-  // so three approvals put it in Build, which is nobody's Gate.
-  const project = await must(origin, "projects/create", { name: "Live", key: "LIV" }, admin.cookie);
-  const states = (project.states ?? []) as Array<{ id: string; name: string }>;
-  const issue = await must(
-    origin,
-    "issues/create",
-    { projectKey: "LIV", title: "Watch me move" },
-    admin.cookie,
-  );
-  const key = String(issue.key);
-  for (const _ of ["Intent", "Spec", "Plan"]) {
-    await must(origin, "gates/approve", { key }, admin.cookie);
-  }
-  const review = states.find((state) => state.name === "Review");
-  if (!review)
-    throw new Error(`the default Workflow has no Review State: ${JSON.stringify(states)}`);
+  /*
+   * Something a Human can cause over HTTP, on a deployment that speaks to no
+   * tracker. A Worker registers no provider (ADR-0024), so a record cannot be
+   * opened here and the Events this phase watches for are Workspace ones: what
+   * is being proved is the stream, not what happened.
+   */
 
   // Two browsers, both watching, neither told anything by the other.
   const first = watch(origin, admin.cookie);
@@ -625,14 +615,15 @@ async function liveUpdatesInsideAWorkersBudget(origin: string): Promise<void> {
     );
   }
 
-  await must(origin, "issues/move", { key, stateId: review.id }, admin.cookie);
+  await must(origin, "agents/create", { name: "Watched" }, admin.cookie);
   const bothSaw = await until(
-    () => kindsSeenBy(first).includes("issue.moved") && kindsSeenBy(second).includes("issue.moved"),
+    () =>
+      kindsSeenBy(first).includes("agent.created") && kindsSeenBy(second).includes("agent.created"),
     // One poll, and a second one's worth of slack for a loaded machine.
     2 * STREAM_POLL_MS,
   );
   check(
-    "two browsers watching the same Workspace both see an Issue move",
+    "two browsers watching the same Workspace both see the same Event",
     bothSaw,
     `one saw ${kindsSeenBy(first).join(",") || "nothing"} and the other ${kindsSeenBy(second).join(",") || "nothing"}`,
   );
@@ -655,350 +646,25 @@ async function liveUpdatesInsideAWorkersBudget(origin: string): Promise<void> {
   const cursor = typeof last?.cursor === "number" ? last.cursor : 0;
   const missed = await must(
     origin,
-    "issues/create",
-    { projectKey: "LIV", title: "Appended while nobody was watching" },
+    "channels/create",
+    { name: "#nobody-was-watching", webhookUrl: "https://hooks.slack.example/T0/B0/x" },
     admin.cookie,
   );
   const resumed = watch(origin, admin.cookie, cursor);
   const caughtUp = await until(
-    () => kindsSeenBy(resumed).includes("issue.created"),
+    () => kindsSeenBy(resumed).includes("channel.created"),
     2 * STREAM_POLL_MS,
   );
   check(
     "the stream that follows it resumes from that cursor and misses nothing",
     // Exactly what the first stream did not deliver: the Event appended after
-    // it ended, and not the move it had already handed over.
-    caughtUp && !kindsSeenBy(resumed).includes("issue.moved"),
-    `${String(missed.key)} was not delivered; from ${String(cursor)} the stream saw ${
+    // it ended, and not the one it had already handed over.
+    caughtUp && !kindsSeenBy(resumed).includes("agent.created"),
+    `${String(missed.id)} was not delivered; from ${String(cursor)} the stream saw ${
       kindsSeenBy(resumed).join(",") || "nothing"
     }`,
   );
   resumed.stop();
-}
-
-/** The protocol revision the loop speaks, and the one URL elicitation needs. */
-const mcpProtocolVersion = "2026-07-28";
-
-/**
- * What a client says about itself on every call. URL elicitation is negotiated
- * per request, so a client that does not declare it is refused rather than
- * handed a link it cannot open.
- */
-const mcpEnvelope = {
-  "io.modelcontextprotocol/protocolVersion": mcpProtocolVersion,
-  "io.modelcontextprotocol/clientCapabilities": { elicitation: { url: {} } },
-  "io.modelcontextprotocol/clientInfo": { name: "claude-code", version: "0" },
-};
-
-/** One tool call's answer, narrowed to what this script reads. */
-interface ToolAnswer {
-  result?: Record<string, unknown>;
-  error?: { code: number; message: string };
-}
-
-/**
- * One tool call over the deployed `/mcp` surface, carrying nothing but an
- * Agent's API key — which is all a Claude Code loop running outside deevy has.
- * The same request `packages/core/tests/milestone.test.ts` makes in process,
- * made over HTTP against workerd instead.
- */
-async function tool(
-  origin: string,
-  key: string,
-  name: string,
-  args: Record<string, unknown>,
-  requestState?: string,
-): Promise<ToolAnswer> {
-  const response = await fetch(`${origin}/mcp`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream",
-      "mcp-protocol-version": mcpProtocolVersion,
-      "mcp-method": "tools/call",
-      "mcp-name": name,
-      authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name,
-        arguments: args,
-        ...(requestState
-          ? { requestState, inputResponses: { approval: { action: "accept" } } }
-          : {}),
-        _meta: mcpEnvelope,
-      },
-    }),
-  });
-  const body = await response.text();
-  if (response.status !== 200) {
-    throw new Error(`${name} was ${String(response.status)}: ${body.slice(0, 300)}`);
-  }
-  return JSON.parse(body) as ToolAnswer;
-}
-
-/** What a tool call returned, or the reason it is worth stopping over. */
-function structured(name: string, answer: ToolAnswer): Record<string, unknown> {
-  if (answer.error) throw new Error(`${name} failed: ${JSON.stringify(answer.error)}`);
-  if (answer.result?.isError) {
-    throw new Error(`${name} refused: ${JSON.stringify(answer.result.content)}`);
-  }
-  return (answer.result?.structuredContent ?? {}) as Record<string, unknown>;
-}
-
-/**
- * Slice 10: the milestone's own scenario, on workerd.
- *
- * `packages/core/tests/milestone.test.ts` walks this loop in process against
- * `node:sqlite`, which proves the core and says nothing about the runtime M3
- * is about. This is the same walk over HTTP against the built Worker on a
- * local D1: everything the loop does goes over `/mcp` with an Agent's API key
- * and nothing else, everything the Human does goes over `/rpc` with a session
- * cookie the Worker minted, and the two halves meet only where they would in
- * production (docs/plans/m3.md slice 10, docs/m3-acceptance.md).
- */
-async function theAgentLoopOnWorkerd(origin: string): Promise<void> {
-  const admin = await signIn(origin, adminEmail);
-  if (admin.cookie.length === 0) throw new Error(`the admin could not sign in: ${admin.location}`);
-  const cookie = admin.cookie;
-
-  // A browser left open on the board before any of this happens, and never
-  // reloaded: what the Human is looking at while the loop works.
-  const board = watch(origin, cookie);
-  await until(() => board.messages.length > 0, 2 * STREAM_POLL_MS);
-
-  // What an admin does on a fresh instance, all of it over the surface the SPA
-  // calls: a Project, an Agent, the grant that makes the Project exist to it,
-  // and a key that is shown exactly once.
-  const project = await must(origin, "projects/create", { name: "Planning", key: "PLN" }, cookie);
-  const planner = await must(origin, "agents/create", { name: "Planner" }, cookie);
-  const plannerId = String(planner.id);
-  await must(origin, "agents/grants/add", { memberId: plannerId, projectId: project.id }, cookie);
-  const issued = await must(
-    origin,
-    "agents/keys/issue",
-    { memberId: plannerId, name: "ci" },
-    cookie,
-  );
-  const key = String(issued.key);
-
-  // Assigning to the Agent is the trigger: a Run exists before the loop wakes.
-  // The two approvals are the Human's, and they put the Issue in the Plan Gate
-  // — the one the loop is about to reach.
-  const issue = await must(
-    origin,
-    "issues/create",
-    { projectKey: "PLN", title: "Ship M3" },
-    cookie,
-  );
-  const issueKey = String(issue.key);
-  await must(origin, "issues/update", { key: issueKey, assigneeMemberId: plannerId }, cookie);
-  await must(origin, "gates/approve", { key: issueKey }, cookie);
-  await must(origin, "gates/approve", { key: issueKey }, cookie);
-
-  const triggered = (await must(origin, "runs/list", { issueKey }, cookie)).runs as Array<{
-    id: string;
-    trigger: string;
-    status: string;
-  }>;
-
-  // From here everything is the loop, over MCP, with nothing but its key.
-  const mine = structured("runs_list", await tool(origin, key, "runs_list", { status: "pending" }))
-    .runs as Array<{ id: string; issueKey: string }>;
-  check(
-    "an assignment opens a Run, and an Agent's API key alone finds it over /mcp",
-    triggered.length === 1 &&
-      triggered[0]?.trigger === "assignment" &&
-      triggered[0]?.status === "pending" &&
-      mine.length === 1 &&
-      mine[0]?.id === triggered[0]?.id &&
-      mine[0]?.issueKey === issueKey,
-    `the Human sees ${JSON.stringify(triggered)}, the Agent ${JSON.stringify(mine)}`,
-  );
-
-  const read = structured("issues_get", await tool(origin, key, "issues_get", { key: issueKey }));
-  check(
-    "the Issue the loop picks up is the assigned one, waiting at the Plan Gate",
-    read.key === issueKey && (read.state as { name?: string } | undefined)?.name === "Plan",
-    `it read ${JSON.stringify({ key: read.key, state: read.state })}`,
-  );
-
-  const runId = String(triggered[0]?.id ?? "");
-
-  await tool(origin, key, "runs_post_activity", {
-    runId,
-    kind: "thought",
-    body: "Reading the intent",
-  });
-  const intent = structured(
-    "documents_get",
-    await tool(origin, key, "documents_get", { issueKey, name: "intent" }),
-  );
-  await tool(origin, key, "documents_write", {
-    issueKey,
-    name: "plan",
-    body: "## Files that change\n- packages/core\n",
-  });
-
-  // What the Human sees of that work afterwards, over /rpc: the narration on
-  // the Run's feed and the Document on the Issue.
-  const feed = (await must(origin, "runs/get", { runId }, cookie)).activities as Array<{
-    kind: string;
-    body: string;
-  }>;
-  const plan = await must(origin, "documents/get", { issueKey, name: "plan" }, cookie);
-  check(
-    "it reads the intent, narrates the work, and writes a plan the Human can read",
-    String(intent.body).includes("## Problem") &&
-      feed.some((one) => one.kind === "thought" && one.body === "Reading the intent") &&
-      String(plan.body).includes("- packages/core"),
-    `the intent is ${JSON.stringify(String(intent.body).slice(0, 40))}, the feed ${JSON.stringify(
-      feed.map((one) => [one.kind, one.body]),
-    )} and the plan ${JSON.stringify(plan.body)}`,
-  );
-
-  // It reaches the Plan Gate and asks. The Run stops, and the link it hands
-  // back is for a Human to open — the Issue's own page, with that Gate in
-  // focus. Which Gate that is comes from the Human's view of the Workflow, so
-  // the two halves of the link are named by different surfaces.
-  const asked = (await tool(origin, key, "runs_request_approval", { runId })).result as {
-    resultType?: string;
-    requestState?: string;
-    inputRequests?: { approval?: { params?: { url?: string; mode?: string } } };
-  };
-  const planGate = ((project.states ?? []) as Array<{ id: string; name: string }>).find(
-    (state) => state.name === "Plan",
-  );
-  const waiting = await must(origin, "runs/get", { runId }, cookie);
-  check(
-    "at the Plan Gate it raises a URL elicitation, and the Run stops to wait",
-    asked.resultType === "input_required" &&
-      asked.inputRequests?.approval?.params?.mode === "url" &&
-      asked.inputRequests.approval.params.url ===
-        `${origin}/issues/${issueKey}?gate=${String(planGate?.id)}` &&
-      waiting.status === "awaiting_input",
-    `it answered ${JSON.stringify(asked)}, the Plan Gate is ${String(planGate?.id)}, and the Run is ${String(waiting.status)}`,
-  );
-
-  // The Human opens that link and approves. The loop retries the same call,
-  // carrying back the state it was given, and is told the ruling.
-  await must(origin, "gates/approve", { key: issueKey, note: "Looks right" }, cookie);
-  const answered = structured(
-    "runs_request_approval",
-    await tool(origin, key, "runs_request_approval", { runId }, asked.requestState),
-  );
-  const carriedOn = await must(origin, "runs/get", { runId }, cookie);
-  check(
-    "the Human approves, and the call the loop retries comes back approved",
-    answered.status === "approved" &&
-      answered.note === "Looks right" &&
-      carriedOn.status === "active",
-    `the loop was told ${JSON.stringify(answered)} and the Run is ${String(carriedOn.status)}`,
-  );
-
-  // It carries on, attaches the pull request it opened, and finishes.
-  await tool(origin, key, "links_add", {
-    issueKey,
-    url: "https://github.com/WeAreNendo/deevy/pull/12",
-    runId,
-  });
-  const finished = structured(
-    "runs_finish",
-    await tool(origin, key, "runs_finish", { runId, status: "completed", summary: "Planned it" }),
-  );
-
-  // What the Human is left with: a finished Run, the evidence attached to the
-  // Issue, and the Issue itself past the Gate it was waiting at.
-  const done = await must(origin, "runs/get", { runId }, cookie);
-  const links = (await must(origin, "links/list", { issueKey }, cookie)).links as Array<
-    Record<string, unknown>
-  >;
-  const moved = await must(origin, "issues/get", { key: issueKey }, cookie);
-  check(
-    "it finishes the Run with a summary and a pull request Link, and the Issue moves on",
-    finished.status === "completed" &&
-      finished.summary === "Planned it" &&
-      done.status === "completed" &&
-      done.summary === "Planned it" &&
-      links.length === 1 &&
-      links[0]?.kind === "pull_request" &&
-      links[0]?.ref === "12" &&
-      (moved.state as { name?: string } | undefined)?.name === "Build",
-    `the loop was told ${JSON.stringify(finished)}, the Human sees ${JSON.stringify({ status: done.status, summary: done.summary })}, the Links are ${JSON.stringify(links)} and the Issue is in ${JSON.stringify(moved.state)}`,
-  );
-
-  const inbox = (await must(origin, "inbox/list", {}, cookie)).notifications as Array<{
-    kind: string;
-    event?: { subjectId?: string };
-  }>;
-  check(
-    "the Human's inbox holds the run_finished Notification for that Run",
-    inbox.some((row) => row.kind === "run_finished" && row.event?.subjectId === runId),
-    `the inbox holds ${JSON.stringify(inbox.map((row) => [row.kind, row.event?.subjectId]))}`,
-  );
-
-  // And the Event log tells the whole story. The kinds are the ones the same
-  // walk records on Node (packages/core/tests/milestone.test.ts), so a runtime
-  // that quietly dropped one would say so here.
-  const me = await must(origin, "me/get", undefined, cookie);
-  const adminMemberId = String((me.member as { id?: string } | null)?.id);
-  const log = (
-    await must(origin, "events/list", { subjectType: "run", subjectId: runId, limit: 200 }, cookie)
-  ).events as Array<{ kind: string; actorMemberId: string | null }>;
-  // Accountability reads straight off the log: the Agent narrated its own
-  // work, and the two Events it could not cause itself carry the Human who
-  // did — the admin assigned the Issue, which started the Run, and the admin
-  // decided the Gate.
-  const humansTurn = ["run.started", "run.answered"];
-  const actors = log.map((row) => [
-    row.kind,
-    row.actorMemberId === adminMemberId
-      ? "the Human"
-      : row.actorMemberId === plannerId
-        ? "the Agent"
-        : String(row.actorMemberId),
-  ]);
-  check(
-    "the Event log tells the whole story, with the Agent as actor and the Human one hop away",
-    log.map((row) => row.kind).join(",") ===
-      [
-        "run.started",
-        "run.activity",
-        "run.activity",
-        "run.awaiting_input",
-        "run.answered",
-        "run.activity",
-        "run.completed",
-      ].join(",") &&
-      log.every(
-        (row) => row.actorMemberId === (humansTurn.includes(row.kind) ? adminMemberId : plannerId),
-      ),
-    `the log reads ${JSON.stringify(actors)}`,
-  );
-
-  // And the board updated itself while all of that happened. The three Events
-  // are the ones a Human watching would care about: the Run stopping to ask,
-  // the Gate they then decided, and the Run finishing. An approval carries the
-  // Issue out of the Gate itself, so `gate.approved` is the move — there is no
-  // second `issue.moved` behind it.
-  const followed = await until(
-    () =>
-      ["run.awaiting_input", "gate.approved", "run.completed"].every((kind) =>
-        kindsSeenBy(board).includes(kind),
-      ),
-    3 * STREAM_POLL_MS,
-  );
-  board.stop();
-  check(
-    "a board opened before the loop began follows it without anyone reloading",
-    followed,
-    `it was handed ${kindsSeenBy(board).join(",") || "nothing"}${
-      board.failure ? `, and failed with ${describeFailure(board.failure)}` : ""
-    }`,
-  );
 }
 
 /** One POST a subscribed URL was given, narrowed to what this script reads. */
@@ -1055,17 +721,22 @@ async function receiver(): Promise<Receiver> {
 /** The secret every subscription in this run signs with. It never comes back out. */
 const subscriptionSecret = "whsec-smoke-secret-not-a-real-one";
 
-/** A Project and a subscription pointed at one path of the receiver. */
+/**
+ * A subscription pointed at one path of the receiver.
+ *
+ * It listens for `agent.created`, which is the Event this deployment can be
+ * made to append: a Worker registers no provider, so nothing here opens a
+ * record (ADR-0024). What is being proved is the delivery, not its subject.
+ */
 async function subscribe(
   origin: string,
   cookie: string,
-  options: { project: string; key: string; url: string },
+  options: { url: string },
 ): Promise<string> {
-  await must(origin, "projects/create", { name: options.project, key: options.key }, cookie);
   const created = await must(
     origin,
     "webhooks/create",
-    { url: options.url, secret: subscriptionSecret, kinds: ["issue.created"] },
+    { url: options.url, secret: subscriptionSecret, kinds: ["agent.created"] },
     cookie,
   );
   return String(created.id);
@@ -1107,12 +778,8 @@ async function queuesForAnAccountThatHasThem(origin: string, far: Receiver): Pro
   const admin = await signIn(origin, adminEmail);
   if (admin.cookie.length === 0) throw new Error(`the admin could not sign in: ${admin.location}`);
 
-  const landing = await subscribe(origin, admin.cookie, {
-    project: "Queued",
-    key: "QUE",
-    url: `${far.origin}/lands`,
-  });
-  await must(origin, "issues/create", { projectKey: "QUE", title: "Tell the URL" }, admin.cookie);
+  const landing = await subscribe(origin, admin.cookie, { url: `${far.origin}/lands` });
+  await must(origin, "agents/create", { name: "Tell the URL" }, admin.cookie);
 
   // No trigger is fired here, and none fires on its own: wrangler dev runs a
   // Cron Trigger only when something asks it to (see `trigger` above). So a
@@ -1155,12 +822,8 @@ async function queuesForAnAccountThatHasThem(origin: string, far: Receiver): Pro
   // the row itself says there is nothing left to try. The eighth attempt is
   // where `maxWebhookAttempts` runs out and the log says so — which is what
   // the sweep would have written, from the same function.
-  const refusing = await subscribe(origin, admin.cookie, {
-    project: "Refused",
-    key: "REF",
-    url: `${far.origin}/fails`,
-  });
-  await must(origin, "issues/create", { projectKey: "REF", title: "Nobody answers" }, admin.cookie);
+  const refusing = await subscribe(origin, admin.cookie, { url: `${far.origin}/fails` });
+  await must(origin, "agents/create", { name: "Nobody answers" }, admin.cookie);
   const ranOut = await until(() => far.count("/fails") >= 8, 30_000);
   // One more beat than the eighth POST needs, so a ninth attempt would have
   // been counted by the time this reads the log.
@@ -1191,12 +854,8 @@ async function theCronPathAlone(origin: string, far: Receiver): Promise<void> {
   const admin = await signIn(origin, adminEmail);
   if (admin.cookie.length === 0) throw new Error(`the admin could not sign in: ${admin.location}`);
 
-  const subscriptionId = await subscribe(origin, admin.cookie, {
-    project: "Swept",
-    key: "SWT",
-    url: `${far.origin}/cron`,
-  });
-  await must(origin, "issues/create", { projectKey: "SWT", title: "Tell the URL" }, admin.cookie);
+  const subscriptionId = await subscribe(origin, admin.cookie, { url: `${far.origin}/cron` });
+  await must(origin, "agents/create", { name: "Tell the URL" }, admin.cookie);
 
   // There is no binding on this configuration, so `createApp` discards the job
   // and nothing carries the row anywhere. Waiting is the assertion.
@@ -1364,76 +1023,6 @@ async function withServer(
  * over it, and the version the room writes when the typing stops — read back
  * over the API, so what is proven is the whole path and not a binding's name.
  */
-async function aDocumentIsLiveOnWorkerd(origin: string): Promise<void> {
-  const admin = await signIn(origin, adminEmail);
-  if (admin.cookie.length === 0) throw new Error(`the admin could not sign in: ${admin.location}`);
-
-  const health = (await (await fetch(`${origin}/rpc/health/ping`, { method: "POST" })).json()) as {
-    json?: { liveDocuments?: boolean };
-  };
-  check(
-    "a Worker with the ROOMS binding says its Documents are live",
-    health.json?.liveDocuments === true,
-    `liveDocuments ${String(health.json?.liveDocuments)}`,
-  );
-
-  const project = await rpc(
-    origin,
-    "projects/create",
-    { name: "Checkout", key: "CHK" },
-    admin.cookie,
-  );
-  const issue = await rpc(
-    origin,
-    "issues/create",
-    { projectKey: (project.output as { key?: string }).key, title: "Live Documents" },
-    admin.cookie,
-  );
-  const issueKey = (issue.output as { key?: string }).key ?? "";
-  const room = `document:${issueKey}:intent`;
-  check(
-    "the room name the SPA builds is the one the server parses",
-    room.startsWith("document:"),
-    room,
-  );
-
-  // The upgrade itself: the room in the query string, because that is what
-  // routes to its Durable Object. No cookie on this socket and none needed —
-  // Hocuspocus authenticates a *document* rather than a connection, so what is
-  // proven here is that the object exists, routes and speaks.
-  const socket = new WebSocket(
-    `${origin.replace("http", "ws")}/collab?room=${encodeURIComponent(room)}`,
-  );
-  const opened = await new Promise<boolean>((settled) => {
-    socket.addEventListener("open", () => settled(true));
-    socket.addEventListener("error", () => settled(false));
-    setTimeout(() => settled(false), 10_000);
-  });
-  check("the Durable Object answers a websocket upgrade on /collab", opened, "it did not open");
-  socket.close();
-
-  // And the room is reachable as a room: the Worker's own LiveRooms port goes
-  // through the same object, so a write that finds nobody in it still lands.
-  const written = await rpc(
-    origin,
-    "documents/write",
-    { issueKey, name: "intent", body: "## Problem\n\nWritten through the Worker." },
-    admin.cookie,
-  );
-  const read = await rpc(origin, "documents/get", { issueKey, name: "intent" }, admin.cookie);
-  const document = read.output as { body?: string; basis?: string | null };
-  check(
-    "a Document written on workerd reads back with a basis to write from",
-    document.body?.includes("Written through the Worker.") === true &&
-      typeof document.basis === "string",
-    `write ${String(written.status)}, basis ${typeof document.basis}, body ${String(document.body).slice(0, 40)}`,
-  );
-  check(
-    "the room name the SPA builds is the one the server parses",
-    room.startsWith("document:"),
-    room,
-  );
-}
 
 /** Slice 4: everything deevy serves that needs no signed-in Human. */
 async function theWorkerServesDeevy(origin: string): Promise<void> {
@@ -1675,26 +1264,6 @@ try {
     aHumanSignsIn,
   );
 
-  // Live Documents, which on this deployment are a Durable Object: the one
-  // phase that runs one (ADR-0021).
-  const roomPort = await freePort();
-  await withServer(
-    persistTo,
-    {
-      config: await stubbedOutside(),
-      port: roomPort,
-      vars: {
-        BETTER_AUTH_URL: `http://127.0.0.1:${String(roomPort)}`,
-        BETTER_AUTH_SECRET: "smoke-secret-that-is-at-least-32-characters",
-        GITHUB_CLIENT_ID: "stub-client-id",
-        GITHUB_CLIENT_SECRET: "stub-client-secret",
-        DEEVY_ADMIN_EMAIL: adminEmail,
-        DEEVY_WORKSPACE_NAME: "Acme",
-      },
-    },
-    aDocumentIsLiveOnWorkerd,
-  );
-
   // The Cron Trigger, on the Workspace the sign-in just created. The rows go
   // in while nothing is serving, so one SQLite file has one writer, and the
   // phase reads them back over the API rather than reaching past the Worker.
@@ -1739,29 +1308,14 @@ try {
     liveUpdatesInsideAWorkersBudget,
   );
 
-  // The milestone itself, on the runtime the milestone is about: a loop
-  // outside deevy working an assigned Issue over /mcp with an Agent's API key,
-  // and a Human deciding its Gate over /rpc. Its own server for the reason the
-  // others have theirs — the elicitation hands back a link built from
-  // BETTER_AUTH_URL, and a Human has to be able to open it.
-  const loopPort = await freePort();
-  await withServer(
-    persistTo,
-    {
-      config: await stubbedOutside(),
-      port: loopPort,
-      vars: {
-        BETTER_AUTH_URL: `http://127.0.0.1:${String(loopPort)}`,
-        BETTER_AUTH_SECRET: "smoke-secret-that-is-at-least-32-characters",
-        GITHUB_CLIENT_ID: "stub-client-id",
-        GITHUB_CLIENT_SECRET: "stub-client-secret",
-        DEEVY_ADMIN_EMAIL: adminEmail,
-        DEEVY_WORKSPACE_NAME: "Acme",
-      },
-    },
-    theAgentLoopOnWorkerd,
-  );
-
+  /*
+   * Two phases used to sit here: a live Document on workerd, and the whole
+   * agent loop over /mcp with a Human ruling its Gate over /rpc. Both went
+   * with the tracker (ADR-0024) — there is no Document and, until a Gate is a
+   * request on a Run, nothing to rule. The loop comes back in slice 8 of
+   * docs/plans/sockets.md, where the acceptance walk is rewritten around a
+   * Socket, a Checkpoint and a Proposal and proves the milestone again.
+   */
   // Slice 9, in two halves that differ only in whether the account has Queues.
   // One receiver serves both, so the counts each phase asserts are the same
   // server's, and the second half is subscribed to a path the first never used.

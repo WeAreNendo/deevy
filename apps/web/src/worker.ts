@@ -10,9 +10,8 @@ import {
   type AuthEnv,
   type DueWorkLimits,
 } from "@deevy/core";
+import { socketModules } from "@deevy/sockets";
 import type { WorkerBindings, WorkerEnv } from "./env.ts";
-export { DocumentRoom } from "./rooms.ts";
-import { workerLiveRooms } from "./rooms.ts";
 import { readWorkerEnv, workerAuthEnv } from "./env.ts";
 
 /** Written by the build from package.json; see vite.config.ts. */
@@ -94,12 +93,10 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // The buttons the sign-in page draws, from the same entries Better Auth
       // was just registered with (docs/plans/sign-in.md).
       signInProviders: signInProviders(authEnv),
-      // Live Documents need a Durable Object, which is a paid feature: without
-      // the binding every editor stays exactly what it was (ADR-0021).
-      liveDocuments: Boolean(bindings.ROOMS),
-      // And where to reach them, so an Agent's write lands in the room a Human
-      // has open rather than only in the row behind it.
-      ...(bindings.ROOMS ? { liveRooms: workerLiveRooms(bindings.ROOMS) } : {}),
+      // The tools this build can speak (ADR-0024). The stub is registered only
+      // where the entry says it may be, which is never in production.
+      // A Worker is never the deployment a stub belongs in.
+      sockets: socketModules(),
       // Only when the account has Queues. Absent, `createApp` discards jobs
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).
@@ -139,22 +136,6 @@ const cronLimits: DueWorkLimits = { maxPasses: 1, sweepLimit: 20, deliveryLimit:
 
 export default {
   async fetch(request: Request, bindings: WorkerBindings): Promise<Response> {
-    // A room is one live text, so it is one Durable Object, named after the
-    // room rather than after the connection (ADR-0021). Nothing else about the
-    // request matters here: the object itself decides who may join.
-    const url = new URL(request.url);
-    if (url.pathname === "/collab") {
-      const name = url.searchParams.get("room");
-      if (!name) return new Response("A room has a name", { status: 400 });
-      const rooms = bindings.ROOMS;
-      if (!rooms) {
-        return new Response("This deployment has no Durable Objects, so no live Documents", {
-          status: 501,
-        });
-      }
-      return rooms.get(rooms.idFromName(name)).fetch(request);
-    }
-
     const isolate = isolateFor(bindings);
     await isolate.ready;
     return isolate.app.fetch(request);

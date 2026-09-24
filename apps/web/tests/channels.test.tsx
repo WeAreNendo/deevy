@@ -28,7 +28,7 @@ const stub = vi.hoisted(() => ({
 
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
-  const { stubClient } = await import("./stub-client.ts");
+  const { stubClient, stubProject } = await import("./stub-client.ts");
   const client = stubClient({
     channels: {
       list: async () => ({ channels: stub.channels }),
@@ -48,7 +48,9 @@ vi.mock("../src/lib/orpc.ts", async () => {
         return { rules: stub.rules };
       },
     },
-    projects: { list: async () => ({ projects: [{ id: "p1", key: "DEV", name: "deevy" }] }) },
+    projects: {
+      list: async () => ({ projects: [stubProject("acme-deevy", "deevy", { id: "p1" })] }),
+    },
   });
   return { client, orpc: createTanstackQueryUtils(client) };
 });

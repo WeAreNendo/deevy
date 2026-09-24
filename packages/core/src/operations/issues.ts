@@ -1,33 +1,25 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
-import { issue as issueTable, type Db } from "@deevy/db";
+import type { Db } from "@deevy/db";
 import {
   delegationRefusalMessage,
-  insertIssue,
-  isSelfOrDescendant,
-  issueKey,
-  nextIssueNumber,
   refusesDelegation,
+  routeIssueTo,
+  upsertProjection,
 } from "../issues.ts";
-import { oneLabelPerScope, replaceIssueLabels } from "../labels.ts";
-import { resolveMentions } from "../mentions.ts";
-import { assertLeavable, enterState } from "../workflow.ts";
 import { IssueDetailSchema, IssueSummarySchema } from "../schemas.ts";
+import { requireSocket, requireTracker, socketModuleFor } from "../sockets/registry.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import { defineOperation, type ContextFor } from "./registry.ts";
 import {
-  ProjectKeyLookup,
+  ProjectSlugLookup,
   QueryFlag,
   issueWith,
   loadIssue,
-  openStateDocument,
   requireAssignee,
-  requireIssue,
-  requireIssueForMove,
   requireProject,
-  projectVisible,
-  withKey,
+  resolveIssueRef,
 } from "./shared.ts";
 
 /**
@@ -62,123 +54,131 @@ async function assertRoomBelow(
   });
 }
 
+/** A page of a feed: the moment and the row, so two changes in one millisecond still order. */
+const IssueCursor = /^(\d+):(.+)$/;
+
+function parseIssueCursor(cursor: string): { at: Date; id: string } {
+  const match = IssueCursor.exec(cursor);
+  if (!match) throw new ORPCError("BAD_REQUEST", { message: "Not a cursor" });
+  return { at: new Date(Number(match[1])), id: match[2] ?? "" };
+}
+
 export const issues = {
   create: defineOperation({
     name: "issues.create",
-    summary: "Add an Issue to a Project, in the first State of its Workflow",
+    summary: "Open a record in the tracker a Project is bound to, and project it",
     method: "POST",
     path: "/issues",
     auth: "member",
     agents: true,
     mcp: true,
     input: z.object({
-      projectKey: ProjectKeyLookup,
+      /**
+       * The Issue this one is a part of, by id, URL or key. Its Project is
+       * where the record is opened unless `projectSlug` names another one the
+       * caller was granted (docs/plans/sub-issue-delegation.md).
+       */
+      parent: z.string().trim().min(1).nullish(),
       title: z.string().trim().min(1).max(300),
-      description: z.string().max(100_000).nullish(),
-      assigneeMemberId: z.string().nullish(),
-      parentKey: z.string().nullish(),
+      body: z.string().max(100_000).nullish(),
+      /**
+       * The Agent this is for. It is written as the routing label the Project
+       * names, so the tracker says who the work is for and deevy's own routing
+       * reads it back the same way a Human's label would.
+       */
+      assignAgent: z.string().nullish(),
+      /** Required when there is no parent to take the Project from. */
+      projectSlug: ProjectSlugLookup.optional(),
     }),
     output: IssueDetailSchema,
     handler: async ({ input, context }) => {
-      const project = await requireProject(context, input.projectKey);
-      const first = await context.db.query.workflowState.findFirst({
-        where: { projectId: project.id },
-        orderBy: { position: "asc" },
-      });
-      if (!first) {
-        throw new ORPCError("BAD_REQUEST", { message: "This Project has no Workflow States" });
+      const parent = input.parent ? await resolveIssueRef(context, input.parent) : null;
+      const project = input.projectSlug
+        ? await requireProject(context, input.projectSlug)
+        : parent
+          ? await requireProject(context, parent.project.slug)
+          : null;
+      if (!project) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: "Name a Project, or the Issue this one is a part of",
+        });
       }
-      const assignee = input.assigneeMemberId
-        ? await requireAssignee(context, input.assigneeMemberId)
-        : null;
+      if (parent) await assertRoomBelow(context, parent.issue, parent.issue.externalKey);
 
-      let parentId: string | null = null;
-      let parentKey: string | null = null;
-      if (input.parentKey) {
-        /*
-         * Any Project the caller was granted, not only this one. Work has
-         * dependencies that run across Projects, and a delegation that stops at
-         * the boundary does not remove the dependency — it moves it onto a
-         * Human writing it down twice (docs/plans/sub-issue-delegation.md).
-         * `requireIssue` is the whole access rule: a parent in a Project this
-         * caller does not hold answers "No such Issue".
-         */
-        const parent = await requireIssue(context, input.parentKey);
-        parentId = parent.issue.id;
-        parentKey = issueKey(parent.project.key, parent.issue.number);
-        await assertRoomBelow(context, parent.issue, parentKey);
+      const assignee = input.assignAgent ? await requireAssignee(context, input.assignAgent) : null;
+      if (assignee && assignee.kind !== "agent") {
+        throw new ORPCError("BAD_REQUEST", {
+          message: "Only an Agent is named by a routing label; assign a Human in the tracker",
+        });
       }
 
-      const number = await nextIssueNumber(context.db, project.id);
-      const created = await insertIssue(context.db, {
-        projectId: project.id,
-        number,
+      const row = await requireSocket(context, project.trackerSocketId);
+      const tracker = requireTracker(socketModuleFor(context, row));
+      const label = assignee?.handle ? `${project.routing.labelPrefix}${assignee.handle}` : null;
+      const external = await tracker.createIssue(project.trackerScope, {
         title: input.title,
-        description: input.description,
-        stateId: first.id,
-        assigneeMemberId: input.assigneeMemberId,
-        parentId,
-        createdBy: context.member.id,
+        // The parent's URL in the body, because a tracker that cannot link two
+        // records natively still has to say what this is a part of.
+        body: [input.body ?? "", parent ? `Part of ${parent.issue.url}` : ""]
+          .filter(Boolean)
+          .join("\n\n"),
+        parent: parent ? { externalId: parent.issue.externalId, url: parent.issue.url } : null,
+        labels: label ? [label] : [],
       });
+
+      const { issue } = await upsertProjection(context.db, {
+        projectId: project.id,
+        socketId: row.id,
+        external,
+        createdBy: context.member.id,
+        parentId: parent?.issue.id ?? null,
+      });
+
       await appendEvent(context, {
         kind: "issue.created",
         subjectType: "issue",
-        subjectId: created.id,
+        subjectId: issue.id,
         projectId: project.id,
-        // The State it landed in, so a reader of the log or the inbox sees
-        // where the Issue started, not where it is now. And what it was opened
-        // under, so an Activity about a sub-issue names its parent rather than
-        // leaving the reader to click (docs/plans/sub-issue-delegation.md).
         payload: {
-          key: issueKey(project.key, number),
-          title: created.title,
-          state: first.name,
-          ...(parentKey ? { parentKey } : {}),
-          // An Agent opening an Issue under a parent is a delegation, and the
-          // Event says so rather than leaving the inbox to work it out: what a
-          // Notification is, is a pure function of the Event row, and it is
-          // read again hours later with no request around it (ADR-0003).
-          ...(parentId && context.member.kind === "agent"
-            ? { delegatedTo: parentId, delegatedBy: context.member.id }
+          key: issue.externalKey,
+          url: issue.url,
+          title: issue.title,
+          ...(parent ? { parentKey: parent.issue.externalKey } : {}),
+          /*
+           * The parent, not the Agent: a wave of sub-issues is one line about
+           * the parent, and `issueOf` points that line there because the parent
+           * is the only place the work is whole. Only an Agent's fan-out is
+           * rolled up, so what the Notification is stays a pure function of the
+           * Event row, read again hours later with no request around it
+           * (docs/plans/sub-issue-delegation.md, ADR-0003).
+           */
+          ...(parent && context.member.kind === "agent"
+            ? { delegatedTo: parent.issue.id, delegatedBy: context.member.id }
             : {}),
+          ...(assignee ? { assignedTo: assignee.id } : {}),
+          ...(external.parentLinked ? {} : { parentLinked: false }),
         },
       });
-      /*
-       * Handed to somebody at birth is still being handed to them: the Event
-       * goes in, so their inbox hears about it and an Agent's Run starts. It
-       * follows `issue.created` rather than preceding it, because a reader of
-       * the log should see the Issue exist before it is given away, and because
-       * `triggersFor` reads the Issue when the assignment reaches it.
-       *
-       * Where the first State's own rule names the same Agent, both Events want
-       * a Run and only one is opened: the "at most one open Run per
-       * (issue, agent)" rule in `startRun` is what settles it.
-       */
+
       if (assignee) {
+        await routeIssueTo(context.db, issue.id, assignee.id);
         await appendEvent(context, {
           kind: "issue.assigned",
           subjectType: "issue",
-          subjectId: created.id,
+          subjectId: issue.id,
           projectId: project.id,
-          payload: {
-            from: null,
-            to: assignee.id,
-            fromName: null,
-            toName: assignee.user.name,
-          },
+          payload: { from: null, to: assignee.id, toName: assignee.user.name, byRouting: true },
         });
       }
-      await openStateDocument(context, created.id, project.id, first);
-      return loadIssue(context, created.id);
+
+      return loadIssue(context, issue.id);
     },
   }),
 
   list: defineOperation({
     name: "issues.list",
-    summary: "A Project's Issues, by number, from a cursor",
+    summary: "The records deevy has projected, newest change first",
     method: "GET",
-    // Not under /projects/{projectKey}: the Project is optional now, and a path
-    // parameter cannot be. Nothing outside this repository called the old path.
     path: "/issues",
     auth: "member",
     agents: true,
@@ -186,67 +186,54 @@ export const issues = {
     input: z.object({
       /**
        * Left out, every Project the caller may see, newest change first, in
-       * one query: the Issues home and the command palette are Workspace-wide
-       * screens, and one list beats one per Project on D1's per-invocation
-       * budget (docs/plans/ui-redesign.md slice 2). Named, that Project's
-       * Issues in key order, paged by `after`.
+       * one query: "what is deevy working on" is a Workspace-wide question and
+       * one list beats one per Project on D1's per-invocation budget.
        */
-      projectKey: ProjectKeyLookup.optional(),
-      /**
-       * An Issue key (`DEV-12`), a number, or a word of the title. A key finds
-       * exactly that Issue; anything else matches titles, case-insensitively.
-       */
+      projectSlug: ProjectSlugLookup.optional(),
+      /** A tracker key (`acme/deevy#42`) or a word of the title. */
       q: z.string().trim().min(1).max(200).optional(),
+      /** Where the last page stopped: `<millis>:<id>`. */
+      cursor: z.string().optional(),
+      /** What the tracker says: open, or closed. */
+      state: z.enum(["open", "closed"]).optional(),
       /**
-       * Return Issues numbered above this. A cursor over numbers means
-       * nothing across Projects, so it is ignored without a projectKey.
-       */
-      after: z.coerce.number().int().nonnegative().optional(),
-      stateId: z.string().optional(),
-      /**
-       * A State by name rather than id: States belong to a Project, and a
-       * Workspace-wide list spans Projects whose Workflows share names
-       * (Done is Done everywhere), so the name is what folds across them.
+       * The provider's own word for the state — `In Review`, `Done` — which
+       * folds across Projects whose trackers share it.
        */
       stateName: z.string().trim().min(1).max(100).optional(),
       assigneeMemberId: z.string().optional(),
-      /** Only Issues held by a Human, or only those held by an Agent. */
+      /** Only Issues routed to a Human, or only those routed to an Agent. */
       assigneeKind: z.enum(["human", "agent"]).optional(),
-      /** Only Issues nobody holds. */
+      /** Only Issues deevy has routed to nobody. */
       unassigned: QueryFlag.optional(),
-      /** Only Issues held by an Agent this Human sponsors: "my Agents' Issues". */
+      /** Only Issues held by an Agent this Human sponsors: "my Agents' work". */
       sponsorMemberId: z.string().optional(),
-      labelId: z.string().optional(),
-      /** Only Issues whose State is not a `done` one. */
+      /** A label the tracker carries. */
+      label: z.string().trim().min(1).max(100).optional(),
+      /** Only records the tracker has not closed. */
       open: QueryFlag.optional(),
       limit: z.coerce.number().int().min(1).max(200).default(50),
     }),
     output: z.object({
       issues: z.array(IssueSummarySchema),
-      /** The number of the last Issue returned, or null when the page is empty. */
-      nextCursor: z.number().int().nullable(),
-      /**
-       * Whether more Issues matched than the page holds. A Project's list
-       * turns the page with `after`; the Workspace-wide feed has no cursor,
-       * so this is how a screen knows to say "narrow the filters" rather
-       * than lie with a count.
-       */
+      /** Where to carry on from, or null when the page is the end. */
+      nextCursor: z.string().nullable(),
       hasMore: z.boolean(),
     }),
     handler: async ({ input, context }) => {
-      const projects = input.projectKey
-        ? [await requireProject(context, input.projectKey)]
+      const projects = input.projectSlug
+        ? [await requireProject(context, input.projectSlug)]
         : await visibleProjects(context);
-      const keyOf = new Map(projects.map((project) => [project.id, project.key]));
       const only = projects.length === 1 ? projects[0] : undefined;
-      // The cursor and the search each constrain `number`, so they sit side by
-      // side under AND rather than in one object where the later would win:
-      // `q: "DEV-12"` past a cursor of 20 is nothing, not DEV-12.
       const clauses: SearchClause[] = [];
-      if (input.projectKey && input.after !== undefined) {
-        clauses.push({ number: { gt: input.after } });
+      if (input.cursor !== undefined) {
+        const { at, id } = parseIssueCursor(input.cursor);
+        clauses.push({
+          RAW: (table) => sql`(${table.externalUpdatedAt}, ${table.id}) < (${at.getTime()}, ${id})`,
+        });
       }
-      if (input.q !== undefined) clauses.push(searchClause(input.q, projects));
+      if (input.q !== undefined) clauses.push(searchClause(input.q));
+      if (input.label !== undefined) clauses.push(labelled(input.label));
       // The Assignee filters combine under AND: "Agents I sponsor, and this
       // one in particular" is a narrower question, not a contradiction.
       const assignee = {
@@ -255,31 +242,31 @@ export const issues = {
       };
       const page = await context.db.query.issue.findMany({
         where: {
-          ...(only ? { projectId: only.id } : { projectId: { in: [...keyOf.keys()] } }),
-          ...(input.stateId === undefined ? {} : { stateId: input.stateId }),
-          ...(input.stateName === undefined ? {} : { state: { name: input.stateName } }),
+          ...(only ? { projectId: only.id } : { projectId: { in: projects.map((one) => one.id) } }),
+          ...(input.state === undefined ? {} : { state: input.state }),
+          ...(input.stateName === undefined ? {} : { stateName: input.stateName }),
           ...(input.assigneeMemberId === undefined
             ? {}
             : { assigneeMemberId: input.assigneeMemberId }),
           ...(input.unassigned ? { assigneeMemberId: { isNull: true } } : {}),
           ...(Object.keys(assignee).length > 0 ? { assignee } : {}),
-          ...(input.open ? { closedAt: { isNull: true } } : {}),
-          ...(input.labelId === undefined ? {} : { labels: { id: input.labelId } }),
+          ...(input.open ? { state: "open" as const } : {}),
           ...(clauses.length > 0 ? { AND: clauses } : {}),
         },
         with: issueWith,
-        // A Project's list reads in key order and pages; the Workspace's reads
-        // as a feed, and a cursor over numbers means nothing across Projects.
-        // Two changes in one millisecond would otherwise land in scan order,
-        // so the id breaks the tie the same way every time.
-        orderBy: input.projectKey ? { number: "asc" } : { updatedAt: "desc", id: "desc" },
+        // A feed, so the newest change is first — the record's own change, not
+        // the moment deevy last synced it. Two changes in one millisecond would
+        // otherwise land in scan order, so the id breaks the tie the same way
+        // every time and the cursor names both.
+        orderBy: { externalUpdatedAt: "desc", id: "desc" },
         // One past the page, so `hasMore` costs no second query.
         limit: input.limit + 1,
       });
       const rows = page.slice(0, input.limit);
+      const last = rows.at(-1);
       return {
-        issues: rows.map((row) => withKey(row, keyOf.get(row.projectId) ?? "")),
-        nextCursor: input.projectKey ? (rows.at(-1)?.number ?? null) : null,
+        issues: rows,
+        nextCursor: last ? `${String(last.externalUpdatedAt.getTime())}:${last.id}` : null,
         hasMore: page.length > input.limit,
       };
     },
@@ -287,271 +274,20 @@ export const issues = {
 
   get: defineOperation({
     name: "issues.get",
-    summary: "One Issue by its key, with its State, Assignee, parent and children",
+    summary: "One record by id, URL or the tracker's key, with its family",
     method: "GET",
-    path: "/issues/{key}",
-    auth: "member",
-    agents: true,
-    mcp: true,
-    input: z.object({ key: z.string() }),
-    output: IssueDetailSchema,
-    handler: async ({ input, context }) => {
-      const { issue } = await requireIssue(context, input.key);
-      return loadIssue(context, issue.id);
-    },
-  }),
-
-  move: defineOperation({
-    name: "issues.move",
-    summary:
-      "Put an Issue in another State of its Project's Workflow; a Gate is left by a ruling, never by a move",
-    method: "POST",
-    path: "/issues/{key}/move",
-    auth: "member",
-    agents: true,
-    // A tool, because it is the one thing a Human working an Issue from their
-    // own client does most (ADR-0016). `assertLeavable` keeps a Gate a ruling's.
-    mcp: true,
-    input: z.object({ key: z.string(), stateId: z.string() }),
-    output: IssueDetailSchema,
-    handler: async ({ input, context }) => {
-      const { issue, project, states, from } = await requireIssueForMove(context, input.key);
-      const to = states.find((state) => state.id === input.stateId);
-      if (!to) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: "That State belongs to another Project's Workflow",
-        });
-      }
-      if (to.id === from.id) return loadIssue(context, issue.id);
-      assertLeavable(from, input.key);
-
-      await enterState(context.db, issue, to);
-      await appendEvent(context, {
-        kind: "issue.moved",
-        subjectType: "issue",
-        subjectId: issue.id,
-        projectId: project.id,
-        payload: { from: from.name, to: to.name },
-      });
-      await openStateDocument(context, issue.id, project.id, to);
-      return loadIssue(context, issue.id);
-    },
-  }),
-
-  setLabels: defineOperation({
-    name: "issues.setLabels",
-    summary: "Replace an Issue's Labels; one per scope survives, the last given",
-    method: "PUT",
-    path: "/issues/{key}/labels",
-    auth: "member",
-    agents: true,
-    mcp: true,
-    input: z.object({ key: z.string(), labelIds: z.array(z.string()) }),
-    output: IssueDetailSchema,
-    handler: async ({ input, context }) => {
-      const { issue, project } = await requireIssue(context, input.key);
-      const chosen = await context.db.query.label.findMany({
-        where: { id: { in: input.labelIds }, workspaceId: context.workspace.id },
-      });
-      if (chosen.length !== new Set(input.labelIds).size) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: "One of those Labels is not defined in this Workspace",
-        });
-      }
-      // Order matters for the one-per-scope rule, and findMany does not keep it.
-      const ordered = input.labelIds
-        .map((id) => chosen.find((label) => label.id === id))
-        .filter((label) => label !== undefined);
-
-      const change = await replaceIssueLabels(
-        context.db,
-        issue.id,
-        oneLabelPerScope(ordered).map((label) => label.id),
-      );
-      if (change.added.length > 0 || change.removed.length > 0) {
-        // Names beside the ids, so the log reads without a lookup (docs/plans/ui-redesign-2.md D).
-        const removedLabels =
-          change.removed.length > 0
-            ? await context.db.query.label.findMany({ where: { id: { in: change.removed } } })
-            : [];
-        const text = (label: { scope: string | null; name: string }) =>
-          label.scope ? `${label.scope}: ${label.name}` : label.name;
-        await appendEvent(context, {
-          kind: "issue.labels_changed",
-          subjectType: "issue",
-          subjectId: issue.id,
-          projectId: project.id,
-          payload: {
-            ...change,
-            addedNames: change.added.flatMap((id) => {
-              const label = chosen.find((candidate) => candidate.id === id);
-              return label ? [text(label)] : [];
-            }),
-            removedNames: removedLabels.map(text),
-          },
-        });
-      }
-      return loadIssue(context, issue.id);
-    },
-  }),
-
-  update: defineOperation({
-    name: "issues.update",
-    summary: "Change an Issue's title, description, Assignee, or parent",
-    method: "PATCH",
-    path: "/issues/{key}",
+    path: "/issues/{issue}",
     auth: "member",
     agents: true,
     mcp: true,
     input: z.object({
-      key: z.string(),
-      title: z.string().trim().min(1).max(300).optional(),
-      description: z.string().max(100_000).nullish(),
-      assigneeMemberId: z.string().nullish(),
-      /** Pass null to detach the Issue from its parent. */
-      parentKey: z.string().nullish(),
+      /** An `iss_` id, the record's URL, or the key the tracker wrote. */
+      issue: z.string().trim().min(1),
     }),
     output: IssueDetailSchema,
     handler: async ({ input, context }) => {
-      const { issue: found, project } = await requireIssue(context, input.key);
-
-      // Assignment and reparenting each get their own Event, since the inbox
-      // and the timeline read them differently from an edit (docs/plans/m1.md).
-      let parentId: string | null | undefined;
-      if (input.parentKey !== undefined) {
-        /*
-         * An Issue whose current parent this caller cannot see is not theirs to
-         * move. The parent is hidden from them on a read, which is the rule for
-         * an ungranted Project — but hiding it and allowing the move as well
-         * would let an Agent lift an Issue out of a tree it was never shown.
-         * The refusal admits a tree exists without naming it, and that is the
-         * cheaper of the two costs (docs/plans/sub-issue-delegation.md).
-         */
-        if (found.parentId) {
-          const current = await context.db.query.issue.findFirst({
-            where: { id: found.parentId },
-            columns: { projectId: true },
-          });
-          if (current && !projectVisible(context, current.projectId)) {
-            throw new ORPCError("CONFLICT", {
-              message: `${input.key} is already part of a tree you cannot see.`,
-            });
-          }
-        }
-        if (input.parentKey === null) {
-          parentId = null;
-        } else {
-          const parent = await requireIssue(context, input.parentKey);
-          if (await isSelfOrDescendant(context.db, found.id, parent.issue.id)) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "An Issue cannot be its own parent or a child of its own descendant",
-            });
-          }
-          await assertRoomBelow(
-            context,
-            parent.issue,
-            issueKey(parent.project.key, parent.issue.number),
-          );
-          parentId = parent.issue.id;
-        }
-      }
-      if (input.assigneeMemberId) await requireAssignee(context, input.assigneeMemberId);
-
-      const edits: Record<string, { from: unknown; to: unknown }> = {};
-      if (input.title !== undefined && input.title !== found.title) {
-        edits.title = { from: found.title, to: input.title };
-      }
-      if (input.description !== undefined && input.description !== found.description) {
-        edits.description = { from: found.description, to: input.description ?? null };
-      }
-      const assigneeChanged =
-        input.assigneeMemberId !== undefined &&
-        (input.assigneeMemberId ?? null) !== found.assigneeMemberId;
-      const parentChanged = parentId !== undefined && parentId !== found.parentId;
-
-      if (Object.keys(edits).length === 0 && !assigneeChanged && !parentChanged) {
-        return loadIssue(context, found.id);
-      }
-
-      await context.db
-        .update(issueTable)
-        .set({
-          ...(input.title === undefined ? {} : { title: input.title }),
-          ...(input.description === undefined ? {} : { description: input.description ?? null }),
-          ...(assigneeChanged ? { assigneeMemberId: input.assigneeMemberId ?? null } : {}),
-          ...(parentChanged ? { parentId } : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(issueTable.id, found.id));
-
-      const subject = {
-        subjectType: "issue",
-        subjectId: found.id,
-        projectId: project.id,
-      } as const;
-      if (Object.keys(edits).length > 0) {
-        // A description mentions people the same way a comment does, so the
-        // inbox reads one payload shape for both.
-        const mentionedMemberIds =
-          input.description === undefined
-            ? []
-            : await resolveMentions(context.db, context.workspace.id, input.description ?? "");
-        await appendEvent(context, {
-          kind: "issue.updated",
-          ...subject,
-          payload: { ...edits, mentionedMemberIds },
-        });
-      }
-      if (assigneeChanged) {
-        // Names beside the ids, so the log reads without a lookup (docs/plans/ui-redesign-2.md D).
-        const ids = [found.assigneeMemberId, input.assigneeMemberId ?? null].filter(
-          (id): id is string => id !== null,
-        );
-        const people =
-          ids.length > 0
-            ? await context.db.query.member.findMany({
-                where: { id: { in: ids } },
-                with: { user: true },
-              })
-            : [];
-        const nameOf = (id: string | null) =>
-          id ? (people.find((person) => person.id === id)?.user.name ?? null) : null;
-        await appendEvent(context, {
-          kind: "issue.assigned",
-          ...subject,
-          payload: {
-            from: found.assigneeMemberId,
-            to: input.assigneeMemberId ?? null,
-            fromName: nameOf(found.assigneeMemberId),
-            toName: nameOf(input.assigneeMemberId ?? null),
-          },
-        });
-      }
-      if (parentChanged) {
-        const ids = [found.parentId, parentId ?? null].filter((id): id is string => id !== null);
-        const related =
-          ids.length > 0
-            ? await context.db.query.issue.findMany({
-                where: { id: { in: ids } },
-                with: { project: true },
-              })
-            : [];
-        const keyOf = (id: string | null) => {
-          const row = id ? related.find((candidate) => candidate.id === id) : undefined;
-          return row ? issueKey(row.project.key, row.number) : null;
-        };
-        await appendEvent(context, {
-          kind: "issue.reparented",
-          ...subject,
-          payload: {
-            from: found.parentId,
-            to: parentId ?? null,
-            fromKey: keyOf(found.parentId),
-            toKey: keyOf(parentId ?? null),
-          },
-        });
-      }
-      return loadIssue(context, found.id);
+      const { issue } = await resolveIssueRef(context, input.issue);
+      return loadIssue(context, issue.id);
     },
   }),
 };
@@ -565,7 +301,7 @@ async function visibleProjects(context: ContextFor<"member">) {
       archivedAt: { isNull: true },
       ...(granted ? { id: { in: granted } } : {}),
     },
-    columns: { id: true, key: true },
+    columns: { id: true, slug: true },
   });
 }
 
@@ -575,21 +311,25 @@ type SearchClause = NonNullable<
 >;
 
 /**
- * What `q` means: `DEV-12` is exactly that Issue, a bare number is that number
- * in any Project (or a title containing it), anything else is a word of the
- * title. A key whose Project does not exist here is a word of the title too
- * ("Read ADR-0015 before touching ids" is found by `ADR-0015`). SQLite's LIKE
- * is case-insensitive for ASCII, which is what a key or a title is.
+ * What `q` means: the tracker's key, or a word of the title. A key is matched
+ * as a whole so `acme/deevy#4` does not find `#42`, and anything that is not
+ * one is a word of the title. SQLite's LIKE is case-insensitive for ASCII,
+ * which is what a key or a title is.
  */
-function searchClause(q: string, projects: Array<{ id: string; key: string }>): SearchClause {
-  const asKey = /^([A-Za-z]{2,6})-(\d+)$/.exec(q);
-  if (asKey) {
-    const project = projects.find((candidate) => candidate.key === asKey[1]?.toUpperCase());
-    if (project) return { projectId: project.id, number: Number(asKey[2]) };
-  }
-  const title = titleContains(q);
-  if (/^\d+$/.test(q)) return { OR: [{ number: Number(q) }, title] };
-  return title;
+function searchClause(q: string): SearchClause {
+  return { OR: [{ externalKey: q }, titleContains(q)] };
+}
+
+/**
+ * An Issue carrying this label. The labels are the tracker's, stored as a JSON
+ * array, so the match is over the array's elements rather than the text of it:
+ * a `LIKE '%bug%'` over the JSON would find `debug` and `bugfix` too.
+ */
+function labelled(label: string): SearchClause {
+  return {
+    RAW: (table) =>
+      sql`exists (select 1 from json_each(${table.labels}) where json_each.value = ${label})`,
+  };
 }
 
 /**

@@ -1,26 +1,12 @@
 import { Link, Outlet, useMatches, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Bot,
-  ChevronsUpDown,
-  CircleUser,
-  FolderKanban,
-  Inbox,
-  ListTodo,
-  LogOut,
-  Monitor,
-  Moon,
-  Search,
-  Settings,
-  Sun,
-} from "lucide-react";
+import { ChevronsUpDown, Inbox, LogOut, Monitor, Moon, Search, Settings, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { Shortcut } from "@/components/kbd-hint";
 import { MemberChip } from "@/components/member-chip";
-import { NewIssueButton, NewIssueProvider } from "@/components/new-issue";
 import { ShortcutsSheet } from "@/components/shortcuts-sheet";
 import {
   DropdownMenu,
@@ -39,7 +25,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -86,20 +71,12 @@ export function AppShell({ workspaceName, memberName, member }: ShellProps) {
   const bleed = useMatches().some((match) => match.staticData.bleed === true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const projects = useQuery(orpc.projects.list.queryOptions({ input: {} }));
-  const members = useQuery(orpc.members.list.queryOptions({ input: {} }));
-  // "My Agents' Issues" is offered to a Sponsor and to nobody else.
-  const sponsorsAgents = (members.data?.members ?? []).some(
-    (candidate) => candidate.kind === "agent" && candidate.sponsorId === member?.id,
-  );
 
   useShortcut("mod+k", () => setPaletteOpen((open) => !open), { global: true });
   // Global, so `?` closes the sheet too: while open it owns the shortcut scope.
   useShortcut("?", () => setShortcutsOpen((open) => !open), { global: true });
   useShortcut("g i", () => void navigate({ to: "/inbox" }));
-  useShortcut("g m", () => void navigate({ to: "/", search: { assignee: "me" } }));
-  useShortcut("g a", () => void navigate({ to: "/", search: {} }));
-  useShortcut("g p", () => void navigate({ to: "/projects" }));
+  useShortcut("g p", () => void navigate({ to: "/settings/projects" }));
   useShortcut("g s", () => void navigate({ to: "/settings/workspace" }));
 
   const me = {
@@ -111,186 +88,105 @@ export function AppShell({ workspaceName, memberName, member }: ShellProps) {
 
   return (
     <SidebarProvider className="h-svh overflow-hidden">
-      <NewIssueProvider>
-        <Sidebar collapsible="icon">
-          <SidebarHeader>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  size="lg"
-                  tooltip={workspaceName}
-                  render={<Link to="/" />}
-                  // Folded, `size="lg"` sets `p-0`, which left-aligns the size-6
-                  // badge in a size-8 box: 4px off the column every other icon
-                  // keeps. Centre it there and the rail reads as one column.
-                  className="font-semibold group-data-[collapsible=icon]:justify-center"
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                tooltip={workspaceName}
+                render={<Link to="/" />}
+                // Folded, `size="lg"` sets `p-0`, which left-aligns the size-6
+                // badge in a size-8 box: 4px off the column every other icon
+                // keeps. Centre it there and the rail reads as one column.
+                className="font-semibold group-data-[collapsible=icon]:justify-center"
+              >
+                <span
+                  aria-hidden
+                  className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary font-mono text-xs text-primary-foreground"
                 >
-                  <span
-                    aria-hidden
-                    className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary font-mono text-xs text-primary-foreground"
-                  >
-                    {workspaceName.slice(0, 1).toUpperCase()}
-                  </span>
-                  {/* Gone when folded, gap and all: left in, its `gap-2` alone is
+                  {workspaceName.slice(0, 1).toUpperCase()}
+                </span>
+                {/* Gone when folded, gap and all: left in, its `gap-2` alone is
                       the 4px that pushed the badge off the rail's centre line. */}
-                  <span className="truncate group-data-[collapsible=icon]:hidden">
-                    {workspaceName}
-                  </span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton tooltip="Search or jump" onClick={() => setPaletteOpen(true)}>
-                  <Search />
-                  <span className="text-muted-foreground">Search or jump…</span>
-                  <Shortcut keys="mod+k" className="ml-auto" />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarHeader>
+                <span className="truncate group-data-[collapsible=icon]:hidden">
+                  {workspaceName}
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Search or jump" onClick={() => setPaletteOpen(true)}>
+                <Search />
+                <span className="text-muted-foreground">Search or jump…</span>
+                <Shortcut keys="mod+k" className="ml-auto" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
 
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton tooltip="Inbox" render={<Link to="/inbox" />}>
-                      <Inbox />
-                      <span>Inbox</span>
-                    </SidebarMenuButton>
-                    <InboxBadge />
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      tooltip="My Issues"
-                      render={
-                        <Link
-                          to="/"
-                          search={{ assignee: "me" }}
-                          activeOptions={{ exact: true, includeSearch: true }}
-                        />
-                      }
-                    >
-                      <CircleUser />
-                      <span>My Issues</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  {sponsorsAgents ? (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        tooltip="My Agents' Issues"
-                        render={
-                          <Link
-                            to="/"
-                            search={{ assignee: "agents:me" }}
-                            activeOptions={{ exact: true, includeSearch: true }}
-                          />
-                        }
-                      >
-                        <Bot />
-                        <span>My Agents&apos; Issues</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ) : null}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      tooltip="All Issues"
-                      render={
-                        <Link
-                          to="/"
-                          search={{}}
-                          activeOptions={{ exact: true, includeSearch: true }}
-                        />
-                      }
-                    >
-                      <ListTodo />
-                      <span>All Issues</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton tooltip="Projects" render={<Link to="/projects" />}>
-                      <FolderKanban />
-                      <span>Projects</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton tooltip="Inbox" render={<Link to="/inbox" />}>
+                    <Inbox />
+                    <span>Inbox</span>
+                  </SidebarMenuButton>
+                  <InboxBadge />
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-            {projects.data && projects.data.projects.length > 0 ? (
-              <SidebarGroup>
-                <SidebarGroupLabel>Projects</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {projects.data.projects.map((project) => (
-                      <SidebarMenuItem key={project.id}>
-                        <SidebarMenuButton
-                          tooltip={project.name}
-                          render={<Link to="/projects/$key" params={{ key: project.key }} />}
-                        >
-                          <span className="flex size-4 shrink-0 items-center justify-center font-mono text-[10px] font-medium text-muted-foreground">
-                            {project.key.slice(0, 3)}
-                          </span>
-                          <span className="truncate">{project.name}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ) : null}
-          </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Settings" render={<Link to="/settings/workspace" />}>
+                <Settings />
+                <span>Settings</span>
+                <Shortcut keys="g s" className="ml-auto" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <MemberMenu me={me} />
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
 
-          <SidebarFooter>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton tooltip="Settings" render={<Link to="/settings/workspace" />}>
-                  <Settings />
-                  <span>Settings</span>
-                  <Shortcut keys="g s" className="ml-auto" />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <MemberMenu me={me} />
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarFooter>
-          <SidebarRail />
-        </Sidebar>
+      <SidebarInset>
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+          <SidebarTrigger />
+          <AppBreadcrumb />
+          <span className="flex-1" />
+        </div>
+        {/*
+         * SidebarInset is the <main>; this is the page inside it, and it is
+         * what scrolls. The frame is exactly the viewport's height (below),
+         * so the sidebar and the top bar stay put and a screen that asks for
+         * `h-full` — the Board, whose columns scroll on their own — gets the
+         * room that is actually there rather than growing the window.
+         */}
+        <div
+          className={cn(
+            "min-w-0 flex-1 overflow-y-auto",
+            bleed ? "flex min-h-0 flex-col" : "flex flex-col p-6",
+          )}
+        >
+          <Outlet />
+        </div>
+      </SidebarInset>
 
-        <SidebarInset>
-          <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-            <SidebarTrigger />
-            <AppBreadcrumb />
-            <span className="flex-1" />
-            {/* In the top bar, so it is one click from anywhere and `c` from anywhere. */}
-            <NewIssueButton variant="default" size="default" withShortcut />
-          </div>
-          {/*
-           * SidebarInset is the <main>; this is the page inside it, and it is
-           * what scrolls. The frame is exactly the viewport's height (below),
-           * so the sidebar and the top bar stay put and a screen that asks for
-           * `h-full` — the Board, whose columns scroll on their own — gets the
-           * room that is actually there rather than growing the window.
-           */}
-          <div
-            className={cn(
-              "min-w-0 flex-1 overflow-y-auto",
-              bleed ? "flex min-h-0 flex-col" : "flex flex-col p-6",
-            )}
-          >
-            <Outlet />
-          </div>
-        </SidebarInset>
-
-        <CommandPalette
-          open={paletteOpen}
-          onOpenChange={setPaletteOpen}
-          projects={(projects.data?.projects ?? []).map(({ key, name }) => ({ key, name }))}
-          onShowShortcuts={() => setShortcutsOpen(true)}
-        />
-        <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-        <Toaster />
-      </NewIssueProvider>
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+      />
+      <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <Toaster />
     </SidebarProvider>
   );
 }

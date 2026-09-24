@@ -2,7 +2,6 @@ import { RouterProvider } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MemberChip } from "@/components/member-chip";
-import { StateBadge } from "@/components/state-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +13,6 @@ import {
   invitationInPath,
 } from "@/lib/invitation.ts";
 import { orpc } from "@/lib/orpc.ts";
-import { RoomsProvider } from "@/lib/rooms.tsx";
 import { createAppRouter } from "@/router.tsx";
 import type { ShellProps } from "@/routes/shell.tsx";
 
@@ -206,7 +204,6 @@ function SignedIn({
   onInvitationDropped?: () => void;
 }) {
   const me = useQuery(orpc.me.get.queryOptions());
-  const health = useQuery(orpc.health.ping.queryOptions());
   const context: ShellProps = {
     workspaceName: me.data?.workspace?.name ?? "deevy",
     memberName: me.data?.user.name ?? "",
@@ -247,17 +244,7 @@ function SignedIn({
     );
   }
   if (member.suspendedAt) return <Suspended email={user.email} />;
-  return (
-    // One socket for the session, rooms on it per Document (ADR-0021). A
-    // deployment without rooms says so on `health.ping`, and every editor
-    // stays exactly what it was.
-    <RoomsProvider
-      enabled={health.data?.liveDocuments === true}
-      me={{ id: member.id, name: user.name, kind: member.kind }}
-    >
-      <RouterProvider router={router} />
-    </RoomsProvider>
-  );
+  return <RouterProvider router={router} />;
 }
 
 /**
@@ -418,7 +405,7 @@ function SignInFrame({ children }: { children: React.ReactNode }) {
         <Brand />
         <div className="flex max-w-md flex-col gap-6">
           <p className="text-2xl font-medium leading-snug tracking-tight text-balance">
-            Project management where Humans and Agents work the same Issues, as peers.
+            Humans and Agents work the same Issues, as peers, in the tools you already use.
           </p>
           <dl className="flex flex-col gap-3 text-sm">
             <LegendRow term={<MemberChip member={ada} />}>A Human. Round, in copper.</LegendRow>
@@ -426,14 +413,14 @@ function SignInFrame({ children }: { children: React.ReactNode }) {
               An Agent. Squared, in teal, and always sponsored by a Human.
             </LegendRow>
             <LegendRow
-              term={<StateBadge state={{ name: "Build", isGate: false, category: "active" }} />}
+              term={
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gate">
+                  <span className="size-2 rotate-45 rounded-[1px] bg-gate" aria-hidden />
+                  Gate
+                </span>
+              }
             >
-              A State an Issue moves through.
-            </LegendRow>
-            <LegendRow
-              term={<StateBadge state={{ name: "Intent", isGate: true, category: "active" }} />}
-            >
-              A Gate: a State only a Human's ruling can pass.
+              A Gate: an Agent&apos;s proposal only a Human&apos;s ruling can pass.
             </LegendRow>
           </dl>
         </div>

@@ -20,61 +20,24 @@ export interface Crumb {
   search?: Record<string, unknown>;
 }
 
-const projectTabs: Record<string, string> = {
-  board: "Board",
-  workflow: "Workflow",
-  settings: "Settings",
-};
-
-/** What the trail can name instead of an id or a key: Projects, and Members on their detail pages. */
+/** What the trail can name instead of an id: a Member, on their detail page. */
 export interface CrumbNames {
-  project: (key: string) => string | undefined;
   member?: (id: string) => string | undefined;
 }
 
 /**
  * The trail for a URL, in CONTEXT.md's words: where you are, and the places
- * above it you can go back to. A pure function of the path and the search, so
- * a test can read it without a router; the names come from the caller.
+ * above it you can go back to. A pure function of the path, so a test can read
+ * it without a router; the names come from the caller.
  */
-export function crumbsFor(
-  pathname: string,
-  search: Record<string, unknown>,
-  names: CrumbNames,
-): Crumb[] {
-  const projectName = names.project;
+export function crumbsFor(pathname: string, names: CrumbNames): Crumb[] {
   const parts = pathname.split("/").filter(Boolean);
-  const [head, second, third] = parts;
+  const [head] = parts;
 
-  if (parts.length === 0) {
-    const label =
-      search.assignee === "me"
-        ? "My Issues"
-        : search.assignee === "agents:me"
-          ? "My Agents' Issues"
-          : "All Issues";
-    return search.view === "board" ? [{ label, to: "/" }, { label: "Board" }] : [{ label }];
-  }
+  // Home is what needs you; `/projects` and `/issues/…` only redirect now, so
+  // neither ever asks for a crumb (ADR-0024).
+  if (parts.length === 0) return [{ label: "Home" }];
   if (head === "inbox") return [{ label: "Inbox" }];
-  if (head === "projects") {
-    const projects: Crumb = { label: "Projects", to: "/projects" };
-    if (!second) return [projects];
-    const project: Crumb = {
-      label: projectName(second) ?? second,
-      to: "/projects/$key",
-      params: { key: second },
-    };
-    if (!third) return [projects, project];
-    return [projects, project, { label: projectTabs[third] ?? third }];
-  }
-  if (head === "issues" && second) {
-    const key = second.split("-")[0] ?? second;
-    return [
-      { label: "Projects", to: "/projects" },
-      { label: projectName(key) ?? key, to: "/projects/$key", params: { key } },
-      { label: second },
-    ];
-  }
   if (head === "settings") {
     const settings: Crumb = { label: "Settings", to: "/settings/workspace" };
     const pages = settingsNav.flatMap((group) => group.pages);
@@ -104,21 +67,18 @@ function labelOf(segment: string): string {
 
 /** The top bar's breadcrumb: where you are in the Workspace, each step above it a link. */
 export function AppBreadcrumb() {
-  const { pathname, search, nowhere } = useRouterState({
+  const { pathname, nowhere } = useRouterState({
     select: (state) => ({
       pathname: state.location.pathname,
-      search: state.location.search as Record<string, unknown>,
       // A URL no route claims leaves only the root matched (every page is a route
       // under it), and the path would only spell itself back, capitalised.
       nowhere: state.matches.length === 1,
     }),
   });
-  const projects = useQuery(orpc.projects.list.queryOptions({ input: {} }));
   const members = useQuery(orpc.members.list.queryOptions({ input: {} }));
   const crumbs: Crumb[] = nowhere
     ? [{ label: "Not found" }]
-    : crumbsFor(pathname, search, {
-        project: (key) => projects.data?.projects.find((project) => project.key === key)?.name,
+    : crumbsFor(pathname, {
         member: (id) => members.data?.members.find((member) => member.id === id)?.user.name,
       });
 

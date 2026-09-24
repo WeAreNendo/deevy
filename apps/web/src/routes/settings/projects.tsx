@@ -1,9 +1,7 @@
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { FolderKanban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -29,22 +27,23 @@ export interface ProjectsSettingsPageProps {
  * Project beside the one you are changing, with `?project=` naming it so a
  * Project's settings are a link and Back undoes a selection.
  *
- * It lives here rather than as a tab on the Project because a Project is an
- * entity of this Workspace like a Team, a Label or an Agent, and everything
- * that configures one is in Settings. What stays on the Project itself is the
- * work: its Issues, its Board, and the Workflow they move through.
+ * It lives here because a Project is a binding rather than a place with work
+ * in it (ADR-0024): what it names is the Socket its records come from, the
+ * repository its code is in, and the Agents that may work it. The work itself
+ * is in the tracker, which is where somebody reads it.
  */
 export function ProjectsSettingsPage({ selected, onSelect }: ProjectsSettingsPageProps) {
   const projects = useQuery(orpc.projects.list.queryOptions({ input: {} }));
   const [filter, setFilter] = useState("");
 
   const all = projects.data?.projects ?? [];
-  const current = all.find((project) => project.key === selected) ?? all[0] ?? null;
+  const current = all.find((project) => project.slug === selected) ?? all[0] ?? null;
   const needle = filter.trim().toLowerCase();
   const shown = needle
     ? all.filter(
         (project) =>
-          project.name.toLowerCase().includes(needle) || project.key.toLowerCase().includes(needle),
+          project.name.toLowerCase().includes(needle) ||
+          project.slug.toLowerCase().includes(needle),
       )
     : all;
 
@@ -64,16 +63,10 @@ export function ProjectsSettingsPage({ selected, onSelect }: ProjectsSettingsPag
               </EmptyMedia>
               <EmptyTitle>No Projects yet</EmptyTitle>
               <EmptyDescription>
-                A Project holds Issues and the Workflow they move through. Create your first one
-                from Projects.
+                A Project binds a container in one of your tools to the Agents that work it.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
-          <div className="mx-auto">
-            <Link to="/projects" className={buttonVariants()}>
-              Go to Projects
-            </Link>
-          </div>
         </div>
       ) : null}
 
@@ -96,13 +89,13 @@ export function ProjectsSettingsPage({ selected, onSelect }: ProjectsSettingsPag
 
             <ul className="flex flex-col gap-0.5">
               {shown.map((project) => {
-                const active = project.key === current.key;
+                const active = project.slug === current.slug;
                 return (
                   <li key={project.id}>
                     <button
                       type="button"
                       aria-current={active ? "true" : undefined}
-                      onClick={() => onSelect(project.key)}
+                      onClick={() => onSelect(project.slug)}
                       className={cn(
                         "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-accent",
                         active && "bg-accent",
@@ -113,7 +106,7 @@ export function ProjectsSettingsPage({ selected, onSelect }: ProjectsSettingsPag
                           {project.name}
                         </span>
                         <span className="truncate font-mono text-xs text-muted-foreground">
-                          {project.key}
+                          {project.slug}
                         </span>
                       </span>
                       {project.archivedAt ? (
@@ -129,7 +122,7 @@ export function ProjectsSettingsPage({ selected, onSelect }: ProjectsSettingsPag
           </nav>
 
           <article aria-label={current.name} className="flex flex-col gap-5">
-            <ProjectSettingsForm projectKey={current.key} />
+            <ProjectSettingsForm projectSlug={current.slug} />
           </article>
         </div>
       ) : null}

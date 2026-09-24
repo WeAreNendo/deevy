@@ -8,6 +8,7 @@
  */
 import { createApp } from "@deevy/core/app";
 import type { Auth } from "@deevy/core/auth";
+import type { ExternalIssue, SocketModule, SocketModules } from "@deevy/core/sockets";
 import { API_PATH } from "@deevy/core";
 import type { StoredToken } from "../src/credentials.ts";
 import { authorizeUrl, discover, exchange, listen, pkce, register } from "../src/login.ts";
@@ -47,13 +48,69 @@ export function testDeevy(options: { version?: string } = {}): TestDeevy {
     db,
     auth,
     baseURL,
+    sockets: fakeSockets(),
     ...(options.version ? { version: options.version } : {}),
   });
-  const asFetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const asFetch = ((input: Request | string | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(String(input), init);
     return Promise.resolve(app.request(request));
   }) as typeof fetch;
   return { db, auth, fetch: asFetch, close };
+}
+
+/**
+ * A tracker that is not a tool.
+ *
+ * An Issue is a projection of a record in a Socket (ADR-0024), so a generated
+ * command that opens one needs a provider behind the Socket to open it in. Its
+ * own small fake rather than `@deevy/sockets`, for the reason the core's tests
+ * give: a test dependency on a package that depends on the core is a cycle
+ * nobody needs.
+ */
+function fakeSockets(): SocketModules {
+  const records = new Map<string, ExternalIssue>();
+  const module = (): SocketModule => ({
+    provider: "stub",
+    capabilities: new Set(["tracker"] as const),
+    identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
+    tracker: {
+      verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "" }),
+      normalize: () => [],
+      getIssue: (_scope, ref) => {
+        const found = records.get(ref.externalId);
+        if (!found) throw new Error(`no record ${ref.externalId}`);
+        return Promise.resolve(found);
+      },
+      listIssues: () => Promise.resolve({ issues: [...records.values()], nextCursor: null }),
+      listComments: () => Promise.resolve([]),
+      createIssue: (_scope, draft) => {
+        const externalId = String(records.size + 1);
+        const key = `acme/deevy#${externalId}`;
+        const made: ExternalIssue = {
+          externalId,
+          key,
+          url: `https://tracker.test/acme/deevy/issues/${externalId}`,
+          title: draft.title,
+          body: draft.body,
+          state: "open",
+          stateName: "open",
+          assignees: [],
+          labels: draft.labels,
+          parentExternalId: draft.parent?.externalId ?? null,
+          updatedAt: new Date(),
+        };
+        records.set(externalId, made);
+        return Promise.resolve({ ...made, parentLinked: draft.parent !== null });
+      },
+      createComment: (_scope, ref) => Promise.resolve({ externalId: "c1", url: `${ref.url}#c1` }),
+      setLabels: () => Promise.resolve(),
+      listContainers: () =>
+        Promise.resolve([
+          { scope: { scopeKey: "acme/deevy" }, scopeKey: "acme/deevy", name: "acme/deevy" },
+        ]),
+    },
+  });
+  return { stub: module };
 }
 
 /** A Human who is already a Member, which is what `me.get` answers about. */

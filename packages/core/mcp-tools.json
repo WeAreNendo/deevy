@@ -2,15 +2,16 @@
   {
     "name": "comments_create",
     "operation": "comments.create",
-    "summary": "Say something on an Issue, mentioning Members and Teams by handle",
+    "summary": "Say something on the record in the tracker it lives in",
     "readOnly": false,
     "agents": true,
     "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "issueKey": {
-          "type": "string"
+        "issue": {
+          "type": "string",
+          "minLength": 1
         },
         "body": {
           "type": "string",
@@ -19,108 +20,7 @@
         }
       },
       "required": [
-        "issueKey",
-        "body"
-      ]
-    }
-  },
-  {
-    "name": "documents_get",
-    "operation": "documents.get",
-    "summary": "One Document on an Issue, at its current version or an older one",
-    "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issueKey": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "version": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        }
-      },
-      "required": [
-        "issueKey",
-        "name"
-      ]
-    }
-  },
-  {
-    "name": "documents_write",
-    "operation": "documents.write",
-    "summary": "Write a new version of a Document; older ones stay readable",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issueKey": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string",
-          "maxLength": 100000
-        },
-        "baseVersion": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        },
-        "basis": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "issueKey",
-        "name",
-        "body"
-      ]
-    }
-  },
-  {
-    "name": "documents_write_section",
-    "operation": "documents.writeSection",
-    "summary": "Rewrite one section of a Document, leaving the rest of it alone",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issueKey": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "section": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "body": {
-          "type": "string",
-          "maxLength": 100000
-        }
-      },
-      "required": [
-        "issueKey",
-        "name",
-        "section",
+        "issue",
         "body"
       ]
     }
@@ -158,23 +58,30 @@
   {
     "name": "issues_create",
     "operation": "issues.create",
-    "summary": "Add an Issue to a Project, in the first State of its Workflow",
+    "summary": "Open a record in the tracker a Project is bound to, and project it",
     "readOnly": false,
     "agents": true,
     "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "projectKey": {
-          "type": "string",
-          "pattern": "^[A-Z]{2,6}$"
+        "parent": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 300
         },
-        "description": {
+        "body": {
           "anyOf": [
             {
               "type": "string",
@@ -185,21 +92,18 @@
             }
           ]
         },
-        "assigneeMemberId": {
+        "assignAgent": {
           "type": [
             "string",
             "null"
           ]
         },
-        "parentKey": {
-          "type": [
-            "string",
-            "null"
-          ]
+        "projectSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
         }
       },
       "required": [
-        "projectKey",
         "title"
       ]
     }
@@ -207,48 +111,51 @@
   {
     "name": "issues_get",
     "operation": "issues.get",
-    "summary": "One Issue by its key, with its State, Assignee, parent and children",
+    "summary": "One record by id, URL or the tracker's key, with its family",
     "readOnly": true,
     "agents": true,
     "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "key": {
-          "type": "string"
+        "issue": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
-        "key"
+        "issue"
       ]
     }
   },
   {
     "name": "issues_list",
     "operation": "issues.list",
-    "summary": "A Project's Issues, by number, from a cursor",
+    "summary": "The records deevy has projected, newest change first",
     "readOnly": true,
     "agents": true,
     "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "projectKey": {
+        "projectSlug": {
           "type": "string",
-          "pattern": "^[A-Z]{2,6}$"
+          "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
         },
         "q": {
           "type": "string",
           "minLength": 1,
           "maxLength": 200
         },
-        "after": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "stateId": {
+        "cursor": {
           "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed"
+          ]
         },
         "stateName": {
           "type": "string",
@@ -274,8 +181,10 @@
         "sponsorMemberId": {
           "type": "string"
         },
-        "labelId": {
-          "type": "string"
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
         },
         "open": {
           "type": [
@@ -293,152 +202,6 @@
     }
   },
   {
-    "name": "issues_move",
-    "operation": "issues.move",
-    "summary": "Put an Issue in another State of its Project's Workflow; a Gate is left by a ruling, never by a move",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "stateId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "key",
-        "stateId"
-      ]
-    }
-  },
-  {
-    "name": "issues_set_labels",
-    "operation": "issues.setLabels",
-    "summary": "Replace an Issue's Labels; one per scope survives, the last given",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "labelIds": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "key",
-        "labelIds"
-      ]
-    }
-  },
-  {
-    "name": "issues_update",
-    "operation": "issues.update",
-    "summary": "Change an Issue's title, description, Assignee, or parent",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 300
-        },
-        "description": {
-          "anyOf": [
-            {
-              "type": "string",
-              "maxLength": 100000
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "assigneeMemberId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "parentKey": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "labels_create",
-    "operation": "labels.create",
-    "summary": "Define a Label, plain or scoped",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "scope": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 40
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 60
-        },
-        "color": {
-          "type": "string",
-          "maxLength": 30
-        }
-      },
-      "required": [
-        "name",
-        "color"
-      ]
-    }
-  },
-  {
-    "name": "labels_list",
-    "operation": "labels.list",
-    "summary": "The Labels this Workspace defines",
-    "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
     "name": "links_add",
     "operation": "links.add",
     "summary": "Point an Issue at a pull request, a commit, a branch, or any URL",
@@ -448,8 +211,9 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "issueKey": {
-          "type": "string"
+        "issue": {
+          "type": "string",
+          "minLength": 1
         },
         "url": {
           "type": "string",
@@ -481,7 +245,7 @@
         }
       },
       "required": [
-        "issueKey",
+        "issue",
         "url"
       ]
     }
@@ -496,12 +260,13 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "issueKey": {
-          "type": "string"
+        "issue": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
-        "issueKey"
+        "issue"
       ]
     }
   },
@@ -527,20 +292,20 @@
   {
     "name": "projects_get",
     "operation": "projects.get",
-    "summary": "One Project by its key, with its Workflow: the States an Issue can be moved to, and which are Gates",
+    "summary": "One Project by its slug: where its Issues come from and where its code is",
     "readOnly": true,
     "agents": true,
     "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "key": {
+        "slug": {
           "type": "string",
-          "pattern": "^[A-Z]{2,6}$"
+          "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
         }
       },
       "required": [
-        "key"
+        "slug"
       ]
     }
   },
@@ -631,8 +396,9 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "issueKey": {
-          "type": "string"
+        "issue": {
+          "type": "string",
+          "minLength": 1
         },
         "agentMemberId": {
           "type": "string"
@@ -711,25 +477,6 @@
     }
   },
   {
-    "name": "runs_request_approval",
-    "operation": "runs.requestApproval",
-    "summary": "Ask the Humans who decide this Gate to rule on it, and wait for them",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "runId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "runId"
-      ]
-    }
-  },
-  {
     "name": "runs_start",
     "operation": "runs.start",
     "summary": "Begin a Run on an Issue, pending until the Agent posts its first Activity",
@@ -739,12 +486,13 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "issueKey": {
-          "type": "string"
+        "issue": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
-        "issueKey"
+        "issue"
       ]
     }
   }

@@ -36,14 +36,12 @@ export const health = {
        * it was, rather than a page opening a socket that answers 501 — the same
        * reason this endpoint says which providers exist.
        */
-      liveDocuments: z.boolean(),
     }),
     handler: async ({ context }) => ({
       ok: true as const,
       time: new Date().toISOString(),
       devSignIn: context.devSignIn === true,
       providers: context.signInProviders ?? [],
-      liveDocuments: context.liveDocuments === true,
     }),
   }),
 };

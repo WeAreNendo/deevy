@@ -16,9 +16,8 @@ export function extractHandles(body: string): string[] {
 }
 
 /**
- * The Members a body mentions. A Team handle expands to its Members, since
- * mentioning a Team is how you reach everyone on it (CONTEXT.md). Members and
- * Teams share one handle namespace, so a handle resolves to one or the other.
+ * The Members a body mentions. One query: a handle is a Member's, and the Teams
+ * that used to share the namespace are gone (ADR-0024).
  */
 export async function resolveMentions(
   db: Db,
@@ -27,22 +26,9 @@ export async function resolveMentions(
 ): Promise<string[]> {
   const handles = extractHandles(body);
   if (handles.length === 0) return [];
-
-  // Two queries rather than one per handle, since D1 charges per round trip.
-  const [members, teams] = await Promise.all([
-    db.query.member.findMany({
-      where: { workspaceId, handle: { in: handles } },
-      columns: { id: true },
-    }),
-    db.query.team.findMany({
-      where: { workspaceId, handle: { in: handles } },
-      with: { members: { columns: { id: true } } },
-    }),
-  ]);
-
-  const mentioned = new Set(members.map((member) => member.id));
-  for (const team of teams) {
-    for (const member of team.members) mentioned.add(member.id);
-  }
-  return [...mentioned];
+  const members = await db.query.member.findMany({
+    where: { workspaceId, handle: { in: handles } },
+    columns: { id: true },
+  });
+  return members.map((member) => member.id);
 }

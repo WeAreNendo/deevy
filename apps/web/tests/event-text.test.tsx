@@ -3,68 +3,22 @@ import { describeEvent } from "../src/lib/event-text.ts";
 
 const ctx = {
   memberName: (id: string) => ({ "m-ada": "Ada", "m-bob": "Bob" })[id],
-  labelName: (id: string) => ({ l1: "backend", l2: "epic: Checkout" })[id],
 };
 
 describe("describeEvent", () => {
-  it("names the Gate and quotes the note on a ruling", () => {
-    expect(
-      describeEvent({
-        kind: "gate.approved",
-        payload: { state: "Intent", to: "Spec", note: "Go." },
-      }),
-    ).toMatchObject({
-      text: "approved the Intent Gate → Spec",
-      detail: "Go.",
-      tone: "gate",
-    });
-    expect(
-      describeEvent({
-        kind: "gate.rejected",
-        payload: { state: "Spec", to: "Intent", note: null },
-      }),
-    ).toMatchObject({
-      text: "rejected the Spec Gate",
-      detail: null,
-      tone: "destructive",
-    });
-  });
-
-  it("names the Labels, from the payload when it has them and from the map when it does not", () => {
-    expect(
-      describeEvent({
-        kind: "issue.labels_changed",
-        payload: {
-          added: ["l1", "l2"],
-          removed: [],
-          addedNames: ["backend", "epic: Checkout"],
-          removedNames: [],
-        },
-      })?.text,
-    ).toBe("added Labels backend, epic: Checkout");
-    expect(
-      describeEvent({ kind: "issue.labels_changed", payload: { added: [], removed: ["l1"] } }, ctx)
-        ?.text,
-    ).toBe("removed the Label backend");
-  });
-
-  it("names the Assignee and the parent", () => {
+  it("names the Member a record was routed to", () => {
     expect(
       describeEvent({ kind: "issue.assigned", payload: { from: "m-ada", to: "m-bob" } }, ctx)?.text,
     ).toBe("assigned it to Bob (was Ada)");
     expect(
       describeEvent({
         kind: "issue.assigned",
-        payload: { from: null, to: "m-bob", toName: "Builder", byStateRule: true },
+        payload: { from: null, to: "m-bob", toName: "Builder" },
       })?.text,
-    ).toBe("assigned it to Builder on entering the State");
+    ).toBe("assigned it to Builder");
     expect(
       describeEvent({ kind: "issue.assigned", payload: { from: "m-ada", to: null } }, ctx)?.text,
     ).toBe("unassigned it (was Ada)");
-    expect(
-      describeEvent({ kind: "issue.reparented", payload: { from: null, to: "x", toKey: "DEV-3" } })
-        ?.text,
-    ).toBe("set the parent to DEV-3");
   });
 
   it("gives Runs their words and folds their routine steps", () => {
@@ -89,43 +43,9 @@ describe("describeEvent", () => {
     });
     expect(describeEvent({ kind: "run.went_stale", payload: null })?.text).toBe("went quiet");
     expect(describeEvent({ kind: "run.activity", payload: {} })).toBeNull();
-    expect(
-      describeEvent({
-        kind: "document.updated",
-        payload: { name: "spec", version: 3 },
-        actorKind: "agent",
-      }),
-    ).toMatchObject({
-      text: "wrote spec v3",
-      routine: true,
-    });
   });
 
-  it("gives a comment the voice of whoever wrote it", () => {
-    expect(
-      describeEvent({ kind: "comment.created", payload: { commentId: "c1" }, actorKind: "agent" }),
-    ).toMatchObject({ text: "commented", tone: "agent" });
-    expect(
-      describeEvent({ kind: "comment.edited", payload: { commentId: "c1" }, actorKind: "human" }),
-    ).toMatchObject({ text: "edited a comment", tone: "human" });
-    // No kind known: a Human's, as before.
-    expect(describeEvent({ kind: "comment.deleted", payload: { commentId: "c1" } })).toMatchObject({
-      text: "withdrew a comment",
-      tone: "human",
-    });
-  });
-
-  it("names the Gate a Run waits at when the Event carries it", () => {
-    expect(
-      describeEvent({
-        kind: "run.awaiting_input",
-        payload: { gateStateId: "s1", state: "Intent", url: "https://x" },
-        actorKind: "agent",
-      }),
-    ).toMatchObject({ text: "is waiting at the Intent Gate", tone: "gate" });
-    expect(
-      describeEvent({ kind: "run.awaiting_input", payload: { gateStateId: "s1" } })?.text,
-    ).toBe("is waiting at a Gate");
+  it("says what a Run is waiting on, and quotes the question", () => {
     expect(
       describeEvent({
         kind: "run.awaiting_input",
@@ -139,16 +59,37 @@ describe("describeEvent", () => {
     });
   });
 
-  it("reads the Workspace's own Events for the log", () => {
+  it("names what an Agent linked to a record, by its host", () => {
     expect(
       describeEvent({
-        kind: "workflow.updated",
-        payload: { states: ["Intent", "Build", "Done"], removed: 0 },
-      })?.text,
-    ).toBe("set the Workflow to Intent → Build → Done");
+        kind: "issue.link_added",
+        payload: { kind: "pull_request", url: "https://example.com/acme/deevy/pull/7" },
+        actorKind: "agent",
+      }),
+    ).toMatchObject({
+      text: "added a pull_request on example.com",
+      detail: "https://example.com/acme/deevy/pull/7",
+      tone: "agent",
+      routine: true,
+    });
     expect(
-      describeEvent({ kind: "agent.project_granted", payload: { projectKey: "DEV" } })?.text,
-    ).toBe("granted DEV");
+      describeEvent({ kind: "issue.link_removed", payload: { url: "https://example.com/x" } })
+        ?.text,
+    ).toBe("removed a link");
+  });
+
+  it("gives a comment the voice of whoever wrote it", () => {
+    expect(
+      describeEvent({ kind: "comment.created", payload: { commentId: "c1" }, actorKind: "agent" }),
+    ).toMatchObject({ text: "commented", tone: "agent" });
+    // No kind known: a Human's, as before.
+    expect(describeEvent({ kind: "comment.created", payload: { commentId: "c1" } })).toMatchObject({
+      text: "commented",
+      tone: "human",
+    });
+  });
+
+  it("reads the Workspace's own Events for the log", () => {
     expect(describeEvent({ kind: "member.joined", payload: { role: "admin" } })?.text).toBe(
       "joined as admin",
     );
@@ -216,5 +157,76 @@ describe("describeEvent on a delegation", () => {
     expect(describeEvent({ kind: "workspace.updated", payload: { to: "deevy" } })).toMatchObject({
       text: "renamed the Workspace to deevy",
     });
+  });
+});
+
+describe("the Events a Socket causes", () => {
+  it("says what a record arriving from a tracker means", () => {
+    expect(describeEvent({ kind: "issue.created", payload: { key: "acme/deevy#42" } })?.text).toBe(
+      "opened acme/deevy#42",
+    );
+    expect(
+      describeEvent({ kind: "issue.synced", payload: { changed: ["title", "labels"] } })?.text,
+    ).toBe("synced it from the tracker: title, labels");
+    // Nothing worth naming still says something happened.
+    expect(describeEvent({ kind: "issue.synced", payload: {} })?.text).toBe(
+      "synced it from the tracker",
+    );
+    expect(describeEvent({ kind: "issue.closed", payload: {} })?.text).toBe(
+      "closed it in the tracker",
+    );
+    expect(describeEvent({ kind: "issue.reopened", payload: {} })?.text).toBe(
+      "reopened it in the tracker",
+    );
+  });
+
+  it("names the tool a Socket connects, and what it is there", () => {
+    expect(
+      describeEvent({
+        kind: "socket.connected",
+        payload: { provider: "github", name: "Acme", login: "deevy" },
+      })?.text,
+    ).toBe("connected Acme, a github Socket, as @deevy");
+    expect(describeEvent({ kind: "socket.removed", payload: { name: "Acme" } })?.text).toBe(
+      "disconnected Acme",
+    );
+  });
+
+  it("says a record was routed rather than assigned by hand", () => {
+    expect(
+      describeEvent({
+        kind: "issue.assigned",
+        payload: { from: null, to: "m-bob", toName: "Builder", byRouting: true },
+      })?.text,
+    ).toBe("routed it to Builder");
+  });
+
+  it("names the Project an Agent was granted by its slug", () => {
+    expect(
+      describeEvent({ kind: "agent.project_granted", payload: { projectSlug: "acme-deevy" } })
+        ?.text,
+    ).toBe("granted acme-deevy");
+  });
+});
+
+/**
+ * Convention 5 of docs/plans/sockets.md: a new EventKind has four consumers,
+ * and this is the one that is checkable. The kinds are read out of the core's
+ * own union rather than listed here, so a kind added there and forgotten here
+ * fails rather than printing its dotted name at somebody in the Event log.
+ */
+describe("every EventKind the core can append", () => {
+  it("has a sentence, rather than falling through to its raw name", async () => {
+    // Read as text by the bundler, so this needs no filesystem and no node types.
+    const source = (await import("../../../packages/core/src/events.ts?raw")).default;
+    const union = source.slice(
+      source.indexOf("export type EventKind ="),
+      source.indexOf("export type EventPayload"),
+    );
+    const kinds = [...union.matchAll(/\| "([a-z_]+\.[a-z_]+)"/g)].map((match) => match[1] ?? "");
+    expect(kinds.length).toBeGreaterThan(20);
+
+    const raw = kinds.filter((kind) => describeEvent({ kind, payload: {} })?.text === kind);
+    expect(raw).toEqual([]);
   });
 });

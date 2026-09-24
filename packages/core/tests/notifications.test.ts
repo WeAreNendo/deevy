@@ -12,7 +12,7 @@ import { routeEvent } from "../src/notifications.ts";
 import { slackMessage } from "../src/slack.ts";
 import { deliverDueChannelMessages, dueDeliveriesQuery } from "../src/work.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
 const closers: Array<() => void> = [];
@@ -22,20 +22,29 @@ afterEach(() => {
 
 const webhookUrl = "https://hooks.slack.example/services/T000/B000/xxx";
 
-/** An admin, a second Human to be notified, and a Project whose first State is a Gate. */
+/**
+ * An admin, a second Human to be notified, and a Project bound to a tracker
+ * Socket with one record projected from it (ADR-0024).
+ *
+ * A mention is the Event these tests route: it is the one a Human writes, it
+ * reaches as many Humans as the body names, and it is what tells a room full of
+ * them that something happened.
+ */
 async function workspace() {
   const { db, close } = testDb();
   closers.push(close);
   const alice = await memberContext(db, { role: "admin", name: "Alice" });
   const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-  const asAlice = createRouterClient(router, { context: alice });
-  const project = await asAlice.projects.create({ name: "deevy", key: "DEV" });
-  return { db, alice, bob, asAlice, project, workspaceId: alice.workspace.id };
+  const { sockets } = fakeSockets();
+  const asAlice = createRouterClient(router, { context: { ...alice, sockets } });
+  const { project, record } = await seedProject(db, alice.workspace.id);
+  const issue = await record({ externalId: "1", title: "Ship the thing" });
+  return { db, alice, bob, asAlice, project, issue, sockets, workspaceId: alice.workspace.id };
 }
 
 interface SlackChannelOptions {
   workspaceId: string;
-  kind?: "gate_awaiting" | "run_finished" | null;
+  kind?: "mention" | "run_finished" | null;
   projectId?: string | null;
 }
 
@@ -67,29 +76,29 @@ async function lastEvent(db: Db, kind: string): Promise<Event> {
   return found;
 }
 
-describe("routing a Gate Notification", () => {
+describe("routing a mention", () => {
   it("reaches the inbox and the Slack Channel a rule points at", async () => {
-    const { db, asAlice, workspaceId } = await workspace();
-    const channelId = await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
+    const { db, asAlice, issue, workspaceId } = await workspace();
+    const channelId = await slackChannel(db, { workspaceId, kind: "mention" });
 
-    await asAlice.issues.create({ projectKey: "DEV", title: "Needs a decision" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob can you look?" });
 
-    const routing = await routeEvent(db, await lastEvent(db, "issue.created"));
+    const routing = await routeEvent(db, await lastEvent(db, "comment.created"));
     expect(routing.inbox).toHaveLength(1);
-    expect(routing.inbox[0]?.kind).toBe("gate_awaiting");
-    expect(routing.slack).toEqual([{ channelId, webhookUrl, kind: "gate_awaiting" }]);
+    expect(routing.inbox[0]?.kind).toBe("mention");
+    expect(routing.slack).toEqual([{ channelId, webhookUrl, kind: "mention" }]);
   });
 
   it("leaves one delivery owed to the Channel, whatever the Event told Humans", async () => {
-    const { db, asAlice, workspaceId } = await workspace();
-    const channelId = await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
-    // A third Human, so the Gate concerns two of them and the room still hears
-    // once: a Slack Channel is a room, not a person.
+    const { db, asAlice, issue, workspaceId } = await workspace();
+    const channelId = await slackChannel(db, { workspaceId, kind: "mention" });
+    // A third Human, so the comment concerns two of them and the room still
+    // hears once: a Slack Channel is a room, not a person.
     await memberContext(db, { name: "Carol", email: "carol@example.com" });
 
-    await asAlice.issues.create({ projectKey: "DEV", title: "Needs a decision" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob @carol thoughts?" });
 
-    const event = await lastEvent(db, "issue.created");
+    const event = await lastEvent(db, "comment.created");
     expect(await db.query.notification.findMany({ where: { eventId: event.seq } })).toHaveLength(2);
     const owed = await db.query.delivery.findMany();
     expect(owed).toHaveLength(1);
@@ -105,37 +114,37 @@ describe("routing a Gate Notification", () => {
   });
 
   it("stays in the inbox for a Human who turned Slack off for that kind", async () => {
-    const { db, bob, asAlice, workspaceId } = await workspace();
-    await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
+    const { db, bob, asAlice, issue, workspaceId } = await workspace();
+    await slackChannel(db, { workspaceId, kind: "mention" });
     await db.insert(notificationPreference).values({
       memberId: bob.member.id,
-      kind: "gate_awaiting",
+      kind: "mention",
       slack: false,
     });
 
-    await asAlice.issues.create({ projectKey: "DEV", title: "Needs a decision" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob can you look?" });
 
-    const routing = await routeEvent(db, await lastEvent(db, "issue.created"));
+    const routing = await routeEvent(db, await lastEvent(db, "comment.created"));
     expect(routing.inbox).toHaveLength(1);
     expect(routing.slack).toEqual([]);
   });
 
   it("still reaches the room when only one of the two Humans turned Slack off", async () => {
-    const { db, bob, asAlice, workspaceId } = await workspace();
-    await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
+    const { db, bob, asAlice, issue, workspaceId } = await workspace();
+    await slackChannel(db, { workspaceId, kind: "mention" });
     await memberContext(db, { name: "Carol", email: "carol@example.com" });
     await db.insert(notificationPreference).values({
       memberId: bob.member.id,
-      kind: "gate_awaiting",
+      kind: "mention",
       slack: false,
     });
 
-    await asAlice.issues.create({ projectKey: "DEV", title: "Needs a decision" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob @carol thoughts?" });
 
     // A preference says what reaches a person, and a Slack Channel is a room:
     // Bob's says nothing about what Carol may see posted in one. It stops the
     // message only when nobody it concerns wanted it there.
-    const routing = await routeEvent(db, await lastEvent(db, "issue.created"));
+    const routing = await routeEvent(db, await lastEvent(db, "comment.created"));
     expect(routing.inbox).toHaveLength(2);
     expect(routing.slack).toHaveLength(1);
   });
@@ -144,15 +153,16 @@ describe("routing a Gate Notification", () => {
 describe("the Slack message a Notification becomes", () => {
   it("says what happened and links back to the Issue", () => {
     const message = slackMessage({
-      kind: "gate_awaiting",
-      issue: { key: "DEV-1", title: "Ship the thing" },
+      // The key is the tracker's, so it is what a Human recognises (ADR-0024).
+      kind: "mention",
+      issue: { key: "acme/deevy#1", title: "Ship the thing" },
       baseUrl: "https://deevy.example",
     });
 
-    expect(message.text).toContain("DEV-1");
+    expect(message.text).toContain("acme/deevy#1");
     const rendered = JSON.stringify(message);
-    expect(rendered).toContain("https://deevy.example/issues/DEV-1");
-    expect(rendered).toContain("Gate");
+    expect(rendered).toContain("https://deevy.example/issues/acme%2Fdeevy%231");
+    expect(rendered).toContain("mentioned");
     expect(message.blocks[0]?.type).toBe("section");
   });
 });
@@ -201,9 +211,9 @@ const refused = () => new Response("invalid_token", { status: 403 });
 
 describe("delivering what is owed to a Slack Channel", () => {
   it("posts the message the Event says, and marks the delivery done", async () => {
-    const { db, asAlice, workspaceId } = await workspace();
-    await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
-    await asAlice.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    const { db, asAlice, issue, workspaceId } = await workspace();
+    await slackChannel(db, { workspaceId, kind: "mention" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob can you look?" });
     const slack = stubFetch(ok);
 
     const result = await deliverDueChannelMessages({
@@ -216,17 +226,17 @@ describe("delivering what is owed to a Slack Channel", () => {
     expect(result).toMatchObject({ scanned: 1, delivered: 1, failed: 0, more: false });
     expect(slack.posted).toHaveLength(1);
     expect(slack.posted[0]?.url).toBe(webhookUrl);
-    expect(slack.posted[0]?.body).toContain("DEV-1");
-    expect(slack.posted[0]?.body).toContain("https://deevy.example/issues/DEV-1");
+    expect(slack.posted[0]?.body).toContain("acme/deevy#1");
+    expect(slack.posted[0]?.body).toContain("https://deevy.example/issues/acme%2Fdeevy%231");
     const [row] = await db.query.delivery.findMany();
     expect(row?.deliveredAt).not.toBeNull();
     expect(row).toMatchObject({ attempts: 1, lastStatus: 200 });
   });
 
   it("tries a refused message again on a growing backoff, and gives up in the end", async () => {
-    const { db, asAlice, workspaceId } = await workspace();
-    await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
-    await asAlice.issues.create({ projectKey: "DEV", title: "Ship the thing" });
+    const { db, asAlice, issue, workspaceId } = await workspace();
+    await slackChannel(db, { workspaceId, kind: "mention" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob can you look?" });
     const slack = stubFetch(refused);
 
     // Each pass runs at the moment the row says it is next due, so the backoff
@@ -265,10 +275,10 @@ describe("delivering what is owed to a Slack Channel", () => {
   });
 
   it("is claimed by one sweep only, because two of them must not send it twice", async () => {
-    const { db, asAlice, workspaceId } = await workspace();
-    await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
-    await asAlice.issues.create({ projectKey: "DEV", title: "First" });
-    await asAlice.issues.create({ projectKey: "DEV", title: "Second" });
+    const { db, asAlice, issue, workspaceId } = await workspace();
+    await slackChannel(db, { workspaceId, kind: "mention" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob the first thing" });
+    await asAlice.comments.create({ issue: issue.externalKey, body: "@bob the second thing" });
     const slack = stubFetch(ok);
     const now = new Date();
     const pass = () =>
@@ -304,10 +314,10 @@ describe("delivering what is owed to a Slack Channel", () => {
   });
 
   it("costs the same handful of statements whatever is owed", async () => {
-    const { db, asAlice, workspaceId } = await workspace();
-    await slackChannel(db, { workspaceId, kind: "gate_awaiting" });
+    const { db, asAlice, issue, workspaceId } = await workspace();
+    await slackChannel(db, { workspaceId, kind: "mention" });
     for (let n = 0; n < 20; n += 1) {
-      await asAlice.issues.create({ projectKey: "DEV", title: `Issue ${n}` });
+      await asAlice.comments.create({ issue: issue.externalKey, body: `@bob thing ${n}` });
     }
     const slack = stubFetch(ok);
     const { counted, statements } = countingDb(db);
@@ -330,12 +340,16 @@ describe("delivering what is owed to a Slack Channel", () => {
 describe("a rule scoped to one Project", () => {
   it("does not fire for another Project's Events", async () => {
     const { db, asAlice, workspaceId, project } = await workspace();
-    await slackChannel(db, { workspaceId, kind: "gate_awaiting", projectId: project.id });
-    await asAlice.projects.create({ name: "website", key: "WEB" });
+    await slackChannel(db, { workspaceId, kind: "mention", projectId: project.id });
+    const website = await seedProject(db, workspaceId, {
+      slug: "website",
+      scopeKey: "acme/website",
+    });
+    const elsewhere = await website.record({ externalId: "1", title: "Needs a look" });
 
-    await asAlice.issues.create({ projectKey: "WEB", title: "Needs a decision" });
+    await asAlice.comments.create({ issue: elsewhere.url, body: "@bob can you look?" });
 
-    const routing = await routeEvent(db, await lastEvent(db, "issue.created"));
+    const routing = await routeEvent(db, await lastEvent(db, "comment.created"));
     expect(routing.inbox).toHaveLength(1);
     expect(routing.slack).toEqual([]);
   });
@@ -343,17 +357,16 @@ describe("a rule scoped to one Project", () => {
 
 describe("routing a finished Run", () => {
   it("reaches Slack only, for a Human who turned their inbox off for that kind", async () => {
-    const { db, bob, asAlice, workspaceId, project } = await workspace();
+    const { db, bob, issue, workspaceId, project } = await workspace();
     const channelId = await slackChannel(db, { workspaceId, kind: "run_finished" });
     await db.insert(notificationPreference).values({
       memberId: bob.member.id,
       kind: "run_finished",
       inbox: false,
     });
-    await asAlice.issues.create({ projectKey: "DEV", title: "Ship it" });
     const planner = await agentContext(db, { sponsor: bob.member, grants: [project.id] });
     const asPlanner = createRouterClient(router, { context: planner });
-    const run = await asPlanner.runs.start({ issueKey: "DEV-1" });
+    const run = await asPlanner.runs.start({ issue: issue.externalKey });
 
     await asPlanner.runs.finish({ runId: run.id, status: "completed", summary: "Done" });
 

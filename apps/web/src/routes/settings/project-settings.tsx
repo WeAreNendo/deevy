@@ -7,32 +7,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAutosave } from "@/lib/autosave";
 import { orpc } from "@/lib/orpc";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-/** Base UI's Select wants a value for "no Team"; the empty string is not one. */
-const NO_TEAM = "__none";
 
 /**
  * What a Project is called, what it is for, and whose it is — `projects.update`
  * and `projects.archive` had no UI until here (docs/plans/ui-redesign.md
  * slice 8). The detail pane of Settings › Projects, which is where a Project is
  * configured; it was a tab on the Project itself until 2026-09-11. Every field saves itself (docs/plans/ui-redesign-2.md slice G):
- * text on blur or Enter, the Team on change, each sending only what changed;
- * one status line says Saving, Saved, or what went wrong. The key is not here:
- * it prefixes every Issue and cannot change.
+ * text on blur or Enter, each sending only what changed; one status line says
+ * Saving, Saved, or what went wrong. What the Project is bound to is not here:
+ * the binding editor arrives with the Sockets screens (docs/plans/sockets.md).
  */
-export function ProjectSettingsForm({ projectKey }: { projectKey: string }) {
+export function ProjectSettingsForm({ projectSlug }: { projectSlug: string }) {
   const queryClient = useQueryClient();
-  const project = useQuery(orpc.projects.get.queryOptions({ input: { key: projectKey } }));
-  const teams = useQuery(orpc.teams.list.queryOptions({ input: {} }));
+  const project = useQuery(orpc.projects.get.queryOptions({ input: { slug: projectSlug } }));
   const me = useQuery(orpc.me.get.queryOptions());
   const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.projects.key() });
   // What the fields show: the server's values until a keystroke, then the draft.
@@ -44,7 +31,7 @@ export function ProjectSettingsForm({ projectKey }: { projectKey: string }) {
   const update = useMutation(
     orpc.projects.update.mutationOptions({
       // A save landing resets the draft of the field it carried, and only that
-      // one: a Team change must not wipe a name still being typed.
+      // one: a description change must not wipe a name still being typed.
       onSuccess: async (_saved, variables) => {
         if ("name" in variables) setName(null);
         if ("description" in variables) setDescription(null);
@@ -54,9 +41,9 @@ export function ProjectSettingsForm({ projectKey }: { projectKey: string }) {
   );
   const archive = useMutation(orpc.projects.archive.mutationOptions({ onSuccess: refresh }));
 
-  type Change = { name?: string; description?: string | null; teamId?: string | null };
+  type Change = { name?: string; description?: string | null };
   const autosave = useAutosave<Change>((change) =>
-    update.mutateAsync({ key: projectKey, ...change }),
+    update.mutateAsync({ slug: projectSlug, ...change }),
   );
 
   if (project.isPending) return <Skeleton className="h-48 w-full" />;
@@ -64,7 +51,6 @@ export function ProjectSettingsForm({ projectKey }: { projectKey: string }) {
 
   const shownName = name ?? project.data.name;
   const shownDescription = description ?? project.data.description ?? "";
-  const teamId = project.data.teamId ?? NO_TEAM;
   const admin = me.data?.member?.role === "admin";
 
   const saveName = () => {
@@ -118,43 +104,6 @@ export function ProjectSettingsForm({ projectKey }: { projectKey: string }) {
             onBlur={saveDescription}
           />
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="project-team">Team</Label>
-          <Select
-            value={teamId}
-            onValueChange={(next) => {
-              if (next === null) return;
-              void autosave.saveNow({ teamId: next === NO_TEAM ? null : next });
-            }}
-          >
-            <SelectTrigger id="project-team" className="w-56">
-              <SelectValue>
-                {(selected: string) =>
-                  selected === NO_TEAM
-                    ? "No Team"
-                    : (teams.data?.teams.find((team) => team.id === selected)?.name ?? selected)
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value={NO_TEAM}>No Team</SelectItem>
-              </SelectGroup>
-              <SelectSeparator />
-              <SelectGroup>
-                {(teams.data?.teams ?? []).map((team) => (
-                  <SelectItem key={team.id} value={team.id}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            The Team that owns this Project and can be mentioned as a group. Everyone can still see
-            it.
-          </p>
-        </div>
         <p role="status" className="flex min-h-5 items-center gap-2 text-xs text-muted-foreground">
           {autosave.status === "saving" ? "Saving…" : null}
           {autosave.status === "saved" ? "Saved" : null}
@@ -183,9 +132,9 @@ export function ProjectSettingsForm({ projectKey }: { projectKey: string }) {
                 <Button
                   variant="destructive"
                   disabled={archive.isPending}
-                  onClick={() => archive.mutate({ key: projectKey })}
+                  onClick={() => archive.mutate({ slug: projectSlug })}
                 >
-                  Yes, archive {projectKey}
+                  Yes, archive {projectSlug}
                 </Button>
                 <Button variant="ghost" onClick={() => setConfirming(false)}>
                   Keep it

@@ -2,56 +2,59 @@ import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { extractHandles } from "../src/mentions.ts";
 import { router } from "../src/operations/index.ts";
-import { memberContext, testDb, type MemberContext } from "./helpers.ts";
+import { fakeSockets, memberContext, seedProject, testDb, type MemberContext } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
   for (const close of closers.splice(0)) close();
 });
 
+/**
+ * A Project bound to a tracker Socket and one record projected from it. deevy
+ * stores no comments: `comments.create` writes to the tracker and keeps the
+ * Event, because a mention is a trigger and the log is the record of what
+ * happened (ADR-0024).
+ */
 async function withIssue(db: MemberContext["db"]) {
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const client = createRouterClient(router, { context: admin });
-  await client.projects.create({ name: "deevy", key: "DEV" });
-  await client.issues.create({ projectKey: "DEV", title: "Ship it" });
-  return { admin, client };
+  const { sockets } = fakeSockets();
+  const client = createRouterClient(router, { context: { ...admin, sockets } });
+  const { record } = await seedProject(db, admin.workspace.id);
+  const issue = await record({ externalId: "1", title: "Ship it" });
+  return { admin, client, issue };
 }
 
 describe("extractHandles", () => {
   it("finds @handles and ignores an email address", () => {
-    expect(extractHandles("ping @bob and @core, not bob@example.com")).toEqual(["bob", "core"]);
+    expect(extractHandles("ping @bob and @carol, not bob@example.com")).toEqual(["bob", "carol"]);
     expect(extractHandles("nothing here")).toEqual([]);
     expect(extractHandles("@bob @bob")).toEqual(["bob"]);
   });
 });
 
 describe("comments.create", () => {
-  it("resolves a mentioned Member and expands a mentioned Team to its Members", async () => {
+  it("writes to the tracker under the Socket's account and resolves the Members named", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { admin, client } = await withIssue(db);
+    const { admin, client, issue } = await withIssue(db);
     const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
     const carol = await memberContext(db, { name: "Carol", email: "carol@example.com" });
-    await db
-      .update((await import("@deevy/db")).member)
-      .set({ handle: "bob" })
-      .where(
-        (await import("drizzle-orm")).eq((await import("@deevy/db")).member.id, bob.member.id),
-      );
-    const team = await client.teams.create({ name: "Core", handle: "core" });
-    await client.teams.addMember({ teamId: team.id, memberId: bob.member.id });
-    await client.teams.addMember({ teamId: team.id, memberId: carol.member.id });
 
     const comment = await client.comments.create({
-      issueKey: "DEV-1",
-      body: "ping @bob and @core",
+      issue: issue.externalKey,
+      body: "ping @bob and @carol",
     });
 
-    expect(comment.body).toBe("ping @bob and @core");
-    expect(comment.authorMemberId).toBe(admin.member.id);
+    expect(comment.body).toBe("ping @bob and @carol");
+    // The tracker shows the Socket's own account as the author, which is why
+    // the body deevy sends carries the Member's signature (ADR-0024).
+    expect(comment.author).toMatchObject({ login: "deevy", isBot: true });
+    expect(comment.url).toContain(issue.url);
+
     const page = await client.events.list({ subjectType: "issue" });
     const created = page.events.findLast((e) => e.kind === "comment.created");
     expect(created).toBeDefined();
+    expect(created?.actorMemberId).toBe(admin.member.id);
     const mentioned = (created?.payload as { mentionedMemberIds: string[] } | undefined)
       ?.mentionedMemberIds;
     expect(mentioned).toBeDefined();
@@ -61,9 +64,9 @@ describe("comments.create", () => {
   it("mentions nobody when no handle matches", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { client } = await withIssue(db);
+    const { client, issue } = await withIssue(db);
 
-    await client.comments.create({ issueKey: "DEV-1", body: "ping @nobody" });
+    await client.comments.create({ issue: issue.url, body: "ping @nobody" });
 
     const page = await client.events.list({ subjectType: "issue" });
     const created = page.events.findLast((e) => e.kind === "comment.created");
@@ -72,81 +75,14 @@ describe("comments.create", () => {
       (created?.payload as { mentionedMemberIds: string[] } | undefined)?.mentionedMemberIds,
     ).toEqual([]);
   });
-});
 
-describe("comments.update", () => {
-  it("lets the author edit and refuses anyone else who is not an admin", async () => {
+  it("refuses a record no Socket in this Workspace knows", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const { client } = await withIssue(db);
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const comment = await client.comments.create({ issueKey: "DEV-1", body: "first" });
 
-    const edited = await client.comments.update({ commentId: comment.id, body: "second" });
-    expect(edited).toMatchObject({ body: "second" });
-    expect(edited.editedAt).toBeInstanceOf(Date);
-
-    const asBob = createRouterClient(router, { context: bob });
     await expect(
-      asBob.comments.update({ commentId: comment.id, body: "mine now" }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-});
-
-describe("comments.delete", () => {
-  it("keeps the comment in the thread with no body, and lets an admin delete another's", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withIssue(db);
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const asBob = createRouterClient(router, { context: bob });
-    const mine = await client.comments.create({ issueKey: "DEV-1", body: "mine" });
-    const theirs = await asBob.comments.create({ issueKey: "DEV-1", body: "theirs" });
-
-    await client.comments.delete({ commentId: mine.id });
-    // An admin may delete someone else's.
-    await client.comments.delete({ commentId: theirs.id });
-
-    const { comments } = await client.comments.list({ issueKey: "DEV-1" });
-    expect(comments).toHaveLength(2);
-    expect(comments.every((c) => c.deletedAt !== null)).toBe(true);
-    expect(comments.every((c) => c.body === "")).toBe(true);
-  });
-
-  it("refuses a Member deleting another's comment", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withIssue(db);
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const mine = await client.comments.create({ issueKey: "DEV-1", body: "mine" });
-
-    const asBob = createRouterClient(router, { context: bob });
-    await expect(asBob.comments.delete({ commentId: mine.id })).rejects.toMatchObject({
-      code: "FORBIDDEN",
-    });
-  });
-});
-
-describe("mentions in an Issue description", () => {
-  it("are resolved the same way on update", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withIssue(db);
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    await db
-      .update((await import("@deevy/db")).member)
-      .set({ handle: "bob" })
-      .where(
-        (await import("drizzle-orm")).eq((await import("@deevy/db")).member.id, bob.member.id),
-      );
-
-    await client.issues.update({ key: "DEV-1", description: "over to @bob" });
-
-    const page = await client.events.list({ subjectType: "issue" });
-    const updated = page.events.findLast((e) => e.kind === "issue.updated");
-    expect(updated).toBeDefined();
-    expect(
-      (updated?.payload as { mentionedMemberIds?: string[] } | undefined)?.mentionedMemberIds,
-    ).toEqual([bob.member.id]);
+      client.comments.create({ issue: "acme/deevy#404", body: "anyone there?" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

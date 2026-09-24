@@ -1,5 +1,5 @@
 import { projectGrant, type Db } from "@deevy/db";
-import type { LiveRooms } from "./live-rooms.ts";
+import type { SocketModules } from "./sockets/port.ts";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
 import { COMMON_ERROR_STATUS_MAP, DEFAULT_ERROR_STATUS, ORPCError, onError } from "@orpc/server";
@@ -67,17 +67,11 @@ export interface AppOptions {
    */
   devSignIn?: boolean;
   /**
-   * Whether this deployment serves rooms, which the SPA asks before it opens a
-   * socket (ADR-0021): the Node deployment always does, and a Worker does when
-   * it has the Durable Object binding.
+   * The providers this deployment can speak, built by the entry from
+   * `@deevy/sockets` (ADR-0024). The core holds the port and never a provider,
+   * so a build without one refuses the Socket rather than failing to compile.
    */
-  liveDocuments?: boolean;
-  /**
-   * The open rooms, where this deployment can reach them: an Agent writing a
-   * Document somebody has open goes through here, so the browsers in it see the
-   * change arrive (ADR-0021).
-   */
-  liveRooms?: LiveRooms;
+  sockets?: SocketModules;
   /**
    * Which providers this deployment offers a Human to sign in with, from
    * `signInProviders(env)` in the entry that built the identity configuration.
@@ -132,8 +126,7 @@ export function createApp({
   jobs = discardingJobQueue(),
   onError: report = console.error,
   devSignIn = false,
-  liveDocuments = false,
-  liveRooms,
+  sockets,
   signInProviders = [],
   webURL,
 }: AppOptions) {
@@ -177,6 +170,9 @@ export function createApp({
     ...(webURL ? { webURL } : {}),
     secret,
     jobs,
+    // The same registry the operation surfaces get: a tool that opens a record
+    // in a tracker is refused without it (ADR-0024).
+    ...(sockets ? { sockets } : {}),
     onError: reportUnexpected,
   });
   app.all("/mcp", (c) => mcp.fetch(c.req.raw));
@@ -211,8 +207,7 @@ export function createApp({
     ...(webURL ? { webURL } : {}),
     jobs,
     devSignIn,
-    liveDocuments,
-    ...(liveRooms ? { liveRooms } : {}),
+    ...(sockets ? { sockets } : {}),
     signInProviders: await offeredProviders(),
   });
   app.use("/rpc/*", async (c, next) => {

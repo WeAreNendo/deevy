@@ -28,21 +28,6 @@ export {
   type ClientMetadataFetchOptions,
   type MetadataResourceFetch,
 } from "./cimd.ts";
-export type { LiveRooms, Wrote } from "./live-rooms.ts";
-export {
-  announceWrite,
-  createRoomServer,
-  liveRoomsOf,
-  roomAuthenticator,
-  roomSocket,
-  serveRoomSocket,
-  type Joining,
-  type RoomContext,
-  type RoomServerOptions,
-  type RoomSocket,
-  type RuntimeSocket,
-} from "./room-server.ts";
-export { authorizeRoom, parseRoomName, roomName, type OpenedRoom, type Room } from "./rooms.ts";
 export {
   appendEvent,
   type EventInput,
@@ -113,3 +98,19 @@ export {
   type SweepStaleRunsOptions,
 } from "./work.ts";
 export { idPrefixes, isId, newId, type IdKind } from "./ids.ts";
+export {
+  parseIssueRef,
+  routeIssueTo,
+  upsertProjection,
+  type IssueRef,
+  type ProjectionInput,
+  type ProjectionResult,
+} from "./issues.ts";
+export {
+  requireForge,
+  requireSocket,
+  requireTracker,
+  scopeKeyOf,
+  socketModuleFor,
+} from "./sockets/registry.ts";
+export type * from "./sockets/port.ts";

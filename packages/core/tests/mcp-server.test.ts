@@ -7,7 +7,7 @@ import { createApp } from "../src/app.ts";
 import { createAuth } from "../src/auth.ts";
 import { opaqueToolError, toolError } from "../src/mcp/errors.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, testDb } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -73,22 +73,33 @@ function toolNames(answer: JsonRpcAnswer): string[] {
 }
 
 /**
- * A Workspace an Agent works in: an admin Human, a granted Project with an
- * Issue in Plan, a Project the Agent was never granted, and the Agent's key.
+ * A Workspace an Agent works in: an admin Human, a tracker Socket, a granted
+ * Project with a record projected from it, a Project the Agent was never
+ * granted, and the Agent's key.
  */
 async function workspaceWithAgent() {
   const { db, auth } = testAuth();
+  const { sockets } = fakeSockets();
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const client = createRouterClient(router, { context: admin });
+  const client = createRouterClient(router, { context: { ...admin, sockets } });
 
-  const granted = await client.projects.create({ name: "deevy", key: "DEV" });
-  await client.issues.create({ projectKey: "DEV", title: "Ship the MCP surface" });
-  // Intent to Spec to Plan, so the Issue carries the plan Document an Agent writes.
-  await client.gates.approve({ key: "DEV-1" });
-  await client.gates.approve({ key: "DEV-1" });
+  const socket = await client.sockets.connect({ provider: "stub", name: "Example tracker" });
+  const granted = await client.projects.create({
+    slug: "deevy",
+    name: "deevy",
+    tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
+  });
+  const issue = await client.issues.create({
+    projectSlug: "deevy",
+    title: "Ship the MCP surface",
+  });
 
-  await client.projects.create({ name: "ops", key: "OPS" });
-  await client.issues.create({ projectKey: "OPS", title: "Rotate the keys" });
+  await client.projects.create({
+    slug: "ops",
+    name: "ops",
+    tracker: { socketId: socket.id, scope: { scopeKey: "acme/ops" } },
+  });
+  const ungranted = await client.issues.create({ projectSlug: "ops", title: "Rotate the keys" });
 
   const agent = await agentContext(db, {
     sponsor: admin.member,
@@ -99,7 +110,18 @@ async function workspaceWithAgent() {
     body: { userId: agent.member.userId, name: "laptop" },
   });
 
-  return { db, auth, admin, client, agent, key: issued.key, app: createApp({ db, auth }) };
+  return {
+    db,
+    auth,
+    admin,
+    client,
+    agent,
+    issue,
+    ungranted,
+    sockets,
+    key: issued.key,
+    app: createApp({ db, auth, sockets }),
+  };
 }
 
 describe("POST /mcp without a credential", () => {
@@ -180,54 +202,62 @@ describe("tools/list", () => {
     const names = toolNames(await mcp(app, key, "tools/list", {}));
 
     expect(names).toContain("issues_get");
-    expect(names).toContain("documents_write");
-    expect(names).not.toContain("gates_approve");
+    expect(names).toContain("comments_create");
+    expect(names).not.toContain("agents_create");
     expect(names).not.toContain("projects_create");
   });
 });
 
 describe("a tool call authenticated with an Agent's key", () => {
-  it("reads the Issue it was granted and writes that Issue's plan Document", async () => {
-    const { app, key, client, agent } = await workspaceWithAgent();
+  it("reads the record it was granted and says something on it in the tracker", async () => {
+    const { app, key, db, agent, issue } = await workspaceWithAgent();
 
     const read = await mcp(app, key, "tools/call", {
       name: "issues_get",
-      arguments: { key: "DEV-1" },
+      arguments: { issue: issue.externalKey },
     });
     expect(read.result?.isError).toBeUndefined();
     expect(read.result?.structuredContent).toMatchObject({
-      key: "DEV-1",
+      externalKey: issue.externalKey,
       title: "Ship the MCP surface",
     });
 
+    // FAILS in slice 0: `createApp` passes `sockets` to the /rpc and /api
+    // contexts and never to `createDeevyMcp`, so every Socket-backed tool
+    // answers NOT_IMPLEMENTED on the MCP surface. Reported, not worked around.
     const written = await mcp(app, key, "tools/call", {
-      name: "documents_write",
-      arguments: {
-        issueKey: "DEV-1",
-        name: "plan",
-        body: "## Files that change\n\npackages/core/src/mcp/server.ts",
-      },
+      name: "comments_create",
+      arguments: { issue: issue.url, body: "Reading packages/core/src/mcp/server.ts first" },
     });
     expect(written.result?.isError).toBeUndefined();
-    expect(written.result?.structuredContent).toMatchObject({ name: "plan", version: 2 });
+    expect(written.result?.structuredContent).toMatchObject({
+      body: "Reading packages/core/src/mcp/server.ts first",
+      author: { login: "deevy", isBot: true },
+    });
 
-    // The write went through the same handler /api and /rpc call, so it is a
-    // real version by that Agent, not an MCP-shaped copy of one.
-    const stored = await client.documents.get({ issueKey: "DEV-1", name: "plan" });
-    expect(stored.body).toContain("packages/core/src/mcp/server.ts");
-    expect(stored.authorMemberId).toBe(agent.member.id);
+    // The write went through the same handler /api and /rpc call, so the Event
+    // is that Agent's own rather than an MCP-shaped copy of one (ADR-0024).
+    const appended = await db.query.event.findFirst({
+      where: { kind: "comment.created", subjectId: issue.id },
+    });
+    expect(appended?.actorMemberId).toBe(agent.member.id);
+    expect(appended?.payload).toMatchObject({
+      body: "Reading packages/core/src/mcp/server.ts first",
+    });
   });
 
-  it("is told an Issue in a Project it was never granted does not exist", async () => {
-    const { app, key } = await workspaceWithAgent();
+  it("is told a record in a Project it was never granted does not exist", async () => {
+    const { app, key, ungranted } = await workspaceWithAgent();
 
     const answer = await mcp(app, key, "tools/call", {
       name: "issues_get",
-      arguments: { key: "OPS-1" },
+      arguments: { issue: ungranted.externalKey },
     });
 
     expect(answer.result?.isError).toBe(true);
-    expect(answer.result?.content).toEqual([{ type: "text", text: "No such Project" }]);
+    expect(answer.result?.content).toEqual([
+      { type: "text", text: `No such Issue: ${ungranted.externalKey}` },
+    ]);
   });
 });
 
@@ -235,40 +265,41 @@ describe("a tool deevy does not project", () => {
   it("is absent from tools/list and refused when an Agent names it anyway", async () => {
     const { app, key } = await workspaceWithAgent();
 
-    expect(toolNames(await mcp(app, key, "tools/list", {}))).not.toContain("gates_approve");
+    // A real operation that is a Human's to call in deevy's own UI, so it is
+    // not a tool at all rather than a tool that answers with a refusal.
+    expect(toolNames(await mcp(app, key, "tools/list", {}))).not.toContain("agents_create");
 
     const answer = await mcp(app, key, "tools/call", {
-      name: "gates_approve",
-      arguments: { key: "DEV-1" },
+      name: "agents_create",
+      arguments: { name: "Planner" },
     });
 
     expect(answer.result).toBeUndefined();
-    expect(answer.error?.message).toContain("gates_approve");
+    expect(answer.error?.message).toContain("agents_create");
   });
 
-  it("refuses labels_delete by name, though an Agent may create a Label", async () => {
+  it("does not project connecting a Socket, which is an admin's alone", async () => {
     const { app, key } = await workspaceWithAgent();
 
     const names = toolNames(await mcp(app, key, "tools/list", {}));
-    expect(names).toContain("labels_create");
-    expect(names).not.toContain("labels_delete");
+    expect(names).not.toContain("sockets_connect");
+    expect(names).not.toContain("sockets_list");
 
-    // Widening "manage Labels" stopped at creating one: deleting a
-    // Workspace-scoped Label reaches Projects this Agent cannot see, so the
-    // name is not a tool at all rather than a tool that answers with a refusal.
+    // A Socket is a credential (ADR-0024): an Agent that could connect one
+    // could point its own Project at somebody else's tracker.
     const answer = await mcp(app, key, "tools/call", {
-      name: "labels_delete",
-      arguments: { labelId: "whatever" },
+      name: "sockets_connect",
+      arguments: { provider: "stub", name: "whatever" },
     });
 
     expect(answer.result).toBeUndefined();
-    expect(answer.error?.message).toContain("labels_delete");
+    expect(answer.error?.message).toContain("sockets_connect");
   });
 });
 
 describe("the tools/list filter", () => {
   it("is display only: a tool it leaves out is still refused by the middleware", async () => {
-    const { db, app, key, agent } = await workspaceWithAgent();
+    const { db, app, key, agent, issue } = await workspaceWithAgent();
     // A suspended Member keeps its row and its key, and is no Member as far as
     // the Workspace is concerned, so it is offered nothing at all.
     await db.update(member).set({ suspendedAt: new Date() }).where(eq(member.id, agent.member.id));
@@ -279,7 +310,7 @@ describe("the tools/list filter", () => {
     // the empty list is a courtesy, never the thing standing in the way.
     const answer = await mcp(app, key, "tools/call", {
       name: "issues_get",
-      arguments: { key: "DEV-1" },
+      arguments: { issue: issue.externalKey },
     });
 
     expect(answer.result?.isError).toBe(true);
@@ -318,7 +349,7 @@ async function legacyMcp(
 
 describe("a 2025-11-25 client", () => {
   it("still gets its handshake, its tool list and its answer", async () => {
-    const { app, key } = await workspaceWithAgent();
+    const { app, key, issue } = await workspaceWithAgent();
 
     const init = await legacyMcp(app, key, "initialize", {
       protocolVersion: "2025-11-25",
@@ -331,10 +362,10 @@ describe("a 2025-11-25 client", () => {
 
     const answer = await legacyMcp(app, key, "tools/call", {
       name: "issues_get",
-      arguments: { key: "DEV-1" },
+      arguments: { issue: issue.externalKey },
     });
     expect(answer.result?.isError).toBeUndefined();
-    expect(answer.result?.structuredContent).toMatchObject({ key: "DEV-1" });
+    expect(answer.result?.structuredContent).toMatchObject({ externalKey: issue.externalKey });
   });
 });
 
@@ -345,13 +376,13 @@ describe("what an Agent is told when a tool call fails", () => {
     const app = createApp({ db, auth, onError: (error) => reported.push(error) });
 
     const refused = await mcp(app, key, "tools/call", {
-      name: "documents_get",
-      arguments: { issueKey: "DEV-1", name: "nonesuch" },
+      name: "issues_get",
+      arguments: { issue: "acme/deevy#404" },
     });
 
     expect(refused.result?.isError).toBe(true);
     expect(refused.result?.content).toEqual([
-      { type: "text", text: "This Issue has no nonesuch Document" },
+      { type: "text", text: "No such Issue: acme/deevy#404" },
     ]);
     expect(reported).toEqual([]);
   });
@@ -404,72 +435,36 @@ describe("a Human's own client", () => {
     const agent = toolNames(await mcp(app, key, "tools/list", {}));
 
     // The writing side of a Run faces the Agent (ADR-0016)...
-    for (const name of [
-      "runs_start",
-      "runs_post_activity",
-      "runs_request_approval",
-      "runs_finish",
-    ]) {
+    for (const name of ["runs_start", "runs_post_activity", "runs_finish"]) {
       expect(human).not.toContain(name);
       expect(agent).toContain(name);
     }
     // ...answering one faces the Human, and the rest faces both.
     expect(human).toContain("runs_answer");
     expect(agent).not.toContain("runs_answer");
-    for (const name of ["issues_move", "projects_get", "runs_list", "runs_get", "inbox_list"]) {
+    for (const name of [
+      "issues_get",
+      "issues_list",
+      "comments_create",
+      "projects_get",
+      "runs_list",
+      "runs_get",
+      "inbox_list",
+    ]) {
       expect(human).toContain(name);
       expect(agent).toContain(name);
     }
   });
 
   it("is refused a Run by the middleware when it names the tool anyway", async () => {
-    const { app, humanKey } = await workspaceWithHumanKey();
+    const { app, humanKey, issue } = await workspaceWithHumanKey();
 
     const answer = await mcp(app, humanKey, "tools/call", {
       name: "runs_start",
-      arguments: { issueKey: "DEV-1" },
+      arguments: { issue: issue.externalKey },
     });
 
     expect(answer.result?.isError).toBe(true);
     expect(answer.result?.content).toEqual([{ type: "text", text: "Only an Agent can do that" }]);
-  });
-
-  it("moves an Issue between States, and is still stopped at a Gate", async () => {
-    const { app, humanKey, client } = await workspaceWithHumanKey();
-
-    // `projects_get` is where a client learns the States and their ids.
-    const project = await mcp(app, humanKey, "tools/call", {
-      name: "projects_get",
-      arguments: { key: "DEV" },
-    });
-    const answered = project.result?.structuredContent as
-      | { states: Array<{ id: string; name: string; isGate: boolean }> }
-      | undefined;
-    const states = answered?.states ?? [];
-    const build = states.find((state) => state.name === "Build");
-    const review = states.find((state) => state.name === "Review");
-    if (!build || !review) throw new Error("the default workflow lost a State");
-
-    // DEV-1 sits in the Plan Gate, and a move is not a ruling (ADR-0004).
-    const refused = await mcp(app, humanKey, "tools/call", {
-      name: "issues_move",
-      arguments: { key: "DEV-1", stateId: build.id },
-    });
-    expect(refused.result?.isError).toBe(true);
-    expect(refused.result?.content).toEqual([
-      { type: "text", text: "DEV-1 is in the Plan Gate; approve or reject it" },
-    ]);
-
-    // The ruling happens in deevy (ADR-0010); Build is then left like any State.
-    await client.gates.approve({ key: "DEV-1" });
-    const moved = await mcp(app, humanKey, "tools/call", {
-      name: "issues_move",
-      arguments: { key: "DEV-1", stateId: review.id },
-    });
-    expect(moved.result?.isError).toBeUndefined();
-    expect(moved.result?.structuredContent).toMatchObject({
-      key: "DEV-1",
-      state: { name: "Review" },
-    });
   });
 });

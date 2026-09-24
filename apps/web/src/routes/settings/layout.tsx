@@ -26,16 +26,12 @@ export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
     pages: [
       { label: "General", to: "/settings/workspace" },
       { label: "Members", to: "/settings/members" },
-      { label: "Teams", to: "/settings/teams" },
       { label: "Event log", to: "/settings/events" },
     ],
   },
   {
     group: "Work",
-    pages: [
-      { label: "Projects", to: "/settings/projects" },
-      { label: "Labels", to: "/settings/labels" },
-    ],
+    pages: [{ label: "Projects", to: "/settings/projects" }],
   },
   {
     group: "Agents and delivery",

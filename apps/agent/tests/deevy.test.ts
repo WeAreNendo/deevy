@@ -18,10 +18,9 @@ describe("the client", () => {
   it("carries deevy's own word for a refusal, not the status code", async () => {
     const it = await instance();
     closers.push(it.close);
-    await it.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-    await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+    const issue = await it.assign();
 
-    const refused = await it.deevy.startRun("DEV-1").catch((error: unknown) => error);
+    const refused = await it.deevy.startRun(issue.externalKey).catch((error: unknown) => error);
 
     expect(refused).toBeInstanceOf(DeevyError);
     expect(refused).toMatchObject({ code: "CONFLICT", status: 409 });

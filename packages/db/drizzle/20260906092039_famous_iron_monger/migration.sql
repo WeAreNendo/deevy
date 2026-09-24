@@ -1,1 +1,0 @@
-CREATE INDEX `issue_updatedAt_idx` ON `issue` (`updated_at`);

@@ -4,13 +4,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
   const { stubClient } = await import("./stub-client.ts");
-  const client = stubClient({
-    issues: {
-      get: async () => {
-        throw Object.assign(new Error("No such Issue"), { code: "NOT_FOUND" });
-      },
-    },
-  });
+  const client = stubClient();
   return { client, orpc: createTanstackQueryUtils(client) };
 });
 
@@ -32,22 +26,18 @@ describe("a URL that leads nowhere", () => {
       .getByRole("heading", { name: "There is nothing here" })
       .closest('[data-slot="empty"]') as HTMLElement;
     expect(within(page).getByRole("button", { name: "Go back" })).toBeTruthy();
-    expect(within(page).getByRole("link", { name: "All Issues" })).toBeTruthy();
-    expect(within(page).getByRole("link", { name: "Inbox" })).toBeTruthy();
+    expect(
+      within(page)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    ).toEqual(["/", "/inbox"]);
   });
 
   it("keeps the real crumbs on a page that exists", async () => {
-    await mountAt("/");
+    await mountAt("/inbox");
 
-    await screen.findByRole("heading", { name: "All Issues" });
+    await screen.findByRole("heading", { name: "Inbox" });
     const crumbs = screen.getByRole("navigation", { name: "breadcrumb" });
-    expect(crumbs.textContent).toBe("All Issues");
-  });
-
-  it("says which Issue does not exist when the API says NOT_FOUND", async () => {
-    await mountAt("/issues/DEV-999");
-
-    expect(await screen.findByRole("heading", { name: "There is no Issue DEV-999" })).toBeTruthy();
-    expect(screen.getByText("No such Issue")).toBeTruthy();
+    expect(crumbs.textContent).toBe("Inbox");
   });
 });

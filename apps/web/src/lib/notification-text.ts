@@ -18,7 +18,7 @@ export interface NotificationText {
 
 export interface DescribableNotification {
   kind: string;
-  issue: { state?: { name: string } | null } | null;
+  issue: { externalKey: string; title: string } | null;
   event: { kind: string; payload: unknown };
   comment?: { id: string; body: string | null } | null;
 }
@@ -31,15 +31,11 @@ export function describeNotification(row: DescribableNotification): Notification
     row.event.payload && typeof row.event.payload === "object" && !Array.isArray(row.event.payload)
       ? (row.event.payload as Record<string, unknown>)
       : {};
-  const stateName = row.issue?.state?.name ?? "a";
-  const gate = text(payload.state) ?? stateName;
 
   switch (row.kind) {
     case "assignment":
       return {
-        verb: payload.byStateRule
-          ? `assigned it to you, entering ${stateName}`
-          : "assigned it to you",
+        verb: payload.byRouting ? "routed it to you" : "assigned it to you",
         excerpt: null,
         tone: "human",
       };
@@ -71,43 +67,9 @@ export function describeNotification(row: DescribableNotification): Notification
         ? { verb: "finished every sub-issue of this", excerpt: null, tone: "agent" }
         : { verb: "opened sub-issues under this", excerpt: text(payload.title), tone: "agent" };
     case "gate_awaiting":
-      switch (row.event.kind) {
-        case "gate.rejected":
-          return { verb: `rejected the ${gate} Gate`, excerpt: text(payload.note), tone: "gate" };
-        case "gate.approved":
-          return {
-            verb: `approved the ${gate} Gate → ${text(payload.to) ?? stateName}`,
-            excerpt: text(payload.note),
-            tone: "gate",
-          };
-        case "gate.approval": {
-          // Short of the threshold, so the row is still a question: say how
-          // many more Humans it wants (docs/plans/four-eyes-gates.md).
-          const remaining = typeof payload.remaining === "number" ? payload.remaining : null;
-          const more =
-            remaining === null
-              ? ""
-              : `; it wants ${remaining} more ${remaining === 1 ? "Human" : "Humans"}`;
-          return {
-            verb: `approved the ${gate} Gate${more}`,
-            excerpt: text(payload.note),
-            tone: "gate",
-          };
-        }
-        case "issue.moved":
-          return {
-            verb: `moved it into the ${text(payload.to) ?? stateName} Gate`,
-            excerpt: null,
-            tone: "gate",
-          };
-        case "issue.created":
-          // The first State's name rides in the payload; older Events fall
-          // back to where the Issue is now.
-          return { verb: `created it in the ${gate} Gate`, excerpt: null, tone: "gate" };
-        default:
-          // run.awaiting_input carries the Gate's name as `state`.
-          return { verb: `is waiting at the ${gate} Gate`, excerpt: null, tone: "gate" };
-      }
+      // No producer until a Gate is a request on a Run and says which
+      // Checkpoint it is (docs/plans/sockets.md, slice 2).
+      return { verb: "wants your ruling", excerpt: null, tone: "gate" };
     case "run_awaiting_input":
       return { verb: "asks a question", excerpt: text(payload.question), tone: "agent" };
     case "run_finished":
@@ -127,7 +89,7 @@ export function describeNotification(row: DescribableNotification): Notification
         return { verb: "answered your Agent's question", excerpt: null, tone: "muted" };
       }
       return {
-        verb: `${ruling} the ${gate} Gate your Agent asked about`,
+        verb: `${ruling} the Gate your Agent asked about`,
         excerpt: text(payload.note),
         tone: "muted",
       };

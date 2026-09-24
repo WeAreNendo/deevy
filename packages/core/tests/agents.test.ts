@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
 import type { OperationMeta } from "../src/operations/registry.ts";
 import { getOperationMeta } from "../src/operations/registry.ts";
-import { agentContext, fakeApiKeys, memberContext, testDb } from "./helpers.ts";
+import {
+  agentContext,
+  fakeApiKeys,
+  fakeSockets,
+  memberContext,
+  seedProject,
+  testDb,
+} from "./helpers.ts";
 
 /** Every operation in the router, as the registry describes it. */
 function operations(node: unknown, found: OperationMeta[] = []): OperationMeta[] {
@@ -41,7 +48,7 @@ describe("the Agent capability rule", () => {
     const agent = await memberContext(db, { kind: "agent", name: "Planner" });
     const asAgent = createRouterClient(router, { context: agent });
 
-    expect(await asAgent.labels.list({})).toMatchObject({ labels: [] });
+    expect(await asAgent.issues.list({})).toMatchObject({ issues: [], nextCursor: null });
   });
 
   it("opens exactly the operations ADR-0004 allows an Agent", () => {
@@ -51,35 +58,27 @@ describe("the Agent capability rule", () => {
       .sort();
 
     expect(allowed).toEqual([
+      // Saying something goes to the tracker the Project is bound to; deevy
+      // stores no comments and an Agent authors none of the record (ADR-0024).
       "comments.create",
-      "comments.list",
-      "documents.get",
-      "documents.list",
-      // Reading a Document's history is reading: an Agent that wrote a version
-      // may see what came before it, and write is still write.
-      "documents.versions",
-      "documents.write",
-      "documents.writeSection",
       "inbox.list",
       // Its own inbox, scoped to the caller in the same statement it updates
       // with, so a loop that polls `unreadOnly` can stop finding the same work
       // (docs/plans/m4.md). Not projected as a tool: the loop keeps its books,
       // not the model.
       "inbox.markRead",
+      // Opening a record in the tracker, which is how an Agent splits work
+      // (docs/plans/sub-issue-delegation.md).
       "issues.create",
       "issues.get",
       "issues.list",
-      "issues.move",
-      "issues.setLabels",
-      "issues.update",
-      "labels.create",
-      "labels.list",
       "links.add",
       "links.list",
       // Bounded to the evidence its own Run attached (docs/plans/m3.md).
       "links.remove",
       // Asking who it is, which is how it learns its own Member id.
       "me.get",
+      // Where it learns what its Project is bound to, without asking a Human.
       "projects.get",
       "projects.list",
       // `runs.answer` is not here: an elicitation asks a Human.
@@ -87,8 +86,6 @@ describe("the Agent capability rule", () => {
       "runs.get",
       "runs.list",
       "runs.postActivity",
-      // It may ask for a Gate decision, and never make one (ADR-0004).
-      "runs.requestApproval",
       "runs.start",
     ]);
   });
@@ -99,42 +96,25 @@ describe("Project grants", () => {
     const { db, close } = testDb();
     closers.push(close);
     const admin = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAdmin = createRouterClient(router, { context: admin });
-    const dev = await asAdmin.projects.create({ key: "DEV", name: "deevy" });
-    await asAdmin.projects.create({ key: "OPS", name: "operations" });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Granted" });
-    await asAdmin.issues.create({ projectKey: "OPS", title: "Hidden" });
+    const deevy = await seedProject(db, admin.workspace.id);
+    const ops = await seedProject(db, admin.workspace.id, {
+      slug: "ops",
+      scopeKey: "acme/ops",
+    });
+    const granted = await deevy.record({ externalId: "1", title: "Granted" });
+    const hidden = await ops.record({ externalId: "1", title: "Hidden" });
 
-    const agent = await agentContext(db, { sponsor: admin.member, grants: [dev.id] });
+    const agent = await agentContext(db, { sponsor: admin.member, grants: [deevy.project.id] });
     const asAgent = createRouterClient(router, { context: agent });
 
-    expect((await asAgent.projects.list({})).projects.map((p) => p.key)).toEqual(["DEV"]);
-    expect(await asAgent.issues.get({ key: "DEV-1" })).toMatchObject({ key: "DEV-1" });
-    await expect(asAgent.issues.get({ key: "OPS-1" })).rejects.toMatchObject({
+    expect((await asAgent.projects.list({})).projects.map((p) => p.slug)).toEqual(["deevy"]);
+    expect(await asAgent.issues.get({ issue: granted.externalKey })).toMatchObject({
+      externalKey: granted.externalKey,
+    });
+    // An ungranted Project does not exist to an Agent rather than being
+    // forbidden, and the projection inside it is not there either.
+    await expect(asAgent.issues.get({ issue: hidden.url })).rejects.toMatchObject({
       code: "NOT_FOUND",
-      message: "No such Project",
-    });
-  });
-});
-
-describe("Gate decisions", () => {
-  it("refuses a delegated credential, so approval happens in deevy's UI", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const admin = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAdmin = createRouterClient(router, { context: admin });
-    await asAdmin.projects.create({ key: "DEV", name: "deevy" });
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Gated" });
-
-    const viaKey = createRouterClient(router, {
-      context: { ...admin, principal: { kind: "api_key", keyId: "k1" } },
-    });
-    await expect(viaKey.gates.approve({ key: "DEV-1" })).rejects.toMatchObject({
-      code: "FORBIDDEN",
-    });
-
-    expect(await asAdmin.gates.approve({ key: "DEV-1" })).toMatchObject({
-      state: { name: "Spec" },
     });
   });
 });
@@ -194,12 +174,14 @@ describe("agents.create", () => {
     expect(created.handle).toBe("planner");
   });
 
-  it("suffixes a handle that a Member or a Team already answers to", async () => {
+  it("suffixes a handle another Member already answers to", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const asAda = createRouterClient(router, { context: ada });
-    await asAda.teams.create({ name: "Planner", handle: "planner" });
+    // A Human already answers to `planner`, and a handle is what a mention
+    // resolves to, so the two cannot be the same word.
+    await memberContext(db, { name: "Planner", email: "planner@example.com" });
 
     const first = await asAda.agents.create({ name: "Planner" });
     const second = await asAda.agents.create({ name: "Planner" });
@@ -235,7 +217,7 @@ describe("agents.list", () => {
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const asAda = createRouterClient(router, { context: ada });
-    const dev = await asAda.projects.create({ key: "DEV", name: "deevy" });
+    const { project: dev } = await seedProject(db, ada.workspace.id);
     await asAda.agents.create({ name: "Planner" });
     const second = await agentContext(db, {
       sponsor: ada.member,
@@ -505,7 +487,7 @@ describe("agents.grants", () => {
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const asAda = createRouterClient(router, { context: ada });
-    const dev = await asAda.projects.create({ key: "DEV", name: "deevy" });
+    const { project: dev } = await seedProject(db, ada.workspace.id);
     const planner = await asAda.agents.create({ name: "Planner" });
 
     await asAda.agents.grants.add({ memberId: planner.id, projectId: dev.id });
@@ -513,7 +495,7 @@ describe("agents.grants", () => {
       await db.query.projectGrant.findFirst({ where: { memberId: planner.id } }),
     ).toMatchObject({ projectId: dev.id, grantedBy: ada.member.id });
     expect((await asAda.agents.grants.list({ memberId: planner.id })).projects).toMatchObject([
-      { key: "DEV" },
+      { slug: "deevy" },
     ]);
 
     await asAda.agents.grants.remove({ memberId: planner.id, projectId: dev.id });
@@ -534,10 +516,11 @@ describe("an Agent's own webhook", () => {
     const { db, close } = testDb();
     closers.push(close);
     const admin = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAdmin = createRouterClient(router, { context: admin });
+    const { sockets } = fakeSockets();
+    const asAdmin = createRouterClient(router, { context: { ...admin, sockets } });
     // The Project has to exist for the Agent to be granted one; nothing here
     // needs its id.
-    await asAdmin.projects.create({ key: "DEV", name: "deevy" });
+    await seedProject(db, admin.workspace.id);
     const created = await asAdmin.agents.create({ name: "Planner" });
 
     await asAdmin.agents.update({
@@ -551,7 +534,7 @@ describe("an Agent's own webhook", () => {
     expect((await asAdmin.agents.list({})).agents[0]?.webhookUrl).toBe(
       "https://runner.example/deevy",
     );
-    await asAdmin.issues.create({ projectKey: "DEV", title: "Something to hear about" });
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Something to hear about" });
 
     const owed = await db.query.delivery.findMany({ where: { target: "webhook" } });
     expect(owed.length).toBeGreaterThan(0);
@@ -632,23 +615,27 @@ describe("every door into an ungranted Project", () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const asAda = createRouterClient(router, { context: ada });
-    const dev = await asAda.projects.create({ key: "DEV", name: "deevy" });
-    await asAda.projects.create({ key: "OPS", name: "operations" });
-    await asAda.issues.create({ projectKey: "OPS", title: "Rotate the keys" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
+    const { project: dev } = await seedProject(db, ada.workspace.id);
+    await seedProject(db, ada.workspace.id, { slug: "ops", scopeKey: "acme/ops" });
 
     const agent = await agentContext(db, { sponsor: ada.member, grants: [dev.id] });
     const asAgent = createRouterClient(router, { context: agent });
 
     // Reading a Project it was never granted tells it the Project's name, its
-    // description, its Team and its whole Workflow.
-    await expect(asAgent.projects.get({ key: "OPS" })).rejects.toMatchObject({
+    // description and everything that Project is bound to.
+    await expect(asAgent.projects.get({ slug: "ops" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
 
     // And the inbox is a door too: a Notification names an Issue, and reading
-    // it back is reading an Issue in a Project the Agent cannot see.
-    await asAda.issues.update({ key: "OPS-1", assigneeMemberId: agent.member.id });
+    // it back is reading a projection in a Project the Agent cannot see.
+    await asAda.issues.create({
+      projectSlug: "ops",
+      title: "Rotate the keys",
+      assignAgent: agent.member.id,
+    });
     expect((await asAgent.inbox.list({})).notifications).toEqual([]);
   });
 });

@@ -49,25 +49,12 @@ export * from "@/components/ui/toggle";
 export * from "@/components/ui/toggle-group";
 export * from "@/components/ui/tooltip";
 
-// Registry pieces (reui, diceui)
-export * from "@/components/reui/kanban";
-export * from "@/components/reui/timeline";
-export * from "@/components/diceui/sortable";
-
 // deevy's own
-export * from "@/components/approvers-picker";
 export * from "@/components/data-table";
-export * from "@/components/issue-filters";
 export * from "@/components/kbd-hint";
-export * from "@/components/label-badge";
 export * from "@/components/markdown";
-export * from "@/components/markdown-editor";
 export * from "@/components/member-chip";
 export * from "@/components/page-header";
 export * from "@/components/run-status";
 export * from "@/components/settings-page";
-export * from "@/components/state-badge";
-export * from "@/components/workflow-state-fields";
-export { LABEL_COLORS } from "@/lib/label-colors";
-export { labelText } from "@/lib/labels";
 export { cn } from "@/lib/utils";

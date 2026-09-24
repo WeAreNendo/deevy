@@ -483,7 +483,7 @@ describe("RFC 8707 audience validation", () => {
 });
 
 describe("a real token and the sessionOnly rule", () => {
-  it("carries the Human everywhere but a Gate decision", async () => {
+  it("carries the Human everywhere but the consents that delegated it", async () => {
     const { db, auth, app } = testApp();
     await humanMember(db);
     const { token } = await mintToken(app, auth, "u1", { resource: apiResource });
@@ -495,17 +495,17 @@ describe("a real token and the sessionOnly rule", () => {
     expect(who.status).toBe(200);
     expect(((await who.json()) as { member: { id: string } }).member.id).toBe("m1");
 
-    // And it still cannot approve a Gate on their behalf. `sessionOnly` is
-    // checked in the middleware, so the refusal does not depend on the Issue
-    // existing: what is refused is the credential, not the request
-    // (docs/plans/m2.md).
-    const approved = await app.request("/api/issues/DEV-1/gate/approve", {
-      method: "POST",
-      headers: { ...bearer, "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    expect(approved.status).toBe(403);
-    expect((await approved.json()) as { message: string }).toMatchObject({
+    /*
+     * And it still cannot enumerate the consents that delegated it. A
+     * delegated credential listing or revoking its own siblings is the other
+     * shape `sessionOnly` refuses (ADR-0010's consequences), and it is the one
+     * that carries the rule while a Gate is being re-made as a request on a
+     * Run (docs/plans/sockets.md, slice 2). The check is in the middleware, so
+     * what is refused is the credential rather than the request.
+     */
+    const consents = await app.request("/api/oauth-clients", { headers: bearer });
+    expect(consents.status).toBe(403);
+    expect((await consents.json()) as { message: string }).toMatchObject({
       message: "Only a Human signed in to deevy can do that",
     });
   });

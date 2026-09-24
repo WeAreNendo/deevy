@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { deliver } from "../src/deliver.ts";
+import { deliver, branchFor } from "../src/deliver.ts";
 import { forgeFor, githubForge, githubSlug, type Forge, type PullRequest } from "../src/forge.ts";
 import { openWorkspace, type RepoConfig } from "../src/workspace.ts";
 
@@ -62,23 +62,28 @@ describe("what a Run delivers", () => {
     const delivered = await deliver({
       workspace,
       forge,
-      issueKey: "DEV-42",
+      issueKey: "acme/deevy#42",
       runId: "run-abcdef12-3456",
       author,
     });
 
+    // The key is the tracker's, and the Run's id is what tells two attempts
+    // apart. The shape of the name moves to the core with `runs.checkout`
+    // (docs/plans/sockets.md, slice 6), so what is asserted is what it is for.
+    const branch = delivered?.branch ?? "";
+    expect(branch.startsWith("deevy/")).toBe(true);
+    expect(branch.endsWith("run-abcd")).toBe(true);
     expect(delivered).toMatchObject({
-      branch: "deevy/dev-42-run-abcd",
       pullRequest: { url: "https://github.com/owner/repo/pull/7", number: 7 },
     });
     // On the remote, which is the only place it counts.
     const { stdout } = await run("git", ["-C", repo.url, "branch", "--list"]);
-    expect(stdout).toContain("deevy/dev-42-run-abcd");
+    expect(stdout).toContain(branch);
     expect(forge.opened).toEqual([
       {
-        branch: "deevy/dev-42-run-abcd",
+        branch,
         base: "main",
-        title: "DEV-42: worked by a deevy Agent",
+        title: "acme/deevy#42: worked by a deevy Agent",
         body: expect.stringContaining("run-abcdef12-3456"),
       },
     ]);
@@ -98,7 +103,7 @@ describe("what a Run delivers", () => {
     const one = await deliver({
       workspace: first,
       forge,
-      issueKey: "DEV-1",
+      issueKey: "acme/deevy#1",
       runId: "run-abcdef12",
       author,
     });
@@ -109,7 +114,7 @@ describe("what a Run delivers", () => {
     const two = await deliver({
       workspace: second,
       forge,
-      issueKey: "DEV-1",
+      issueKey: "acme/deevy#1",
       runId: "run-abcdef12",
       author,
     });
@@ -129,7 +134,7 @@ describe("what a Run delivers", () => {
     await deliver({
       workspace,
       forge,
-      issueKey: "DEV-1",
+      issueKey: "acme/deevy#1",
       runId: "run-abcdef12",
       author,
       summary: "Added a health endpoint, and a smoke that proves it answers.",
@@ -138,7 +143,7 @@ describe("what a Run delivers", () => {
     // What a reviewer opens says what the Agent decided. Its reasoning is in
     // deevy; this is the one line that reaches the code review.
     expect(forge.opened[0]).toMatchObject({
-      title: "DEV-1: Added a health endpoint, and a smoke that proves it answers.",
+      title: "acme/deevy#1: Added a health endpoint, and a smoke that proves it answers.",
     });
     expect(String((forge.opened[0] as { body: string }).body)).toContain(
       "Added a health endpoint, and a smoke that proves it answers.",
@@ -149,10 +154,10 @@ describe("what a Run delivers", () => {
       "log",
       "-1",
       "--format=%s",
-      "deevy/dev-1-run-abcd",
+      (forge.opened[0] as { branch: string } | undefined)?.branch ?? "",
     ]);
     expect(stdout.trim()).toBe(
-      "DEV-1: Added a health endpoint, and a smoke that proves it answers.",
+      "acme/deevy#1: Added a health endpoint, and a smoke that proves it answers.",
     );
   });
 
@@ -163,9 +168,9 @@ describe("what a Run delivers", () => {
     scratch.push(workspace.cwd);
     await writeFile(join(workspace.cwd, "health.ts"), "export const ok = true;\n");
 
-    await deliver({ workspace, forge, issueKey: "DEV-1", runId: "run-abcdef12", author });
+    await deliver({ workspace, forge, issueKey: "acme/deevy#1", runId: "run-abcdef12", author });
 
-    expect(forge.opened[0]).toMatchObject({ title: "DEV-1: worked by a deevy Agent" });
+    expect(forge.opened[0]).toMatchObject({ title: "acme/deevy#1: worked by a deevy Agent" });
   });
 
   it("delivers nothing when the session changed nothing", async () => {
@@ -176,7 +181,7 @@ describe("what a Run delivers", () => {
 
     // An empty pull request is a worse record than none.
     expect(
-      await deliver({ workspace, forge, issueKey: "DEV-1", runId: "run-1", author }),
+      await deliver({ workspace, forge, issueKey: "acme/deevy#1", runId: "run-1", author }),
     ).toBeNull();
     expect(forge.opened).toEqual([]);
   });
@@ -188,7 +193,7 @@ describe("what a Run delivers", () => {
     scratch.push(workspace.cwd);
     await writeFile(join(workspace.cwd, "answer.txt"), "42\n");
 
-    await deliver({ workspace, forge: null, issueKey: "DEV-1", runId: "run-1", author });
+    await deliver({ workspace, forge: null, issueKey: "acme/deevy#1", runId: "run-1", author });
 
     expect((await run("git", ["-C", repo.url, "rev-parse", "main"])).stdout.trim()).toBe(before);
   });
@@ -200,7 +205,13 @@ describe("what a Run delivers", () => {
       const workspace = await openWorkspace({ runId, repo });
       scratch.push(workspace.cwd);
       await writeFile(join(workspace.cwd, `${runId}.txt`), "work\n");
-      const delivered = await deliver({ workspace, forge: null, issueKey: "DEV-1", runId, author });
+      const delivered = await deliver({
+        workspace,
+        forge: null,
+        issueKey: "acme/deevy#1",
+        runId,
+        author,
+      });
       branches.push(delivered?.branch ?? "");
     }
 
@@ -216,7 +227,7 @@ describe("what a Run delivers", () => {
     const delivered = await deliver({
       workspace,
       forge: null,
-      issueKey: "DEV-1",
+      issueKey: "acme/deevy#1",
       runId: "run-1",
       author,
     });
@@ -303,5 +314,17 @@ describe("the forge", () => {
     await expect(forge.open({ branch: "b", base: "main", title: "t", body: "y" })).rejects.toThrow(
       "Validation Failed",
     );
+  });
+});
+
+describe("the branch a Run is delivered on", () => {
+  it("is a name git will take, whatever the tracker calls the record", () => {
+    // `acme/deevy#42` is an ordinary GitHub key and a terrible ref: the slash
+    // would nest it under `deevy/acme/`, colliding with any branch called
+    // `deevy/acme`, and `#` is not a character to put in a ref by choice.
+    expect(branchFor("acme/deevy#42", "run_abcdefgh12")).toBe("deevy/acme-deevy-42-run_abcd");
+    expect(branchFor("ENG-12", "run_abcdefgh12")).toBe("deevy/eng-12-run_abcd");
+    // Nothing usable in the key still leaves a branch named after the Run.
+    expect(branchFor("###", "run_abcdefgh12")).toBe("deevy/run_abcd");
   });
 });

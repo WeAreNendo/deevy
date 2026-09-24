@@ -58,7 +58,7 @@ describe("the command list", () => {
 
 describe("a command's name", () => {
   it("makes words out of a dotted, camelCased operation", () => {
-    expect(commandWords("issues.setLabels")).toEqual(["issues", "set-labels"]);
+    expect(commandWords("inbox.markAllRead")).toEqual(["inbox", "mark-all-read"]);
     expect(commandWords("issues.get")).toEqual(["issues", "get"]);
     expect(commandWords("agents.keys.issue")).toEqual(["agents", "keys", "issue"]);
     expect(commandWords("oauthClients.revoke")).toEqual(["oauth-clients", "revoke"]);
@@ -67,13 +67,13 @@ describe("a command's name", () => {
 
 describe("a command's positional arguments", () => {
   it("are the path parameters, in the order the path names them", () => {
-    expect(parametersOf("/issues/{key}/labels")).toEqual(["key"]);
+    expect(parametersOf("/issues/{issue}/comments")).toEqual(["issue"]);
     expect(parametersOf("/agents/{memberId}/keys/{keyId}")).toEqual(["memberId", "keyId"]);
     expect(parametersOf("/issues")).toEqual([]);
   });
 
   it("are read off the real operations", () => {
-    expect(byOperation.get("issues.setLabels")?.parameters).toEqual(["key"]);
+    expect(byOperation.get("issues.get")?.parameters).toEqual(["issue"]);
     expect(byOperation.get("issues.create")?.parameters).toEqual([]);
   });
 
@@ -128,22 +128,17 @@ describe("the shape of what the walk hands on", () => {
 
 describe("what the CLI cannot do", () => {
   /**
-   * The four operations no credential a CLI can hold will ever satisfy: they
-   * want a cookie session, which means a Human in deevy's own browser. Two
-   * different reasons sit behind the one flag, and neither should acquire a
-   * third member without somebody deciding it should — so the list is written
-   * down here.
+   * The operations no credential a CLI can hold will ever satisfy: they want a
+   * cookie session, which means a Human in deevy's own browser. The list should
+   * not grow without somebody deciding it should, so it is written down here.
+   * Ruling on a Gate joins it again when a Gate is a request on a Run
+   * (docs/plans/sockets.md, slice 2).
    */
   it("knows which operations want a Human in a browser", () => {
     const sessionOnly = commands
       .filter((command) => command.sessionOnly)
       .map((command) => command.operation);
-    expect(sessionOnly).toEqual([
-      "gates.approve",
-      "gates.reject",
-      "oauthClients.list",
-      "oauthClients.revoke",
-    ]);
+    expect(sessionOnly).toEqual(["oauthClients.list", "oauthClients.revoke"]);
   });
 
   it("marks the operations only an Agent may call", () => {

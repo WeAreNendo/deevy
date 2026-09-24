@@ -4,22 +4,16 @@
  * `iss_k3xr8v2m9qpw`. Readable in an Event payload, an MCP argument or a URL,
  * copy-pasteable, safe to say aloud; about 62 bits of randomness per id, from
  * the Web Crypto API so the same code runs on Node and on Workers. The Event
- * `seq`, Issue keys (`DEV-42`) and API key secrets (`deevy_sk_…`) are not ids
- * of this kind and stay as they are.
+ * `seq`, an Issue's external key (`acme/deevy#42`) and API key secrets
+ * (`deevy_sk_…`) are not ids of this kind and stay as they are.
  */
 export const idPrefixes = {
   workspace: "ws",
   member: "mem",
-  team: "team",
+  socket: "sock",
   project: "proj",
-  state: "st",
-  decision: "dec",
   issue: "iss",
-  comment: "cmt",
-  document: "doc",
-  documentVersion: "docv",
   link: "lnk",
-  label: "lbl",
   run: "run",
   activity: "act",
   notification: "ntf",

@@ -2,7 +2,7 @@ import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { authId, idPrefixes, isId, newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
-import { memberContext, testDb } from "./helpers.ts";
+import { fakeSockets, memberContext, testDb } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -67,18 +67,23 @@ describe("the rows deevy creates", () => {
     const { db, close } = testDb();
     closers.push(close);
     const alice = await memberContext(db, { role: "admin", name: "Alice" });
-    const client = createRouterClient(router, { context: alice });
-    const project = await client.projects.create({ name: "deevy", key: "DEV" });
-    const issue = await client.issues.create({ projectKey: "DEV", title: "Ship it" });
-    const label = await client.labels.create({ name: "backend", color: "#333" });
-    const comment = await client.comments.create({ issueKey: issue.key, body: "Hello" });
+    const { sockets } = fakeSockets();
+    const client = createRouterClient(router, { context: { ...alice, sockets } });
+    const socket = await client.sockets.connect({ provider: "stub", name: "Example tracker" });
+    const project = await client.projects.create({
+      slug: "deevy",
+      name: "deevy",
+      tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
+    });
+    const issue = await client.issues.create({ projectSlug: "deevy", title: "Ship it" });
 
     expect(alice.member.id).toMatch(/^mem_/);
     expect(alice.workspace.id).toMatch(/^ws_/);
+    expect(socket.id).toMatch(/^sock_/);
     expect(project.id).toMatch(/^proj_/);
-    expect(project.states[0]?.id).toMatch(/^st_/);
     expect(issue.id).toMatch(/^iss_/);
-    expect(label.id).toMatch(/^lbl_/);
-    expect(comment.id).toMatch(/^cmt_/);
+    // The key is the tracker's, so it is not an id of deevy's kind (ADR-0024).
+    expect(issue.externalKey).toMatch(/^acme\/deevy#/);
+    expect(issue.externalKey).not.toMatch(/^iss_/);
   });
 });

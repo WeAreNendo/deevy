@@ -1,4 +1,4 @@
-import { member, project, projectGrant, user, workspace } from "@deevy/db";
+import { member, project, projectGrant, socket, user, workspace } from "@deevy/db";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Auth } from "../src/auth.ts";
 import { buildContext, createApp } from "../src/app.ts";
@@ -147,8 +147,26 @@ async function agentWithKey(db: ReturnType<typeof testDb>["db"], auth: Auth) {
   await db
     .insert(member)
     .values({ id: "m1", workspaceId: "w1", userId: "a1", role: "member", kind: "agent" });
-  await db.insert(project).values({ id: "p1", workspaceId: "w1", key: "DEV", name: "deevy" });
-  await db.insert(project).values({ id: "p2", workspaceId: "w1", key: "OPS", name: "ops" });
+  await db.insert(socket).values({
+    id: "sock1",
+    workspaceId: "w1",
+    provider: "stub",
+    capabilities: ["tracker"],
+    name: "Example tracker",
+    identity: { login: "deevy", id: "bot-1", mentionHandle: "@deevy" },
+    config: {},
+  });
+  const bound = (id: string, slug: string, scopeKey: string) => ({
+    id,
+    workspaceId: "w1",
+    slug,
+    name: slug,
+    trackerSocketId: "sock1",
+    trackerScope: { scopeKey },
+    trackerScopeKey: `stub:${scopeKey}`,
+  });
+  await db.insert(project).values(bound("p1", "deevy", "acme/deevy"));
+  await db.insert(project).values(bound("p2", "ops", "acme/ops"));
   await db.insert(projectGrant).values({ memberId: "m1", projectId: "p1" });
   const issued = await auth.api.createApiKey({ body: { userId: "a1", name: "laptop" } });
   return issued.key;

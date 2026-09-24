@@ -6,8 +6,8 @@ import {
   member as memberTable,
   project as projectTable,
   run as runTable,
+  socket as socketTable,
   user as userTable,
-  workflowState,
   workspace as workspaceTable,
   type Db,
 } from "@deevy/db";
@@ -32,11 +32,11 @@ function emptyDatabase() {
 interface SeedOptions {
   /** The Agent's schedule trigger, in minutes. Absent is no schedule. */
   scheduleMinutes?: number;
-  /** Whether the Issue is assigned to that Agent. */
+  /** Whether the record is routed to that Agent. */
   assigned?: boolean;
 }
 
-/** A Workspace with one Agent and one Issue, straight into the tables. */
+/** A Workspace with one Agent and one projected record, straight into the tables. */
 async function seedWorkspace(db: Db, options: SeedOptions = {}) {
   const workspaceId = newId("workspace");
   await db.insert(workspaceTable).values({ id: workspaceId, name: "deevy", slug: "deevy" });
@@ -47,19 +47,40 @@ async function seedWorkspace(db: Db, options: SeedOptions = {}) {
   await db
     .insert(agentTable)
     .values({ memberId: agentMemberId, scheduleMinutes: options.scheduleMinutes ?? null });
+  // An Issue is a projection of a record in a tracker Socket (ADR-0024), so a
+  // Project is a binding and every row below hangs off the Socket.
+  const socketId = newId("socket");
+  await db.insert(socketTable).values({
+    id: socketId,
+    workspaceId,
+    provider: "stub",
+    capabilities: ["tracker"],
+    name: "Example tracker",
+    identity: { login: "deevy", id: "bot-1", mentionHandle: "@deevy" },
+    config: {},
+  });
   const projectId = newId("project");
-  await db.insert(projectTable).values({ id: projectId, workspaceId, key: "DEV", name: "deevy" });
-  const stateId = newId("state");
-  await db
-    .insert(workflowState)
-    .values({ id: stateId, projectId, name: "Doing", position: 1, category: "active" });
+  await db.insert(projectTable).values({
+    id: projectId,
+    workspaceId,
+    slug: "acme-deevy",
+    name: "deevy",
+    trackerSocketId: socketId,
+    trackerScope: { scopeKey: "acme/deevy" },
+    trackerScopeKey: "stub:acme/deevy",
+  });
   const issueId = newId("issue");
   await db.insert(issueTable).values({
     id: issueId,
     projectId,
-    number: 1,
+    socketId,
+    externalId: "1",
+    externalKey: "acme/deevy#1",
+    url: "https://tracker.test/acme/deevy/issues/1",
     title: "Ship the thing",
-    stateId,
+    state: "open",
+    stateName: "open",
+    externalUpdatedAt: new Date(),
     assigneeMemberId: options.assigned ? agentMemberId : null,
   });
   return { workspaceId, agentMemberId, issueId };
@@ -83,15 +104,20 @@ async function seedRuns(
     id: newId("run"),
     issueId: newId("issue"),
     agentMemberId: where.agentMemberId,
-    number: on.number + at + 1,
+    externalId: String(at + 2),
   }));
   await db.insert(issueTable).values(
     rows.map((row) => ({
       id: row.issueId,
       projectId: on.projectId,
-      number: row.number,
-      title: `Silent ${String(row.number)}`,
-      stateId: on.stateId,
+      socketId: on.socketId,
+      externalId: row.externalId,
+      externalKey: `acme/deevy#${row.externalId}`,
+      url: `https://tracker.test/acme/deevy/issues/${row.externalId}`,
+      title: `Silent ${row.externalId}`,
+      state: "open" as const,
+      stateName: "open",
+      externalUpdatedAt: new Date(),
     })),
   );
   await db.insert(runTable).values(

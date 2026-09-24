@@ -1,20 +1,14 @@
 import {
   allowlistRule,
-  comment,
-  document,
-  documentVersion,
   event,
-  gateDecision,
   invitation,
   issue,
   issueLink,
-  label,
   notification,
   member,
   project,
-  team,
+  socket,
   user,
-  workflowState,
   workspace,
 } from "@deevy/db";
 import { createSelectSchema } from "drizzle-orm/zod";
@@ -43,30 +37,29 @@ export const AllowlistRuleSchema = createSelectSchema(allowlistRule);
  */
 export const InvitationSchema = createSelectSchema(invitation).omit({ tokenHash: true });
 
-export const TeamSchema = createSelectSchema(team);
+/**
+ * A Socket as every surface shows one: never its credentials and never its
+ * webhook secret, which are sealed columns and leave the database only to be
+ * handed to the provider module (ADR-0024). `secrets.test.ts` holds the line.
+ */
+export const SocketSchema = createSelectSchema(socket)
+  .omit({ credentials: true, webhookSecret: true })
+  .extend({
+    identity: z.object({ login: z.string(), id: z.string(), mentionHandle: z.string() }),
+    capabilities: z.array(z.enum(["tracker", "forge", "docs", "chat"])),
+  });
+
 export const ProjectSchema = createSelectSchema(project);
-export const WorkflowStateSchema = createSelectSchema(workflowState);
-
-/** A Project as every surface shows one: the row plus its Workflow, in order. */
-export const ProjectWithStatesSchema = ProjectSchema.extend({
-  states: z.array(WorkflowStateSchema),
-  team: TeamSchema.nullable(),
-});
-
-export const TeamWithMembersSchema = TeamSchema.extend({
-  members: z.array(MemberWithUserSchema),
-});
 
 export const IssueSchema = createSelectSchema(issue);
 
-export const LabelSchema = createSelectSchema(label);
-
-/** An Issue as a list shows one: the row plus its derived key, State and Labels. */
+/**
+ * An Issue as a list shows one: the projection, plus the Member deevy routed it
+ * to. Its key and its state are the tracker's own words and are columns now,
+ * so nothing is derived on the way out (ADR-0024).
+ */
 export const IssueSummarySchema = IssueSchema.extend({
-  key: z.string(),
-  state: WorkflowStateSchema,
   assignee: MemberWithUserSchema.nullable(),
-  labels: z.array(LabelSchema),
   /**
    * Whether an Agent is working this one right now. Only set where it was asked
    * for — an Issue's children, which is the one list where it answers the
@@ -76,77 +69,20 @@ export const IssueSummarySchema = IssueSchema.extend({
   hasOpenRun: z.boolean().optional(),
 });
 
-export const GateDecisionSchema = createSelectSchema(gateDecision).extend({
-  /**
-   * What each of the Issue's Documents said when this ruling was made. A Gate
-   * approves text, and the text keeps moving afterwards; this is the record of
-   * which words were agreed to.
-   */
-  documents: z.array(z.object({ name: z.string(), version: z.number().int() })),
-});
-
-/**
- * Where the Gate an Issue is in has got to, and what the Human reading it may
- * do about it (docs/plans/four-eyes-gates.md). Null when the Issue is not in a
- * Gate, which is also when nothing is asked to work it out.
- */
-export const GateStandingSchema = z.object({
-  /** Distinct Humans who must approve before the Issue leaves. */
-  required: z.number().int(),
-  /** How many could give one: the approvers this Gate names, or every Human, less the suspended. */
-  eligible: z.number().int(),
-  excludeRequester: z.boolean(),
-  /** Approvals this Gate had until the Document under them changed (ADR-0021). */
-  clearedByAnEdit: z.number().int(),
-  approvals: z.array(
-    z.object({
-      memberId: z.string(),
-      name: z.string().nullable(),
-      note: z.string().nullable(),
-      at: z.date(),
-    }),
-  ),
-  mayApprove: z.boolean(),
-  /** Why not, when `mayApprove` is false. */
-  refusedBecause: z.enum(["not_an_approver", "requester", "approved", "too_few_humans"]).nullable(),
-});
-
-/** An Issue as its own page shows one: the summary plus its family and its Gate history. */
+/** An Issue as its own page shows one: the summary plus its family. */
 export const IssueDetailSchema = IssueSummarySchema.extend({
   project: ProjectSchema,
   parent: IssueSummarySchema.nullable(),
   children: z.array(IssueSummarySchema),
-  gateDecisions: z.array(GateDecisionSchema),
-  gate: GateStandingSchema.nullable(),
 });
 
-export const DocumentSchema = createSelectSchema(document);
-export const DocumentVersionSchema = createSelectSchema(documentVersion);
-
-/** A Document read at one version: the row plus that version's body. */
-export const DocumentAtVersionSchema = DocumentSchema.extend({
-  version: z.number().int(),
+/** A comment as it stands in the tracker. deevy stores none of them. */
+export const ExternalCommentSchema = z.object({
+  externalId: z.string(),
+  url: z.string(),
   body: z.string(),
-  authorMemberId: z.string().nullable(),
-  /**
-   * When this version was written, which is the version row's own time rather
-   * than the Document's: reading version 1 of a Document edited yesterday must
-   * say when version 1 was written, not when the Document last changed.
-   */
-  writtenAt: z.date(),
-  /**
-   * What to echo back on a write, so the server can merge what you changed
-   * rather than paste what you sent (ADR-0021). Opaque, and null when there is
-   * nothing to write from — reading an older version is reading history.
-   */
-  basis: z.string().nullable(),
-});
-
-export const CommentSchema = createSelectSchema(comment);
-
-/** A comment as the thread shows one: the row plus who wrote it. */
-export const CommentWithAuthorSchema = CommentSchema.extend({
-  author: MemberWithUserSchema.nullable(),
+  author: z.object({ login: z.string(), id: z.string(), isBot: z.boolean() }),
+  createdAt: z.date(),
 });
 
 export const IssueLinkSchema = createSelectSchema(issueLink);

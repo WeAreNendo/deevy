@@ -1,0 +1,21 @@
+{
+  "name": "@deevy/sockets",
+  "version": "0.8.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./stub": "./src/stub/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {},
+  "dependencies": {
+    "@deevy/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

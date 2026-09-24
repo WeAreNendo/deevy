@@ -38,7 +38,7 @@ function oneOperation(version: string): unknown {
 
 /** An instance serving a document with some operations taken out of it. */
 function servingSpec(spec: unknown): typeof fetch {
-  return ((input: RequestInfo | URL) => {
+  return ((input: Request | string | URL) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.endsWith("/api/spec.json")) {
       return Promise.resolve(new Response(JSON.stringify(spec), { status: 200 }));
@@ -101,7 +101,7 @@ describe("the cache", () => {
   it("asks once and then reads the file", async () => {
     const dir = await tempDir();
     let asked = 0;
-    const counting = ((input: RequestInfo | URL) => {
+    const counting = ((input: Request | string | URL) => {
       asked += 1;
       return servingSpec(oneOperation("1.2.3"))(input);
     }) as typeof fetch;
@@ -114,7 +114,7 @@ describe("the cache", () => {
   it("asks again once the answer is a day old", async () => {
     const dir = await tempDir();
     let asked = 0;
-    const counting = ((input: RequestInfo | URL) => {
+    const counting = ((input: Request | string | URL) => {
       asked += 1;
       return servingSpec(oneOperation("1.2.3"))(input);
     }) as typeof fetch;
@@ -200,7 +200,7 @@ describe("a command this instance does not have", () => {
         Object.entries(full.paths).filter(([path]) => path !== "/projects"),
       ),
     };
-    const pretending = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const pretending = ((input: Request | string | URL, init?: RequestInit) => {
       const url = String(input instanceof Request ? input.url : input);
       if (url.endsWith("/api/spec.json")) {
         return Promise.resolve(new Response(JSON.stringify(older), { status: 200 }));
@@ -219,7 +219,19 @@ describe("a command this instance does not have", () => {
     }));
 
     await expect(
-      root.parseAsync(["projects", "create", "--key", "DEV", "--name", "Dev"], { from: "user" }),
+      root.parseAsync(
+        [
+          "projects",
+          "create",
+          "--slug",
+          "acme-deevy",
+          "--name",
+          "Dev",
+          "--tracker",
+          JSON.stringify({ socketId: "sock_000000000", scope: { scopeKey: "acme/deevy" } }),
+        ],
+        { from: "user" },
+      ),
     ).rejects.toThrow(/has no `projects.create`/);
 
     // And one it does have reaches the instance, so the filter is narrowing

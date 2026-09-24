@@ -14,8 +14,7 @@ afterEach(() => {
 async function deevyWithAnAssignedIssue(title = "Ship it") {
   const it = await instance();
   closers.push(it.close);
-  await it.asAda.issues.create({ projectKey: "DEV", title });
-  await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+  await it.assign(title);
   return it;
 }
 
@@ -44,13 +43,12 @@ describe("a pass", () => {
     const pass = await runOnce({ ...options, deevy: it.deevy, proxy: it.proxy, session });
 
     expect(pass.worked).toEqual([
-      { runId: expect.any(String), issueKey: "DEV-1", status: "completed" },
+      { runId: expect.any(String), issueKey: "acme/deevy#1", status: "completed" },
     ]);
     expect(await story(it)).toEqual([
+      "socket.connected",
       "project.created",
       "issue.created",
-      // The intent Document its State supplies a template for.
-      "document.created",
       "issue.assigned",
       "run.started",
       "run.activity",
@@ -75,36 +73,13 @@ describe("a pass", () => {
     expect(again.worked).toEqual([]);
     expect(again.takenUp).toEqual([]);
   });
-
-  it("reports what is waiting on a Human without touching it", async () => {
-    const it = await deevyWithAnAssignedIssue();
-    await it.asAda.gates.approve({ key: "DEV-1" });
-    await it.asAda.gates.approve({ key: "DEV-1" });
-    const session = scripted([
-      async () => {
-        const [run] = await it.deevy.runs("pending");
-        await it.deevy.postActivity(run.id, "action", "Wrote the plan");
-        await it.asAgent(`/runs/${run.id}/request-approval`);
-      },
-      finished,
-    ]);
-
-    const pass = await runOnce({ ...options, deevy: it.deevy, proxy: it.proxy, session });
-
-    expect(pass.worked[0]).toMatchObject({ status: "awaiting_input" });
-    expect(pass.waiting.map((run) => run.issueKey)).toEqual(["DEV-1"]);
-    // A Run waiting on a Human is not the supervisor's to close, however long
-    // it waits (docs/agent-loop.md).
-    expect(pass.worked[0].failedBy).toBeUndefined();
-  });
 });
 
 describe("taking work up from the inbox", () => {
   it("opens a Run for an assignment and clears the Notification it acted on", async () => {
     const it = await instance();
     closers.push(it.close);
-    await it.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-    await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+    await it.assign("Ship it");
     // The Run the trigger opened is finished, so only the inbox is left to
     // find the work by — which is the path ADR-0003 promises an Agent with no
     // webhook URL, and the one M4 slice 1 made survivable.
@@ -124,8 +99,8 @@ describe("taking work up from the inbox", () => {
       ]),
     });
 
-    expect(pass.takenUp).toEqual(["DEV-1"]);
-    expect(pass.worked[0]).toMatchObject({ issueKey: "DEV-1", status: "completed" });
+    expect(pass.takenUp).toEqual(["acme/deevy#1"]);
+    expect(pass.worked[0]).toMatchObject({ issueKey: "acme/deevy#1", status: "completed" });
     expect(await it.deevy.unread()).toEqual([]);
   });
 
@@ -150,7 +125,7 @@ describe("taking work up from the inbox", () => {
     // ever been: a request known to fail on the happy path, and an error in
     // deevy's log on nothing going wrong.
     expect(pass.takenUp).toEqual([]);
-    expect(pass.worked[0]).toMatchObject({ issueKey: "DEV-1", status: "completed" });
+    expect(pass.worked[0]).toMatchObject({ issueKey: "acme/deevy#1", status: "completed" });
     expect(it.refused).toEqual([]);
   });
 
@@ -174,15 +149,14 @@ describe("taking work up from the inbox", () => {
     });
 
     expect(pass.takenUp).toEqual([]);
-    expect((await it.asAda.runs.list({ issueKey: "DEV-1" })).runs).toHaveLength(1);
+    expect((await it.asAda.runs.list({ issue: "acme/deevy#1" })).runs).toHaveLength(1);
     expect(await it.deevy.unread()).toEqual([]);
   });
 
   it("opens one when the Issue has none open, and asks only once", async () => {
     const it = await instance();
     closers.push(it.close);
-    await it.asAda.issues.create({ projectKey: "DEV", title: "Ship it" });
-    await it.asAda.issues.update({ key: "DEV-1", assigneeMemberId: it.planner.id });
+    await it.assign("Ship it");
     const [opened] = await it.deevy.runs("pending");
     await it.deevy.finishRun(opened.id, "failed", "An earlier attempt gave up");
 
@@ -201,7 +175,7 @@ describe("taking work up from the inbox", () => {
 
     // A finished Run is not an open one, so this is the path that does start
     // one — and it still does not cost a refusal.
-    expect(pass.takenUp).toEqual(["DEV-1"]);
+    expect(pass.takenUp).toEqual(["acme/deevy#1"]);
     expect(it.refused).toEqual([]);
   });
 });
@@ -451,7 +425,7 @@ describe("the evidence a Run leaves on the Issue", () => {
     });
 
     expect(pass.worked[0]).toMatchObject({ status: "completed", delivered: shipped });
-    const links = await it.asAda.links.list({ issueKey: "DEV-1" });
+    const links = await it.asAda.links.list({ issue: "acme/deevy#1" });
     expect(links.links).toHaveLength(1);
     expect(links.links[0]).toMatchObject({
       url: "https://github.com/owner/repo/pull/7",
@@ -460,8 +434,10 @@ describe("the evidence a Run leaves on the Issue", () => {
     });
     // A comment rather than an Activity, because the model closed its own Run
     // before there was a branch to name and a closed Run takes no more.
-    const said = await it.asAda.comments.list({ issueKey: "DEV-1" });
-    expect(said.comments.map((comment) => comment.body)).toContain(
+    // The comment is the tracker's: deevy stores none of them, and signs each
+    // one with the Member who wrote it (ADR-0024).
+    const said = it.tracker.comments.get("1") ?? [];
+    expect(said.at(-1)?.body).toContain(
       `Run \`${waiting.id}\` pushed \`deevy/dev-1-run-abcd\` and opened https://github.com/owner/repo/pull/7`,
     );
   });
@@ -484,8 +460,8 @@ describe("the evidence a Run leaves on the Issue", () => {
       ]),
     });
 
-    expect((await it.asAda.links.list({ issueKey: "DEV-1" })).links).toEqual([]);
-    expect((await it.asAda.comments.list({ issueKey: "DEV-1" })).comments).toEqual([]);
+    expect((await it.asAda.links.list({ issue: "acme/deevy#1" })).links).toEqual([]);
+    expect(it.tracker.comments.get("1")).toBeUndefined();
   });
 
   it("says so in the feed when the work is done and the record is not", async () => {
@@ -509,8 +485,8 @@ describe("the evidence a Run leaves on the Issue", () => {
     // The Run's own outcome stands: the work happened, only the record of it
     // failed, and a Human can see both.
     expect(pass.worked[0]).toMatchObject({ status: "completed" });
-    const said = await it.asAda.comments.list({ issueKey: "DEV-1" });
-    expect(said.comments.at(-1)?.body).toContain("could not be delivered");
+    const said = it.tracker.comments.get("1") ?? [];
+    expect(said.at(-1)?.body).toContain("could not be delivered");
   });
 });
 
@@ -525,6 +501,6 @@ describe("a Run that is not ours to drive", () => {
       { ...run, status: "active" },
     );
 
-    expect(result).toEqual({ runId: run.id, issueKey: "DEV-1", status: "active" });
+    expect(result).toEqual({ runId: run.id, issueKey: "acme/deevy#1", status: "active" });
   });
 });

@@ -91,27 +91,34 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
   });
   const member = (id: unknown, name: unknown) =>
     str(name) ?? (typeof id === "string" ? (context.memberName?.(id) ?? null) : null);
-  const labels = (ids: unknown, names: unknown) => {
-    const named = list(names);
-    if (named.length > 0) return named;
-    return list(ids).map((id) => context.labelName?.(id) ?? "a Label");
-  };
-
   switch (event.kind) {
     case "issue.created":
-      return say("created this Issue");
-    case "issue.updated": {
-      const edits = p as { title?: { to?: unknown }; description?: unknown };
-      if (edits.title?.to) return say(`renamed it to “${str(edits.title.to) ?? ""}”`);
-      if (edits.description) return say("edited the description");
-      return say("edited this Issue");
+      return say(str(p.key) ? `opened ${str(p.key) ?? ""}` : "opened this record");
+    case "issue.synced": {
+      // What the tracker said differently, which is the whole of what a reader
+      // wants: "it changed" is a line nobody can do anything with.
+      const changed = list(p.changed);
+      return say(
+        changed.length > 0
+          ? `synced it from the tracker: ${changed.join(", ")}`
+          : "synced it from the tracker",
+        null,
+        "muted",
+        true,
+      );
     }
+    case "issue.closed":
+      return say("closed it in the tracker", null, "muted");
+    case "issue.reopened":
+      return say("reopened it in the tracker", null, "muted");
     case "issue.assigned": {
       const to = member(p.to, p.toName);
       const from = member(p.from, p.fromName);
-      const by = p.byStateRule ? " on entering the State" : "";
+      // Routed, not assigned: a label or a Project's default named the Agent,
+      // and saying "assigned" would credit a Human who did nothing (ADR-0024).
+      const verb = p.byRouting ? "routed" : "assigned";
       if (!to) return say(`unassigned it${from ? ` (was ${from})` : ""}`);
-      return say(`assigned it to ${to}${from ? ` (was ${from})` : ""}${by}`);
+      return say(`${verb} it to ${to}${from ? ` (was ${from})` : ""}`);
     }
     case "delegation.refused": {
       const allowed = typeof p.allowed === "number" ? p.allowed : null;
@@ -137,31 +144,6 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
         "muted",
       );
     }
-    case "issue.reparented": {
-      const to = str(p.toKey);
-      const from = str(p.fromKey);
-      if (!to) return say(`detached it from ${from ?? "its parent"}`);
-      return say(`set the parent to ${to}${from ? ` (was ${from})` : ""}`);
-    }
-    case "issue.moved":
-      return say(
-        str(p.from) && str(p.to)
-          ? `moved it from ${str(p.from) ?? ""} to ${str(p.to) ?? ""}`
-          : "moved this Issue",
-      );
-    case "issue.labels_changed": {
-      const added = labels(p.added, p.addedNames);
-      const removed = labels(p.removed, p.removedNames);
-      const parts = [
-        added.length > 0
-          ? `added ${added.length === 1 ? "the Label" : "Labels"} ${join(added)}`
-          : null,
-        removed.length > 0
-          ? `removed ${removed.length === 1 ? "the Label" : "Labels"} ${join(removed)}`
-          : null,
-      ].filter((part): part is string => part !== null);
-      return say(parts.length > 0 ? parts.join("; ") : "changed the Labels");
-    }
     case "issue.link_added": {
       const url = str(p.url);
       let host: string | null = null;
@@ -179,48 +161,6 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     }
     case "issue.link_removed":
       return say("removed a link", str(p.url));
-    case "document.created":
-      return say(
-        str(p.name) ? `opened the ${str(p.name) ?? ""} Document` : "opened a Document",
-        null,
-        "muted",
-        true,
-      );
-    case "gate.approvals_cleared":
-      return say(
-        `cleared ${typeof p.cleared === "number" ? String(p.cleared) : "an"} approval${p.cleared === 1 ? "" : "s"} on the ${str(p.state) ?? ""} Gate`,
-        str(p.name) ? `${str(p.name) ?? ""} changed after it was approved` : null,
-        "gate",
-        false,
-      );
-    case "document.updated":
-      return say(
-        str(p.name)
-          ? `wrote ${str(p.name) ?? ""}${typeof p.version === "number" ? ` v${String(p.version)}` : ""}`
-          : "wrote a Document",
-        null,
-        agentTone,
-        true,
-      );
-    case "gate.approval": {
-      const approvals = typeof p.approvals === "number" ? p.approvals : null;
-      const required = typeof p.required === "number" ? p.required : null;
-      const counted =
-        approvals !== null && required !== null ? ` (${approvals} of ${required})` : "";
-      return say(
-        `approved the ${str(p.state) ?? ""} Gate${counted}`.replace("  ", " "),
-        str(p.note),
-        "gate",
-      );
-    }
-    case "gate.approved":
-      return say(
-        `approved the ${str(p.state) ?? ""} Gate → ${str(p.to) ?? ""}`.replace("  ", " "),
-        str(p.note),
-        "gate",
-      );
-    case "gate.rejected":
-      return say(`rejected the ${str(p.state) ?? ""} Gate`, str(p.note), "destructive");
     case "run.started": {
       const trigger = str(p.trigger);
       const by =
@@ -255,10 +195,6 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say("went quiet", null, "muted");
     case "comment.created":
       return say("commented", null, byActor);
-    case "comment.edited":
-      return say("edited a comment", null, byActor);
-    case "comment.deleted":
-      return say("withdrew a comment", null, byActor);
     case "member.joined":
       return say(`joined as ${str(p.role) ?? "a member"}`, null, "human");
     case "member.role_changed":
@@ -280,7 +216,7 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     case "agent.key_revoked":
       return say("revoked an API key", null, "destructive");
     case "agent.project_granted":
-      return say(`granted ${str(p.projectKey) ?? "a Project"}`);
+      return say(`granted ${str(p.projectSlug) ?? "a Project"}`);
     case "agent.project_revoked":
       return say("revoked a Project", null, "destructive");
     case "project.created":
@@ -290,35 +226,19 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say(`changed the Project's ${join(changed) || "settings"}`);
     }
     case "project.archived":
-      return say(`archived ${str(p.key) ?? "the Project"}`, null, "destructive");
-    case "team.created":
-      return say(`created the Team ${str(p.name) ?? ""}`);
-    case "team.updated":
-      return say(`renamed the Team ${str(p.from) ?? ""} to ${str(p.to) ?? ""}`);
-    case "team.deleted":
-      return say(`deleted the Team ${str(p.name) ?? ""}`, null, "destructive");
-    case "team.member_added":
+      return say(`archived ${str(p.slug) ?? "the Project"}`, null, "destructive");
+    case "socket.connected": {
+      const provider = str(p.provider);
+      const named = str(p.name) ?? "a Socket";
+      const login = str(p.login);
       return say(
-        `added ${member(p.memberId, p.memberName) ?? "a Member"} to the Team${str(p.teamName) ? ` ${str(p.teamName) ?? ""}` : ""}`,
+        `connected ${named}${provider ? `, a ${provider} Socket` : ""}${login ? `, as @${login}` : ""}`,
       );
-    case "team.member_removed":
-      return say(
-        `removed ${member(p.memberId, p.memberName) ?? "a Member"} from the Team${str(p.teamName) ? ` ${str(p.teamName) ?? ""}` : ""}`,
-      );
-    case "workflow.updated":
-      return say(`set the Workflow to ${list(p.states).join(" → ")}`);
-    case "label.created":
-      return say(
-        `created the Label ${str(p.scope) ? `${str(p.scope) ?? ""}: ` : ""}${str(p.name) ?? ""}`,
-      );
-    case "label.updated":
-      return say(`renamed a Label to ${str(p.name) ?? ""}`);
-    case "label.deleted":
-      return say(
-        `deleted the Label ${str(p.scope) ? `${str(p.scope) ?? ""}: ` : ""}${str(p.name) ?? ""}`,
-        null,
-        "destructive",
-      );
+    }
+    case "socket.updated":
+      return say(`changed ${str(p.name) ?? "a Socket"}`);
+    case "socket.removed":
+      return say(`disconnected ${str(p.name) ?? "a Socket"}`, null, "destructive");
     case "allowlist.rule_added":
       return say(`allowed ${str(p.kind) ?? ""} ${str(p.value) ?? ""}`.trim());
     case "allowlist.rule_removed":

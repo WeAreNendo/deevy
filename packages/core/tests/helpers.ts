@@ -1,12 +1,14 @@
-import type { Db, Member, Workspace } from "@deevy/db";
+import type { Db, Issue, Member, Project, Workspace } from "@deevy/db";
 import { eq } from "drizzle-orm";
-import { agent, member, projectGrant, user, workspace } from "@deevy/db";
+import { agent, member, project, projectGrant, socket, user, workspace } from "@deevy/db";
 import type { OpenedDatabase } from "@deevy/adapters/node";
 import { openDatabase } from "@deevy/adapters/node";
 import type { Session } from "../src/auth.ts";
 import type { AppContext } from "../src/operations/registry.ts";
 import type { ApiKeys, ApiKeySummary } from "../src/keys.ts";
 import { newId } from "../src/ids.ts";
+import { upsertProjection } from "../src/issues.ts";
+import type { ExternalIssue, SocketModule, SocketModules } from "../src/sockets/port.ts";
 
 export const migrationsFolder = new URL("../../db/drizzle", import.meta.url).pathname;
 
@@ -75,6 +77,7 @@ export interface MemberContextOptions {
   kind?: Member["kind"];
   name?: string;
   email?: string;
+  handle?: string;
 }
 
 /**
@@ -103,6 +106,9 @@ export async function memberContext(
     id: memberId,
     workspaceId: ws.id,
     userId,
+    // Every Member a real sign-in makes has one (handles.ts), and a routing
+    // label is built from it, so a fixture without one is not a Member.
+    handle: options.handle ?? name.toLowerCase(),
     role: options.role ?? "member",
     kind: options.kind ?? "human",
   });
@@ -184,6 +190,149 @@ export function fakeApiKeys(): FakeApiKeys {
       if (!found || found.userId !== userId) return false;
       rows.delete(keyId);
       return true;
+    },
+  };
+}
+
+/**
+ * A tracker that is not a tool.
+ *
+ * Every rule about inbound, routing and projection is a rule about what happens
+ * when a tracker says something, so the core's tests play one rather than
+ * reaching for a network (ADR-0024). It is deliberately its own small fake and
+ * not `@deevy/sockets`: the core holds the port, and a test dependency on a
+ * package that depends on the core is a cycle nobody needs.
+ */
+export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
+  sockets: SocketModules;
+  records: Map<string, ExternalIssue>;
+} {
+  let opened = 0;
+  const module = (): SocketModule => ({
+    provider: "stub",
+    capabilities: new Set(["tracker"] as const),
+    identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
+    tracker: {
+      verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "" }),
+      normalize: () => [],
+      getIssue: (_scope, ref) => {
+        const found = records.get(ref.externalId);
+        if (!found) throw new Error(`no record ${ref.externalId}`);
+        return Promise.resolve(found);
+      },
+      listIssues: () => Promise.resolve({ issues: [...records.values()], nextCursor: null }),
+      listComments: () => Promise.resolve([]),
+      createIssue: (scope, draft) => {
+        opened += 1;
+        const container = typeof scope.scopeKey === "string" ? scope.scopeKey : "acme/deevy";
+        // Prefixed, so a record this opens can never collide with one a test
+        // seeded by hand — a collision would silently update that record
+        // instead of opening a new one.
+        const externalId = `new-${String(opened)}`;
+        const key = `${container}#${externalId}`;
+        const made: ExternalIssue = {
+          externalId,
+          key,
+          url: `https://tracker.test/${key}`,
+          title: draft.title,
+          body: draft.body,
+          state: "open",
+          stateName: "Open",
+          assignees: [],
+          labels: draft.labels,
+          parentExternalId: draft.parent?.externalId ?? null,
+          updatedAt: new Date(),
+        };
+        records.set(made.externalId, made);
+        return Promise.resolve({ ...made, parentLinked: draft.parent !== null });
+      },
+      createComment: (_scope, ref) =>
+        Promise.resolve({ externalId: `c${String(records.size)}`, url: `${ref.url}#c` }),
+      setLabels: () => Promise.resolve(),
+      listContainers: () =>
+        Promise.resolve([
+          { scope: { scopeKey: "acme/deevy" }, scopeKey: "acme/deevy", name: "acme/deevy" },
+        ]),
+    },
+  });
+  return { sockets: { stub: module }, records };
+}
+
+/** A record as a tracker would state one, for a test that only cares about a few fields. */
+export function externalIssue(
+  over: Partial<ExternalIssue> & { externalId: string },
+): ExternalIssue {
+  const key = over.key ?? `acme/deevy#${over.externalId}`;
+  return {
+    key,
+    url: over.url ?? `https://tracker.test/${key}`,
+    title: over.title ?? `Record ${over.externalId}`,
+    body: over.body ?? null,
+    state: over.state ?? "open",
+    stateName: over.stateName ?? (over.state === "closed" ? "Done" : "Open"),
+    assignees: over.assignees ?? [],
+    labels: over.labels ?? [],
+    parentExternalId: over.parentExternalId ?? null,
+    updatedAt: over.updatedAt ?? new Date(),
+    externalId: over.externalId,
+  };
+}
+
+export interface SeededProject {
+  socketId: string;
+  project: Project;
+  /** Projects one record and hands back the row, as a delivery would. */
+  record: (over: Partial<ExternalIssue> & { externalId: string }) => Promise<Issue>;
+}
+
+/**
+ * A Socket and a Project bound to it: what every test that has an Issue needs
+ * before it can have one. The Socket row is written directly because connecting
+ * one is an admin operation and most of these tests are not about that.
+ */
+export async function seedProject(
+  db: Db,
+  workspaceId: string,
+  options: { slug?: string; scopeKey?: string; defaultAgentMemberId?: string } = {},
+): Promise<SeededProject> {
+  const slug = options.slug ?? "deevy";
+  const scopeKey = options.scopeKey ?? "acme/deevy";
+  const socketId = newId("socket");
+  await db.insert(socket).values({
+    id: socketId,
+    workspaceId,
+    provider: "stub",
+    capabilities: ["tracker"],
+    name: "Example tracker",
+    identity: { login: "deevy", id: "bot-1", mentionHandle: "@deevy" },
+    config: {},
+  });
+  const [row] = await db
+    .insert(project)
+    .values({
+      id: newId("project"),
+      workspaceId,
+      slug,
+      name: slug,
+      trackerSocketId: socketId,
+      trackerScope: { scopeKey },
+      trackerScopeKey: `stub:${scopeKey}`,
+      ...(options.defaultAgentMemberId
+        ? { defaultAgentMemberId: options.defaultAgentMemberId }
+        : {}),
+    })
+    .returning();
+  if (!row) throw new Error("seedProject: the insert returned no row");
+  return {
+    socketId,
+    project: row,
+    record: async (over) => {
+      const { issue } = await upsertProjection(db, {
+        projectId: row.id,
+        socketId,
+        external: externalIssue({ ...over, key: over.key ?? `${scopeKey}#${over.externalId}` }),
+      });
+      return issue;
     },
   };
 }

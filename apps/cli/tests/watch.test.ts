@@ -2,17 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { plain } from "../src/render.ts";
 import { eventLine, watch } from "../src/watch.ts";
 import type { DeevyClient } from "../src/client.ts";
-import { gateUrl, openGate, type Reporter } from "../src/identity.ts";
-
-/** Everything the CLI said, so a test reads what a person would see. */
-function collect(): Reporter & { lines: { out: string[]; err: string[] } } {
-  const lines = { out: [] as string[], err: [] as string[] };
-  return {
-    lines,
-    out: (line: string) => lines.out.push(line),
-    err: (line: string) => lines.err.push(line),
-  };
-}
 
 /**
  * The shape the log actually stores. Written from `packages/db/src/schema/event.ts`
@@ -70,8 +59,18 @@ describe("following the Event log", () => {
    */
   it("picks the stream back up when it ends having said something", async () => {
     const { client, asked } = endingStreams([
-      [{ type: "event", event: { seq: 1, kind: "issue.created", payload: { key: "DEV-1" } } }],
-      [{ type: "event", event: { seq: 2, kind: "issue.moved", payload: { key: "DEV-1" } } }],
+      [
+        {
+          type: "event",
+          event: { seq: 1, kind: "issue.created", payload: { key: "acme/deevy#1" } },
+        },
+      ],
+      [
+        {
+          type: "event",
+          event: { seq: 2, kind: "issue.synced", payload: { key: "acme/deevy#1" } },
+        },
+      ],
     ]);
     const said: string[] = [];
     const reached = await watch(client, { out: (line) => said.push(line), limit: 2, idleMs: 1 });
@@ -211,19 +210,19 @@ describe("an Event as a line", () => {
     const said = eventLine(
       {
         seq: 42,
-        kind: "issue.moved",
+        kind: "issue.synced",
         subjectType: "issue",
         subjectId: "iss_9dq8dybazb80",
         // Where deevy's own renderer reads an Issue key from, because an Event
         // has no column for one.
-        payload: { key: "DEV-7", title: "Ship it" },
+        payload: { key: "acme/deevy#7", title: "Ship it" },
         createdAt: new Date("2026-09-18T10:11:12Z"),
       },
       plain,
     );
     expect(said).toContain("42");
-    expect(said).toContain("issue.moved");
-    expect(said).toContain("DEV-7");
+    expect(said).toContain("issue.synced");
+    expect(said).toContain("acme/deevy#7");
     expect(said).toContain("2026-09-18 10:11:12Z");
   });
 
@@ -236,27 +235,5 @@ describe("an Event as a line", () => {
     const said = eventLine({ seq: 1, kind: "workspace.created" }, plain);
     expect(said).not.toContain("undefined");
     expect(said.trimEnd().endsWith("workspace.created")).toBe(true);
-  });
-});
-
-describe("a Gate", () => {
-  it("is opened where it can be ruled, rather than refused where it cannot", () => {
-    const said = collect();
-    const url = openGate("https://deevy.example.com", "DEV-42", {
-      openBrowser: false,
-      report: said,
-    });
-    expect(url).toBe("https://deevy.example.com/issues/DEV-42");
-    // The URL goes to stdout so it can be piped; the explanation does not.
-    expect(said.lines.out).toEqual([url]);
-    expect(said.lines.err.join(" ")).toContain("by a Human, in a browser");
-  });
-
-  it("builds the link deevy builds for itself", () => {
-    // Same shape as packages/core/src/slack.ts, and a key is escaped.
-    expect(gateUrl("https://deevy.example.com/", "DEV-1")).toBe(
-      "https://deevy.example.com/issues/DEV-1",
-    );
-    expect(gateUrl("https://d.example.com", "A B")).toContain("A%20B");
   });
 });

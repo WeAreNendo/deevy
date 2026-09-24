@@ -12,6 +12,7 @@ import type { Auth } from "../auth.ts";
 import { MCP_PATH } from "../auth.ts";
 import { buildContext } from "../app.ts";
 import type { JobQueue } from "../jobs.ts";
+import type { SocketModules } from "../sockets/port.ts";
 import { router } from "../operations/index.ts";
 import type { AppContext } from "../operations/registry.ts";
 import type { GateElicitation } from "./elicitation.ts";
@@ -58,6 +59,12 @@ export interface DeevyMcpOptions {
    * writes over MCP owes what an Agent that writes over /rpc owes.
    */
   jobs?: JobQueue;
+  /**
+   * The providers this deployment can speak (ADR-0024). A tool that reaches a
+   * tracker — `issues_create`, `comments_create` — is refused without them, so
+   * the MCP surface needs the same registry the operation surfaces get.
+   */
+  sockets?: SocketModules;
   /** Called with anything a tool call raised that the caller is not told about. */
   onError?: (error: unknown) => void;
 }
@@ -82,6 +89,7 @@ export function createDeevyMcp({
   auth,
   baseURL,
   webURL,
+  sockets,
   secret,
   stateTtlSeconds,
   jobs,
@@ -106,6 +114,7 @@ export function createDeevyMcp({
         ...(await buildContext(db, auth, request.headers, origin, MCP_PATH)),
         ...(webURL ? { webURL } : {}),
         ...(jobs ? { jobs } : {}),
+        ...(sockets ? { sockets } : {}),
       };
       // No credential at all is an authentication answer, not a tool error:
       // the challenge is what starts the OAuth dance.
