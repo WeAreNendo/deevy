@@ -64,7 +64,9 @@ stub.notifications = [
     issue: decide,
     event: {
       kind: "run.awaiting_input",
-      payload: {},
+      // What makes this a Gate rather than a question: the request it is
+      // about, which is what the right pane opens (notifications.ts).
+      payload: { gateRequestId: "gate_stub00000", checkpoint: "ship" },
       actorMemberId: "m-planner",
     },
     actor: {
@@ -79,8 +81,21 @@ stub.notifications = [
 
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
-  const { stubClient } = await import("./stub-client.ts");
+  const { stubClient, stubIssue } = await import("./stub-client.ts");
   const client = stubClient({
+    // The right pane reads the record itself rather than the copy the
+    // Notification carries: one shape for a record, whoever asked for it.
+    issues: {
+      get: async (input: { issue: string }) => ({
+        ...stubIssue,
+        id: input.issue,
+        title: input.issue === shipIt.id ? shipIt.title : decide.title,
+        externalKey: input.issue === shipIt.id ? shipIt.externalKey : decide.externalKey,
+        url: input.issue === shipIt.id ? shipIt.url : decide.url,
+        children: [],
+        parent: null,
+      }),
+    },
     inbox: {
       // Fresh rows each time: a row marked read in place would look unchanged
       // to the query's structural sharing, and the list would not re-render.
@@ -115,7 +130,7 @@ describe("the inbox", () => {
 
     const list = await screen.findByRole("list", { name: "Notifications" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(list).getByText("wants your ruling")).toBeTruthy();
+    expect(within(list).getByText(/wants your ruling/)).toBeTruthy();
     expect(within(list).getByText("mentioned you")).toBeTruthy();
     expect(within(list).getByText(/Look at this before Friday/)).toBeTruthy();
     expect(within(list).getByText("routed it to you")).toBeTruthy();
@@ -140,7 +155,7 @@ describe("the inbox", () => {
 
     await screen.findByRole("list", { name: "Notifications" });
     fireEvent.click(screen.getByRole("checkbox", { name: "Select routed it to you" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select wants your ruling" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select wants your ruling/ }));
     const bar = screen.getByRole("toolbar", { name: "Selection" });
     expect(within(bar).getByText("2 selected")).toBeTruthy();
 
@@ -156,17 +171,27 @@ describe("the inbox", () => {
     await waitFor(() => expect(stub.allRead).toBeGreaterThan(0));
   });
 
-  it("marks a row read when it is opened, and keeps the right pane waiting", async () => {
+  it("opens the ruling beside the list when a Gate is what is waiting", async () => {
     await mountAt("/inbox", { memberName: "Ada" });
 
     const list = await screen.findByRole("list", { name: "Notifications" });
-    fireEvent.click(within(list).getByText("wants your ruling"));
+    fireEvent.click(within(list).getByText(/wants your ruling/));
 
     // Reading is what was owed, so opening marks it read.
     await waitFor(() => expect(stub.read).toContainEqual({ ids: ["n3"] }));
-    // Nothing is rendered beside the list: the ruling screen arrives with the
-    // Gate as a request on a Run (docs/plans/sockets.md, slices 2 and 3).
-    expect(screen.getByText("Pick a Notification")).toBeTruthy();
+    // And what was owed is a ruling, so the ruling is what opens — in front,
+    // with the card focused, rather than a page to navigate to next.
+    const gate = await screen.findByRole("group", { name: /ship Gate/ });
+    expect(gate.getAttribute("data-focused")).toBe("true");
+  });
+
+  it("opens the record deevy knows when what is waiting is not a Gate", async () => {
+    await mountAt("/inbox", { memberName: "Ada" });
+
+    const list = await screen.findByRole("list", { name: "Notifications" });
+    fireEvent.click(within(list).getByText(/routed it to you/));
+
+    expect(await screen.findByRole("heading", { name: "Ship it" })).toBeTruthy();
   });
 
   it("shows only what is unread when asked", async () => {
@@ -190,7 +215,7 @@ describe("the inbox", () => {
       expect(within(list).getAllByRole("listitem")).toHaveLength(3);
 
       const reads = stub.read.length;
-      fireEvent.click(within(list).getByText("wants your ruling"));
+      fireEvent.click(within(list).getByText(/wants your ruling/));
       await waitFor(() => expect(stub.read).toHaveLength(reads + 1));
       // Read now, so gone from the filtered list.
       await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2));

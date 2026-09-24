@@ -1,6 +1,18 @@
 import { Link, Outlet, useMatches, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronsUpDown, Inbox, LogOut, Monitor, Moon, Search, Settings, Sun } from "lucide-react";
+import {
+  BellRing,
+  ChevronsUpDown,
+  ClipboardList,
+  Inbox,
+  LogOut,
+  Monitor,
+  Moon,
+  PlayCircle,
+  Search,
+  Settings,
+  Sun,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
@@ -76,6 +88,8 @@ export function AppShell({ workspaceName, memberName, member }: ShellProps) {
   // Global, so `?` closes the sheet too: while open it owns the shortcut scope.
   useShortcut("?", () => setShortcutsOpen((open) => !open), { global: true });
   useShortcut("g i", () => void navigate({ to: "/inbox" }));
+  useShortcut("g r", () => void navigate({ to: "/runs" }));
+  useShortcut("g w", () => void navigate({ to: "/work" }));
   useShortcut("g p", () => void navigate({ to: "/settings/projects" }));
   useShortcut("g s", () => void navigate({ to: "/settings/workspace" }));
 
@@ -129,11 +143,33 @@ export function AppShell({ workspaceName, memberName, member }: ShellProps) {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
+                  <SidebarMenuButton tooltip="Needs me" render={<Link to="/" />}>
+                    <BellRing />
+                    <span>Needs me</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <SidebarMenuButton tooltip="Inbox" render={<Link to="/inbox" />}>
                     <Inbox />
                     <span>Inbox</span>
                   </SidebarMenuButton>
                   <InboxBadge />
+                </SidebarMenuItem>
+                {/* What the Agents are doing, and the records they are doing
+                    it on. Everything else a team reads in its own tools. */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton tooltip="Runs" render={<Link to="/runs" />}>
+                    <PlayCircle />
+                    <span>Runs</span>
+                    <Shortcut keys="g r" className="ml-auto" />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton tooltip="Work" render={<Link to="/work" />}>
+                    <ClipboardList />
+                    <span>Work</span>
+                    <Shortcut keys="g w" className="ml-auto" />
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

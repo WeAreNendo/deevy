@@ -182,6 +182,8 @@ const appRelations = defineRelationsPart(tables, (r) => ({
       optional: false,
     }),
     member: r.one.member({ from: r.gateDecision.memberId, to: r.member.id, optional: false }),
+    /** The tool a Ruling from outside came through, so a screen can name it. */
+    socket: r.one.socket({ from: r.gateDecision.socketId, to: r.socket.id }),
   },
   run: {
     issue: r.one.issue({ from: r.run.issueId, to: r.issue.id, optional: false }),

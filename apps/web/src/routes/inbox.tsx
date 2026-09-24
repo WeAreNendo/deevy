@@ -29,6 +29,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toneClass } from "@/lib/event-text";
 import { describeNotification, type NotificationTone } from "@/lib/notification-text";
+import { GatePage } from "@/routes/gates/gate";
+import { WorkItemPage } from "@/routes/work/item";
 import { orpc } from "@/lib/orpc";
 import { useShortcut } from "@/lib/shortcuts";
 import { ago } from "@/lib/time";
@@ -306,18 +308,33 @@ export function InboxPage({
     </section>
   );
 
+  // What the row is about, opened in front: a Gate is the ruling itself,
+  // because ruling is what was owed; anything else is the record as deevy
+  // knows it (docs/plans/sockets.md, slice 3).
+  const gateRequestId =
+    selected?.kind === "gate_awaiting"
+      ? ((selected.event.payload as { gateRequestId?: unknown } | null)?.gateRequestId ?? null)
+      : null;
   const preview = (
-    <Empty className="h-full">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <MailOpen aria-hidden />
-        </EmptyMedia>
-        <EmptyTitle>Pick a Notification</EmptyTitle>
-        <EmptyDescription>
-          Choose one from the list, and open the record where it lives.
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    <div className="h-full overflow-y-auto p-6">
+      {typeof gateRequestId === "string" ? (
+        <GatePage requestId={gateRequestId} />
+      ) : selected?.issue ? (
+        <WorkItemPage issueId={selected.issue.id} />
+      ) : (
+        <Empty className="h-full">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MailOpen aria-hidden />
+            </EmptyMedia>
+            <EmptyTitle>Pick a Notification</EmptyTitle>
+            <EmptyDescription>
+              Choose one from the list, and open the record where it lives.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
+    </div>
   );
 
   if (narrow) return list;

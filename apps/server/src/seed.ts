@@ -325,6 +325,36 @@ await record({
   stateName: "Done",
 });
 
+// -------------------------------------------------------------------- gates
+
+// What the Project asks before an Agent goes past a Checkpoint, and one Run
+// stopped at it: the ruling screen is the page a seeded Workspace exists to
+// show, so it starts with something waiting on a Human (ADR-0020, ADR-0024).
+await admin.api.checkpoints.set({
+  projectSlug: dev.slug,
+  checkpoints: [
+    { name: "plan", approvalsRequired: 1 },
+    { name: "ship", approvalsRequired: 2, excludeRequester: true },
+  ],
+});
+await planner.api.gates.request({
+  runId: planningRun.id,
+  checkpoint: "plan",
+  proposal: [
+    "## What I will do",
+    "",
+    "Take the three list operations that still page by offset and give each a",
+    "cursor over `(changed_at, id)`, which is the pair that is unique.",
+    "",
+    "- `issues.list` first, because it is the one every screen reads",
+    "- then `runs.list` and `events.list`, which share the shape",
+    "",
+    "No operation changes its name, and the old `offset` keeps working for one",
+    "release so nothing breaks while a client catches up.",
+  ].join("\n"),
+  links: [{ url: "https://github.com/acme/deevy/pull/412", title: "Draft: cursor paging" }],
+});
+
 // ----------------------------------------------------------------- delivery
 
 const slack = await admin.api.channels.create({

@@ -474,6 +474,12 @@
         "agentMemberId": {
           "type": "string"
         },
+        "mine": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
         "status": {
           "type": "string",
           "enum": [

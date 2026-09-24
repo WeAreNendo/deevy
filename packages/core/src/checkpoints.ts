@@ -188,3 +188,38 @@ export const CheckpointPolicySchema = z.object({
   excludeRequester: z.boolean(),
   approverMemberIds: z.array(z.string()),
 });
+
+export interface RulingStanding {
+  /** Who is reading, and whether they are a Human at all. */
+  viewerId: string;
+  viewerKind: "human" | "agent";
+  /** The Human this Run is for, which a four-eyes policy excludes. */
+  requesterId: string | null;
+  /** Whether this Human has already ruled on this request. */
+  hasRuled: boolean;
+  status: "open" | "approved" | "rejected" | "superseded";
+}
+
+/**
+ * Why this Human may not rule on this Gate, or null when they may.
+ *
+ * The same rules `recordRuling` enforces, in the same words, so a screen can
+ * say what will happen before somebody clicks and the two can never drift: a
+ * disabled button with a different reason than the refusal behind it is worse
+ * than no reason at all.
+ */
+export function rulingRefusal(policy: CheckpointPolicy, standing: RulingStanding): string | null {
+  if (standing.status !== "open") return `This Gate was already ${standing.status}`;
+  if (standing.viewerKind !== "human") return "Only a Human can rule on a Gate";
+  if (standing.hasRuled) return "You have already ruled on this Gate";
+  if (
+    policy.approverMemberIds.length > 0 &&
+    !policy.approverMemberIds.includes(standing.viewerId)
+  ) {
+    return `Only the Humans named on the ${policy.name} Checkpoint can rule on this`;
+  }
+  if (policy.excludeRequester && standing.requesterId === standing.viewerId) {
+    return `The ${policy.name} Checkpoint wants somebody other than the Human this Run is for`;
+  }
+  return null;
+}

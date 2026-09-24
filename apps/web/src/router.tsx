@@ -13,6 +13,12 @@ declare module "@tanstack/react-router" {
   }
 }
 import { dropInvitation } from "./lib/invitation.ts";
+import { GatePage } from "./routes/gates/gate.tsx";
+import { RunsPage, parseRunsSearch } from "./routes/runs/list.tsx";
+import { RunPage } from "./routes/runs/run.tsx";
+import { WorkPage } from "./routes/work/list.tsx";
+import { WorkItemPage } from "./routes/work/item.tsx";
+import { parseWorkSearch } from "./components/work-filters.tsx";
 import { HomePage } from "./routes/home.tsx";
 import { ConsentPage } from "./routes/consent.tsx";
 import { TokensPage } from "./routes/dev/tokens.tsx";
@@ -64,6 +70,58 @@ const projectRoute = createRoute({
   path: "/projects/$key",
   beforeLoad: ({ params }) => {
     throw redirect({ to: "/settings/projects", search: { project: params.key } });
+  },
+});
+// Where a Human rules. The one link an Agent hands somebody, so it is a page
+// of its own rather than a panel on something else (ADR-0024).
+const gateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/gates/$requestId",
+  component: function GateRoute() {
+    return <GatePage requestId={gateRoute.useParams().requestId} />;
+  },
+});
+// What deevy's Agents have been doing. The one list deevy still owns: a Run is
+// deevy's own record, and the tracker has none of it (ADR-0024).
+const runsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/runs",
+  validateSearch: (search: Record<string, unknown>) => parseRunsSearch(search),
+  component: function RunsRoute() {
+    return <RunsPage search={runsRoute.useSearch()} />;
+  },
+});
+const runRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/runs/$runId",
+  component: function RunRoute() {
+    return <RunPage runId={runRoute.useParams().runId} />;
+  },
+});
+// Every record deevy has projected, read-only: the work is the tracker's, and
+// what deevy adds is who it routed it to and what happened next (ADR-0024).
+const workRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/work",
+  validateSearch: (search: Record<string, unknown>) => parseWorkSearch(search),
+  component: function WorkRoute() {
+    const search = workRoute.useSearch();
+    const navigate = workRoute.useNavigate();
+    return (
+      <WorkPage
+        search={search}
+        onSearch={(patch) =>
+          void navigate({ search: (previous) => parseWorkSearch({ ...previous, ...patch }) })
+        }
+      />
+    );
+  },
+});
+const workItemRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/work/$issueId",
+  component: function WorkItemRoute() {
+    return <WorkItemPage issueId={workItemRoute.useParams().issueId} />;
   },
 });
 const inboxRoute = createRoute({
@@ -219,6 +277,11 @@ const tokensRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   projectsRoute,
+  gateRoute,
+  runsRoute,
+  runRoute,
+  workRoute,
+  workItemRoute,
   inboxRoute,
   projectRoute,
   settingsRoute.addChildren([

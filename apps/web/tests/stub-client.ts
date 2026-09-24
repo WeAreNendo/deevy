@@ -97,6 +97,64 @@ const emptyIssue = {
   project: stubbedProject,
 };
 
+/**
+ * A Gate as the API answers one: the request, the policy it is measured
+ * against, the Rulings so far, and where the Human reading it stands
+ * (ADR-0024). Every screen that shows a Gate takes this shape.
+ */
+export function stubGate(extra: Record<string, unknown> = {}) {
+  return {
+    id: "gate_stub00000",
+    runId: "run_stub000000",
+    issueId: emptyIssue.id,
+    projectId: stubbedProject.id,
+    checkpoint: "ship",
+    proposal: "## What I will do\n\nRewrite the totals, behind a flag.",
+    links: [] as Array<{ url: string; title: string }>,
+    requestedBy: "m-planner",
+    visit: 1,
+    status: "open",
+    askedAt: stamp,
+    decidedAt: null,
+    url: "https://deevy.test/gates/gate_stub00000",
+    policy: {
+      id: null,
+      name: "ship",
+      approvalsRequired: 1,
+      excludeRequester: false,
+      approverMemberIds: [] as string[],
+    },
+    decisions: [] as Array<Record<string, unknown>>,
+    approvals: 0,
+    run: { id: "run_stub000000", issueKey: emptyIssue.externalKey },
+    you: { mayRule: true, hasRuled: false, why: null as string | null },
+    ...extra,
+  };
+}
+
+/** A Run as the feed lists one, with the Gate it is waiting at when it is. */
+export function stubRun(extra: Record<string, unknown> = {}) {
+  return {
+    id: "run_stub000000",
+    issueKey: emptyIssue.externalKey,
+    agentMemberId: "m-planner",
+    triggeredByMemberId: null,
+    trigger: "assignment",
+    status: "active",
+    summary: null,
+    startedAt: stamp,
+    lastActivityAt: stamp,
+    finishedAt: null,
+    createdAt: stamp,
+    lastActivities: [] as Array<Record<string, unknown>>,
+    activityCount: 0,
+    openGateRequestId: null,
+    ...extra,
+  };
+}
+
+export { emptyIssue as stubIssue };
+
 // The return type is deliberately loose: createTanstackQueryUtils wants a real
 // client shape, and a stub only ever implements the operations a test touches.
 export function stubClient(overrides: StubOverrides = {}): never {
@@ -237,6 +295,17 @@ export function stubClient(overrides: StubOverrides = {}): never {
     },
     comments: {
       create: async () => ({}),
+    },
+    gates: {
+      list: async () => ({ gates: [] }),
+      get: async () => stubGate(),
+      request: async () => stubGate(),
+      approve: async () => stubGate({ status: "approved" }),
+      reject: async () => stubGate({ status: "rejected" }),
+    },
+    checkpoints: {
+      list: async () => ({ checkpoints: [] }),
+      set: async () => ({ checkpoints: [] }),
     },
     events: {
       list: async () => ({ events: [], nextCursor: null }),

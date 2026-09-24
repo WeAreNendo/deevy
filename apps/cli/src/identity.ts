@@ -28,31 +28,6 @@ const console_: Reporter = {
 };
 
 /**
- * The one thing a CLI can do about a Gate: put it in front of a Human.
- *
- * A Gate is ruled in deevy's own browser and by nothing else — not this, not an
- * API key, not an Agent, whatever it is signed in as (ADR-0004, ADR-0010) — so
- * the useful verb is not `approve` but `open`. The URL is the one deevy builds
- * for itself when it tells somebody about an Issue (packages/core/src/slack.ts).
- */
-export function gateUrl(webOrigin: string, issueKey: string): string {
-  return `${webOrigin.replace(/\/+$/, "")}/issues/${encodeURIComponent(issueKey)}`;
-}
-
-export function openGate(
-  origin: string,
-  issueKey: string,
-  options: { openBrowser?: boolean; report?: Reporter } = {},
-): string {
-  const report = options.report ?? console_;
-  const url = gateUrl(origin, issueKey);
-  report.err("A Gate is ruled in deevy, by a Human, in a browser.");
-  report.out(url);
-  if (options.openBrowser !== false) openInBrowser(url);
-  return url;
-}
-
-/**
  * Best effort: a terminal on a server has no browser, and that is not an error.
  *
  * The listener matters. `spawn` does not throw when the opener is missing — it

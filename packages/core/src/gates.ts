@@ -13,6 +13,7 @@ import {
   CheckpointPolicySchema,
   policyFor,
   requesterFor,
+  rulingRefusal,
   type CheckpointPolicy,
 } from "./checkpoints.ts";
 import { appendEvent, type EventSource } from "./events.ts";
@@ -220,6 +221,12 @@ export const GateDecisionSchema = z.object({
   decision: z.enum(["approved", "rejected"]),
   note: z.string().nullable(),
   via: z.enum(["web", "socket", "slack"]),
+  /**
+   * The tool it came through, where it came through one. A screen says "via
+   * GitHub" from this rather than from the Socket list, which is an admin's
+   * (ADR-0025).
+   */
+  socket: z.object({ id: z.string(), provider: z.string(), name: z.string() }).nullable(),
   createdAt: z.date(),
 });
 
@@ -246,16 +253,35 @@ export const GateRequestSchema = z.object({
   /** Approvals so far, which with the policy is the whole arithmetic. */
   approvals: z.number().int(),
   run: z.object({ id: z.string(), issueKey: z.string() }),
+  /**
+   * Where the Human reading this stands: whether they may rule, whether they
+   * already have, and why not when they may not — decided by the same rules
+   * that would refuse the Ruling itself (checkpoints.ts).
+   */
+  you: z.object({
+    mayRule: z.boolean(),
+    hasRuled: z.boolean(),
+    why: z.string().nullable(),
+  }),
 });
 
 export type GateRequestView = z.infer<typeof GateRequestSchema>;
 
+/** A Ruling, with the tool it came through where it came through one. */
+export type GateDecisionRow = GateDecision & {
+  socket?: { id: string; provider: string; name: string } | null;
+};
+
 export interface GateViewInput {
   request: GateRequest;
   policy: CheckpointPolicy;
-  decisions: GateDecision[];
+  decisions: GateDecisionRow[];
   issueKey: string;
   origin: string;
+  /** Who is reading, so the view can say where they stand. */
+  viewer: { id: string; kind: "human" | "agent" };
+  /** The Human this Run is for, read off the Run (`requesterFor`). */
+  requesterId: string | null;
 }
 
 export function gateView({
@@ -264,7 +290,17 @@ export function gateView({
   decisions,
   issueKey,
   origin,
+  viewer,
+  requesterId,
 }: GateViewInput): GateRequestView {
+  const hasRuled = decisions.some((row) => row.memberId === viewer.id);
+  const why = rulingRefusal(policy, {
+    viewerId: viewer.id,
+    viewerKind: viewer.kind,
+    requesterId,
+    hasRuled,
+    status: request.status,
+  });
   return {
     id: request.id,
     runId: request.runId,
@@ -286,9 +322,13 @@ export function gateView({
       decision: row.decision,
       note: row.note,
       via: row.via,
+      socket: row.socket
+        ? { id: row.socket.id, provider: row.socket.provider, name: row.socket.name }
+        : null,
       createdAt: row.createdAt,
     })),
     approvals: decisions.filter((row) => row.decision === "approved").length,
     run: { id: request.runId, issueKey },
+    you: { mayRule: why === null, hasRuled, why },
   };
 }

@@ -13,38 +13,31 @@ const groups: Array<{ title: string; rows: Array<[keys: string, does: string]> }
   {
     title: "Anywhere",
     rows: [
-      ["mod+k", "Search Issues, or jump to a page"],
-      ["c", "New Issue"],
+      ["mod+k", "Jump to a page, a Run or a record"],
       ["?", "This sheet"],
       ["mod+b", "Fold the sidebar"],
       ["g i", "Inbox"],
-      ["g m", "My Issues"],
-      ["g a", "All Issues"],
+      ["g r", "Runs"],
+      ["g w", "Work"],
       ["g p", "Projects"],
       ["g s", "Settings"],
     ],
   },
   {
-    title: "In a list, or on a board",
+    title: "In a list",
     rows: [
       ["j", "Next row"],
       ["k", "Previous row"],
-      ["enter", "Open beside the list"],
-      ["o", "Open the full page"],
+      ["enter", "Open it"],
       ["escape", "Clear the selection, or close what is open"],
     ],
   },
   {
-    title: "On an Issue",
+    title: "On a Gate",
     rows: [
-      ["a", "Assignee"],
-      ["s", "State, or the Note of the Gate it is in"],
-      ["l", "Labels"],
-      ["p", "Parent"],
       ["shift+a", "Approve: the Note, with Approve chosen for ⌘↵"],
       ["shift+r", "Reject: the same, with Reject chosen"],
-      ["[", "Previous Document"],
-      ["]", "Next Document"],
+      ["mod+enter", "Commit the ruling"],
     ],
   },
   {
@@ -57,9 +50,8 @@ const groups: Array<{ title: string; rows: Array<[keys: string, does: string]> }
   {
     title: "While writing",
     rows: [
-      ["mod+enter", "Send the comment, answer or note"],
-      ["@", "Mention a Member or a Team"],
-      ["/", "A block, by name, at the start of a line"],
+      ["mod+enter", "Send the answer or the note"],
+      ["@", "Mention a Member"],
     ],
   },
 ];

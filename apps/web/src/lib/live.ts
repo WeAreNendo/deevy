@@ -22,7 +22,18 @@ export function keysFor(event: LiveEvent): QueryKey[] {
       keys.push(orpc.issues.key(), orpc.comments.key(), orpc.links.key(), orpc.inbox.key());
       break;
     case "run":
-      keys.push(orpc.runs.key(), orpc.inbox.key());
+      // A Run's own Events move the Gate it is waiting at as well: a ruling
+      // resumes it, and the Gate screen is reading the same request.
+      keys.push(orpc.runs.key(), orpc.gates.key(), orpc.inbox.key());
+      break;
+    case "gate":
+      // A ruling somebody else made, from deevy, the tracker or Slack: the
+      // card in front of this Human has to stop offering a decision that has
+      // already been taken (ADR-0025).
+      keys.push(orpc.gates.key(), orpc.runs.key(), orpc.inbox.key());
+      break;
+    case "socket":
+      keys.push(orpc.sockets.key());
       break;
     case "project":
       keys.push(orpc.projects.key(), orpc.issues.key());

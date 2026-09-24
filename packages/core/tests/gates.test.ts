@@ -324,7 +324,16 @@ describe("a ruling that came from somewhere else", () => {
       externalRef: { commentId: "c1" },
       decision: "approved",
     });
-    expect((await asPlanner.gates.get({ requestId: asked.id })).status).toBe("approved");
+
+    const ruled = await asPlanner.gates.get({ requestId: asked.id });
+    expect(ruled.status).toBe("approved");
+    // Which tool it came through, in the answer: a screen says "via GitHub"
+    // and a Human who reads it never has to ask where a decision was made,
+    // which is the whole of what `via` is for (ADR-0025).
+    expect(ruled.decisions[0]).toMatchObject({
+      via: "socket",
+      socket: { provider: "stub", name: "Example tracker" },
+    });
   });
 });
 
@@ -407,5 +416,40 @@ describe("a Run waiting at a Gate", () => {
     // The same ask, unread again, rather than a second row about one question.
     const again = await asBob.inbox.list({ unreadOnly: true });
     expect(again.notifications.filter((row) => row.kind === "gate_awaiting")).toHaveLength(1);
+  });
+});
+
+describe("what the Gate says to the Human reading it", () => {
+  it("says whether they may rule, and why not when they may not", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asCarol, asPlanner, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+
+    // The screen asks the server rather than working the policy out again: the
+    // rules that refuse a Ruling and the words that explain it are one thing.
+    expect((await asBob.gates.get({ requestId: asked.id })).you).toMatchObject({
+      mayRule: true,
+      hasRuled: false,
+      why: null,
+    });
+    const ada = await asAda.gates.get({ requestId: asked.id });
+    expect(ada.you.mayRule).toBe(false);
+    expect(ada.you.why).toContain("somebody other than the Human this Run is for");
+
+    await asBob.gates.approve({ requestId: asked.id });
+    const bobAgain = await asBob.gates.get({ requestId: asked.id });
+    expect(bobAgain.you).toMatchObject({ mayRule: false, hasRuled: true });
+    expect(bobAgain.approvals).toBe(1);
+    expect(bobAgain.policy.approvalsRequired).toBe(2);
+    expect((await asCarol.gates.get({ requestId: asked.id })).you.mayRule).toBe(true);
   });
 });
