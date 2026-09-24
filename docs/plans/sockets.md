@@ -11,6 +11,12 @@ deevy holds no Issue, Document, Workflow or Label of its own.
 Fifteen slices, 0 to 14, in dependency order. Each is one PR on `main` and carries its own tests. The first
 carries a major changeset; the rest carry ordinary ones.
 
+**Status: done, 2026-09-24**, in fifteen stacked pull requests (#82 to #96). What each slice found, and the
+questions this plan left open answered as far as a build can answer them, are under "What it found" at the
+end. What no test can do is still owed: each provider's setup in OPERATIONS.md walked once against the real
+tool — GitHub's with an App, Linear's, GitLab's and Notion's — and the live test of the runtime against a real
+model (`docs/sockets-acceptance.md`).
+
 Why this and why now. v1 made deevy a complete tracker: Issues with keys, a Workflow of States and Gates per
 Project, intent/spec/plan Documents materialised from templates and edited live, Labels, Teams, comments, a
 board. Every one of those was built well, and every one of them is a thing a team already has somewhere
@@ -809,7 +815,46 @@ Any change to what an Agent may rule: nothing, on any door.
 
 ## What it found
 
-Written before the work, to be answered after it.
+Written before the work, to be answered after it; newest first.
+
+**Slice 14, as built.** The record is OPERATIONS.md, DEVELOPMENT.md, the `deevy-ui` skill, PLAN.md, CLAUDE.md
+and the README rewritten for the shape that shipped, and the screenshots taken again. Four things came out of
+it that were not documentation.
+
+- **`sockets.rewire` did not exist.** This plan's risks and this slice's own list both said it did. It does
+  now, for the one tool that lets deevy say where its webhook goes — a GitHub App, through `PATCH
+/app/hook/config` — and every Socket's page shows the address it delivers to, which is the one thing an
+  operator re-pastes when a tunnel's hostname changes.
+- **The dev server did not forward `/hooks`.** It still proxied `/collab`, a route that left with the
+  Documents, while a Socket's address — built on the instance's origin, which in the dev loop is Vite's — went
+  to the SPA. A tunnel pointed at the dev loop would have delivered nowhere.
+- **The Gate, the Run and the record were wider than a phone.** A bare `grid` sized its one column to the
+  longest unwrapped line, which put a Proposal 2,589px wide on a 390px screen; and `@3xl:-order-none` is not a
+  class, so on a desktop the ruling card took the wide column and the Proposal the narrow one. Both were in
+  the screenshots, and neither was in any test.
+- **A Proposal quoted as a line read as markdown** ("## What I will do Read `/approve`…") in the Inbox and a
+  Run's feed. A quote is now a line of words (`lib/plain-text.ts`) and a Run's feed renders what it holds.
+
+**The questions this plan left open.** Two were answered by the build and three can only be answered by use.
+
+- _Whether a Proposal in a comment is enough to rule on from the tracker._ Not yet known. Everything needed
+  to find out is there: every Ruling records where it was made (`via`), so the answer is a count over the
+  Event log after a team has used it for a few weeks.
+- _Whether one identity per Socket is what teams want._ Nobody has asked for `planner[bot]` yet, because
+  nobody has used it yet. The signature line on every comment names the Agent and the Run, and the deferred
+  item is ready.
+- _Whether `gates`, `runs` and `off` are the right settings, or a team wants deevy quiet on their issues and
+  loud in Slack._ Answered: that is already one choice each — Mirror set to Nothing on the Project, and a
+  routing rule sending Gate awaiting to a Slack room — because what the tracker is told and what Slack is told
+  are separate.
+- _Whether thirty minutes is the right catch-up, and whether the quiet is ever anything but a dead tunnel._
+  Not known; but the dead tunnel now has its own answer (the address on the Socket's page, and
+  `sockets.rewire` for GitHub), and the catch-up is honest about what it cannot bring back: a comment, and so
+  a Ruling, arrives only by delivery.
+- _Whether a Project with no Checkpoints leaves an Agent asking for `plan` under a policy nobody chose._
+  Answered in slice 8: the record an Agent reads carries the Checkpoints its Project lists, and the
+  instructions say a Project that lists none is one where the Agent plans, builds and finishes without
+  stopping. The seed lists `plan` and `ship`.
 
 **Slice 13, as built.** Notion verifies its webhook with the token deevy received, somebody tags a row
 `agent:planner`, deevy reads the row back and routes it, the Proposal is the integration's comment on it, a
@@ -1089,16 +1134,3 @@ for the screens that come after the providers.
 The tool set is **seventeen**: `gates_request` is `runs_request_approval` come back, and `gates_get` beside
 it is the polling half for a client that cannot take an elicitation, which is every client today. Asking
 costs **17 statements** and ruling **17**, both a third of D1's cap.
-
-- Whether a Proposal in a comment is enough for a Human to rule on from the tracker, or whether the Gate
-  screen in deevy stays the place people actually decide. The mirror is built so the tracker is enough;
-  the Event log's `via` column will say what people did.
-- Whether one identity per Socket is what teams want, or whether the first request after GitHub is
-  "planner should be `planner[bot]`". The deferred item is ready if so.
-- Whether `gates`, `runs` and `off` are the right three settings for how much deevy says in a tracker, or
-  whether a team wants deevy quiet on their issues and loud in Slack.
-- Whether thirty minutes is the right catch-up interval for a Socket that has gone quiet, and whether the
-  quiet is ever anything other than a tunnel that died.
-- Whether a Project with no Checkpoints listed — the default — leaves an Agent asking for `plan` under a
-  one-approval policy nobody chose, and whether the seed should list `plan` and `ship` so a new Workspace
-  starts with the shape the instructions assume.

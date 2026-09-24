@@ -6,11 +6,14 @@
  *
  *   vp run web#screens
  *
- * Needs the `dev:stub` instance up on DEEVY_SCREENS_URL (default
- * http://localhost:5173) with a seeded database (docs/DEVELOPMENT.md,
- * "Running without an OAuth App"); it signs in as DEEVY_ADMIN_EMAIL through
- * the stub, the way the dev form does, then walks the routes below in light
- * and dark, at desktop and phone widths.
+ * Needs a seeded, stubbed instance up on DEEVY_SCREENS_URL (default
+ * http://localhost:5173) — the `seeded` launch configuration is the one to
+ * use, on http://localhost:3020 with DEEVY_ADMIN_EMAIL=ada@example.com, since
+ * every identity there is at example.com (docs/DEVELOPMENT.md). It signs in as
+ * DEEVY_ADMIN_EMAIL through the stub, the way the dev form does, then walks
+ * the routes below in light and dark, at desktop and phone widths. A screen of
+ * one Run, one Gate, one record or one Socket is found through the API at the
+ * moment of capture, because a seed's ids are new every time.
  */
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -27,26 +30,44 @@ const port = 9333;
 
 if (!email) throw new Error("DEEVY_ADMIN_EMAIL is not set; it is who the screenshots sign in as");
 
-type Shot = { name: string; path: string; theme?: "dark"; phone?: boolean; settle?: number };
+/**
+ * A path, or an expression evaluated in the signed-in page that answers one —
+ * for a screen whose URL carries an id the seed chose.
+ */
+type Shot = {
+  name: string;
+  path: string | { find: string };
+  theme?: "dark";
+  phone?: boolean;
+  settle?: number;
+};
+
+const firstRun = `fetch("/api/runs").then((r) => r.json()).then((j) => "/runs/" + j.runs[0].id)`;
+const openGate = `fetch("/api/gates?status=open").then((r) => r.json()).then((j) => "/gates/" + j.gates[0].id)`;
+const firstRecord = `fetch("/api/issues").then((r) => r.json()).then((j) => "/work/" + j.issues[0].id)`;
+const firstSocket = `fetch("/api/sockets").then((r) => r.json()).then((j) => "/settings/sockets/" + j.sockets[0].id)`;
+
 const shots: Shot[] = [
   { name: "sign-in", path: "/" }, // taken before signing in
-  { name: "issues", path: "/" },
-  { name: "issues-peek", path: "/?peek=DEV-21" },
-  { name: "issues-board", path: "/?view=board" },
-  { name: "issue", path: "/issues/DEV-21" },
+  { name: "needs-me", path: "/" },
   { name: "inbox", path: "/inbox" },
-  { name: "projects", path: "/projects" },
-  { name: "project", path: "/projects/DEV" },
-  { name: "board", path: "/projects/DEV/board" },
-  { name: "workflow", path: "/projects/DEV/workflow" },
+  { name: "runs", path: "/runs" },
+  { name: "run", path: { find: firstRun } },
+  { name: "gate", path: { find: openGate } },
+  { name: "work", path: "/work" },
+  { name: "work-item", path: { find: firstRecord } },
+  { name: "settings-sockets", path: "/settings/sockets" },
+  { name: "settings-socket", path: { find: firstSocket } },
+  { name: "settings-projects", path: "/settings/projects" },
+  { name: "settings-identities", path: "/settings/identities" },
   { name: "settings-workspace", path: "/settings/workspace" },
   { name: "settings-agents", path: "/settings/agents" },
   { name: "settings-events", path: "/settings/events" },
-  { name: "issues-dark", path: "/", theme: "dark" },
-  { name: "issue-dark", path: "/issues/DEV-21", theme: "dark" },
+  { name: "needs-me-dark", path: "/", theme: "dark" },
+  { name: "gate-dark", path: { find: openGate }, theme: "dark" },
   { name: "inbox-dark", path: "/inbox", theme: "dark" },
-  { name: "issues-phone", path: "/", phone: true },
-  { name: "issues-peek-phone", path: "/?peek=DEV-21", phone: true },
+  { name: "needs-me-phone", path: "/", phone: true },
+  { name: "gate-phone", path: { find: openGate }, phone: true },
   { name: "inbox-phone", path: "/inbox", phone: true },
 ];
 
@@ -204,7 +225,7 @@ try {
 
   console.log(`Screens from ${origin}, into ${out}`);
   const [signedOut, ...signedIn] = shots as [Shot, ...Shot[]];
-  await goto(page, signedOut.path, 1500);
+  await goto(page, typeof signedOut.path === "string" ? signedOut.path : "/", 1500);
   await snap(page, signedOut.name);
 
   // The stub sign-in, as the dev form does it (apps/web/src/App.tsx DevSignIn):
@@ -239,13 +260,15 @@ try {
   const who = await evaluate<string>(page, "document.body.innerText.slice(0, 200)");
   if (/Sign in with /.test(who)) throw new Error(`sign-in as ${email} did not take`);
 
-  // DEEVY_SCREENS_ONLY=issue,inbox-phone takes those shots alone (the sign-in one always).
+  // DEEVY_SCREENS_ONLY=gate,inbox-phone takes those shots alone (the sign-in one always).
   const only = process.env.DEEVY_SCREENS_ONLY?.split(",").map((name) => name.trim());
   for (const shot of signedIn.filter((candidate) => !only || only.includes(candidate.name))) {
     // A blank page between shots ends the previous document, and with it the
     // live Event stream it held open; a dozen of those in a row starve the next.
+    // The instance's own `/healthz` rather than about:blank, so the theme and
+    // an id to find are written and asked on the instance's origin.
     const blank = page.once("Page.loadEventFired");
-    await page.send("Page.navigate", { url: "about:blank" });
+    await page.send("Page.navigate", { url: `${origin}/healthz` });
     await blank;
     await viewport(page, shot.phone ?? false);
     // next-themes reads this key; "light" is what the default resolves to on this machine's headless Chrome.
@@ -253,7 +276,9 @@ try {
       page,
       `localStorage.setItem("theme", ${JSON.stringify(shot.theme ?? "light")}); true`,
     );
-    await goto(page, shot.path, shot.settle ?? 2000);
+    const path =
+      typeof shot.path === "string" ? shot.path : await evaluate<string>(page, shot.path.find);
+    await goto(page, path, shot.settle ?? 2000);
     if (process.env.DEEVY_SCREENS_DEBUG) {
       console.log(
         shot.name,

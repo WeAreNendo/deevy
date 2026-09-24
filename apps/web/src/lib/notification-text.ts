@@ -6,6 +6,7 @@
  * question, the summary. Everything comes from the Event the row carries.
  */
 import type { EventTone } from "@/lib/event-text";
+import { plainLine } from "@/lib/plain-text";
 
 /** A Notification speaks in the same tones an Event does; one palette serves both. */
 export type NotificationTone = EventTone;
@@ -26,7 +27,16 @@ export interface DescribableNotification {
 const text = (value: unknown): string | null =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
+/**
+ * The row's words, with the excerpt as one line: what an Agent or a Human wrote
+ * is markdown, and a quote in a list is not the place to render it.
+ */
 export function describeNotification(row: DescribableNotification): NotificationText {
+  const said = describe(row);
+  return { ...said, excerpt: said.excerpt === null ? null : plainLine(said.excerpt) || null };
+}
+
+function describe(row: DescribableNotification): NotificationText {
   const payload =
     row.event.payload && typeof row.event.payload === "object" && !Array.isArray(row.event.payload)
       ? (row.event.payload as Record<string, unknown>)

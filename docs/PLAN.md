@@ -1,108 +1,113 @@
-# deevy: v1 plan
+# deevy: the plan
 
-Discovery output, 2026-09-03. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); the reasoning behind the
+Discovery output, 2026-09-03; rewritten 2026-09-24, when the Sockets milestone closed and deevy stopped being
+a tracker of its own. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); the reasoning behind the
 hard-to-reverse choices is in [docs/adr](./adr). Research notes that informed this plan are in
 [docs/research](./research).
 
 ## What deevy is
 
-Project management where Humans and Agents collaborate as peers on the same Issues. Open source (AGPL-3.0),
-self-hosted, built first for our own team of 2 to 10 people who use coding agents every day, with the solo
-developer as the zero-config case.
+The glue between a team's tools and its Agents. Humans and Agents collaborate as peers on the work the team
+already keeps in GitHub, Linear, GitLab or Notion; deevy routes that work to Agents, records what they do,
+and holds the decisions only a Human may make. Open source (AGPL-3.0), self-hosted, built first for our own
+team of 2 to 10 people who use coding agents every day, with the solo developer as the zero-config case.
 
-Four things make it different from Plane, Linear, It's a Plan, Paperclip, and Vikunja's bot users:
+Four things make it different:
 
 1. **Every Agent has a Sponsor.** An Agent is a first-class Member with its own identity, keys, and audit trail,
    and exactly one Human is accountable for it.
-2. **Gates are a workflow primitive.** A Gate is a State an Issue cannot leave without a Human's approval, and an
-   Agent can never approve one.
+2. **Gates are Human decisions an Agent cannot make.** A Gate is a Run's request to go past a Checkpoint, with
+   a Proposal the Human rules on, and an Agent can never rule on one.
 3. **The Event log is the audit trail.** Every change is an immutable Event with actor and timestamp; webhooks,
-   live UI, notifications, and metrics all derive from it.
-4. **deevy never runs agents.** It triggers them through events and an MCP inbox, and receives Runs back. Claude
-   Code in CI, an Agent SDK service, a GitHub Action, or a local loop does the running.
-
-Everything else is deliberately conventional so agents and humans already know how to use it: Issues with keys
-like `DEV-42`, Projects, Teams, Labels, a board, comments, links to pull requests.
+   the live UI, notifications and what deevy says back in the tools all derive from it.
+4. **deevy never runs agents, and never owns the tracker.** It triggers Agents through events and an MCP
+   inbox and receives Runs back — Claude Code in CI, an Agent SDK service, the reference runtime or a local
+   loop does the running — and the work stays where the team keeps it.
 
 ## What deevy became
 
-Decided 2026-09-19, after v1 was complete and used. Everything conventional in the sentence above is a
-thing a team already has somewhere else, and asking them to move it into deevy — or to keep two of
-everything — to get the four things that are different was a heavy layer nobody asked for. So the tracker
-comes out. A **Socket** is one connected external tool under one identity: a GitHub App, a Linear app, a
-GitLab application, a Notion integration, a Slack app. An Issue is a projection of a record in a tracker
-Socket, routed to an Agent by a label, a mention or a Project's default; a Project is a binding to the
-Sockets its work lives in; a Gate is a Run's request to pass a Checkpoint with a Proposal the Human rules
-on — in deevy, on the tracker, or in Slack. Documents, the Workflow, Labels, Teams, comments, the board and
-deevy's own keys go. The four differentiators stand, and the fourth gains a clause: deevy never runs
-agents, and never owns the tracker.
-
-The plan is [sockets.md](./plans/sockets.md), fifteen slices, and the choices that are expensive to
-reverse are [ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
-[ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md). The vocabulary in
-[CONTEXT.md](../CONTEXT.md) is already the new one. The sections below describe v1 as it was built and
-stand as its record until the plan's last slice rewrites them.
+Decided 2026-09-19, after v1 was complete and used, and built in fifteen slices by 2026-09-24. v1 was a
+complete tracker of its own — Issues with `DEV-42` keys, Documents, a Workflow of States, Labels, Teams,
+comments, a board — and every one of those was a thing a team already had somewhere else. Asking them to move
+it into deevy, or to keep two of everything, to get the four things above was a heavy layer nobody asked for.
+So the tracker came out, and deevy connects to the team's tools instead: a **Socket** is one connected tool
+under one identity — a GitHub App, a Linear application, a GitLab user, a Notion integration, a Slack app.
+The plan was [sockets.md](./plans/sockets.md); the choices that are expensive to reverse are
+[ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
+[ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md); what each slice found is at the end of
+the plan. A clean break: the first release of this shape starts from an empty database.
 
 ## Domain model in one paragraph
 
-A **Workspace** holds **Members** (Humans and Agents), **Teams**, **Projects**, Labels, and settings. A Team owns
-Projects and can be mentioned; it is not a permission wall, and every Human sees every Project in v1. A Project
-has a **Workflow**: an ordered list of **States**, some of which are **Gates**, plus rules that fire on entering
-a State. An **Issue** belongs to a Project, has a key, a Description, named **Documents** (intent, spec, plan,
-each versioned markdown with a template from its State), Labels (plain or scoped, one per scope), an optional
-parent Issue, one **Assignee** (Human or Agent), comments, and typed **Links** to pull requests, commits,
-branches, and URLs. An Agent working an Issue produces a **Run** that records who
-triggered it, posts **Activities** (thought, action, elicitation, response, error), attaches evidence and
-Links, and ends in a state. Every change becomes an **Event**. **Notifications** derive from Events and are
-delivered to **Channels**: each Human's in-app inbox, and Slack.
+A **Workspace** holds **Members** (Humans and Agents), **Sockets**, **Projects**, and settings. A Socket is a
+connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion), a **forge** (GitHub,
+GitLab), **docs** (Notion) and **chat** (Slack). A **Project** is a binding: the container in a tracker its
+records come from, optionally the repository its code is in and where its documents live, which Agents may
+work it, the default Agent, how a record names an Agent (a label prefix, a mention), its **Checkpoints**, and
+how much deevy says back in the tracker. An **Issue** is a projection of a record in a tracker — its key, URL,
+title, body and state as the tool last said them — routed to one Agent; deevy authors none of it. An Agent
+working an Issue produces a **Run** that records who triggered it, posts **Activities** (thought, action,
+elicitation, response, error), asks at Checkpoints for **Gates**, attaches **Links** and opens a pull request,
+and ends in a state. A Gate carries the Agent's **Proposal** and the **Rulings** on it, made in deevy, in the
+tracker or in Slack. A Human's **Identities** are their accounts on the tools, linked so a Ruling made there is
+theirs. Every change becomes an **Event**. **Notifications** derive from Events and are delivered to
+**Channels**: each Human's in-app inbox, a Slack room, a Slack direct message.
 
-## Default workflow template
+## Checkpoints
 
-Intent → Spec → Plan → Build → Review → Done, with Gates on leaving Intent, Spec, Plan, and Review. Each of the
-first three States supplies a Document template following the playbook's headings (Problem, Proposed outcome,
-Affected users and systems, Constraints, Open questions for intent; requirements, design, and flagged concerns
-for spec; files that change, order of work, tests that prove it for plan). Teams that want Todo, Doing, Done
-delete the middle. Sizing is binary: fits in one PR, or needs an intent. No estimates.
+A Project names the points a Run stops at — `plan` and `ship` are the usual two, and any name works — each
+with how many distinct Humans must approve, whether the Human the work is for may count, and who may rule. A
+Checkpoint an Agent names that the Project does not list gets the default: one approval, from any Human. There
+are no States and no templates: a Proposal is the Agent's own markdown, and where a team keeps plans
+afterwards is the Agent's job and a Link.
 
 ## The agent loop
 
-**Triggers** that create a Run: assigning an Issue to an Agent; mentioning an Agent in a comment; a workflow
-rule on entering a State (for example, entering Plan assigns the planning Agent); a schedule on an Agent.
+**Triggers** that create a Run: routing a record to an Agent (a label `agent:<handle>`, an assignment or
+delegation to deevy in the tool, or the Project's default Agent); mentioning an Agent in a comment on the
+record; opening a sub-issue for another Agent; a schedule on an Agent.
 
-**Delivery.** A trigger appends an Event, creates a Run in `pending`, and delivers a signed webhook to the URL
-the Agent registered, with retries and backoff from the Event log. Agents without a URL poll their inbox over
-MCP. Either way the Agent then reads the Issue and its Documents over MCP.
+**Delivery.** A tool tells deevy what changed at `/hooks/<socket>`, signed, and deevy asks the tool itself
+when it has heard nothing for a while, so an instance no tool can reach still works. A trigger appends an
+Event, creates a Run in `pending`, and delivers a signed webhook to the URL the Agent registered, with retries
+and backoff from the Event log; Agents without a URL poll their inbox over MCP. Either way the Agent then reads
+the record and its conversation — live from the tool — over MCP.
 
-**Run lifecycle.** `pending` → `active` on first Activity → `awaiting_input` when the Agent posts an elicitation
-→ back to `active` when a Human answers → `completed` or `failed`; `stale` after a configurable silence (default
-30 minutes), recoverable. The Run's final response carries a summary and Links. This is the shape Linear, Plane,
-and Notion converged on, so existing agents port with a thin adapter.
+**Run lifecycle.** `pending` → `active` on first Activity → `awaiting_input` when the Agent asks a Gate or a
+question → back to `active` when a Human rules or answers → `completed` or `failed`; `stale` after a
+configurable silence (default 30 minutes), recoverable — but never while it waits on a Human. The Run's final
+response carries a summary and Links.
 
-**Gates.** When an Issue reaches a Gate, Humans with Project access (or the approvers the Gate names) get a
-Notification. Approval or rejection is an Event. An Agent that reaches a Gate mid-Run can surface it as a URL
-elicitation so the Human approves in deevy and the Agent resumes. One approval from anybody, with no
-requester-cannot-approve rule, was v1; both are now settings on the Gate (see Four-eyes Gates, below).
+**Gates.** An Agent at a Checkpoint asks with its Proposal and stops. The Humans who may rule are notified,
+deevy says so on the record in the tracker and in Slack, and a Human rules in deevy, with `/approve` or
+`/reject <why>` in a comment where they read it, or with a button in Slack — the same policy and the same
+refusals through all three doors, recorded with where it came from. The Run resumes when the Gate is decided.
+
+**Code.** A Run cloned from a Project's forge gets a credential deevy mints for that attempt, which never
+leaves the runtime's supervisor; deevy opens the pull request through the forge, closing the record when it
+merges.
 
 **Accountability.** The Run records the Member that triggered it. The accountable Human for any agent action is
-one hop away: the triggering Human, or the Sponsor when an Agent triggered it.
+one hop away: the triggering Human, or the Sponsor when routing or an Agent triggered it.
 
 ## Authentication and access
 
 - Humans sign in with GitHub, GitLab, Google, or generic OpenID Connect. No local passwords. Each provider is
-  a client pair in the environment — GitLab and the OIDC provider also take an issuer, so a self-hosted GitLab
-  and any one IdP behind Okta, Entra, Keycloak or Authentik work — and an instance offers exactly the
-  providers whose variables are set, reported publicly by `health.ping` and rendered as one button each.
+  a client pair in the environment — GitLab and the OIDC provider also take an issuer — and an instance offers
+  exactly the providers whose variables are set.
 - A Human who signs in with a second configured provider on the same verified address links onto the user row
   they already have: one Human is one Member, with one handle and one inbox.
 - A Workspace admin allowlists a GitHub organization, a GitLab group, or an email domain; matching sign-ins
-  auto-join. Everyone else is invited: an admin creates an invitation for one address and gets a URL to send
-  however they like, good for seven days, spent after sign-in by the Human whose address it names. deevy sends
-  no email until the email Channel exists, and never needs to. The first sign-in matching the configured admin
-  email becomes admin.
+  auto-join. Everyone else is invited with a link an admin sends. The first sign-in matching the configured
+  admin email becomes admin.
 - Every Member is a Better Auth user. Agents are token-only users created by their Sponsor, who issues and
   rotates their API keys. A suspended Sponsor suspends their Agents until someone else sponsors them.
-- Agents get a fixed capability set scoped to granted Projects: read and write Issues, comment, create and
-  update Runs. Never administer, never manage Members, never approve a Gate.
+- Agents get a fixed capability set scoped to granted Projects: read records and their conversation, comment
+  and open sub-issues through the tools, read documents, add Links, ask at Checkpoints, open pull requests,
+  drive their own Runs. Never administer, never manage Members, never rule on a Gate.
+- A Ruling from a tool counts only when the tool signed it and the account is the Human's: the account they
+  sign in with, one they linked from a signed-in session, or — where an admin allowed it, for a tool with
+  nothing better — an address they verified (ADR-0025).
 - MCP clients used by Humans sign in with OAuth 2.1; deevy is its own authorization server. Agents use API keys
   as bearer tokens on the same MCP endpoint.
 
@@ -113,56 +118,64 @@ One typed core, projected three ways (ADR-0005):
 - **HTTP API** defined with oRPC 2.0 (beta) procedures behind our own operation-registry type, served by Hono
   through the fetch adapter, with generated OpenAPI 3.1 and a reference UI. The React SPA uses the typed client
   with TanStack Query (ADR-0009).
-- **MCP server** speaking the 2026-07-28 revision in stateless form through the TypeScript SDK v2 per-request
-  handler, serving 2025-era clients through the SDK's legacy stateless mode. Tools are projected from the same
-  oRPC procedures by walking the router and registering each procedure's schemas. The set is twenty-three
-  tools, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`, `issues_create`,
-  `issues_update`, `issues_move`, `issues_set_labels`; `projects_get`; `documents_get`, `documents_write`;
-  `comments_create`; `labels_list`, `labels_create`; `links_list`, `links_add`, `links_remove`; `inbox_list`;
-  `runs_list`, `runs_get` for anyone; `runs_start`, `runs_post_activity`, `runs_request_approval`,
-  `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer` for a Human alone. A client
-  is offered what it may call. Renaming or deleting a Label, and ruling on a Gate, stay off it: a Label is
-  Workspace-scoped and a Gate is a Human's to rule on.
+- **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
+  procedures. The set is nineteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
+  `issues_create`, `comments_create`, `projects_get`, `docs_get`, `links_list`, `links_add`, `links_remove`,
+  `inbox_list`, `gates_get`, `runs_list`, `runs_get` for anyone; `runs_start`, `runs_post_activity`,
+  `gates_request`, `pulls_open`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
+  for a Human alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
+  rule on, in a browser or from a tool that vouches for them.
+- **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is
+  not a Member with a session.
 - **Events** delivered as signed webhooks to Agents and to generic subscribers, and consumed internally by the
-  SSE stream, the inbox, and Slack.
+  SSE stream, the inbox, Slack and what deevy says back in the tools.
 
 ## Architecture
 
 - **Runtime-agnostic core** (ADR-0006): web-standard APIs only. Two deployment shapes, operator's choice: a
-  single Node process with SQLite in a Docker image (first), and a Cloudflare Worker with D1 (second). The Workers
-  build runs in CI from day one.
+  single Node process with SQLite in a Docker image, and a Cloudflare Worker with D1. The Workers build runs in
+  CI on every commit.
+- **Sockets behind a port.** The core holds the types a tool must answer to (`@deevy/core/sockets`); each tool
+  is a module in `packages/sockets`, written on `fetch` and `crypto.subtle`, and the two entries hand the
+  registry to the app. Credentials are sealed under `DEEVY_SECRET`.
 - **Adapters** with a Node and a Workers implementation: storage driver, job queue (in-process outbox on Node,
-  Queues on Workers), cron (timer on Node, Cron Triggers on Workers), static assets. Webhook delivery and the
-  stale-Run sweep are adapter operations.
-- **No interactive transactions in the core.** D1 has none, so multi-statement writes are batches behind the
-  storage adapter.
+  Queues on Workers), cron (timer on Node, Cron Triggers on Workers), static assets.
+- **No interactive transactions in the core.** D1 has none, so multi-statement writes are batches, and every
+  inbound delivery's statement count is a number a test asserts.
 - **Live UI** over server-sent events fed by an Event-log cursor, with heartbeats; identical on both targets.
 - **Data**: Drizzle 1.0 release candidate, pinned to the exact rc, on the SQLite dialect; `node:sqlite` on Node,
   D1 on Workers (ADR-0008). Migrations are generated by drizzle-kit and applied by the Node migrator or by
-  `wrangler d1 migrations apply`, never by drizzle-kit against D1. Timestamps as integers. Postgres is a later
-  third adapter.
+  `wrangler d1 migrations apply`. Timestamps as integers. Postgres is a later third adapter.
 - **Auth**: Better Auth 1.7 with the GitHub, GitLab, Google, and generic OAuth providers, the API-key plugin, and
   the MCP plugin as OAuth authorization server (ADR-0007).
-- **Toolchain**: Vite+ (`vp`) on Node 22.18+; pnpm workspace from `vp create vite:monorepo`; React with shadcn.
+- **Toolchain**: Vite+ (`vp`) on Node 22.18+; a pnpm workspace; React with shadcn on Base UI.
 
 Repository layout:
 
 ```
-apps/web         React SPA (vp dev / vp build); also hosts the Cloudflare Worker entry via the Cloudflare Vite plugin
-apps/server      Node entry (Hono on @hono/node-server), built with vp pack; Docker image
-packages/core    domain model, workflow engine, Event log, oRPC contracts, MCP tool projection
-packages/db      Drizzle schema and migrations (shared by node:sqlite and D1)
+apps/web          React SPA; also the Cloudflare Worker entry
+apps/server       Node entry (Hono on @hono/node-server), built with vp pack; Docker image
+apps/agent        the reference agent runtime
+apps/cli          the command line, generated from the operation registry
+packages/core     operation registry, Event log, Gates and Checkpoints, the Socket port, MCP tool projection
+packages/sockets  GitHub, Linear, GitLab, Notion and Slack, and the stub
+packages/db       Drizzle schema and migrations (shared by node:sqlite and D1)
 packages/adapters node/ and workers/ implementations of storage, jobs, cron, assets
 ```
 
 ## Notifications
 
-Notification kinds in v1: mention, assignment, Gate awaiting you, Run awaiting input, Run finished or failed.
-Channels: each Human's in-app inbox (always), and Slack via an incoming-webhook URL per Channel. Routing is both
-Workspace rules (this kind, for this Project, to this Channel) and per-person preferences. A Slack app with per-
-person DMs and approve buttons comes after v1.
+Notification kinds: assignment, mention, Gate awaiting you, Run awaiting input, Run finished or failed, and
+the sub-issues an Agent opened or finished. Channels: each Human's in-app inbox (always), a Slack room through
+an incoming webhook or a connected Slack app, and a Slack direct message for a Human whose Slack account is
+linked. Routing is both Workspace rules (this kind, for this Project, to this Channel) and per-person
+preferences. A Gate in Slack carries Approve and Reject.
 
 ## Milestones
+
+What each milestone built, written when it was built. Sockets removed a good deal of what M1, Four-eyes Gates
+and Live Documents describe — the Workflow, Documents, Labels, Teams, the board — so read those as the record
+of v1, and the paragraphs above as what deevy is now.
 
 **M0 Scaffold.** Monorepo from the Vite+ template; `packages/core` with the first oRPC contracts; Drizzle
 schema; Better Auth on Node with GitHub sign-in; CI running lint, typecheck, tests, the Node build, and the
@@ -286,14 +299,17 @@ sub-issues is one line in that Sponsor's inbox and not forty. Built in six slice
 [sub-issue-delegation.md](./plans/sub-issue-delegation.md), recorded in
 [ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md).
 
-**Sockets.** The current milestone, and the first to remove more than it adds. deevy stops being a tracker
-and becomes the glue between a team's existing tools and its Agents: an Issue is a projection of a record
-in a Socket, a Project is a binding, a Gate is a request on a Run with a Proposal, and a Ruling may come
-from the tracker or from Slack as well as from deevy. GitHub first, then Linear, GitLab and Notion, with
-the Slack app after the rulings-from-outside slice. Fifteen slices in [sockets.md](./plans/sockets.md),
-recorded in [ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
+**Sockets.** The first milestone to remove more than it added, built in fifteen slices from 2026-09-19 to
+2026-09-24. deevy stopped being a tracker and became the glue between a team's existing tools and its
+Agents: an Issue is a projection of a record in a Socket, a Project is a binding, a Gate is a request on a Run
+with a Proposal, and a Ruling may come from the tracker or from Slack as well as from deevy. GitHub first,
+with the acceptance walk rebuilt around a Socket and run on both deployments on every commit; then rulings
+from outside, the Slack app, Linear, GitLab and Notion, and a Project's documents read where the team keeps
+them. Plan and findings in [sockets.md](./plans/sockets.md), decisions in
+[ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
 [ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md). A clean break: the first release of
-this shape starts from an empty database.
+this shape starts from an empty database. What no test can do is still owed: each provider's setup walked
+once against the real tool.
 
 **After Sockets**, in rough order: cost and time accounting per Run; per-Agent identities on a Socket
 where a provider makes them cheap; Jira and Asana; email Channel; private Projects; Postgres adapter.

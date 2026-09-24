@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { MemberChip } from "@/components/member-chip";
 import { PageHeader } from "@/components/page-header";
+import { Markdown } from "@/components/markdown";
 import { RailHeading } from "@/components/rail-heading";
 import { RunStatus, type RunStatusValue } from "@/components/run-status";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,7 @@ export function RunPage({ runId }: { runId: string }) {
         }
       />
 
-      <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
         <section className="flex min-w-0 flex-col gap-2">
           <RailHeading>Activity</RailHeading>
           {found.activities.length === 0 ? (
@@ -70,7 +71,11 @@ export function RunPage({ runId }: { runId: string }) {
                   data-kind={activity.kind}
                   className="flex flex-col gap-0.5 border-l-2 pl-3"
                 >
-                  <span className={`text-sm ${tones[activity.kind] ?? ""}`}>{activity.body}</span>
+                  {/* An Agent writes its Activities in markdown, a Proposal most of all:
+                      read here in full, so rendered, in the kind's own tone. */}
+                  <Markdown className={`text-sm ${tones[activity.kind] ?? ""}`}>
+                    {activity.body}
+                  </Markdown>
                   <span className="text-xs text-muted-foreground">{ago(activity.createdAt)}</span>
                 </li>
               ))}
@@ -81,7 +86,7 @@ export function RunPage({ runId }: { runId: string }) {
           ) : null}
         </section>
 
-        <div className="flex flex-col gap-6 @3xl:-order-none -order-1">
+        <div className="flex flex-col gap-6 -order-1 @3xl:order-none">
           <section className="flex flex-col gap-2">
             <RailHeading>Gates</RailHeading>
             {asked.length === 0 ? (

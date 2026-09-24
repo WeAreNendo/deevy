@@ -77,6 +77,28 @@ const credentials = {
 const scope = { scopeKey: "acme/deevy" };
 const ref = { externalId: "I_kwDOMxK7Zs6oF3S9", url: "https://github.com/acme/deevy/issues/42" };
 
+describe("where the App delivers", () => {
+  it("is pointed at deevy's address again, as the App, when that address moved", async () => {
+    // A laptop behind a tunnel gets a new hostname more often than it gets a
+    // new App: GitHub lets the App say where its one webhook goes.
+    const { module, asked } = githubReturning({
+      "PATCH /app/hook/config": {
+        url: "https://new-tunnel.example.net/hooks/sock_1",
+        content_type: "json",
+      },
+    });
+
+    await module.rewire?.("https://new-tunnel.example.net/hooks/sock_1");
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({
+      method: "PATCH",
+      body: { url: "https://new-tunnel.example.net/hooks/sock_1", content_type: "json" },
+    });
+    expect(asked[0]?.authorization).toMatch(/^Bearer eyJ/);
+  });
+});
+
 describe("how deevy authenticates", () => {
   it("asks as the App, then acts as the installation that covers the repository", async () => {
     const { tracker, asked } = githubReturning({

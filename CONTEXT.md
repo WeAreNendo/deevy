@@ -130,8 +130,8 @@ _Avoid_: uuid, guid, primary key (in prose)
 
 ### Retired
 
-Words v1 used that the Sockets plan removes. Old documents and, until the first slice lands, old code use
-them; new writing does not.
+Words v1 used that the Sockets milestone removed. Old documents — the plans and ADRs written before it —
+use them; code and new writing do not.
 
 - **Document** — the intent, spec and plan texts a State materialised. What an Agent proposes is a
   Proposal on a Gate; where a team keeps plans is theirs.

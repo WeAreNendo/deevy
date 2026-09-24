@@ -151,13 +151,22 @@ export const sockets = {
     path: "/sockets",
     auth: "admin",
     input: z.object({}),
-    output: z.object({ sockets: z.array(SocketSchema) }),
+    output: z.object({
+      // Each with where it delivers, which is not a secret and is the one thing
+      // an operator re-pastes when this deevy's address moves.
+      sockets: z.array(SocketSchema.extend({ inboundUrl: z.string() })),
+    }),
     handler: async ({ context }) => {
       const rows = await context.db.query.socket.findMany({
         where: { workspaceId: context.workspace.id, status: { ne: "removed" } },
         orderBy: { createdAt: "asc" },
       });
-      return { sockets: rows.map(socketOut) };
+      return {
+        sockets: rows.map((row) => ({
+          ...socketOut(row),
+          inboundUrl: inboundUrl(context, row.id),
+        })),
+      };
     },
   }),
 
@@ -215,6 +224,41 @@ export const sockets = {
         webhookSecret: null,
         state: await signState(requireInstanceSecret(context), row.id),
       };
+    },
+  }),
+
+  rewire: defineOperation({
+    name: "sockets.rewire",
+    summary: "Point a tool's own webhook at this deevy's address, after the address moved",
+    method: "POST",
+    path: "/sockets/{socketId}/rewire",
+    auth: "admin",
+    input: z.object({ socketId: z.string() }),
+    output: z.object({ inboundUrl: z.string() }),
+    handler: async ({ input, context }) => {
+      const socket = await requireSocket(context, input.socketId);
+      if (socket.workspaceId !== context.workspace.id) {
+        throw new ORPCError("NOT_FOUND", { message: "No such Socket" });
+      }
+      const module = await socketModuleFor(context, socket);
+      const url = inboundUrl(context, socket.id);
+      if (!module.rewire) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: `${socket.name} does not let deevy say where it delivers; paste ${url} into its webhook settings`,
+        });
+      }
+      await module.rewire(url);
+      await appendEvent(context, {
+        kind: "socket.updated",
+        subjectType: "socket",
+        subjectId: socket.id,
+        payload: {
+          provider: socket.provider,
+          name: socket.name,
+          summary: `Pointed its webhook at ${url}`,
+        },
+      });
+      return { inboundUrl: url };
     },
   }),
 

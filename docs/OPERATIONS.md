@@ -195,8 +195,7 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
    wrangler d1 execute deevy --remote --command "select name from sqlite_master where type='table' order by name"
    ```
 
-   The first lists every file in `packages/db/migrations` — twenty-four as of migration `0024` — asks to
-   confirm, and reports each as applied. The second then says there is nothing left to apply. The third lists deevy's tables plus
+   The first lists every file in `packages/db/migrations`, asks to confirm, and reports each as applied. The second then says there is nothing left to apply. The third lists deevy's tables plus
    wrangler's own `d1_migrations`. Applying twice is a no-op. Nothing here touches the local D1 that
    `vp run web#test:workers` uses; `--remote` is the whole difference.
 
@@ -260,7 +259,7 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
 9. **Sign in** at the `workers.dev` origin with the GitHub account whose email is `DEEVY_ADMIN_EMAIL`. The
    first sign-in creates the Workspace and makes you its admin, and nothing else ever creates a second one.
    Settings, Members lists exactly one Member — you, `admin`, `human`. Settings, Event log is the whole
-   Workspace log, newest first (an Issue's Activity is the same log read per Issue); it opens with
+   Workspace log, newest first (a record's page under Work is the same log read per record); it opens with
    `member.joined` over `workspace.created`, both with a null actor because deevy did the writing. The raw
    document is `GET /api/events`, which a signed-in browser can simply visit.
 
@@ -270,14 +269,6 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
   configuration for exactly this reason: `wrangler deploy` must not fail on a queue the account may not
   create. Without it a webhook goes out at the next Cron pass instead of the moment it is owed, and nothing
   else differs — see [Queues, when the account has them](#queues-when-the-account-has-them).
-- **Durable Objects are paid, and live Documents need one.** A room — one Document several Members type in
-  at once — is one Durable Object, so the `ROOMS` binding in `apps/web/wrangler.jsonc` is what makes
-  Documents live on this deployment. Unlike `JOBS` the binding is committed, because unlike a queue it is
-  what the feature _is_; a deploy on an account without Durable Objects fails on it, and the honest fix is
-  either the paid plan or removing the binding. Without it every Document still reads, writes and versions
-  exactly as it did before: `health.ping` answers `liveDocuments: false`, the SPA opens no socket, and a
-  write that would land on top of somebody else's is refused rather than merged
-  ([ADR-0021](./adr/0021-a-document-is-live-and-markdown-is-what-it-becomes.md)).
 - **A Cron Trigger comes round once a minute at the finest.** That is Cloudflare's floor, not deevy's, and it
   is why `DEEVY_SWEEP_INTERVAL_SECONDS` is a Node-only knob. A backlog drains twenty rows a minute.
 - **D1 caps the queries one invocation may run**, which is what bounds a live stream's life and what
@@ -300,38 +291,37 @@ beside `wrangler.jsonc`, so run `wrangler dev` from `apps/web` and let it find i
 `.gitignore` keeps the file itself out of the repository. Nothing on the Worker reads `process.env`; the
 bindings arrive with the request.
 
-| Variable                       | Node        | Workers                | Default                  | Without it                                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | ----------- | ---------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_URL`              | env         | secret                 | the request's origin     | Sign-in callbacks are wrong, the OAuth server is off, and Slack deliveries wait.                                                                                                                                                                                                                                          |
-| `BETTER_AUTH_SECRET`           | env         | secret                 | —                        | Better Auth falls back to a development key and says so; a Gate elicitation signed by one instance is then refused by the next. Changing it signs everyone out.                                                                                                                                                           |
-| `DEEVY_SECRET`                 | env         | secret                 | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume.            |
-| `DEEVY_GITHUB_API`             | env         | var                    | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                                       |
-| `DEEVY_SOCKET_CATCHUP_MINUTES` | env         | var                    | `30`                     | A connected tool that has said nothing for half an hour is asked what changed. Polling is what keeps an instance no tool can reach working, so lower it on a laptop and leave it alone on a public deployment.                                                                                                            |
-| `DEEVY_DEV_STUB_SOCKETS`       | env         | var                    | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker and a forge in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on. |
-| `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                    | `acme/deevy`             | That stub offers one container and no repository. `name[=cloneUrl]`, separated by commas, names what it holds. Read only when the flag above is set.                                                                                                                                                                      |
-| `GITHUB_CLIENT_ID`             | env         | secret                 | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                                        |
-| `GITHUB_CLIENT_SECRET`         | env         | secret                 | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
-| `GOOGLE_CLIENT_ID`             | env         | secret                 | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                                    |
-| `GOOGLE_CLIENT_SECRET`         | env         | secret                 | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
-| `GITLAB_CLIENT_ID`             | env         | secret                 | —                        | GitLab is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/gitlab`.                                                                                                                                    |
-| `GITLAB_CLIENT_SECRET`         | env         | secret                 | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
-| `GITLAB_ISSUER`                | env         | var                    | `https://gitlab.com`     | GitLab sign-in goes to gitlab.com. Set it to a self-hosted instance's origin; every GitLab endpoint deevy calls is built from it, and a GitLab Socket on that instance takes its accounts from sign-in.                                                                                                                   |
-| `DEEVY_OIDC_ISSUER`            | env         | var                    | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                                 |
-| `DEEVY_OIDC_CLIENT_ID`         | env         | secret                 | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                                    |
-| `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret                 | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
-| `DEEVY_OIDC_NAME`              | env         | var                    | `Single sign-on`         | The button says "Sign in with Single sign-on". Set it to what your teammates call the IdP.                                                                                                                                                                                                                                |
-| `DEEVY_ADMIN_EMAIL`            | env         | var                    | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                                      |
-| `DEEVY_WORKSPACE_NAME`         | env         | var                    | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                                      |
-| `DEEVY_WEB_ORIGIN`             | env         | var                    | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                                       |
-| `DEEVY_RUN_STALE_MINUTES`      | env         | var                    | 30                       | Nothing: 30 minutes of silence makes a Run `stale`, which its next Activity undoes.                                                                                                                                                                                                                                       |
-| `DEEVY_SWEEP_INTERVAL_SECONDS` | env         | — the Cron Trigger     | 60                       | Nothing: the sweep looks every minute. Node-only, because on Workers the schedule is `triggers.crons` in `apps/web/wrangler.jsonc`.                                                                                                                                                                                       |
-| `DEEVY_GATE_REMINDER_HOURS`    | env         | var                    | 4                        | Nothing: an undecided Gate asks its approvers again every four hours.                                                                                                                                                                                                                                                     |
-| `DEEVY_STREAM_SECONDS`         | — unbounded | var                    | 60                       | Nothing: a live stream on Workers ends after a minute and the browser resumes from the cursor it signed off with. Workers-only, because a Node process holds a connection for as long as the browser does.                                                                                                                |
-| `ROOMS`                        | —           | Durable Object binding | — the object             | Nothing on Node, which serves its own rooms on the port it already listens on. On Workers, a deployment without it has no live Documents: editors behave as they did before, and `health.ping` says so. Durable Objects are a paid feature.                                                                               |
-| `JOBS`                         | — the sweep | optional binding       | — no queue               | Nothing: a webhook delivery goes out at the next Cron pass instead of the moment it is owed. Workers-only, and absent from the committed `apps/web/wrangler.jsonc` because Queues are a paid feature.                                                                                                                     |
-| `DEEVY_DATABASE_PATH`          | env         | — the `DB` binding     | `/data/deevy.sqlite`     | Node writes to `./data/deevy.sqlite`. On Workers the rows are D1's and the path means nothing.                                                                                                                                                                                                                            |
-| `DEEVY_PORT`                   | env         | —                      | 3000                     | Node listens on 3000. Workers has no port: the platform routes to the Worker.                                                                                                                                                                                                                                             |
-| `DEEVY_WEB_DIST`               | env         | —                      | —                        | Node answers the API and serves no pages. On Workers the SPA is the asset handler's, not the app's.                                                                                                                                                                                                                       |
+| Variable                       | Node        | Workers            | Default                  | Without it                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ----------- | ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, the OAuth server is off, and Slack deliveries wait.                                                                                                                                                                                                                                          |
+| `BETTER_AUTH_SECRET`           | env         | secret             | —                        | Better Auth falls back to a development key and says so; a Gate elicitation signed by one instance is then refused by the next. Changing it signs everyone out.                                                                                                                                                           |
+| `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume.            |
+| `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                                       |
+| `DEEVY_SOCKET_CATCHUP_MINUTES` | env         | var                | `30`                     | A connected tool that has said nothing for half an hour is asked what changed. Polling is what keeps an instance no tool can reach working, so lower it on a laptop and leave it alone on a public deployment.                                                                                                            |
+| `DEEVY_DEV_STUB_SOCKETS`       | env         | var                | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker and a forge in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on. |
+| `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                | `acme/deevy`             | That stub offers one container and no repository. `name[=cloneUrl]`, separated by commas, names what it holds. Read only when the flag above is set.                                                                                                                                                                      |
+| `GITHUB_CLIENT_ID`             | env         | secret             | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                                        |
+| `GITHUB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `GOOGLE_CLIENT_ID`             | env         | secret             | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                                    |
+| `GOOGLE_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `GITLAB_CLIENT_ID`             | env         | secret             | —                        | GitLab is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/gitlab`.                                                                                                                                    |
+| `GITLAB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `GITLAB_ISSUER`                | env         | var                | `https://gitlab.com`     | GitLab sign-in goes to gitlab.com. Set it to a self-hosted instance's origin; every GitLab endpoint deevy calls is built from it, and a GitLab Socket on that instance takes its accounts from sign-in.                                                                                                                   |
+| `DEEVY_OIDC_ISSUER`            | env         | var                | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                                 |
+| `DEEVY_OIDC_CLIENT_ID`         | env         | secret             | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                                    |
+| `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `DEEVY_OIDC_NAME`              | env         | var                | `Single sign-on`         | The button says "Sign in with Single sign-on". Set it to what your teammates call the IdP.                                                                                                                                                                                                                                |
+| `DEEVY_ADMIN_EMAIL`            | env         | var                | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                                      |
+| `DEEVY_WORKSPACE_NAME`         | env         | var                | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                                      |
+| `DEEVY_WEB_ORIGIN`             | env         | var                | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                                       |
+| `DEEVY_RUN_STALE_MINUTES`      | env         | var                | 30                       | Nothing: 30 minutes of silence makes a Run `stale`, which its next Activity undoes.                                                                                                                                                                                                                                       |
+| `DEEVY_SWEEP_INTERVAL_SECONDS` | env         | — the Cron Trigger | 60                       | Nothing: the sweep looks every minute. Node-only, because on Workers the schedule is `triggers.crons` in `apps/web/wrangler.jsonc`.                                                                                                                                                                                       |
+| `DEEVY_GATE_REMINDER_HOURS`    | env         | var                | 4                        | Nothing: an undecided Gate asks its approvers again every four hours.                                                                                                                                                                                                                                                     |
+| `DEEVY_STREAM_SECONDS`         | — unbounded | var                | 60                       | Nothing: a live stream on Workers ends after a minute and the browser resumes from the cursor it signed off with. Workers-only, because a Node process holds a connection for as long as the browser does.                                                                                                                |
+| `JOBS`                         | — the sweep | optional binding   | — no queue               | Nothing: a webhook delivery goes out at the next Cron pass instead of the moment it is owed. Workers-only, and absent from the committed `apps/web/wrangler.jsonc` because Queues are a paid feature.                                                                                                                     |
+| `DEEVY_DATABASE_PATH`          | env         | — the `DB` binding | `/data/deevy.sqlite`     | Node writes to `./data/deevy.sqlite`. On Workers the rows are D1's and the path means nothing.                                                                                                                                                                                                                            |
+| `DEEVY_PORT`                   | env         | —                  | 3000                     | Node listens on 3000. Workers has no port: the platform routes to the Worker.                                                                                                                                                                                                                                             |
+| `DEEVY_WEB_DIST`               | env         | —                  | —                        | Node answers the API and serves no pages. On Workers the SPA is the asset handler's, not the app's.                                                                                                                                                                                                                       |
 
 The Worker serves the SPA, the API, the reference at `/api/docs`, the MCP challenge and, since M3 slice 5,
 signing in: `BETTER_AUTH_*`, `GITHUB_*`, `GOOGLE_*`, `GITLAB_*`, `DEEVY_OIDC_*`, `DEEVY_ADMIN_EMAIL` and
@@ -585,11 +575,12 @@ It is stateless, so any instance answers any request and nothing has to stick to
 unauthenticated request answers 401 naming its Protected Resource Metadata, which is how a client knows to
 start an OAuth flow rather than simply failing.
 
-An Agent can do less than a Human by construction: it can read and write Issues, Documents, comments, Labels
-and Links in the Projects it was granted, and drive its own Runs. It can never administer the Workspace,
-manage Members, or approve a Gate, and neither can anything holding a delegated credential — a Gate is decided
-by a Human signed in to deevy, in a browser (ADR-0004, ADR-0010). Which operations an Agent may call at all is
-default-deny, per operation (ADR-0011).
+An Agent can do less than a Human by construction: in the Projects it was granted it can read records and
+their conversation, open sub-issues and comment in the tracker through deevy, read a Project's documents, add
+Links, ask at a Checkpoint, open a pull request, and drive its own Runs. It can never administer the Workspace,
+manage Members, or rule on a Gate, and neither can anything holding a delegated credential — a Gate is decided
+by a Human, in deevy's browser or from a tool that vouches for them (ADR-0004, ADR-0010, ADR-0025). Which
+operations an Agent may call at all is default-deny, per operation (ADR-0011).
 
 [agent-loop.md](./agent-loop.md) is a worked example of the runtime on the other side: the MCP configuration a
 Claude Code loop needs, the instructions that tell it how to work an Issue, and what the Human does at the
@@ -816,92 +807,110 @@ the instance is given an origin sends them.
 
 ## Gates, and how many Humans they ask for
 
-A Gate is a State an Issue cannot leave without a Human's approval, and by default one approval from any
-Human of the Workspace opens it. Two settings on each Gate, in the Project's Workflow editor, change that
+A Gate is a Run's request to go past a Checkpoint: the Agent asks with `gates_request`, naming the Checkpoint
+and attaching a Proposal in markdown, and the Run waits — as long as it takes, since a Run waiting on a Human
+never goes stale — until Humans rule. What each Checkpoint asks for is the Project's policy, under **Settings ›
+Projects › Checkpoints**
 ([ADR-0020](./adr/0020-a-gate-may-want-more-than-one-human-and-may-exclude-the-one-who-asked.md)):
 
-| Setting                                            | Default | What it does                                                                           |
-| -------------------------------------------------- | ------- | -------------------------------------------------------------------------------------- |
-| **Humans who must agree**                          | 1       | The Issue stays in the Gate until that many _distinct_ Humans have approved this visit |
-| **Whoever brings an Issue here cannot approve it** | off     | The Human who moved the Issue into the Gate is refused their own approval              |
-| **Approvers**                                      | empty   | Names who may rule at all; empty means any Human                                       |
+| Setting                           | Default      | What it does                                                        |
+| --------------------------------- | ------------ | ------------------------------------------------------------------- |
+| **Approvals**                     | 1            | The Gate stays open until that many _distinct_ Humans have approved |
+| **Not the Human the work is for** | off          | The Human the Run is for is refused their own approval              |
+| **Who may rule**                  | nobody named | Names who may rule at all; nobody named means any Human             |
 
-**The defaults leave every Workflow exactly as it was**, including a Workspace of one Human, which is what an
-upgrade to this version does to an instance that changes nothing.
+A Checkpoint an Agent names and the policy does not list gets the defaults: one approval, from any Human.
+**The Human the work is for** is whoever started the Run where that was a Human, and the Agent's Sponsor where
+routing started it — the Human accountable for what the Agent is about to do.
 
 What is worth knowing before turning either on:
 
-- **One rejection ends it, whatever the threshold**, and the Human who brought the Issue may still reject it.
-  Consensus is for letting work through; one reason to stop is enough.
-- **Approvals count for one visit to the Gate.** Entering the State starts a visit and so does every
-  rejection — including a rejection in the first State of a Workflow, which has nowhere to send the Issue and
-  leaves it where it is. Approvals given before a rejection are spent.
-- **Excluding the requester costs a Human from every count.** Which Human it will be is not known until there
-  is an Issue, but that one of them will be is, so saving the Workflow refuses a threshold that could not be
-  met once they are left out. **A Workspace with one Human cannot exclude the requester at all** — every Gate
-  would be a dead end — and a Gate asking two approvals with the exclusion on needs three Humans.
-- **Suspending a Member can strand an Issue.** Configuration-time checking cannot prevent it: a Gate wanting
-  two approvals in a Workspace of two is fine until one of them is suspended. The Issue says so where the
-  approve button would be, naming both numbers, and the fix is an admin's — lower the Gate's threshold in the
-  Workflow, or reinstate the Member. deevy does not quietly lower it for you.
-- **An Agent still never approves anything** (ADR-0004), whatever these are set to, and neither does a
-  Human's delegated credential (ADR-0010). A Gate that names approvers may only name Humans.
+- **One rejection ends it, whatever the threshold**, and the Human the work is for may still reject. Consensus
+  is for letting work through; one reason to stop is enough. Asking again after a rejection is a new Gate,
+  one visit later, and the approvals before it are spent.
+- **A changed Proposal is a new question.** Asking again with the same words is the same Gate; asking with
+  different ones supersedes it, and any approvals on the old one do not carry over.
+- **Excluding the Human the work is for costs a Human from every count.** Saving the policy refuses a
+  threshold that could not be met once they are left out: **a Workspace with one Human cannot turn it on at
+  all**, and a Checkpoint wanting two approvals with it on needs three Humans.
+- **Suspending a Member can strand a Gate.** Checking the policy when it is saved cannot prevent it: two
+  approvals in a Workspace of two is fine until one of them is suspended. The Gate says so where the approve
+  button would be, naming both numbers, and the fix is an admin's — lower the threshold, or reinstate the
+  Member. deevy does not quietly lower it for you.
+- **An Agent still never rules** (ADR-0004), whatever these are set to, and neither does a Human's delegated
+  credential (ADR-0010). A policy that names who may rule may only name Humans.
 
 A Gate short of its threshold appends a `gate.approval` Event carrying how many approvals are still wanted;
-`gate.approved` is appended only when the last one lands and the Issue actually leaves. Webhook subscribers
-receive the new kind, and anything switching on kinds ignores it.
+`gate.approved` is appended only when the last one lands, and the Run resumes with `run.answered`. A Human
+who has not ruled on a Gate waiting on them is reminded after `DEEVY_GATE_REMINDER_HOURS`.
 
-## Ruling from the tracker
+## Connecting your tools
 
-A Human can approve or reject a Gate by commenting `/approve` or `/reject <why>` on the record in the tracker,
-where deevy's own comment asked for the ruling
-([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)). It is the same Ruling as the button
-in deevy — the same Checkpoint policy, the same refusals in the same words — recorded with where it came from.
+A Socket is one tool deevy is connected to, under one identity of its own — a GitHub App, a Linear
+application, a GitLab user, a Notion integration, a Slack app — and every Agent works through it
+([ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)). Connect one under **Settings ›
+Sockets**; a Project is then a binding to what is in it, under **Settings › Projects**. Each Socket's
+credential is sealed under `DEEVY_SECRET`, so an instance without one can connect nothing that holds a
+credential.
 
-It counts only when deevy can prove which Member wrote the comment, and deevy never matches a login: those are
-renamed and reused. What it matches is the tool's own account id, against one of:
+| Tool   | What deevy uses it for                                  | What you register there, and paste into deevy                              |
+| ------ | ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| GitHub | records (issues), and code (a repository to push to)    | a GitHub App deevy writes the manifest for, installed on your repositories |
+| Linear | records                                                 | an OAuth application with client credentials and a webhook                 |
+| GitLab | records, and code                                       | an access token for the user deevy acts as, and a webhook on each project  |
+| Notion | records (a database's rows), and a Project's documents  | an internal integration's secret, and a webhook subscription               |
+| Slack  | Gates in a room or a direct message, ruled with buttons | an app from deevy's manifest                                               |
 
-- **The account the Human signs in to deevy with.** A Human who signs in with GitHub rules from github.com with
-  no further step. A GitHub Enterprise Server's accounts are not github.com's and are not matched this way.
-- **An account they linked** under **Settings › Identities**, from a signed-in session — how a Human who signs
-  in with Google rules from GitHub. The linked account may carry a different address from theirs; that link is
-  the only place deevy accepts one.
-- **The address the tool reports**, matched to one a Member has verified — only on a Socket where an admin
-  turned it on (`sockets.update` with `identityByEmail`), because it is a weaker proof. It is meant for a tool
-  with nothing better to offer, and every Ruling it makes says "(email)" wherever it is shown.
+### Where a tool delivers
 
-A comment by an account deevy cannot place rules nothing, and deevy says so on the record with a link to
-Settings › Identities; so does a comment the Checkpoint refuses, and one on a record with nothing waiting. A
-comment by a bot — deevy's own included — rules nothing and is not answered. A Human who unlinks an account
-under Settings › Identities stays unlinked: nothing links it again until they do. Every link and every refusal
-is in the Event log (`identity.linked`, `identity.revoked`, `gate.ruling_refused`).
+A tool tells deevy what happened by posting to the Socket's own address, `<BETTER_AUTH_URL>/hooks/<socket>`,
+which the Socket's page shows under **Where it delivers**. That address has to be one the tool can reach:
+public, and HTTPS. A deployed instance has one. **A laptop does not**, and needs a tunnel — Cloudflare Tunnel,
+ngrok, or anything that gives the laptop's port a public HTTPS name — with `BETTER_AUTH_URL` set to that name.
+A **named tunnel**, whose hostname stays the same from one start to the next, is worth the few minutes it takes
+over a quick one that is given a new hostname every time, because every tool's webhook is registered against
+the hostname.
 
-## Ruling from Slack
+When the address does change, every registered webhook points at the old one. A GitHub App's can be pointed
+at the new one from deevy — **Point GitHub at this address** on the Socket's page, or `sockets.rewire` —
+because GitHub lets an App say where its own webhook goes. The others keep their webhook in their own
+settings, and the address is pasted there again.
 
-A Slack app is a Socket too: connect it under **Settings › Sockets › Connect Slack**. deevy starts the Socket
-first and shows the app manifest (`docs/slack-manifest.yaml`) with this instance's own request URL in it, so
-creating the app in Slack — Create New App → From an app manifest — is one trip. Install it to the
-workspace, then paste the **Bot User OAuth Token** and the **Signing Secret** back into deevy. The URL must
-be one Slack can reach; an instance with no public address can post to Slack but hears no clicks.
+**Polling is why none of this is required to try deevy.** A Socket that has said nothing for
+`DEEVY_SOCKET_CATCHUP_MINUTES` (half an hour) is asked what changed in each Project bound to it, one Project a
+pass, and a Socket connected with `pollMinutes` is asked on that schedule whether it has spoken or not. So a
+laptop with no tunnel still sees records arrive, change and close, and routes them to Agents — a little late.
+What polling cannot bring is what only a delivery carries: a comment, and so a `/approve` in one, and a
+click on a Slack button. Those need the public address.
 
-Then, under **Settings › Channels**, add a room in the app (its Slack channel ID, after `/invite @deevy`
-there) and route `Gate awaiting` to it. A Gate arrives with **Approve** and **Reject**; Reject asks why first.
-The message is changed when anybody rules — in Slack, in deevy or in the tracker — through the same outbox
-as everything else, so a click is answered at once and the message a moment later. A Human whose Slack
-account is linked is also told by direct message, unless they turned that off under **Settings ›
-Notifications**. The incoming-webhook Channel is still there for a room with no app: it posts a link and
-takes no click.
+### Working in GitHub
 
-A click counts only for a Slack account linked to a Member, and Slack's accounts are not a sign-in's, so
-linking is its own step: an unlinked click, or `/deevy link`, gets a code only that person sees, which they
-enter under **Settings › Identities** within ten minutes. deevy names the account before linking it,
-because a code handed over by somebody else would link _their_ account. Codes are kept only as a hash.
+A GitHub App is a Socket, for a Project's issues and its code at once: connect it under **Settings › Sockets ›
+Connect GitHub**. **Create the App on GitHub** posts a manifest deevy writes — the Socket's own webhook
+address, and exactly the permissions it needs: issues (read and write), contents and pull requests (write),
+metadata (read) — so GitHub makes the App and hands its credentials back without anybody copying a private key
+out of a browser. Install it on the repositories deevy should work, from the page GitHub then shows; each
+installation is written on the Socket. **Paste an App you already have** is the other way in, for an
+organisation that makes its Apps centrally: its id, its private key (PKCS#1 as GitHub gives it, or PKCS#8)
+and its webhook secret.
 
-Slack signs every request with a timestamp, and one older than five minutes is refused however it is signed.
-Slack's signing secret is rotated in Slack; paste the new one with `sockets.update` (`webhookSecret`) and
-deevy keeps taking the old one for a day, so the two can be changed in either order.
+Bind a Project to a repository under **Settings › Projects**, as its tracker and its repository — they are
+usually the same. A label `agent:<handle>` routes an issue to that Agent. GitHub cannot assign an App, so the
+label and the Project's default Agent are how "give this to deevy" is said there. deevy writes its own
+`deevy:awaiting-approval` label the first time it needs it, and an Agent's sub-issues are GitHub's own.
 
-## Working in Linear
+**The code.** A Run clones with an installation token GitHub mints for that one repository, which lives an
+hour and never leaves the runtime's supervisor; a Run resumed after a Gate is given a fresh one. deevy opens
+the pull request through the App, saying `Closes <issue URL>` — so merging it closes the issue on GitHub — and
+naming the Run.
+
+**Ruling from GitHub** needs no linking step for a Human who signs in to deevy with GitHub: github.com's
+accounts are the ones deevy signs people in with ([Ruling from the tracker](#ruling-from-the-tracker)). A
+GitHub Enterprise Server is the same module with `DEEVY_GITHUB_API` (or the Socket's own API address) pointing
+at its API root, and shares nothing with sign-in: its Humans link their accounts under **Settings ›
+Identities**.
+
+### Working in Linear
 
 A Linear workspace is a Socket: connect it under **Settings › Sockets › Connect Linear**. deevy acts in Linear
 as an OAuth application of your own, so the first step is making one, and deevy starts the Socket before you
@@ -943,7 +952,7 @@ deevy reads which account and which workspace said yes, and gives the token back
 another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
 deevy minted with the old one; connect the Socket again with the new one.
 
-## Working in GitLab
+### Working in GitLab
 
 A GitLab instance is a Socket, for a Project's issues and its code at once: connect it under **Settings ›
 Sockets › Connect GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
@@ -981,7 +990,7 @@ rules with no linking step, and one who signs in otherwise links GitLab under **
 Socket on any other GitLab shares nothing with sign-in. A comment by a project or group access token's bot
 rules nothing. When the token expires, connect the Socket again with a new one.
 
-## Working in Notion
+### Working in Notion
 
 A Notion workspace is a Socket, for a Project's records and for its documents: connect it under **Settings ›
 Sockets › Connect Notion**. deevy acts in Notion as an internal integration of your own:
@@ -1021,11 +1030,61 @@ for its author. It counts only on a Socket where an admin turned on **Take a ver
 the Socket's page, only against an address a Member verified in deevy, and every Ruling it makes says
 "(email)" wherever it is shown ([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)).
 
+### Working in Slack
+
+A Slack app is a Socket too: connect it under **Settings › Sockets › Connect Slack**. deevy starts the Socket
+first and shows the app manifest (`docs/slack-manifest.yaml`) with this instance's own request URL in it, so
+creating the app in Slack — Create New App → From an app manifest — is one trip. Install it to the
+workspace, then paste the **Bot User OAuth Token** and the **Signing Secret** back into deevy. The URL must
+be one Slack can reach; an instance with no public address can post to Slack but hears no clicks.
+
+Then, under **Settings › Channels**, add a room in the app (its Slack channel ID, after `/invite @deevy`
+there) and route `Gate awaiting` to it. A Gate arrives with **Approve** and **Reject**; Reject asks why first.
+The message is changed when anybody rules — in Slack, in deevy or in the tracker — through the same outbox
+as everything else, so a click is answered at once and the message a moment later. A Human whose Slack
+account is linked is also told by direct message, unless they turned that off under **Settings ›
+Notifications**. The incoming-webhook Channel is still there for a room with no app: it posts a link and
+takes no click.
+
+A click counts only for a Slack account linked to a Member, and Slack's accounts are not a sign-in's, so
+linking is its own step: an unlinked click, or `/deevy link`, gets a code only that person sees, which they
+enter under **Settings › Identities** within ten minutes. deevy names the account before linking it,
+because a code handed over by somebody else would link _their_ account. Codes are kept only as a hash.
+
+Slack signs every request with a timestamp, and one older than five minutes is refused however it is signed.
+Slack's signing secret is rotated in Slack; paste the new one with `sockets.update` (`webhookSecret`) and
+deevy keeps taking the old one for a day, so the two can be changed in either order.
+
+## Ruling from the tracker
+
+A Human can approve or reject a Gate by commenting `/approve` or `/reject <why>` on the record in the tracker,
+where deevy's own comment asked for the ruling
+([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)). It is the same Ruling as the button
+in deevy — the same Checkpoint policy, the same refusals in the same words — recorded with where it came from.
+
+It counts only when deevy can prove which Member wrote the comment, and deevy never matches a login: those are
+renamed and reused. What it matches is the tool's own account id, against one of:
+
+- **The account the Human signs in to deevy with.** A Human who signs in with GitHub rules from github.com with
+  no further step. A GitHub Enterprise Server's accounts are not github.com's and are not matched this way.
+- **An account they linked** under **Settings › Identities**, from a signed-in session — how a Human who signs
+  in with Google rules from GitHub. The linked account may carry a different address from theirs; that link is
+  the only place deevy accepts one.
+- **The address the tool reports**, matched to one a Member has verified — only on a Socket where an admin
+  turned it on (`sockets.update` with `identityByEmail`), because it is a weaker proof. It is meant for a tool
+  with nothing better to offer, and every Ruling it makes says "(email)" wherever it is shown.
+
+A comment by an account deevy cannot place rules nothing, and deevy says so on the record with a link to
+Settings › Identities; so does a comment the Checkpoint refuses, and one on a record with nothing waiting. A
+comment by a bot — deevy's own included — rules nothing and is not answered. A Human who unlinks an account
+under Settings › Identities stays unlinked: nothing links it again until they do. Every link and every refusal
+is in the Event log (`identity.linked`, `identity.revoked`, `gate.ruling_refused`).
+
 ## How far an Agent may split work up
 
-An Agent can open sub-issues and hand them to other Agents
-([ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md)). Left alone, an Agent that decides a
-task has forty parts will open forty Issues, each of which opens a Run. Three numbers on the Workspace decide
+An Agent can open sub-issues — records in the team's own tracker, under the one it is working — and hand them
+to other Agents ([ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md)). Left alone, an Agent
+that decides a task has forty parts will open forty records, each of which opens a Run. Three numbers on the Workspace decide
 how far it may go, under **Settings › Workspace**:
 
 | Setting              | Default | What it does                                              |
@@ -1064,9 +1123,12 @@ to. Point it at a Docker instance or at a `workers.dev` origin and the only thin
    another from the Agent's own page if you lose it; deevy keeps only a hash.
 2. **Grant it the Projects it should work in.** An Agent starts with none, and one it was not granted does
    not exist to it.
-3. **Give it somewhere to work**, if it should write code: `DEEVY_AGENT_REPO` and a `DEEVY_AGENT_GIT_TOKEN`
-   scoped to that one repository, with permission to push a branch and open a pull request and nothing else.
-   Leave both unset and the runtime works Documents, Gates and Runs only.
+3. **Bind the Project to where its code is**, if it should write code: a forge Socket — GitHub or GitLab —
+   under **Settings › Projects**. deevy then answers every Run with the repository, the branch to cut and a
+   credential for it, and opens the pull request itself. The runtime needs nothing for this.
+   `DEEVY_AGENT_REPO`, `DEEVY_AGENT_GIT_TOKEN` and `DEEVY_AGENT_BASE_BRANCH` are one override, taken together,
+   for a repository deevy has no Socket for; leave all three unset otherwise. With neither, a Run reads,
+   narrates, asks at Checkpoints and finishes, and writes no code.
 4. **Run it.** `docker compose --profile agent up -d`, or the image directly. The image carries one
    coding-agent CLI, chosen at build time; `claude-code` is the default and `opencode`, `cursor` and
    `copilot` are the others ([docs/harnesses.md](./harnesses.md)):
@@ -1085,8 +1147,8 @@ docker build -f apps/agent/Dockerfile --build-arg HARNESS=claude-code -t deevy-a
 `runs.list` with no arguments is its queue: for an Agent that means its own Runs, `pending` being work to do.
 Its inbox is the other way in, and the two together are the polling fallback ADR-0003 promises an Agent with
 no webhook URL. It takes up one Run at a time, gives the session a working directory, and lets the model read
-the Issue and its Documents, write the Document the State asks for, narrate through `runs_post_activity`, and
-stop at a Gate.
+the record and its conversation (and any page of the Project's documents it links, through `docs_get`),
+narrate through `runs_post_activity`, and stop at the Checkpoints its Project lists.
 
 A Run stopped at a Gate is not the runtime's any more. deevy moves it back to `active` the moment a Human
 rules and tells the Agent so, and that Notification is what hands it back — so the runtime never polls a Gate
@@ -1099,10 +1161,11 @@ it `stale` half an hour later.
 
 ### What it produces
 
-A Run that changed files gets a branch named after the attempt, a commit, a push, and a pull request. The
-pull request's URL becomes a Link on the Issue carrying the Run's id, which is what makes "this pull request
-came from that attempt" a fact rather than a coincidence, and a comment on the Issue names both. Nothing is
-ever pushed to the base branch. A Run that changed nothing attaches nothing.
+A Run that changed files gets a branch named after the attempt, a commit, a push, and a pull request that
+deevy opens through the forge Socket, saying `Closes <record URL>` and naming the Run. The pull request's URL
+becomes a Link on the record carrying the Run's id, which is what makes "this pull request came from that
+attempt" a fact rather than a coincidence. Nothing is ever pushed to the base branch. A Run that changed
+nothing attaches nothing.
 
 ### Its configuration
 
@@ -1136,9 +1199,9 @@ other, and the runtime refuses to start when a harness's required one is missing
 
 ### What is bounded, and what is not
 
-**Issue text is untrusted input.** Descriptions, Documents, comments and other Agents' Activities are written
-by anyone with access to the Project, and all of it reaches a session that — with a repository configured —
-holds a shell. No prompt makes that safe. What bounds it is structural, and it is worth knowing exactly what
+**A record's text is untrusted input.** Its body, its comments, the pages of a Project's documents and other
+Agents' Activities are written by anyone who can write in the team's tools, and all of it reaches a session
+that — with a repository bound — holds a shell. No prompt makes that safe. What bounds it is structural, and it is worth knowing exactly what
 each part does:
 
 - **The session is its own user, and that is the boundary.** The supervisor runs as root in the container so
@@ -1162,17 +1225,18 @@ each part does:
   needs in `DEEVY_AGENT_PASS_ENV`. The Agent's own key is the sharpest case — a shell plus that key is every
   operation the Agent may call, over `curl`, including the ones deliberately left out of the tool list — and
   the session never holds it at all: it reaches deevy through a loopback proxy the runtime opens for each
-  Run, which adds the key on the way out, offers only the twelve tools the runtime grants, and refuses any
+  Run, which adds the key on the way out, offers only the fourteen tools the runtime grants, and refuses any
   other tool before deevy hears of it. A refusal is written into the Run's feed as an error Activity. A shell
-  that finds the proxy's port gets those twelve tools and nothing else, which is the allowlist and not a hole.
+  that finds the proxy's port gets the tools the runtime grants and nothing else, which is the allowlist and not a hole.
 - **The credential is the supervisor's, and the session runs git anyway.** `origin` in the clone is a
   loopback address: the supervisor serves the remote there and adds the token on the way out, so the session
   branches, commits and pushes as it likes while its checkout holds no credential and its `.git/config` has
   nothing to find. **Where an Agent can push is the scope of the token you issue and whatever your forge
   protects, and nothing else.** The runtime does not restrict it: `git push`, `git remote`, `git config` and
   `gh` are not denied, and an Agent can move the base branch, force-push included, with no Gate in the way —
-  a Gate governs the State an Issue is in, not a ref (ADR-0019). Give it a token scoped to one repository,
-  protect the branches that matter, and read the Run's feed: every ref a Run moved is an Activity naming the
+  a Gate governs whether a Run goes past a Checkpoint, not a ref (ADR-0019). Keep what it can reach small —
+  a GitHub App installed on the repositories it works, a GitLab user who is a Developer on them and nothing
+  more — protect the branches that matter, and read the Run's feed: every ref a Run moved is an Activity naming the
   branch, both commits, and whether history was rewritten.
 - **A Gate is the last line.** An Agent can never approve one (ADR-0004), so nothing an agent proposes ships
   without a Human deciding it did.
@@ -1202,14 +1266,14 @@ and that is what each paragraph below says, in the words its recipe ships (`boun
 
 Nothing here is measured, and these are the knobs that move the bill rather than numbers to plan against.
 
-| Knob                              | Which way                                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `DEEVY_AGENT_MODEL`               | The largest single lever.                                                                              |
-| `DEEVY_AGENT_EFFORT`              | Thinking depth per session. `xhigh` suits code work; `low` suits a runtime that only writes Documents. |
-| `DEEVY_AGENT_RUN_TIMEOUT_SECONDS` | The ceiling on one Run. A session stopped at the timeout has still spent what it spent.                |
-| `DEEVY_AGENT_REPO`                | A repository means file and shell tools, which means longer sessions.                                  |
-| `CURSOR_API_KEY`                  | `cursor`                                                                                               | —   | The runtime refuses to start. Cursor's API key, from cursor.com; the desktop app's login is not shared with the CLI. |
-| `DEEVY_AGENT_POLL_SECONDS`        | Costs deevy requests, not tokens. A poll that finds nothing spends nothing.                            |
+| Knob                              | Which way                                                                                             |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `DEEVY_AGENT_MODEL`               | The largest single lever.                                                                             |
+| `DEEVY_AGENT_EFFORT`              | Thinking depth per session. `xhigh` suits code work; `low` suits a runtime that only reads and plans. |
+| `DEEVY_AGENT_RUN_TIMEOUT_SECONDS` | The ceiling on one Run. A session stopped at the timeout has still spent what it spent.               |
+| `DEEVY_AGENT_REPO`                | A repository means file and shell tools, which means longer sessions.                                 |
+| `CURSOR_API_KEY`                  | `cursor`                                                                                              | —   | The runtime refuses to start. Cursor's API key, from cursor.com; the desktop app's login is not shared with the CLI. |
+| `DEEVY_AGENT_POLL_SECONDS`        | Costs deevy requests, not tokens. A poll that finds nothing spends nothing.                           |
 
 Runs are triggered by assignment, mention, a workflow rule, or an Agent's schedule. A schedule on an Agent is
 the one that can spend money while nobody is watching.
@@ -1222,8 +1286,15 @@ writes `-wal` and `-shm` alongside it.
 
 deevy runs as uid 65532 and `/data` must belong to it. A **named volume created fresh** takes its ownership
 from the image and needs nothing. A **host directory** does not: `chown -R 65532:65532` it before the first
-start, or deevy will be able to read it and not write it. So will a volume written by a release before
-v0.8.0, which ran as root — see [Upgrading](#upgrading).
+start, or deevy will be able to read it and not write it. Nor will a volume something else wrote as root;
+give it to deevy once, with the container stopped:
+
+```bash
+docker run --rm -v deevy-data:/data alpine chown -R 65532:65532 /data
+```
+
+deevy checks that it can write `/data` before it opens the database, and names that command when it cannot,
+rather than starting and failing at the first write.
 
 ## The schema, on either runtime
 
@@ -1259,41 +1330,30 @@ repository — step 3 of [Deploying to a free account](#deploying-to-a-free-acco
 
 ## Upgrading
 
+Within a major version, pull the new image and start it on the same volume; the Node migrator applies what is
+new at startup. On Workers, run `wrangler d1 migrations apply deevy --remote` **before** deploying the new
+Worker, so the code never runs ahead of its schema.
+
 ```bash
-docker pull ghcr.io/wearenendo/deevy:v0.8.0
+docker pull ghcr.io/wearenendo/deevy:<version>
 docker stop deevy && docker rm deevy
-docker run -d --name deevy ... ghcr.io/wearenendo/deevy:v0.8.0   # same -v deevy-data:/data
+docker run -d --name deevy ... ghcr.io/wearenendo/deevy:<version>   # same -v deevy-data:/data
 ```
-
-### Coming from a release before v0.8.0
-
-Those images ran as root, so everything on the volume belongs to root; v0.8.0 runs as uid 65532. Give it the
-volume once, with the container stopped:
-
-```bash
-docker run --rm -v deevy-data:/data alpine chown -R 65532:65532 /data
-```
-
-If you forget, deevy says so and stops: it checks that it can write `/data` before it opens the database,
-and names that exact command in the error. It does not start and then fail later, which is what it would do
-if it only found out at the first write — the migrations are already applied and nothing else writes at
-startup, so a root-owned volume would otherwise carry it all the way to `healthy`. The command is
-idempotent; run it if you are unsure.
-
-Releases up to v0.7.0 were published under `ghcr.io/mattallty/deevy`, deevy's home before it moved to the
-WeAreNendo organisation; v0.8.0 is the first one published under the new one. Those old tags stay where they
-are and nothing newer lands beside them, so an install still pulling from there is pinned to v0.7.0 until its
-image path changes.
 
 Take a backup first (below). Migrations only ever move forward: there is no down migration, so restoring a
 backup is how you go back.
 
-**From an image built on Better Auth 1.7.0 to 1.7.2**, which is every tag before the pin moved to 1.7.3 on
-2026-09-06: migration `0024` drops the `account.issuer` column and its unique index, which 1.7.3 no longer
-writes (its release restored the 1.6 account schema). The Node migrator applies it at startup like any other.
-On Workers, run `wrangler d1 migrations apply deevy --remote` **before** deploying the new Worker: while the
-`NOT NULL` column is still there, 1.7.3 refuses every new sign-up and every account link, and existing
-sessions carry on as if nothing were wrong.
+### Coming from 0.x: start again
+
+The release that made deevy glue between your tools rather than a tracker of its own is a clean break
+([ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)). Its migration history starts
+afresh, so it runs on an **empty** database — a new volume, or a new D1 database on Workers — and there is no
+upgrade path from 0.8 or anything before it. Nothing is exported: the Issues, Documents and comments a 0.x
+instance kept stay in its volume, which a backup keeps for as long as you want them. Connect your tools, bind
+your Projects, and create your Agents again; their records arrive from the tools themselves.
+
+Releases up to v0.7.0 were published under `ghcr.io/mattallty/deevy`, deevy's home before it moved to the
+WeAreNendo organisation, and nothing newer lands there.
 
 ## Backup and restore
 

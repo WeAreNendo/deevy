@@ -6492,6 +6492,9 @@
                           },
                           "hasWebhookSecret": {
                             "type": "boolean"
+                          },
+                          "inboundUrl": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -6511,7 +6514,8 @@
                           "createdAt",
                           "updatedAt",
                           "hasCredentials",
-                          "hasWebhookSecret"
+                          "hasWebhookSecret",
+                          "inboundUrl"
                         ],
                         "additionalProperties": false
                       }
@@ -7029,6 +7033,53 @@
                     "setupUrl",
                     "accountCallbackUrl",
                     "state"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sockets/{socketId}/rewire": {
+      "post": {
+        "operationId": "sockets.rewire",
+        "summary": "Point a tool's own webhook at this deevy's address, after the address moved",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "inboundUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "inboundUrl"
                   ],
                   "additionalProperties": false
                 }

@@ -16,6 +16,7 @@ const calls = vi.hoisted(() => ({
   update: vi.fn(async (_input: Record<string, unknown>) => ({})),
   remove: vi.fn(async (_input: { socketId: string }) => ({})),
   install: vi.fn(async (_input: { socketId: string }) => ({})),
+  rewire: vi.fn(async (_input: { socketId: string }) => ({})),
   left: [] as string[],
 }));
 
@@ -87,6 +88,10 @@ vi.mock("../src/lib/orpc.ts", async () => {
       remove: async (input: { socketId: string }) => {
         void calls.remove(input);
         return { ...stubSocket, status: "removed" };
+      },
+      rewire: async (input: { socketId: string }) => {
+        void calls.rewire(input);
+        return { inboundUrl: "https://deevy.test/hooks/sock_stub00000" };
       },
       handshake: async () => ({
         token: "secret_notion-verification-token-for-tests",
@@ -389,6 +394,44 @@ describe("connecting Linear", () => {
 });
 
 describe("one Socket's own page", () => {
+  it("says where the tool delivers, and points a GitHub App there again when the address moved", async () => {
+    calls.rewire.mockClear();
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "github",
+        name: "acme on GitHub",
+        inboundUrl: "https://deevy.test/hooks/sock_stub00000",
+      },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const delivers = await screen.findByRole("region", { name: "Where it delivers" });
+    expect(within(delivers).getByText("https://deevy.test/hooks/sock_stub00000")).toBeTruthy();
+    fireEvent.click(within(delivers).getByRole("button", { name: "Point GitHub at this address" }));
+
+    await waitFor(() => expect(calls.rewire).toHaveBeenCalledTimes(1));
+    expect(calls.rewire.mock.calls[0]?.[0]).toEqual({ socketId: stubSocket.id });
+    expect(await within(delivers).findByText(/GitHub delivers here now/)).toBeTruthy();
+  });
+
+  it("leaves the address for an admin to paste where the tool keeps it itself", async () => {
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "linear",
+        name: "Acme on Linear",
+        inboundUrl: "https://deevy.test/hooks/sock_stub00000",
+      },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const delivers = await screen.findByRole("region", { name: "Where it delivers" });
+
+    expect(within(delivers).queryByRole("button", { name: /Point/ })).toBeNull();
+    expect(within(delivers).getByText(/paste it into/i)).toBeTruthy();
+  });
+
   it("shows the token Notion sent, to paste back, until a delivery proves it", async () => {
     calls.update.mockClear();
     state.sockets = [

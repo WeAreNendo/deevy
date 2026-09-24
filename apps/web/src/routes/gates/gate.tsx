@@ -6,6 +6,7 @@ import { MemberChip } from "@/components/member-chip";
 import { PageHeader } from "@/components/page-header";
 import { RunStatus, type RunStatusValue } from "@/components/run-status";
 import { RailHeading } from "@/components/rail-heading";
+import { plainLine } from "@/lib/plain-text";
 import { NotFoundPage } from "@/routes/not-found";
 import { Badge } from "@/components/ui/badge";
 import { orpc } from "@/lib/orpc";
@@ -81,7 +82,7 @@ export function GatePage({ requestId, focused = true }: { requestId: string; foc
         }
       />
 
-      <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
         <div className="flex min-w-0 flex-col gap-6">
           <section aria-label="Proposal" className="flex flex-col gap-2">
             <Markdown>{found.proposal}</Markdown>
@@ -111,7 +112,7 @@ export function GatePage({ requestId, focused = true }: { requestId: string; foc
 
         {/* The rail: the ruling first, then what was already said, then the
             Run that stopped here — the order a Human reads them in. */}
-        <div className="flex flex-col gap-6 @3xl:-order-none -order-1">
+        <div className="flex flex-col gap-6 -order-1 @3xl:order-none">
           <GateControls gate={found} focused={focused && found.status === "open"} />
 
           <section className="flex flex-col gap-2">
@@ -172,7 +173,7 @@ export function GatePage({ requestId, focused = true }: { requestId: string; foc
               >
                 {run.data.activities.slice(-6).map((activity) => (
                   <li key={activity.id} data-kind={activity.kind} className="truncate">
-                    {activity.body}
+                    {plainLine(activity.body)}
                   </li>
                 ))}
               </ol>
