@@ -56,6 +56,8 @@ export interface WorkerBindings {
   /** What a Socket's credentials are sealed with (`wrangler secret put`). */
   DEEVY_SECRET?: string;
   DEEVY_SOCKET_CATCHUP_MINUTES?: string;
+  /** GitHub's REST root for a Socket that names none (GitHub Enterprise Server). */
+  DEEVY_GITHUB_API?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
@@ -93,6 +95,8 @@ export interface WorkerEnv {
   socketSecret?: string;
   /** Silence after which deevy asks a Socket rather than waiting to be told. */
   socketCatchupMinutes?: number;
+  /** GitHub's REST root for a Socket that names none (`DEEVY_GITHUB_API`). */
+  githubApi?: string;
   webOrigin?: string;
   /**
    * The sign-in providers this instance offers, one optional entry each, read
@@ -129,6 +133,7 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     socketSecret: env.DEEVY_SECRET,
+    githubApi: env.DEEVY_GITHUB_API,
     ...(env.DEEVY_SOCKET_CATCHUP_MINUTES
       ? { socketCatchupMinutes: Number(env.DEEVY_SOCKET_CATCHUP_MINUTES) }
       : {}),

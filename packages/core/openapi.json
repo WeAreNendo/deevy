@@ -6299,6 +6299,7 @@
                           "status": {
                             "type": "string",
                             "enum": [
+                              "pending",
                               "active",
                               "paused",
                               "removed"
@@ -6530,6 +6531,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "pending",
                         "active",
                         "paused",
                         "removed"
@@ -6612,6 +6614,233 @@
         }
       }
     },
+    "/sockets/begin": {
+      "post": {
+        "operationId": "sockets.begin",
+        "summary": "Start connecting a tool whose own flow has to send you back here",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "github",
+                      "linear",
+                      "gitlab",
+                      "notion",
+                      "slack",
+                      "stub"
+                    ]
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "config": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "provider",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "workspaceId": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "github",
+                        "linear",
+                        "gitlab",
+                        "notion",
+                        "slack",
+                        "stub"
+                      ]
+                    },
+                    "capabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "tracker",
+                          "forge",
+                          "docs",
+                          "chat"
+                        ]
+                      }
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "identity": {
+                      "type": "object",
+                      "properties": {
+                        "login": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "mentionHandle": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "login",
+                        "id",
+                        "mentionHandle"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "array",
+                          "items": {}
+                        }
+                      ]
+                    },
+                    "installedBy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "active",
+                        "paused",
+                        "removed"
+                      ]
+                    },
+                    "lastInboundAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "pollMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "hasCredentials": {
+                      "type": "boolean"
+                    },
+                    "hasWebhookSecret": {
+                      "type": "boolean"
+                    },
+                    "inboundUrl": {
+                      "type": "string"
+                    },
+                    "webhookSecret": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "setupUrl": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workspaceId",
+                    "provider",
+                    "capabilities",
+                    "name",
+                    "identity",
+                    "config",
+                    "installedBy",
+                    "status",
+                    "lastInboundAt",
+                    "pollMinutes",
+                    "createdAt",
+                    "updatedAt",
+                    "hasCredentials",
+                    "hasWebhookSecret",
+                    "inboundUrl",
+                    "webhookSecret",
+                    "setupUrl",
+                    "state"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sockets/{socketId}": {
       "post": {
         "operationId": "sockets.update",
@@ -6640,6 +6869,7 @@
                   "status": {
                     "type": "string",
                     "enum": [
+                      "pending",
                       "active",
                       "paused"
                     ]
@@ -6753,6 +6983,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "pending",
                         "active",
                         "paused",
                         "removed"
@@ -6943,6 +7174,7 @@
                         "status": {
                           "type": "string",
                           "enum": [
+                            "pending",
                             "active",
                             "paused",
                             "removed"
@@ -7369,6 +7601,7 @@
                     "status": {
                       "type": "string",
                       "enum": [
+                        "pending",
                         "active",
                         "paused",
                         "removed"
@@ -11662,6 +11895,63 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "comments": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "externalId": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "body": {
+                                "type": "string"
+                              },
+                              "author": {
+                                "type": "object",
+                                "properties": {
+                                  "login": {
+                                    "type": "string"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "isBot": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "login",
+                                  "id",
+                                  "isBot"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              }
+                            },
+                            "required": [
+                              "externalId",
+                              "url",
+                              "body",
+                              "author",
+                              "createdAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -11689,7 +11979,8 @@
                     "assignee",
                     "project",
                     "parent",
-                    "children"
+                    "children",
+                    "comments"
                   ],
                   "additionalProperties": false
                 }
@@ -12177,6 +12468,20 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          {
+            "in": "query",
+            "name": "comments",
+            "schema": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "style": "deepObject",
+            "explode": true
           }
         ],
         "responses": {
@@ -13250,6 +13555,63 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "comments": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "externalId": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "body": {
+                                "type": "string"
+                              },
+                              "author": {
+                                "type": "object",
+                                "properties": {
+                                  "login": {
+                                    "type": "string"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "isBot": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "login",
+                                  "id",
+                                  "isBot"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              }
+                            },
+                            "required": [
+                              "externalId",
+                              "url",
+                              "body",
+                              "author",
+                              "createdAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -13277,7 +13639,8 @@
                     "assignee",
                     "project",
                     "parent",
-                    "children"
+                    "children",
+                    "comments"
                   ],
                   "additionalProperties": false
                 }

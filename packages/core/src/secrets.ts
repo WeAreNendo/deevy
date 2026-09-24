@@ -123,3 +123,54 @@ export async function openSecret(secret: string, envelope: string): Promise<stri
     throw new Error("deevy cannot open this credential: its secret changed, or the value did");
   }
 }
+
+/**
+ * A short-lived, signed token naming one thing (ADR-0024).
+ *
+ * Used for the `state` a provider echoes back on a redirect: the round trip
+ * leaves deevy's hands entirely — it goes through GitHub and an operator's
+ * browser — so what comes back has to prove it started here. It carries no
+ * secret and needs no table: the name, when it expires, and a tag over both.
+ */
+const STATE_INFO = "deevy:redirect-state:v1";
+
+async function stateKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw",
+    encoder.encode(`${STATE_INFO}:${secret}`),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+}
+
+/** How long a redirect may take. An operator making a GitHub App is slow. */
+export const STATE_TTL_MS = 60 * 60_000;
+
+export async function signState(secret: string, names: string, now = new Date()): Promise<string> {
+  const expires = now.getTime() + STATE_TTL_MS;
+  const tag = await crypto.subtle.sign(
+    "HMAC",
+    await stateKey(secret),
+    encoder.encode(`${names}.${String(expires)}`),
+  );
+  return `${String(expires)}.${toBase64Url(new Uint8Array(tag))}`;
+}
+
+/** Whether this state was minted here, for this thing, and has not expired. */
+export async function verifyState(
+  secret: string,
+  names: string,
+  state: string,
+  now = new Date(),
+): Promise<boolean> {
+  const [expires, tag] = state.split(".");
+  if (!expires || !tag) return false;
+  if (Number(expires) < now.getTime()) return false;
+  const expected = await crypto.subtle.sign(
+    "HMAC",
+    await stateKey(secret),
+    encoder.encode(`${names}.${expires}`),
+  );
+  return toBase64Url(new Uint8Array(expected)) === tag;
+}

@@ -13,6 +13,8 @@
     "@deevy/core": "workspace:*"
   },
   "devDependencies": {
+    "@deevy/adapters": "workspace:*",
+    "@deevy/db": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

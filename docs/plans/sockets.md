@@ -811,6 +811,20 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 4, as built.** The setup route came back from slice 1 with a shape the plan had not settled, and it
+settled itself: a provider's redirect is a port method (`SocketModule.setup`), so the core knows nothing
+about manifests, and the operator's browser is sent back to a Socket that already exists —
+`sockets.begin` writes that row, in a new `pending` status, before there is any credential to put in one.
+The `state` is signed with the instance's own secret rather than a second one, because nothing is sealed
+with it and what it protects expires in an hour. The install callback carries no state and needs none: what
+it carries is an id, and the module asks GitHub what that id is before deevy writes it down.
+
+Two smaller findings. A GitHub issue's id is its node id rather than its number, because a number belongs to
+a repository and a transferred issue would otherwise arrive as a second record; the number is parsed from
+the URL deevy already stores, which is the one thing about a record that is true in both places. And
+`issues.get` grew the live conversation the model section promised — `comments: true`, off by default,
+because it is a request to somebody else's API and a list should not make one.
+
 **Slice 1, as built.** Three things came out differently from the sketch above.
 
 - `POST /hooks/:socketId/setup` is not in this slice. Both flows it exists for are GitHub's — the manifest

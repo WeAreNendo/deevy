@@ -1,0 +1,24 @@
+{
+  "action": "created",
+  "issue": {
+    "id": 2847193021,
+    "node_id": "I_kwDOMxK7Zs6oF3S9",
+    "number": 42,
+    "title": "Checkout totals are wrong with a coupon",
+    "state": "open",
+    "html_url": "https://github.com/acme/deevy/issues/42",
+    "updated_at": "2026-09-21T08:31:07Z"
+  },
+  "comment": {
+    "id": 3192847561,
+    "node_id": "IC_kwDOMxK7Zs6vB2xJ",
+    "user": { "login": "grace-on-github", "id": 5829302, "type": "User" },
+    "created_at": "2026-09-21T09:02:11Z",
+    "updated_at": "2026-09-21T09:02:11Z",
+    "body": "@deevy planner can you take this one?",
+    "html_url": "https://github.com/acme/deevy/issues/42#issuecomment-3192847561"
+  },
+  "repository": { "full_name": "acme/deevy", "name": "deevy", "owner": { "login": "acme" } },
+  "sender": { "login": "grace-on-github", "id": 5829302, "type": "User" },
+  "installation": { "id": 61892041 }
+}

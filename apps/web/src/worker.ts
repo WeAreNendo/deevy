@@ -96,7 +96,7 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // The tools this build can speak (ADR-0024). The stub is registered only
       // where the entry says it may be, which is never in production.
       // A Worker is never the deployment a stub belongs in.
-      sockets: socketModules(),
+      sockets: socketModules(env.githubApi ? { githubApiBase: env.githubApi } : {}),
       // What their credentials are sealed with. A Worker without it can serve
       // a Socket that holds none and refuses to connect one that does.
       ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
@@ -184,7 +184,9 @@ export default {
             : {}),
           // And the tools this build can speak, so a Workspace whose tracker
           // cannot reach this Worker is still asked (ADR-0024).
-          sockets: socketModules(),
+          sockets: socketModules(
+            isolate.env.githubApi ? { githubApiBase: isolate.env.githubApi } : {},
+          ),
           ...(isolate.env.socketSecret ? { socketSecret: isolate.env.socketSecret } : {}),
         }),
       ),

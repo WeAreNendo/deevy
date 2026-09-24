@@ -1,6 +1,6 @@
 import { projectGrant, type Db } from "@deevy/db";
 import type { SocketModules } from "./sockets/port.ts";
-import { handleInbound } from "./sockets/hooks.ts";
+import { handleInbound, handleSetup } from "./sockets/hooks.ts";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
 import { COMMON_ERROR_STATUS_MAP, DEFAULT_ERROR_STATUS, ORPCError, onError } from "@orpc/server";
@@ -166,6 +166,21 @@ export function createApp({
       jobs,
     }),
   );
+  // Where a provider's own flow sends an operator back: GitHub's App manifest
+  // conversion and its installation callback are both redirects, so this is a
+  // GET as often as it is a POST (ADR-0024).
+  app.all("/hooks/:socketId/setup", (c) =>
+    handleSetup(c.req.raw, {
+      db,
+      socketId: c.req.param("socketId"),
+      ...(sockets ? { sockets } : {}),
+      ...(socketSecret ? { socketSecret } : {}),
+      ...(secret ? { secret } : {}),
+      ...(baseURL ? { baseURL } : {}),
+      ...(webURL ? { webURL } : {}),
+      jobs,
+    }),
+  );
 
   if (auth) {
     app.use("/api/auth/*", cors({ origin, credentials: true }));
@@ -235,6 +250,7 @@ export function createApp({
     devSignIn,
     ...(sockets ? { sockets } : {}),
     ...(socketSecret ? { socketSecret } : {}),
+    ...(secret ? { secret } : {}),
     signInProviders: await offeredProviders(),
   });
   app.use("/rpc/*", async (c, next) => {

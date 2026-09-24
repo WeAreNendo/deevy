@@ -83,6 +83,11 @@ export async function requireSocket(context: SocketFor, socketId: string): Promi
   if (row.status === "paused") {
     throw new ORPCError("CONFLICT", { message: `The ${row.name} Socket is paused` });
   }
+  if (row.status === "pending") {
+    throw new ORPCError("CONFLICT", {
+      message: `The ${row.name} Socket is not connected yet; finish connecting it first`,
+    });
+  }
   return row;
 }
 

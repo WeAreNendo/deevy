@@ -9,7 +9,7 @@ import {
   type Socket,
 } from "@deevy/db";
 import { InboundDeliverySchema, SocketSchema } from "../schemas.ts";
-import { requireSealingSecret, sealSecret } from "../secrets.ts";
+import { requireSealingSecret, sealSecret, signState } from "../secrets.ts";
 import {
   requireSocket,
   requireTracker,
@@ -65,6 +65,22 @@ function seal(context: Pick<AppContext, "socketSecret">, value: string): Promise
   return sealSecret(requireSealingSecret(context.socketSecret), value);
 }
 
+/**
+ * What this instance signs a redirect's `state` with. Better Auth's secret,
+ * which every deployment already has, rather than a second one to configure:
+ * nothing is sealed with it, and rotating it only ends redirects in flight.
+ */
+function requireInstanceSecret(context: Pick<AppContext, "secret">): string {
+  const secret = context.secret;
+  if (!secret) {
+    throw new ORPCError("NOT_IMPLEMENTED", {
+      message:
+        "This deevy has no secret to sign a redirect with, so it cannot start that flow. Set one on the server and restart.",
+    });
+  }
+  return secret;
+}
+
 const ConnectedSocketSchema = SocketSchema.extend({
   inboundUrl: z.string(),
   /**
@@ -89,6 +105,56 @@ export const sockets = {
         orderBy: { createdAt: "asc" },
       });
       return { sockets: rows.map(socketOut) };
+    },
+  }),
+
+  begin: defineOperation({
+    name: "sockets.begin",
+    summary: "Start connecting a tool whose own flow has to send you back here",
+    method: "POST",
+    path: "/sockets/begin",
+    auth: "admin",
+    input: z.object({
+      provider: z.enum(socketProviders),
+      name: z.string().trim().min(1).max(120),
+      config: z.record(z.string(), z.unknown()).default({}),
+    }),
+    output: ConnectedSocketSchema.extend({
+      /** Where the provider sends the operator back to, code in hand. */
+      setupUrl: z.string(),
+      /**
+       * What the provider must echo back on that redirect. Signed with this
+       * instance's own secret and good for an hour, so what lands can be shown
+       * to have started here (secrets.ts).
+       */
+      state: z.string(),
+    }),
+    handler: async ({ input, context }) => {
+      // A Socket with nothing in it yet: connecting a GitHub App means sending
+      // an operator to GitHub and back, and this row is where they land.
+      const [row] = await context.db
+        .insert(socketTable)
+        .values({
+          id: newId("socket"),
+          workspaceId: context.workspace.id,
+          provider: input.provider,
+          capabilities: [],
+          name: input.name,
+          identity: { login: "", id: "", mentionHandle: "" },
+          config: input.config,
+          installedBy: context.member.id,
+          status: "pending",
+        })
+        .returning();
+      if (!row) throw new Error("sockets.begin: the insert returned no row");
+
+      return {
+        ...socketOut(row),
+        inboundUrl: inboundUrl(context, row.id),
+        setupUrl: `${inboundUrl(context, row.id)}/setup`,
+        webhookSecret: null,
+        state: await signState(requireInstanceSecret(context), row.id),
+      };
     },
   }),
 

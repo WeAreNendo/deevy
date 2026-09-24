@@ -171,7 +171,9 @@ export const issues = {
         });
       }
 
-      return loadIssue(context, issue.id);
+      // A record opened a moment ago has no conversation, and nobody asked
+      // for one: `issues.get` is where a caller asks (ADR-0024).
+      return { ...(await loadIssue(context, issue.id)), comments: null };
     },
   }),
 
@@ -283,11 +285,34 @@ export const issues = {
     input: z.object({
       /** An `iss_` id, the record's URL, or the key the tracker wrote. */
       issue: z.string().trim().min(1),
+      /**
+       * Read the conversation from the tracker as well. Off by default,
+       * because it is a request to somebody else's API and most callers want
+       * the record: an Agent about to work one asks for it, a list does not.
+       */
+      comments: QueryFlag.optional(),
     }),
     output: IssueDetailSchema,
     handler: async ({ input, context }) => {
-      const { issue } = await resolveIssueRef(context, input.issue);
-      return loadIssue(context, issue.id);
+      const { issue, project } = await resolveIssueRef(context, input.issue);
+      const found = await loadIssue(context, issue.id);
+      if (!input.comments) return { ...found, comments: null };
+
+      // Best effort, and said so: a tracker that is down or a Socket that was
+      // paused should not turn reading a record into a failure, and the
+      // record itself is deevy's own (ADR-0024).
+      try {
+        const row = await requireSocket(context, project.trackerSocketId);
+        const tracker = requireTracker(await socketModuleFor(context, row));
+        const comments = await tracker.listComments(
+          project.trackerScope,
+          { externalId: issue.externalId, url: issue.url },
+          50,
+        );
+        return { ...found, comments };
+      } catch {
+        return { ...found, comments: [] };
+      }
     },
   }),
 };

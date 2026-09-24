@@ -1,0 +1,37 @@
+{
+  "action": "labeled",
+  "issue": {
+    "id": 2847193021,
+    "node_id": "I_kwDOMxK7Zs6oF3S9",
+    "number": 42,
+    "title": "Checkout totals are wrong with a coupon",
+    "user": { "login": "ada-on-github", "id": 5829301, "type": "User" },
+    "labels": [
+      { "id": 8271930211, "name": "bug", "color": "d73a4a" },
+      { "id": 8271930212, "name": "agent:planner", "color": "0e8a16" }
+    ],
+    "state": "open",
+    "state_reason": null,
+    "assignees": [{ "login": "grace-on-github", "id": 5829302, "type": "User" }],
+    "comments": 2,
+    "created_at": "2026-09-18T09:14:22Z",
+    "updated_at": "2026-09-21T08:31:07Z",
+    "closed_at": null,
+    "body": "Applying `SAVE10` twice leaves the total negative.",
+    "html_url": "https://github.com/acme/deevy/issues/42",
+    "url": "https://api.github.com/repos/acme/deevy/issues/42",
+    "sub_issues_summary": { "total": 0, "completed": 0, "percent_completed": 0 }
+  },
+  "label": { "id": 8271930212, "name": "agent:planner", "color": "0e8a16" },
+  "repository": {
+    "id": 856789542,
+    "node_id": "R_kgDOMxK7Zg",
+    "name": "deevy",
+    "full_name": "acme/deevy",
+    "private": true,
+    "owner": { "login": "acme", "id": 4471902, "type": "Organization" },
+    "default_branch": "main"
+  },
+  "sender": { "login": "ada-on-github", "id": 5829301, "type": "User" },
+  "installation": { "id": 61892041, "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNjE4OTIwNDE=" }
+}

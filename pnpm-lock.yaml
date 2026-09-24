@@ -786,6 +786,12 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@deevy/adapters':
+        specifier: workspace:*
+        version: link:../adapters
+      '@deevy/db':
+        specifier: workspace:*
+        version: link:../db
       '@types/node':
         specifier: 'catalog:'
         version: 26.4.1
