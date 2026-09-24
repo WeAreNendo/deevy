@@ -1,0 +1,42 @@
+{
+  "action": "create",
+  "actor": {
+    "id": "5a1b7c3e-9d24-4f60-8e1a-2b3c4d5e6f70",
+    "type": "user",
+    "name": "Grace Hopper",
+    "email": "grace@example.com",
+    "url": "https://linear.app/acme/profiles/grace"
+  },
+  "createdAt": "2026-09-24T10:21:17.902Z",
+  "data": {
+    "id": "b3a2c1d0-e9f8-4a7b-8c6d-5e4f3a2b1c0d",
+    "createdAt": "2026-09-24T10:21:17.902Z",
+    "updatedAt": "2026-09-24T10:21:17.902Z",
+    "archivedAt": null,
+    "body": "/approve cap it at the basket total\nand say so in the changelog",
+    "edited": false,
+    "issueId": "0b6e2f4a-3c1d-4e8b-9a7f-5d2c1b0a9e81",
+    "parentId": null,
+    "userId": "5a1b7c3e-9d24-4f60-8e1a-2b3c4d5e6f70",
+    "botActor": null,
+    "reactionData": [],
+    "issue": {
+      "id": "0b6e2f4a-3c1d-4e8b-9a7f-5d2c1b0a9e81",
+      "title": "Checkout totals are wrong with a coupon",
+      "teamId": "e4f5a6b7-8c9d-4e0f-a1b2-c3d4e5f6a7b8",
+      "identifier": "ENG-12",
+      "url": "https://linear.app/acme/issue/ENG-12/checkout-totals-are-wrong-with-a-coupon"
+    },
+    "user": {
+      "id": "5a1b7c3e-9d24-4f60-8e1a-2b3c4d5e6f70",
+      "name": "Grace Hopper",
+      "email": "grace@example.com",
+      "url": "https://linear.app/acme/profiles/grace"
+    }
+  },
+  "url": "https://linear.app/acme/issue/ENG-12/checkout-totals-are-wrong-with-a-coupon#comment-b3a2c1d0",
+  "type": "Comment",
+  "organizationId": "9c8b7a6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+  "webhookTimestamp": 1790245277950,
+  "webhookId": "3d2c1b0a-9f8e-4d7c-b6a5-f4e3d2c1b0a9"
+}

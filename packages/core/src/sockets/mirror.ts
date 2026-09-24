@@ -36,6 +36,9 @@ const runKinds: ReadonlySet<string> = new Set<EventKind>([
   "run.started",
   "run.completed",
   "run.failed",
+  // A pull request, where the tracker cannot see one for itself: see
+  // `deriveSocketMirrors` for which trackers those are.
+  "issue.link_added",
 ]);
 
 /**
@@ -68,12 +71,22 @@ export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[
   // telling the record's tracker too would say it to everybody else
   // (sockets/chat.ts).
   if (event.kind === "gate.ruling_refused" && payloadVia(event) === "slack") return [];
+  // Evidence is said only when it is a pull request: the rest of what an Agent
+  // links is already on the Run, and a comment per link would be noise.
+  if (event.kind === "issue.link_added" && payloadText(event, "kind") !== "pull_request") return [];
 
   const project = await db.query.project.findFirst({
     where: { id: event.projectId },
-    columns: { mirror: true, trackerSocketId: true },
+    columns: { mirror: true, trackerSocketId: true, forgeSocketId: true },
   });
   if (!project || !mirrorsKind(event.kind, project.mirror)) return [];
+  // A tracker that is also where the code is shows the pull request on the
+  // record already — GitHub does, from the `Closes` line deevy writes into
+  // its body — so saying so again would be the same thing twice. Linear and
+  // Notion know nothing about a repository they are not.
+  if (event.kind === "issue.link_added" && project.forgeSocketId === project.trackerSocketId) {
+    return [];
+  }
 
   const [row] = await db
     .insert(deliveryTable)
@@ -92,8 +105,17 @@ export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[
 }
 
 function payloadVia(event: Event): string | null {
-  const via = (event.payload as { via?: unknown } | null)?.via;
-  return typeof via === "string" ? via : null;
+  return payloadText(event, "via");
+}
+
+function payloadText(event: Pick<Event, "payload">, key: string): string | null {
+  const value = (event.payload as Record<string, unknown> | null)?.[key];
+  return typeof value === "string" ? value : null;
+}
+
+/** The Run an Event names in its payload rather than as its subject: evidence it attached. */
+export function payloadRunId(event: Pick<Event, "payload">): string | null {
+  return payloadText(event, "runId");
 }
 
 export interface MirrorSubject {
@@ -222,6 +244,20 @@ export function mirrorFor(
         "\n",
       ),
       // Nothing changed, so nothing about the record's labels does either.
+      labels: { add: [], remove: [] },
+    };
+  }
+
+  if (event.kind === "issue.link_added") {
+    const url = text("url");
+    if (!url) return null;
+    const title = text("title");
+    return {
+      comment: [
+        `Opened a pull request: ${title ? `[${title}](${url})` : url}`,
+        "",
+        signature(subject),
+      ].join("\n"),
       labels: { add: [], remove: [] },
     };
   }

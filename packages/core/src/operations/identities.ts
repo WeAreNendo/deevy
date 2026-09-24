@@ -9,6 +9,7 @@ import {
   restoreIdentity,
   revokeIdentity,
 } from "../identities.ts";
+import { beginAccountLink } from "../account-links.ts";
 import { socketModuleFor } from "../sockets/registry.ts";
 import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
 
@@ -19,10 +20,11 @@ import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
  * not an admin — lists or unlinks somebody else's; and an Agent has no
  * Identities, because an Agent never rules (ADR-0010).
  *
- * Linking is not here. Linking an account the Human signs in with is Better
- * Auth's own `link-social` from a signed-in session, and what that writes is
- * what the resolver reads (identities.ts); a tool with an OAuth grant of its
- * own, or a code sent to one account alone, brings its own route with it.
+ * Linking is three doors. An account the Human signs in with is Better Auth's
+ * own `link-social` from a signed-in session, and what that writes is what the
+ * resolver reads (identities.ts); a code Slack sent to one account alone is
+ * `peek` and `link`; and a tool with an OAuth grant of its own — Linear — is
+ * `begin` here and its callback route (account-links.ts).
  */
 
 const IdentitySchema = z.object({
@@ -57,6 +59,11 @@ export const identities = {
        * nowhere, and a button for it would be a setting with nothing behind it.
        */
       linkable: z.array(z.string()),
+      /**
+       * The connected tools whose accounts are linked through the tool's own
+       * consent page (`identities.begin`), rather than through a sign-in.
+       */
+      tools: z.array(z.object({ socketId: z.string(), provider: z.string(), name: z.string() })),
     }),
     handler: async ({ context }) => {
       const rows = await identitiesOf(context.db, context.member.id);
@@ -64,12 +71,31 @@ export const identities = {
         .select({ providerId: accountTable.providerId })
         .from(accountTable)
         .where(eq(accountTable.userId, context.member.userId));
+      const { linkable, tools } = await linkableTools(context);
       return {
         identities: rows.map(view),
         signIns: [...new Set(accounts.map((row) => row.providerId))].sort(),
-        linkable: await linkableProviders(context),
+        linkable,
+        tools,
       };
     },
+  }),
+
+  begin: defineOperation({
+    name: "identities.begin",
+    summary: "Start linking your account on a tool, on that tool's own page",
+    method: "POST",
+    path: "/identities/begin",
+    auth: "member",
+    // A Human present, not a credential they delegated: linking an account is
+    // giving it the power to rule as you (ADR-0010).
+    sessionOnly: true,
+    input: z.object({ socketId: z.string() }),
+    output: z.object({
+      /** Where to send the browser. It comes back to deevy on its own. */
+      url: z.string(),
+    }),
+    handler: ({ input, context }) => beginAccountLink(context, input.socketId),
   }),
 
   revoke: defineOperation({
@@ -164,23 +190,32 @@ export const identities = {
 };
 
 /**
- * Which sign-in providers' accounts the Workspace's tools take. Asked of each
- * connected Socket's module, because the provider is what knows whether its
- * accounts are the sign-in provider's — github.com's are, a GitHub Enterprise
- * Server's are not (IdentityScope). Building a module reads no network.
+ * What the Workspace's tools let a Human link: the sign-in providers whose
+ * accounts they take, and the tools that link through their own consent page.
+ * Asked of each connected Socket's module, because the provider is what knows
+ * whether its accounts are the sign-in provider's — github.com's are, a GitHub
+ * Enterprise Server's are not (IdentityScope). Building a module reads no
+ * network.
  */
-async function linkableProviders(context: ContextFor<"member">): Promise<string[]> {
+async function linkableTools(context: ContextFor<"member">): Promise<{
+  linkable: string[];
+  tools: { socketId: string; provider: string; name: string }[];
+}> {
   const rows = await context.db.query.socket.findMany({
     where: { workspaceId: context.workspace.id, status: "active" },
-    columns: { provider: true, config: true },
+    columns: { id: true, provider: true, name: true, config: true, credentials: true },
+    orderBy: { createdAt: "asc" },
   });
   const found = new Set<string>();
+  const tools: { socketId: string; provider: string; name: string }[] = [];
   for (const row of rows) {
     const module = await socketModuleFor(context, row).catch(() => null);
     const provider = module?.identityScope?.signInProvider;
     if (provider) found.add(provider);
+    if (module?.accountLink)
+      tools.push({ socketId: row.id, provider: row.provider, name: row.name });
   }
-  return [...found].sort();
+  return { linkable: [...found].sort(), tools };
 }
 
 function view(row: z.input<typeof IdentitySchema> & Record<string, unknown>) {

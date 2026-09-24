@@ -314,19 +314,7 @@ export async function redeemLinkCode(
   source: EventSource & { member: Member },
   found: LinkCode,
 ): Promise<MemberIdentity> {
-  const live = await source.db.query.memberIdentity.findFirst({
-    where: {
-      provider: found.provider,
-      instance: found.instance,
-      externalUserId: found.externalUserId,
-      revokedAt: { isNull: true },
-    },
-  });
-  if (live && live.memberId !== source.member.id) {
-    throw new ORPCError("CONFLICT", {
-      message: "That account already approves and rejects as somebody else in deevy",
-    });
-  }
+  const live = await liveIdentityFor(source, found.provider, found.instance, found.externalUserId);
   // Spent first, and only if nobody spent it in between: the update is the claim.
   const [spent] = await source.db
     .update(linkCodeTable)
@@ -348,4 +336,50 @@ export async function redeemLinkCode(
     "link_code",
   );
   return linked.identity;
+}
+
+/**
+ * Links an account the tool itself said consented, on its own page, while the
+ * Human was signed in to deevy: Linear's OAuth (account-links.ts). Refused, as
+ * a code is, where the account already rules as somebody else.
+ */
+export async function linkConsentedAccount(
+  source: EventSource & { member: Member },
+  socket: { id: string; provider: string },
+  scope: IdentityScope,
+  account: { id: string; login: string },
+): Promise<MemberIdentity> {
+  const live = await liveIdentityFor(source, socket.provider, scope.instance, account.id);
+  if (live) return live;
+  const linked = await link(
+    source,
+    socket,
+    scope,
+    { id: account.id, login: account.login, isBot: false },
+    source.member,
+    "oauth",
+  );
+  return linked.identity;
+}
+
+/**
+ * The live Identity for an account, when it is this Human's; a refusal when it
+ * is somebody else's. One account is one Human, and changing whose it is is
+ * theirs to undo first.
+ */
+async function liveIdentityFor(
+  source: EventSource & { member: Member },
+  provider: string,
+  instance: string,
+  externalUserId: string,
+): Promise<MemberIdentity | null> {
+  const live = await source.db.query.memberIdentity.findFirst({
+    where: { provider, instance, externalUserId, revokedAt: { isNull: true } },
+  });
+  if (live && live.memberId !== source.member.id) {
+    throw new ORPCError("CONFLICT", {
+      message: "That account already approves and rejects as somebody else in deevy",
+    });
+  }
+  return live ?? null;
 }

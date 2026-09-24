@@ -250,6 +250,25 @@ export function fakeSockets(records: Map<string, ExternalIssue> = new Map()): {
       ...(config.signInProvider === "github" ? { signInProvider: "github" as const } : {}),
     },
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
+    // A tool whose accounts a Human links through its own consent, as Linear's
+    // are (ADR-0025). The code is the account: `<id>`, or `<id>@<instance>`
+    // for one that lives somewhere else.
+    accountLink: {
+      authorizeUrl: ({ redirectUri, state }) =>
+        `https://tracker.test/oauth/authorize?${new URLSearchParams({
+          redirect_uri: redirectUri,
+          state,
+        }).toString()}`,
+      account: ({ code }) => {
+        const [id = "", instance = "stub:test"] = code.split("@");
+        return Promise.resolve({ id, login: `user-${id}`, instance });
+      },
+    },
+    install: ({ redirectUri, state }) =>
+      `https://tracker.test/oauth/install?${new URLSearchParams({
+        redirect_uri: redirectUri,
+        state,
+      }).toString()}`,
     tracker: {
       // Not real cryptography — that is the stub provider's own test
       // (packages/sockets/tests/stub.test.ts). What this has to be is a
@@ -386,6 +405,7 @@ export function externalIssue(
     assignees: over.assignees ?? [],
     labels: over.labels ?? [],
     parentExternalId: over.parentExternalId ?? null,
+    ...(over.delegateId === undefined ? {} : { delegateId: over.delegateId }),
     updatedAt: over.updatedAt ?? new Date(),
     externalId: over.externalId,
   };

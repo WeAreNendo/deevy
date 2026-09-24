@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth";
+import { leaveFor } from "@/lib/leave";
 import { orpc } from "@/lib/orpc";
 import { providerLabel } from "@/lib/providers";
 
@@ -29,7 +30,20 @@ const verifiedByText: Record<string, string> = {
   email: "Its address matches yours",
 };
 
-export function IdentitiesPage() {
+/** What a tool's consent page sent the browser back with (account-links.ts). */
+export interface IdentitiesSearch {
+  linked?: string;
+  linkError?: string;
+}
+
+export function parseIdentitiesSearch(search: Record<string, unknown>): IdentitiesSearch {
+  return {
+    ...(typeof search.linked === "string" ? { linked: search.linked } : {}),
+    ...(typeof search.linkError === "string" ? { linkError: search.linkError } : {}),
+  };
+}
+
+export function IdentitiesPage({ search = {} }: { search?: IdentitiesSearch }) {
   const queryClient = useQueryClient();
   const listed = useQuery(orpc.identities.list.queryOptions({ input: {} }));
   const health = useQuery(orpc.health.ping.queryOptions({ input: {} }));
@@ -37,6 +51,9 @@ export function IdentitiesPage() {
   const revoke = useMutation(orpc.identities.revoke.mutationOptions({ onSuccess: refresh }));
   const restore = useMutation(orpc.identities.restore.mutationOptions({ onSuccess: refresh }));
   const [linkFailed, setLinkFailed] = useState<string | null>(null);
+  const begin = useMutation(
+    orpc.identities.begin.mutationOptions({ onSuccess: ({ url }) => leaveFor(url) }),
+  );
   const [code, setCode] = useState("");
   const peek = useMutation(orpc.identities.peek.mutationOptions());
   const redeem = useMutation(
@@ -56,6 +73,8 @@ export function IdentitiesPage() {
   // nowhere.
   const takes = new Set(listed.data?.linkable ?? []);
   const linkable = (health.data?.providers ?? []).filter((one) => takes.has(one.id));
+  // The tools whose accounts are linked on the tool's own consent page: Linear.
+  const tools = listed.data?.tools ?? [];
   type Row = (typeof rows)[number];
 
   const columns: DataColumn<Row>[] = [
@@ -135,6 +154,16 @@ export function IdentitiesPage() {
       title="Identities"
       description="The accounts on your team's tools that can approve or reject as you, by commenting where the work lives."
     >
+      {search.linked ? (
+        <p role="status" className="text-sm">
+          Your {providerLabel(search.linked)} account is linked.
+        </p>
+      ) : null}
+      {search.linkError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {search.linkError}
+        </p>
+      ) : null}
       {revoke.error || restore.error ? (
         <p className="text-sm text-destructive">{(revoke.error ?? restore.error)?.message}</p>
       ) : null}
@@ -215,7 +244,7 @@ export function IdentitiesPage() {
         ) : null}
       </SettingsSection>
 
-      {linkable.length > 0 ? (
+      {linkable.length > 0 || tools.length > 0 ? (
         <SettingsSection aria-label="Link an account" title="Link an account">
           <p className="text-sm text-muted-foreground">
             Comment <code>/approve</code> or <code>/reject</code> on a record and it counts as you
@@ -249,8 +278,24 @@ export function IdentitiesPage() {
                 </li>
               ),
             )}
+            {tools.map((tool) => (
+              <li key={tool.socketId} className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  disabled={begin.isPending}
+                  onClick={() => begin.mutate({ socketId: tool.socketId })}
+                >
+                  Link {providerLabel(tool.provider)}
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  On {providerLabel(tool.provider)}&apos;s own page, as the account you use in{" "}
+                  {tool.name}.
+                </span>
+              </li>
+            ))}
           </ul>
           {linkFailed ? <p className="text-sm text-destructive">{linkFailed}</p> : null}
+          {begin.error ? <p className="text-sm text-destructive">{begin.error.message}</p> : null}
         </SettingsSection>
       ) : null}
     </SettingsPage>

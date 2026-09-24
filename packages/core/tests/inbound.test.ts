@@ -104,6 +104,36 @@ describe("a record arriving from a tracker", () => {
     expect(closed?.assigneeMemberId).toBeNull();
   });
 
+  it("hands a record delegated to deevy itself to the default Agent, even one routed elsewhere", async () => {
+    // Linear's "assign to an app" makes the app the record's delegate and
+    // leaves the Human its assignee: saying "deevy, take this" in the tracker's
+    // own words, which is the default Agent's to answer (ADR-0024).
+    const { db, close } = testDb();
+    closers.push(close);
+    const { ada, apply, planner, seeded } = await workspace(db);
+    const builder = await agentContext(db, {
+      name: "Builder",
+      handle: "builder",
+      email: "builder@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    await seeded.setDefaultAgent(planner.member.id);
+    const first = new Date("2026-09-24T09:00:00Z");
+    const later = new Date("2026-09-24T10:00:00Z");
+    await apply([record({ externalId: "9", labels: ["agent:builder"], updatedAt: first })]);
+
+    // Delegated to somebody else's app, it stays where the label put it.
+    await apply([record({ externalId: "9", delegateId: "another-app", updatedAt: first })]);
+    const kept = await db.query.issue.findFirst({ where: { externalId: "9" } });
+    expect(kept?.assigneeMemberId).toBe(builder.member.id);
+
+    // The Socket's own identity is `bot-1` (helpers.ts).
+    await apply([record({ externalId: "9", delegateId: "bot-1", updatedAt: later })]);
+    const moved = await db.query.issue.findFirst({ where: { externalId: "9" } });
+    expect(moved?.assigneeMemberId).toBe(planner.member.id);
+  });
+
   it("never lets an older delivery overwrite what a newer one already said", async () => {
     const { db, close } = testDb();
     closers.push(close);

@@ -10,6 +10,7 @@ import type {
   SocketModule,
   SocketModuleInput,
 } from "@deevy/core/sockets";
+import { hmacHex, sameText } from "../signing.ts";
 import { noteView, render } from "./blocks.ts";
 
 /**
@@ -44,29 +45,6 @@ const WINDOW_SECONDS = 5 * 60;
 
 /** The buttons deevy draws. Anything else on a message is somebody else's. */
 const ACTIONS = { deevy_approve: "approved", deevy_reject: "rejected" } as const;
-
-const encoder = new TextEncoder();
-
-async function hmacHex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const mac = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return [...new Uint8Array(mac)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-/** Compared in time that does not depend on where they first differ. */
-function sameText(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let differ = 0;
-  for (let index = 0; index < a.length; index += 1)
-    differ |= a.charCodeAt(index) ^ b.charCodeAt(index);
-  return differ === 0;
-}
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 

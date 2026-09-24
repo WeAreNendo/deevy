@@ -31,7 +31,7 @@ import {
 import { openStatuses } from "./runs.ts";
 import { appendEvent } from "./events.ts";
 import { applyInbound } from "./sockets/apply.ts";
-import { mirrorFor, mirrorsKind, type MirrorAction } from "./sockets/mirror.ts";
+import { mirrorFor, mirrorsKind, payloadRunId, type MirrorAction } from "./sockets/mirror.ts";
 import { chatGateMessage } from "./sockets/chat-out.ts";
 import { forgetOldDeliveries } from "./sockets/hooks.ts";
 import type { ChatMessage, InboundEvent, SocketModules } from "./sockets/port.ts";
@@ -1137,6 +1137,8 @@ export async function deliverDueSocketMirrors({
     ...new Set([
       ...gates.map((gate) => gate.runId),
       ...events.filter((event) => event.subjectType === "run").map((event) => event.subjectId),
+      // Evidence names the Run that produced it in its payload (shared.ts).
+      ...events.map((event) => payloadRunId(event)).filter(isText),
     ]),
   ];
   const runs = runIds.length
@@ -1176,11 +1178,14 @@ export async function deliverDueSocketMirrors({
       continue;
     }
     const gate = event.subjectType === "gate" ? gateById.get(event.subjectId) : undefined;
+    const attributed = payloadRunId(event);
     const run = gate
       ? runById.get(gate.runId)
       : event.subjectType === "run"
         ? runById.get(event.subjectId)
-        : undefined;
+        : attributed
+          ? runById.get(attributed)
+          : undefined;
     const action = mirrorFor(event, {
       gate: gate
         ? {

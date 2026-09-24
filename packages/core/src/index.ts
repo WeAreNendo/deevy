@@ -1,4 +1,10 @@
 export { buildContext, createApp, type App, type AppOptions } from "./app.ts";
+export {
+  accountCallbackUrl,
+  beginAccountLink,
+  finishAccountLink,
+  type AccountCallback,
+} from "./account-links.ts";
 // The two protected resources, for anything outside this package that builds
 // a context: which surface a request reached decides the audience it accepts.
 export { API_PATH, MCP_PATH, type ResourcePath } from "./auth.ts";

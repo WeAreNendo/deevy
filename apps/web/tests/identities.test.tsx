@@ -21,6 +21,15 @@ const stub = vi.hoisted(() => ({
   linked: [] as unknown[],
   peeked: [] as unknown[],
   redeemed: [] as unknown[],
+  tools: [] as Array<{ socketId: string; provider: string; name: string }>,
+  begun: [] as unknown[],
+  left: [] as string[],
+}));
+
+vi.mock("../src/lib/leave.ts", () => ({
+  leaveFor: (url: string) => {
+    stub.left.push(url);
+  },
 }));
 
 vi.mock("../src/lib/auth.ts", () => ({
@@ -52,7 +61,12 @@ vi.mock("../src/lib/orpc.ts", async () => {
         identities: stub.identities,
         signIns: stub.signIns,
         linkable: stub.linkable,
+        tools: stub.tools,
       }),
+      begin: async (input: { socketId: string }) => {
+        stub.begun.push(input);
+        return { url: "https://linear.app/oauth/authorize?state=sock_linear.signed" };
+      },
       revoke: async (input: { identityId: string }) => {
         stub.revoked.push(input);
         stub.identities = stub.identities.map((one) =>
@@ -111,6 +125,9 @@ beforeEach(() => {
   stub.linked = [];
   stub.peeked = [];
   stub.redeemed = [];
+  stub.tools = [];
+  stub.begun = [];
+  stub.left = [];
 });
 
 describe("Settings › Identities", () => {
@@ -190,6 +207,30 @@ describe("Settings › Identities", () => {
     fireEvent.click(screen.getByRole("button", { name: "Link @omar to me" }));
     await waitFor(() => expect(stub.redeemed).toEqual([{ code: "ABCD-EFGH" }]));
     expect(await screen.findByText("You redeemed a code sent to it")).toBeTruthy();
+  });
+
+  it("links a Linear account on Linear's own page", async () => {
+    stub.linkable = [];
+    stub.tools = [{ socketId: "sock_linear", provider: "linear", name: "Acme on Linear" }];
+    await mountAt("/settings/identities", { memberName: "Grace" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Link Linear" }));
+
+    await waitFor(() => expect(stub.begun).toEqual([{ socketId: "sock_linear" }]));
+    expect(stub.left).toEqual(["https://linear.app/oauth/authorize?state=sock_linear.signed"]);
+  });
+
+  it("says what happened when a tool sent you back", async () => {
+    await mountAt("/settings/identities?linked=linear", { memberName: "Grace" });
+    expect(await screen.findByText("Your Linear account is linked.")).toBeTruthy();
+  });
+
+  it("says why, when a tool sent you back without linking anything", async () => {
+    await mountAt(
+      `/settings/identities?linkError=${encodeURIComponent("That link did not start here.")}`,
+      { memberName: "Grace" },
+    );
+    expect(await screen.findByText("That link did not start here.")).toBeTruthy();
   });
 
   it("is under You in Settings", async () => {

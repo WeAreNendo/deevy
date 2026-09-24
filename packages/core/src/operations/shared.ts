@@ -444,6 +444,8 @@ export async function addIssueLink(context: ContextFor<"member">, input: IssueLi
       linkId: id,
       kind: input.kind ?? parsed.kind,
       url: input.url,
+      // What a mirrored comment names the link by, where somebody named it.
+      ...(input.title ? { title: input.title } : {}),
       ...(input.runId ? { runId: input.runId } : {}),
     },
   });

@@ -358,9 +358,13 @@ export async function handleSetup(request: Request, options: SetupOptions): Prom
     member: null,
     ...(options.jobs ? { jobs: options.jobs } : {}),
   };
+  // The address the provider sent the browser to, named again exactly when an
+  // OAuth code is traded: the configured origin rather than whatever a proxy
+  // made of the host.
+  const redirectUri = `${(options.baseURL ?? url.origin).replace(/\/+$/, "")}/hooks/${socket.id}/setup`;
   let result;
   try {
-    result = await module.setup({ params });
+    result = await module.setup({ params, redirectUri });
   } catch (error) {
     const why = error instanceof Error ? error.message : String(error);
     return json({ error: why }, 400);

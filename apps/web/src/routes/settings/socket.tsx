@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { NotFoundPage } from "@/routes/not-found";
+import { leaveFor } from "@/lib/leave";
 import { orpc } from "@/lib/orpc";
 import { ago } from "@/lib/time";
 import { providerLabel } from "@/lib/providers";
@@ -57,6 +58,9 @@ export function SocketPage({ socketId }: { socketId: string }) {
   );
   const check = useMutation(orpc.sockets.test.mutationOptions({ onSuccess: refresh }));
   const remove = useMutation(orpc.sockets.remove.mutationOptions({ onSuccess: refresh }));
+  const install = useMutation(
+    orpc.sockets.install.mutationOptions({ onSuccess: ({ url }) => leaveFor(url) }),
+  );
 
   const socket = sockets.data?.sockets.find((row) => row.id === socketId);
   if (sockets.isPending) return <p className="text-muted-foreground">Loading the Socket…</p>;
@@ -137,6 +141,41 @@ export function SocketPage({ socketId }: { socketId: string }) {
         ) : null}
         {check.error ? <p className="text-sm text-destructive">{check.error.message}</p> : null}
       </SettingsSection>
+
+      {socket.provider === "linear" && socket.status !== "pending" ? (
+        <SettingsSection
+          aria-label="Assigning issues to deevy"
+          title="Assigning issues to deevy"
+          description="Each issue assigned to deevy goes to the Project's default Agent."
+        >
+          {(socket.config as Record<string, unknown>).assignable === true ? (
+            <p className="text-sm text-muted-foreground">
+              People can assign an issue to deevy in Linear. It shows as the issue&apos;s delegate,
+              and whoever assigned it stays its assignee.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                A Linear admin installs deevy as an agent once, on Linear&apos;s own page. Until
+                then a label is the only way to hand an issue to an Agent.
+              </p>
+              <div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={install.isPending}
+                  onClick={() => install.mutate({ socketId })}
+                >
+                  Install deevy as an agent
+                </Button>
+              </div>
+              {install.error ? (
+                <p className="text-sm text-destructive">{install.error.message}</p>
+              ) : null}
+            </>
+          )}
+        </SettingsSection>
+      ) : null}
 
       <SettingsSection
         aria-label="What it signs with"
