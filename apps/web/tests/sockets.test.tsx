@@ -37,6 +37,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
       providers: async () => ({
         providers: [
           { id: "github", label: "GitHub", capabilities: ["tracker", "forge"] },
+          { id: "gitlab", label: "GitLab", capabilities: ["tracker", "forge"] },
           { id: "linear", label: "Linear", capabilities: ["tracker"] },
           { id: "slack", label: "Slack", capabilities: ["chat"] },
           { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
@@ -133,7 +134,7 @@ describe("the tools this Workspace is connected to", () => {
     // was not built with would only ever produce a refusal.
     const connect = screen.getByRole("group", { name: "Connect a tool" });
     expect(within(connect).getByRole("button", { name: /GitHub/ })).toBeTruthy();
-    expect(within(connect).queryByRole("button", { name: /GitLab/ })).toBeNull();
+    expect(within(connect).queryByRole("button", { name: /Notion/ })).toBeNull();
   });
 
   it("starts the GitHub flow with a form GitHub itself takes", async () => {
@@ -245,6 +246,66 @@ describe("the tools this Workspace is connected to", () => {
       credentials: { botToken: "xoxb-pasted-from-slack" },
       webhookSecret: "8f14e45fceea167a5a36dedd4bea2543",
     });
+  });
+});
+
+describe("connecting GitLab", () => {
+  it("takes the instance and a token, then says where GitLab sends deliveries and with what", async () => {
+    state.sockets = [];
+    calls.connect.mockClear();
+    calls.rotate.mockClear();
+    calls.update.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect GitLab" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme on GitLab" } });
+    fireEvent.change(screen.getByLabelText("GitLab URL"), {
+      target: { value: "https://gitlab.example.com/" },
+    });
+    fireEvent.change(screen.getByLabelText("Access token"), {
+      target: { value: "glpat-pasted-token" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
+    expect(calls.connect.mock.calls[0]?.[0]).toEqual({
+      provider: "gitlab",
+      name: "Acme on GitLab",
+      config: { baseUrl: "https://gitlab.example.com" },
+      credentials: { token: "glpat-pasted-token" },
+    });
+
+    // Connected: a secret token deevy minted, shown once, for GitLab's webhook.
+    await waitFor(() => expect(calls.rotate).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("whsec_said_exactly_once")).toBeTruthy();
+    expect(screen.getByText("https://deevy.test/hooks/sock_stub00000")).toBeTruthy();
+
+    // Or GitLab's own signing token, which signs every delivery, pasted back.
+    fireEvent.change(screen.getByLabelText("Signing token"), {
+      target: { value: "whsec_Z2l0bGFiLXNpZ25pbmc=" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use the signing token" }));
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    expect(calls.update.mock.calls[0]?.[0]).toEqual({
+      socketId: stubSocket.id,
+      webhookSecret: "whsec_Z2l0bGFiLXNpZ25pbmc=",
+    });
+  });
+
+  it("names no instance when it is gitlab.com, which is what a Socket assumes", async () => {
+    state.sockets = [];
+    calls.connect.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect GitLab" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme on GitLab" } });
+    fireEvent.change(screen.getByLabelText("Access token"), {
+      target: { value: "glpat-pasted-token" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
+    expect(calls.connect.mock.calls[0]?.[0]).toMatchObject({ config: {} });
   });
 });
 

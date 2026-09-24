@@ -100,6 +100,9 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // claim is that the runtime cannot tell the two runtimes apart (src/env.ts).
       sockets: socketModules({
         ...(env.githubApi ? { githubApiBase: env.githubApi } : {}),
+        ...(env.providers.gitlab?.issuer
+          ? { gitlabSignInIssuer: env.providers.gitlab.issuer }
+          : {}),
         ...(env.devStubSockets
           ? {
               devStub: true,
@@ -196,6 +199,9 @@ export default {
           // cannot reach this Worker is still asked (ADR-0024).
           sockets: socketModules({
             ...(isolate.env.githubApi ? { githubApiBase: isolate.env.githubApi } : {}),
+            ...(isolate.env.providers.gitlab?.issuer
+              ? { gitlabSignInIssuer: isolate.env.providers.gitlab.issuer }
+              : {}),
             ...(isolate.env.devStubSockets
               ? {
                   devStub: true,

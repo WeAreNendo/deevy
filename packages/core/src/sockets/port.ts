@@ -173,9 +173,17 @@ export interface PullRequestDraft {
   body: string;
 }
 
+/** What a forge opened: where it is, its number, and what the forge calls it. */
+export interface OpenedPullRequest {
+  url: string;
+  number: number;
+  /** The forge's own words for it — `Merge request !7` on GitLab. Absent, `Pull request #7`. */
+  label?: string;
+}
+
 export interface ForgeSocket {
   credential(scope: Scope): Promise<ForgeCredential>;
-  openPullRequest(scope: Scope, draft: PullRequestDraft): Promise<{ url: string; number: number }>;
+  openPullRequest(scope: Scope, draft: PullRequestDraft): Promise<OpenedPullRequest>;
 }
 
 /** Who clicked or typed in a chat tool: one user, in one team. */

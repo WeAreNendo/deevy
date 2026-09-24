@@ -315,7 +315,7 @@ bindings arrive with the request.
 | `GOOGLE_CLIENT_SECRET`         | env         | secret                 | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
 | `GITLAB_CLIENT_ID`             | env         | secret                 | —                        | GitLab is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/gitlab`.                                                                                                                                    |
 | `GITLAB_CLIENT_SECRET`         | env         | secret                 | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
-| `GITLAB_ISSUER`                | env         | var                    | `https://gitlab.com`     | GitLab sign-in goes to gitlab.com. Set it to a self-hosted instance's origin; every GitLab endpoint deevy calls is built from it.                                                                                                                                                                                         |
+| `GITLAB_ISSUER`                | env         | var                    | `https://gitlab.com`     | GitLab sign-in goes to gitlab.com. Set it to a self-hosted instance's origin; every GitLab endpoint deevy calls is built from it, and a GitLab Socket on that instance takes its accounts from sign-in.                                                                                                                   |
 | `DEEVY_OIDC_ISSUER`            | env         | var                    | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                                 |
 | `DEEVY_OIDC_CLIENT_ID`         | env         | secret                 | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                                    |
 | `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret                 | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
@@ -942,6 +942,44 @@ links theirs once, under **Settings › Identities › Link Linear**: Linear ask
 deevy reads which account and which workspace said yes, and gives the token back at once. An account in
 another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
 deevy minted with the old one; connect the Socket again with the new one.
+
+## Working in GitLab
+
+A GitLab instance is a Socket, for a Project's issues and its code at once: connect it under **Settings ›
+Sockets › Connect GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
+
+1. A dedicated user called deevy, with a **personal access token**, or the bot user GitLab makes for a
+   **project** or **group access token**, where your GitLab tier offers those. The token needs
+   the `api` scope. Give its user **Developer** on each project deevy works, and nothing more: every comment,
+   label, branch and merge request is by that user.
+2. Paste the token, and the instance's address if it is not gitlab.com. Connecting asks GitLab who the token
+   belongs to, and a token that cannot answer is refused rather than stored.
+3. deevy then mints a **secret token** and shows it once, beside the webhook URL. On each project (or group)
+   you bind, add a webhook in GitLab — **Settings › Webhooks** — with that URL and secret token, and choose
+   **Issues events** and **Comments** (the confidential ones too, if deevy should see those). Instead of the
+   secret token you can generate GitLab's **signing token** on the webhook and paste it back into the dialog:
+   GitLab then signs each delivery and its time rather than sending the secret with it, and a signed delivery
+   more than five minutes old is refused.
+
+Bind a Project to a GitLab project under **Settings › Projects**, as its tracker and its repository. deevy
+stores the project's id, so renaming it or moving it to another group breaks nothing. A label `agent:<handle>`
+routes an issue to that Agent, and deevy adds `deevy:awaiting-approval` (GitLab makes the label on the project
+the first time). GitLab's issues are open or closed and nothing else: a team's workflow is in its scoped labels,
+which deevy reads as labels. GitLab has no parent for an issue, so an Agent's sub-issue is _related_ to the
+record it came from and deevy keeps the tree itself.
+
+**The code.** A Run clones over HTTPS with the Socket's own token as the password of GitLab's `oauth2` user.
+GitLab mints nothing narrower from a token, which is why its user should be a Developer on the projects it
+works and no more; the token still stays in the runtime's supervisor, behind its loopback proxy, and never
+reaches the session or `.git/config`. deevy opens a **merge request** from the Run's branch, which says
+`Closes <issue URL>` so merging it closes the issue, and deletes the branch on merge.
+
+**Ruling from GitLab** is `/approve` and `/reject <why>` in a comment, as on GitHub
+([Ruling from the tracker](#ruling-from-the-tracker)). A Socket on the instance this deevy signs people in
+with — gitlab.com, or `GITLAB_ISSUER` — takes its accounts from sign-in, so a Human who signs in with GitLab
+rules with no linking step, and one who signs in otherwise links GitLab under **Settings › Identities**. A
+Socket on any other GitLab shares nothing with sign-in. A comment by a project or group access token's bot
+rules nothing. When the token expires, connect the Socket again with a new one.
 
 ## How far an Agent may split work up
 
