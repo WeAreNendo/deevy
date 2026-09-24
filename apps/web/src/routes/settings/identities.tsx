@@ -5,6 +5,8 @@ import { DataTable, type DataColumn } from "@/components/data-table";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth";
 import { orpc } from "@/lib/orpc";
 import { providerLabel } from "@/lib/providers";
@@ -35,6 +37,17 @@ export function IdentitiesPage() {
   const revoke = useMutation(orpc.identities.revoke.mutationOptions({ onSuccess: refresh }));
   const restore = useMutation(orpc.identities.restore.mutationOptions({ onSuccess: refresh }));
   const [linkFailed, setLinkFailed] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const peek = useMutation(orpc.identities.peek.mutationOptions());
+  const redeem = useMutation(
+    orpc.identities.link.mutationOptions({
+      onSuccess: async () => {
+        setCode("");
+        peek.reset();
+        await refresh();
+      },
+    }),
+  );
 
   const rows = listed.data?.identities ?? [];
   const signIns = new Set(listed.data?.signIns ?? []);
@@ -144,6 +157,63 @@ export function IdentitiesPage() {
           }}
         />
       )}
+
+      <SettingsSection aria-label="Link with a code" title="Link with a code">
+        <p className="text-sm text-muted-foreground">
+          Click Approve or Reject in Slack before your account is linked, or type{" "}
+          <code>/deevy link</code> there, and Slack shows you a code only you can see. Enter it here
+          within ten minutes.
+        </p>
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(submitted) => {
+            submitted.preventDefault();
+            if (code.trim()) peek.mutate({ code: code.trim() });
+          }}
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="link-code">Code from Slack</Label>
+            <Input
+              id="link-code"
+              value={code}
+              autoComplete="one-time-code"
+              placeholder="ABCD-EFGH"
+              className="w-40 font-mono uppercase"
+              onChange={(changed) => {
+                setCode(changed.target.value);
+                peek.reset();
+              }}
+            />
+          </div>
+          <Button type="submit" variant="outline" disabled={peek.isPending || !code.trim()}>
+            Check the code
+          </Button>
+        </form>
+        {peek.error ? <p className="text-sm text-destructive">{peek.error.message}</p> : null}
+        {peek.data ? (
+          <div className="flex flex-col gap-2 rounded-md border p-3">
+            <p className="text-sm">
+              This links{" "}
+              <span className="font-mono">
+                {peek.data.externalLogin ? `@${peek.data.externalLogin}` : "an account"}
+              </span>{" "}
+              in {peek.data.socketName ?? providerLabel(peek.data.provider)} to you. It will be able
+              to approve and reject as you. Only continue if that account is yours.
+            </p>
+            <div>
+              <Button
+                disabled={redeem.isPending}
+                onClick={() => redeem.mutate({ code: code.trim() })}
+              >
+                Link {peek.data.externalLogin ? `@${peek.data.externalLogin}` : "it"} to me
+              </Button>
+            </div>
+            {redeem.error ? (
+              <p className="text-sm text-destructive">{redeem.error.message}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </SettingsSection>
 
       {linkable.length > 0 ? (
         <SettingsSection aria-label="Link an account" title="Link an account">

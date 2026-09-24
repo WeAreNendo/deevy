@@ -1,0 +1,54 @@
+{
+  "type": "block_actions",
+  "user": {
+    "id": "U07GRACE01",
+    "username": "grace",
+    "name": "grace",
+    "team_id": "T07ACME001"
+  },
+  "api_app_id": "A07DEEVY01",
+  "token": "legacy-verification-token-unused",
+  "container": {
+    "type": "message",
+    "message_ts": "1758625200.000100",
+    "channel_id": "C07DEEVY01",
+    "is_ephemeral": false
+  },
+  "trigger_id": "9876543210123.7654321098765.0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+  "team": {
+    "id": "T07ACME001",
+    "domain": "acme"
+  },
+  "enterprise": null,
+  "is_enterprise_install": false,
+  "channel": {
+    "id": "C07DEEVY01",
+    "name": "deevy"
+  },
+  "message": {
+    "type": "message",
+    "subtype": "bot_message",
+    "text": "Waiting on a ruling at the plan Checkpoint: acme/deevy#42",
+    "ts": "1758625200.000100",
+    "bot_id": "B07DEEVY01"
+  },
+  "state": {
+    "values": {}
+  },
+  "response_url": "https://hooks.slack.com/actions/T07ACME001/7654321098765/Zq1Xw2Ve3Ur4Ts5",
+  "actions": [
+    {
+      "action_id": "deevy_reject",
+      "block_id": "gate",
+      "text": {
+        "type": "plain_text",
+        "text": "Reject",
+        "emoji": true
+      },
+      "value": "gate_k3xr8v2m9qpw",
+      "style": "danger",
+      "type": "button",
+      "action_ts": "1758625300.123456"
+    }
+  ]
+}

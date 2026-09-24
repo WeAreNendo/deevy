@@ -144,6 +144,10 @@ describe("what the CLI cannot do", () => {
       // deevy, from the link the CLI hands them.
       "gates.approve",
       "gates.reject",
+      // Linking an account gives it the power to rule as you, so it is the same
+      // decision, taken the same way (ADR-0025).
+      "identities.link",
+      "identities.peek",
       "oauthClients.list",
       "oauthClients.revoke",
     ]);

@@ -876,6 +876,31 @@ comment by a bot — deevy's own included — rules nothing and is not answered.
 under Settings › Identities stays unlinked: nothing links it again until they do. Every link and every refusal
 is in the Event log (`identity.linked`, `identity.revoked`, `gate.ruling_refused`).
 
+## Ruling from Slack
+
+A Slack app is a Socket too: connect it under **Settings › Sockets › Connect Slack**. deevy starts the Socket
+first and shows the app manifest (`docs/slack-manifest.yaml`) with this instance's own request URL in it, so
+creating the app in Slack — Create New App → From an app manifest — is one trip. Install it to the
+workspace, then paste the **Bot User OAuth Token** and the **Signing Secret** back into deevy. The URL must
+be one Slack can reach; an instance with no public address can post to Slack but hears no clicks.
+
+Then, under **Settings › Channels**, add a room in the app (its Slack channel ID, after `/invite @deevy`
+there) and route `Gate awaiting` to it. A Gate arrives with **Approve** and **Reject**; Reject asks why first.
+The message is changed when anybody rules — in Slack, in deevy or in the tracker — through the same outbox
+as everything else, so a click is answered at once and the message a moment later. A Human whose Slack
+account is linked is also told by direct message, unless they turned that off under **Settings ›
+Notifications**. The incoming-webhook Channel is still there for a room with no app: it posts a link and
+takes no click.
+
+A click counts only for a Slack account linked to a Member, and Slack's accounts are not a sign-in's, so
+linking is its own step: an unlinked click, or `/deevy link`, gets a code only that person sees, which they
+enter under **Settings › Identities** within ten minutes. deevy names the account before linking it,
+because a code handed over by somebody else would link _their_ account. Codes are kept only as a hash.
+
+Slack signs every request with a timestamp, and one older than five minutes is refused however it is signed.
+Slack's signing secret is rotated in Slack; paste the new one with `sockets.update` (`webhookSecret`) and
+deevy keeps taking the old one for a day, so the two can be changed in either order.
+
 ## How far an Agent may split work up
 
 An Agent can open sub-issues and hand them to other Agents

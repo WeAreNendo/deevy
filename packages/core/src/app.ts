@@ -170,6 +170,9 @@ export function createApp({
       socketId: c.req.param("socketId"),
       ...(sockets ? { sockets } : {}),
       ...(socketSecret ? { socketSecret } : {}),
+      // Where a Human opens deevy, which a chat reply names when it tells
+      // somebody where to link their account (sockets/chat.ts).
+      ...((webURL ?? baseURL) ? { origin: webURL ?? baseURL } : {}),
       jobs,
     }),
   );

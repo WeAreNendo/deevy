@@ -32,7 +32,12 @@ describe("what one Human wants to hear about, and where", () => {
     // point is that every kind is offered and defaults to on, not that there
     // are five of them.
     expect(preferences).toHaveLength(humanNotificationKinds.length);
-    expect(preferences).toContainEqual({ kind: "gate_awaiting", inbox: true, slack: true });
+    expect(preferences).toContainEqual({
+      kind: "gate_awaiting",
+      inbox: true,
+      slack: true,
+      slackDm: true,
+    });
     expect(preferences.every((row) => row.inbox && row.slack)).toBe(true);
   });
 
@@ -44,9 +49,19 @@ describe("what one Human wants to hear about, and where", () => {
     });
 
     const { preferences } = await asBob.preferences.get({});
-    expect(preferences).toContainEqual({ kind: "gate_awaiting", inbox: true, slack: false });
+    expect(preferences).toContainEqual({
+      kind: "gate_awaiting",
+      inbox: true,
+      slack: false,
+      slackDm: true,
+    });
     // The kinds they said nothing about are untouched.
-    expect(preferences).toContainEqual({ kind: "mention", inbox: true, slack: true });
+    expect(preferences).toContainEqual({
+      kind: "mention",
+      inbox: true,
+      slack: true,
+      slackDm: true,
+    });
   });
 
   it("is their own and nobody else's", async () => {
@@ -57,7 +72,12 @@ describe("what one Human wants to hear about, and where", () => {
     });
 
     const alice = await asAlice.preferences.get({});
-    expect(alice.preferences).toContainEqual({ kind: "mention", inbox: true, slack: true });
+    expect(alice.preferences).toContainEqual({
+      kind: "mention",
+      inbox: true,
+      slack: true,
+      slackDm: true,
+    });
     // Every row written belongs to the Member that asked for it: the operation
     // takes no Member, so there is no way to set another Human's.
     const rows = await db.query.notificationPreference.findMany();

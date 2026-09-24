@@ -811,6 +811,35 @@ Any change to what an Agent may rule: nothing, on any door.
 
 Written before the work, to be answered after it.
 
+**Slice 10, as built.** A Gate posted to a Slack room or a linked Human's direct messages carries Approve
+and Reject; a click rules as the Human whose Slack account it is, through the same `recordRuling`, and the
+message changes through the outbox wherever the Ruling came from. The real module behind the real route
+proves it end to end (`packages/sockets/tests/slack-deevy.test.ts`), and a click that rules costs 24
+statements, asserted.
+
+Four things came out differently from the sketch, and one was a bug the slice found in an older one.
+
+- **`sockets.connect` never proved the credential it was given.** It built the module from the
+  configuration alone, so a real Slack token — or a pasted GitHub App key, since slice 5 — could not answer
+  `identity()`, and the fakes hid it because theirs needs no credential. It seals first and proves with
+  what it sealed now, and a test fails the old way.
+- **Connecting Slack is one trip.** Slack wants the request URL in the app's own manifest, and the URL
+  names the Socket, so `sockets.begin` starts it and `sockets.connect` completes it (`socketId`). The dialog
+  renders the committed `docs/slack-manifest.yaml`, so the manifest in the repository is the one people
+  paste.
+- **A link code names its account before it links.** The code links a Slack account to whoever redeems it,
+  so a code handed over by somebody else links theirs; `identities.peek` shows which account, and linking is
+  a second, deliberate step. Codes are stored as a hash, and nothing about one reaches the Event log.
+- **Three things are said inline, not through the outbox.** The plan put everything behind the outbox for
+  Slack's three seconds, and the Ruling and the message update are. But a dialog must open within Slack's
+  `trigger_id` window, a link code must never sit in a queue, and a refusal is for the one person who
+  clicked and nobody else; each is one request, answered to that person alone.
+
+A refusal made in Slack is written to the log (`gate.ruling_refused`, `via: slack`) and not mirrored to the
+tracker, where it would be said to everybody. `run.awaiting_input` is what notifies a Gate, so the chat
+sweep finds the Gate through that Event's payload as well as its own. A Ruling now costs one statement more
+everywhere — it asks where the Gate's chat messages are — which the ratchets record.
+
 **Slice 9, as built.** A Human rules by commenting `/approve` where they read the Proposal, and deevy
 proves who wrote it from the tool's own account id: an Identity already written down, the account they sign
 in to deevy with, or — only on a Socket an admin allowed it — an address they verified. The acceptance walk

@@ -20,8 +20,17 @@ import { NoInput, defineOperation } from "./registry.ts";
 const PreferenceView = z.object({
   kind: z.enum(humanNotificationKinds),
   inbox: z.boolean(),
+  /** In the Slack rooms the Workspace's routing rules send this kind to. */
   slack: z.boolean(),
+  /**
+   * As a direct message from the Slack app, once your Slack account is linked
+   * (ADR-0025). Nothing is sent before then, whatever this says.
+   */
+  slackDm: z.boolean(),
 });
+
+/** What a caller sets: the direct-message column may be left out, and keeps its value. */
+const PreferenceInput = PreferenceView.extend({ slackDm: z.boolean().optional() });
 
 export const preferences = {
   get: defineOperation({
@@ -45,6 +54,7 @@ export const preferences = {
           kind,
           inbox: saved.get(kind)?.inbox ?? true,
           slack: saved.get(kind)?.slack ?? true,
+          slackDm: saved.get(kind)?.slackDm ?? true,
         })),
       };
     },
@@ -56,10 +66,19 @@ export const preferences = {
     method: "PUT",
     path: "/preferences",
     auth: "member",
-    input: z.object({ preferences: z.array(PreferenceView).max(humanNotificationKinds.length) }),
+    input: z.object({ preferences: z.array(PreferenceInput).max(humanNotificationKinds.length) }),
     output: z.object({ preferences: z.array(PreferenceView) }),
     handler: async ({ input, context }) => {
       const changed = [...new Map(input.preferences.map((row) => [row.kind, row])).values()];
+      // What a caller left out keeps the value it had, which a client that
+      // predates direct messages relies on to not switch them off.
+      const before = new Map(
+        (
+          await context.db.query.notificationPreference.findMany({
+            where: { memberId: context.member.id },
+          })
+        ).map((row) => [row.kind, row]),
+      );
       if (changed.length > 0) {
         // Replace only the kinds named, in two statements: D1 has no
         // interactive transactions (ADR-0006), and a kind that is briefly
@@ -79,6 +98,7 @@ export const preferences = {
             kind: row.kind,
             inbox: row.inbox,
             slack: row.slack,
+            slackDm: row.slackDm ?? before.get(row.kind)?.slackDm ?? true,
           })),
         );
       }
@@ -92,6 +112,7 @@ export const preferences = {
           kind,
           inbox: saved.get(kind)?.inbox ?? true,
           slack: saved.get(kind)?.slack ?? true,
+          slackDm: saved.get(kind)?.slackDm ?? true,
         })),
       };
     },

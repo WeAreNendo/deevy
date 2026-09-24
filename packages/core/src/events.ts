@@ -2,6 +2,7 @@ import { event, type Db, type Event, type Member, type Workspace } from "@deevy/
 import type { JobQueue } from "./jobs.ts";
 import { deriveNotifications } from "./notifications.ts";
 import { triggersFor } from "./triggers.ts";
+import { deriveChatUpdates } from "./sockets/chat-out.ts";
 import { deriveSocketMirrors } from "./sockets/mirror.ts";
 import { deriveWebhookDeliveries } from "./webhooks.ts";
 
@@ -199,6 +200,10 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
   // lives (ADR-0024). Same shape, same row, same sweep: a Project that mirrors
   // nothing pays one pure check and no query at all (sockets/mirror.ts).
   owed.push(...(await deriveSocketMirrors(source.db, row)));
+  // And the messages a chat tool holds about a Gate this Event changes: the
+  // buttons on a Slack message stop being true the moment anybody rules,
+  // wherever they ruled (sockets/chat-out.ts).
+  owed.push(...(await deriveChatUpdates(source.db, row)));
 
   // Then, and only then, the nudge: a job names a row that is already durable,
   // so a deployment with a queue sends it now instead of at the next sweep and

@@ -1,16 +1,18 @@
-import { channel as channelTable, type Channel, type Db } from "@deevy/db";
+import { channel as channelTable, channelKinds, type Channel, type Db } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { appendEvent } from "../events.ts";
 import { postSlackMessage } from "../slack.ts";
-import { NoInput, defineOperation } from "./registry.ts";
+import { requireSocket, socketModuleFor } from "../sockets/registry.ts";
+import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
 import { newId } from "../ids.ts";
 
 /**
  * Channels: where Notifications are delivered (CONTEXT.md). Only Slack is
  * configured here. The inbox is every Human's and needs no row, so a Channel in
- * this namespace is always a Slack incoming webhook.
+ * this namespace is a Slack incoming webhook, which posts a link, or a room in
+ * a connected Slack app, where a Gate carries its two buttons (ADR-0025).
  *
  * None of these operations is open to an Agent (ADR-0004). Where Humans are
  * told things is administration, and an Agent never administers.
@@ -24,9 +26,12 @@ import { newId } from "../ids.ts";
  */
 const ChannelView = z.object({
   id: z.string(),
-  kind: z.enum(["inbox", "slack"]),
+  kind: z.enum(channelKinds),
   name: z.string(),
   webhookHost: z.string().nullable(),
+  /** For a room in a Slack app: the Socket it is in, and the conversation's id. */
+  socketId: z.string().nullable(),
+  conversation: z.string().nullable(),
   createdBy: z.string().nullable(),
   createdAt: z.date(),
 });
@@ -43,11 +48,15 @@ function hostOf(config: Channel["config"]): string | null {
 }
 
 function view(row: Channel) {
+  const text = (key: string) =>
+    typeof row.config?.[key] === "string" ? (row.config[key] as string) : null;
   return {
     id: row.id,
     kind: row.kind,
     name: row.name,
     webhookHost: hostOf(row.config),
+    socketId: text("socketId"),
+    conversation: text("conversation"),
     createdBy: row.createdBy,
     createdAt: row.createdAt,
   };
@@ -113,6 +122,56 @@ export const channels = {
         subjectType: "channel",
         subjectId: id,
         payload: { name: input.name, channelKind: "slack", webhookHost: hostOf(row.config) },
+      });
+      return view(row);
+    },
+  }),
+
+  /**
+   * A room in a connected Slack app. What a webhook cannot do, this can: a Gate
+   * is posted with its two buttons and changed when somebody rules, wherever
+   * they ruled (ADR-0025). The app has to be in the room, which Slack says in
+   * the error the first message would get.
+   */
+  createInSocket: defineOperation({
+    name: "channels.createInSocket",
+    summary: "Add a room in a connected Slack app as a Channel",
+    method: "POST",
+    path: "/channels/in-socket",
+    auth: "admin",
+    input: z.object({
+      /** What a Human calls it, usually the Slack channel: `#deevy`. */
+      name: z.string().trim().min(1).max(120),
+      socketId: z.string(),
+      /** The conversation's own id in the tool: `C0123ABCD` in Slack. */
+      conversation: z.string().trim().min(1).max(40),
+    }),
+    output: ChannelView,
+    handler: async ({ input, context }) => {
+      const socket = await context.db.query.socket.findFirst({
+        where: { id: input.socketId, workspaceId: context.workspace.id },
+      });
+      if (!socket || socket.status === "removed" || !socket.capabilities.includes("chat")) {
+        throw new ORPCError("NOT_FOUND", { message: "No such chat tool here" });
+      }
+      const id = newId("channel");
+      const [row] = await context.db
+        .insert(channelTable)
+        .values({
+          id,
+          workspaceId: context.workspace.id,
+          kind: "slack_app",
+          name: input.name,
+          config: { socketId: socket.id, conversation: input.conversation },
+          createdBy: context.member.id,
+        })
+        .returning();
+      if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
+      await appendEvent(context, {
+        kind: "channel.created",
+        subjectType: "channel",
+        subjectId: id,
+        payload: { name: input.name, channelKind: "slack_app", socketName: socket.name },
       });
       return view(row);
     },
@@ -196,6 +255,7 @@ export const channels = {
     }),
     handler: async ({ input, context }) => {
       const found = await requireChannel(context.db, context.workspace.id, input.channelId);
+      if (found.kind === "slack_app") return testInSocket(context, found);
       const webhookUrl = found.config?.webhookUrl;
       if (typeof webhookUrl !== "string" || webhookUrl.length === 0) {
         throw new ORPCError("BAD_REQUEST", { message: "This Channel has no webhook URL" });
@@ -219,3 +279,34 @@ export const channels = {
     },
   }),
 };
+
+/**
+ * A room in a Slack app, tested the way it is used: the app posts, which is
+ * also how an operator finds out the app was never invited into the room —
+ * Slack says `not_in_channel`, and that is what this answers with.
+ */
+async function testInSocket(
+  context: ContextFor<"admin">,
+  found: Channel,
+): Promise<{ delivered: boolean; status: number; error: string | null }> {
+  const socketId = typeof found.config?.socketId === "string" ? found.config.socketId : "";
+  const conversation =
+    typeof found.config?.conversation === "string" ? found.config.conversation : "";
+  try {
+    const socket = await requireSocket(context, socketId);
+    const chat = (await socketModuleFor(context, socket)).chat;
+    if (!chat) throw new Error("That Socket is not a chat tool");
+    await chat.post(conversation, {
+      kind: "text",
+      text: `${context.workspace.name} is connected to this room. A Gate routed here arrives with two buttons.`,
+      link: null,
+    });
+    return { delivered: true, status: 200, error: null };
+  } catch (error) {
+    return {
+      delivered: false,
+      status: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}

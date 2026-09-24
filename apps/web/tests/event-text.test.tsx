@@ -235,6 +235,13 @@ describe("a Ruling made in the tracker", () => {
         },
       })?.text,
     ).toContain("wants somebody other than the Human this Run is for");
+    // And the door it came through, since a Slack click is refused as well.
+    expect(
+      describeEvent({
+        kind: "gate.ruling_refused",
+        payload: { externalActor: "omar", reason: "unknown_identity", via: "slack" },
+      })?.text,
+    ).toBe("@omar ruled in Slack and it counted for nothing: an account nobody here has linked");
   });
 
   it("says how an account came to rule as somebody, and folds it away", () => {

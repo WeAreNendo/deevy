@@ -1,8 +1,10 @@
 import {
   account as accountTable,
+  linkCode as linkCodeTable,
   memberIdentity as memberIdentityTable,
   user as userTable,
   type Db,
+  type LinkCode,
   type Member,
   type MemberIdentity,
   type Socket,
@@ -123,7 +125,7 @@ async function memberByVerifiedEmail(
 /** Writes an Identity down, and says so in the log. */
 async function link(
   source: EventSource,
-  socket: Pick<Socket, "id" | "provider">,
+  socket: { id: string; provider: string },
   scope: IdentityScope,
   actor: ExternalActor,
   member: Member,
@@ -237,4 +239,113 @@ export async function restoreIdentity(
     },
   });
   return restored ?? { ...identity, revokedAt: null };
+}
+
+/** How long a link code may wait to be redeemed. */
+export const LINK_CODE_MS = 10 * 60_000;
+
+/** No I, O, 0 or 1: a code is read off one screen and typed into another. */
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** What a code is stored as: a hash of it, typed however it was typed. */
+async function codeHash(code: string): Promise<string> {
+  const normalized = code.toUpperCase().replaceAll(/[^A-Z0-9]/g, "");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * A code for one account on a chat tool, to be said to that account alone
+ * (ADR-0025). Whoever redeems it signed in to deevy becomes that account's
+ * Human; the tool vouches that only this account saw it, and the session
+ * vouches for the Human.
+ *
+ * Returned once and stored only as a hash, so neither the table nor the log can
+ * hand it to anybody else in the ten minutes it is good for.
+ */
+export async function mintLinkCode(
+  source: EventSource,
+  socket: Pick<Socket, "id" | "provider">,
+  scope: IdentityScope,
+  actor: ExternalActor,
+  now = new Date(),
+): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const raw = [...bytes].map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
+  const code = `${raw.slice(0, 4)}-${raw.slice(4)}`;
+  await source.db.insert(linkCodeTable).values({
+    id: newId("linkCode"),
+    workspaceId: source.workspace.id,
+    socketId: socket.id,
+    provider: socket.provider,
+    instance: scope.instance,
+    externalUserId: actor.id,
+    externalLogin: actor.login || null,
+    codeHash: await codeHash(code),
+    expiresAt: new Date(now.getTime() + LINK_CODE_MS),
+  });
+  return code;
+}
+
+/** A code that is still good in this Workspace, or NOT_FOUND. Never says which of those it is not. */
+export async function requireLinkCode(
+  db: Db,
+  workspaceId: string,
+  code: string,
+  now = new Date(),
+): Promise<LinkCode> {
+  const found = await db.query.linkCode.findFirst({
+    where: { codeHash: await codeHash(code), workspaceId },
+  });
+  if (!found || found.redeemedAt || found.expiresAt.getTime() <= now.getTime()) {
+    throw new ORPCError("NOT_FOUND", {
+      message: "That code is not one deevy gave out here, or it has been used or has expired",
+    });
+  }
+  return found;
+}
+
+/**
+ * Links the account a code names to the Human redeeming it, and spends it.
+ * Refused where that account already rules as somebody else: one account is
+ * one Human, and changing whose it is is theirs to undo first.
+ */
+export async function redeemLinkCode(
+  source: EventSource & { member: Member },
+  found: LinkCode,
+): Promise<MemberIdentity> {
+  const live = await source.db.query.memberIdentity.findFirst({
+    where: {
+      provider: found.provider,
+      instance: found.instance,
+      externalUserId: found.externalUserId,
+      revokedAt: { isNull: true },
+    },
+  });
+  if (live && live.memberId !== source.member.id) {
+    throw new ORPCError("CONFLICT", {
+      message: "That account already approves and rejects as somebody else in deevy",
+    });
+  }
+  // Spent first, and only if nobody spent it in between: the update is the claim.
+  const [spent] = await source.db
+    .update(linkCodeTable)
+    .set({ redeemedAt: new Date(), redeemedBy: source.member.id })
+    .where(and(eq(linkCodeTable.id, found.id), isNull(linkCodeTable.redeemedAt)))
+    .returning({ id: linkCodeTable.id });
+  if (!spent) {
+    throw new ORPCError("NOT_FOUND", {
+      message: "That code is not one deevy gave out here, or it has been used or has expired",
+    });
+  }
+  if (live) return live;
+  const linked = await link(
+    source,
+    { id: found.socketId, provider: found.provider },
+    { instance: found.instance },
+    { id: found.externalUserId, login: found.externalLogin ?? "", isBot: false },
+    source.member,
+    "link_code",
+  );
+  return linked.identity;
 }

@@ -23,6 +23,7 @@ import type { EventKind } from "./events.ts";
 import type { JobQueue } from "./jobs.ts";
 import {
   deriveNotifications,
+  gateRequestIdOf,
   isHumanNotificationKind,
   issueOf,
   notificationKindOf,
@@ -31,10 +32,17 @@ import { openStatuses } from "./runs.ts";
 import { appendEvent } from "./events.ts";
 import { applyInbound } from "./sockets/apply.ts";
 import { mirrorFor, mirrorsKind, type MirrorAction } from "./sockets/mirror.ts";
+import { chatGateMessage } from "./sockets/chat-out.ts";
 import { forgetOldDeliveries } from "./sockets/hooks.ts";
-import type { InboundEvent, SocketModules } from "./sockets/port.ts";
+import type { ChatMessage, InboundEvent, SocketModules } from "./sockets/port.ts";
 import { socketModuleFor } from "./sockets/registry.ts";
-import { postSlackMessage, slackMessage, type FetchLike, type SlackPayload } from "./slack.ts";
+import {
+  issueUrl,
+  postSlackMessage,
+  slackMessage,
+  type FetchLike,
+  type SlackPayload,
+} from "./slack.ts";
 import { deriveWebhookDeliveriesForMany, postWebhook } from "./webhooks.ts";
 import { newId } from "./ids.ts";
 
@@ -476,7 +484,7 @@ export interface DueDeliveriesQueryOptions {
  */
 function dueDeliveries(
   db: Db,
-  target: (typeof deliveryTargets)[number],
+  target: (typeof deliveryTargets)[number] | Array<(typeof deliveryTargets)[number]>,
   { workspaceId, now, limit, maxAttempts }: Required<DueDeliveriesQueryOptions>,
 ) {
   return db
@@ -487,7 +495,9 @@ function dueDeliveries(
         isNull(deliveryTable.deliveredAt),
         lte(deliveryTable.nextAttemptAt, now),
         eq(deliveryTable.workspaceId, workspaceId),
-        eq(deliveryTable.target, target),
+        Array.isArray(target)
+          ? inArray(deliveryTable.target, target)
+          : eq(deliveryTable.target, target),
         // Out of attempts is given up on, not retried forever.
         lt(deliveryTable.attempts, maxAttempts),
         // Somebody else may be sending it right now.
@@ -824,6 +834,223 @@ export async function deliverDueChannelMessages({
   return result;
 }
 
+export interface DeliverDueChatMessagesOptions {
+  db: Db;
+  workspaceId: string;
+  /** The providers this deployment can speak. Without them nothing is sent. */
+  sockets?: SocketModules;
+  socketSecret?: string;
+  /** Where a Human opens a Gate in deevy, which every Gate message links to. */
+  baseUrl: string;
+  now?: Date;
+  limit?: number;
+  maxAttempts?: number;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Sends what a chat tool is owed (ADR-0025): a Notification posted to a room in
+ * a Slack app or to one Human's direct messages, and the update a Gate's
+ * messages are owed when somebody rules on it.
+ *
+ * The fourth arm beside Slack's webhooks, the webhooks and the trackers, with
+ * their claim, their backoff and their retirement. A delivery names one of
+ * three things, each looked up in one batched read: a `slack_app` Channel (post
+ * to the room), an Identity (post to that Human's direct messages), or a chat
+ * Socket (update every message of the Gate it holds). A Gate is rendered from
+ * its own rows at send time, so a message posted after somebody already ruled
+ * says so rather than offering a button that would be refused.
+ */
+export async function deliverDueChatMessages({
+  db,
+  workspaceId,
+  sockets,
+  socketSecret,
+  baseUrl,
+  now = new Date(),
+  limit = defaultDeliveryLimit,
+  maxAttempts = maxDeliveryAttempts,
+  fetch: fetchImpl,
+}: DeliverDueChatMessagesOptions): Promise<DeliveryResult> {
+  const result: DeliveryResult = { scanned: 0, delivered: 0, failed: 0, gaveUp: 0, more: false };
+  if (!sockets) return result;
+
+  const due = await dueDeliveries(db, ["chat", "chat_dm"], {
+    workspaceId,
+    now,
+    limit,
+    maxAttempts,
+  });
+  result.more = due.length >= limit;
+  if (due.length === 0) return result;
+  const claimed = await claimDeliveries(
+    db,
+    due.map((row) => row.id),
+    now,
+  );
+  result.scanned = claimed.length;
+  if (claimed.length === 0) return result;
+
+  const eventBySeq = await eventsOf(db, claimed);
+  const targetIds = [...new Set(claimed.map((row) => row.targetId))];
+  const channels = await db.query.channel.findMany({
+    where: { id: { in: targetIds }, workspaceId, kind: "slack_app" },
+  });
+  const channelById = new Map(channels.map((row) => [row.id, row]));
+  const identities = await db.query.memberIdentity.findMany({
+    where: { id: { in: targetIds }, workspaceId, revokedAt: { isNull: true } },
+  });
+  const identityById = new Map(identities.map((row) => [row.id, row]));
+  // Every chat tool in the Workspace: there are one or two, and a direct
+  // message is found by the team its Identity lives in rather than by id.
+  const chatSockets = (
+    await db.query.socket.findMany({ where: { workspaceId, status: "active" } })
+  ).filter((row) => row.capabilities.includes("chat"));
+  const socketById = new Map(chatSockets.map((row) => [row.id, row]));
+
+  const events = [...eventBySeq.values()];
+  // A Gate is the subject of its own Events, and the Run's wait for one names
+  // it in its payload: that wait is what a Human is notified by (notifications.ts).
+  const gateOf = (event: Event): string | null =>
+    event.subjectType === "gate" ? event.subjectId : gateRequestIdOf(event);
+  const gateIds = [...new Set(events.map(gateOf).filter(isText))];
+  const gates = gateIds.length
+    ? await db.query.gateRequest.findMany({
+        where: { id: { in: gateIds } },
+        with: {
+          issue: { columns: { externalKey: true, url: true } },
+          run: { with: { agent: { with: { user: { columns: { name: true } } } } } },
+          checkpointPolicy: { columns: { approvalsRequired: true } },
+          decisions: {
+            with: {
+              socket: { columns: { provider: true } },
+              member: { with: { user: { columns: { name: true } } } },
+            },
+          },
+          mirrors: { where: { kind: "message" } },
+        },
+      })
+    : [];
+  const gateById = new Map(gates.map((row) => [row.id, row]));
+  const issueIds = [...new Set(events.map((event) => issueOf(event)).filter(isText))];
+  const issues = issueIds.length
+    ? await db.query.issue.findMany({
+        where: { id: { in: issueIds } },
+        columns: { id: true, externalKey: true, title: true },
+      })
+    : [];
+  const issueById = new Map(issues.map((row) => [row.id, row]));
+  const origin = baseUrl.replace(/\/+$/, "");
+
+  /** What one Event says in a chat tool: a Gate with its buttons, or a line and a link. */
+  const messageFor = (event: Event): ChatMessage | null => {
+    const gateId = gateOf(event);
+    const gate = gateId ? gateById.get(gateId) : undefined;
+    if (gate) return { kind: "gate", gate: chatGateMessage(gate, origin) };
+    const kind = notificationKindOf(event);
+    if (!kind || !isHumanNotificationKind(kind)) return null;
+    const issueId = issueOf(event);
+    const issue = issueId ? issueById.get(issueId) : undefined;
+    const said = slackMessage({
+      kind,
+      issue: issue ? { key: issue.externalKey, title: issue.title } : null,
+      baseUrl: origin,
+    });
+    return {
+      kind: "text",
+      text: said.text,
+      link: issue
+        ? { url: issueUrl(origin, issue.externalKey), label: `${issue.externalKey} ${issue.title}` }
+        : null,
+    };
+  };
+
+  const undeliverable: string[] = [];
+  const attempted: Attempted[] = [];
+  for (const row of claimed) {
+    const event = eventBySeq.get(row.eventSeq);
+    const channel = channelById.get(row.targetId);
+    const identity = identityById.get(row.targetId);
+    const updating = socketById.get(row.targetId);
+    const socket = channel
+      ? socketById.get(configText(channel.config, "socketId"))
+      : identity
+        ? chatSockets.find(
+            (one) => one.provider === identity.provider && one.config.teamId === identity.instance,
+          )
+        : updating;
+    const message = event ? messageFor(event) : null;
+    // A room whose app was removed, a Human who unlinked, a Socket that was
+    // rested: none of these become sendable by waiting, so they are retired.
+    if (!event || !socket || !message) {
+      undeliverable.push(row.id);
+      continue;
+    }
+    try {
+      const module = await socketModuleFor(
+        {
+          db,
+          sockets,
+          ...(socketSecret ? { socketSecret } : {}),
+          ...(fetchImpl ? { fetch: fetchImpl } : {}),
+        },
+        socket,
+      );
+      const chat = module.chat;
+      if (!chat) throw new Error(`The ${socket.name} Socket is not a chat tool`);
+
+      if (updating && !channel && !identity) {
+        const gate = message.kind === "gate" ? gateById.get(message.gate.gateRequestId) : undefined;
+        for (const mirror of gate?.mirrors.filter((one) => one.socketId === socket.id) ?? []) {
+          const channelId = configText(mirror.externalRef, "channel");
+          const ts = configText(mirror.externalRef, "ts");
+          if (channelId && ts) await chat.update({ channel: channelId, ts }, message);
+        }
+      } else {
+        const conversation = channel
+          ? configText(channel.config, "conversation")
+          : await chat.openDm(identity?.externalUserId ?? "");
+        const ref = await chat.post(conversation, message);
+        // Where it landed, so a Ruling from any door can change it later.
+        if (message.kind === "gate") {
+          await db.insert(socketMirrorTable).values({
+            id: newId("socketMirror"),
+            gateRequestId: message.gate.gateRequestId,
+            socketId: socket.id,
+            kind: "message",
+            externalRef: { channel: ref.channel, ts: ref.ts },
+          });
+        }
+      }
+      attempted.push({ id: row.id, delivered: true, status: 200, error: null });
+    } catch (error) {
+      attempted.push({
+        id: row.id,
+        delivered: false,
+        status: 0,
+        error: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+      });
+    }
+  }
+
+  const recorded = await recordOutcomes(db, attempted, {
+    now,
+    backoff: slackBackoff,
+    maxAttempts,
+    attemptsBefore: new Map(claimed.map((row) => [row.id, row.attempts])),
+  });
+  result.delivered = recorded.delivered;
+  result.failed = recorded.failed;
+  result.gaveUp = recorded.exhausted.length + undeliverable.length;
+  await retireDeliveries(
+    db,
+    undeliverable,
+    "the room, the account or the tool is gone",
+    maxAttempts,
+  );
+  return result;
+}
+
 export interface DeliverDueSocketMirrorsOptions {
   db: Db;
   workspaceId: string;
@@ -1057,6 +1284,12 @@ export async function deliverDueSocketMirrors({
 }
 
 /** Whether a value is a string, for the id lists these lookups are built from. */
+/** One string out of a JSON column, or empty when it is not one. */
+function configText(config: Record<string, unknown> | null | undefined, key: string): string {
+  const value = config?.[key];
+  return typeof value === "string" ? value : "";
+}
+
 function isText(value: string | null): value is string {
   return typeof value === "string";
 }
@@ -1640,6 +1873,8 @@ export interface DueWorkResult {
   forgottenDeliveries: number;
   /** Comments deevy left in a tracker, saying back what happened here. */
   mirrored: number;
+  /** Messages a chat tool was sent or had changed: a Gate in Slack, and its update. */
+  chatMessages: number;
   /** The signal was aborted, so the passes after that point did not run. */
   aborted: boolean;
 }
@@ -1687,6 +1922,7 @@ export async function runDueWork({
     syncedRecords: 0,
     forgottenDeliveries: 0,
     mirrored: 0,
+    chatMessages: 0,
     aborted: false,
   };
 
@@ -1774,6 +2010,27 @@ export async function runDueWork({
         }),
       (of) => {
         result.mirrored += of.delivered;
+      },
+    );
+  }
+  // And what a chat tool is owed: a Gate in a Slack room or a Human's direct
+  // messages, and the update its message is owed when somebody rules. A Gate
+  // message links into deevy, so without an origin it waits (ADR-0025).
+  if (sockets && baseUrl) {
+    await drain(
+      () =>
+        deliverDueChatMessages({
+          db,
+          workspaceId,
+          sockets,
+          baseUrl,
+          now,
+          ...(socketSecret ? { socketSecret } : {}),
+          ...(fetch ? { fetch } : {}),
+          ...deliveryBound,
+        }),
+      (of) => {
+        result.chatMessages += of.delivered;
       },
     );
   }

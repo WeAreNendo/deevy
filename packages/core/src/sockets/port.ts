@@ -171,6 +171,110 @@ export interface ForgeSocket {
   openPullRequest(scope: Scope, draft: PullRequestDraft): Promise<{ url: string; number: number }>;
 }
 
+/** Who clicked or typed in a chat tool: one user, in one team. */
+export interface ChatActor {
+  /** The team the user belongs to, which is the Identity's instance (ADR-0025). */
+  team: string;
+  /** The tool's own id for the user. The only thing ever matched on. */
+  user: string;
+  /** What the tool calls them, for a screen and a reply. Never matched on. */
+  login: string;
+}
+
+/** Where a message lives in a chat tool, which is what a later update names. */
+export interface ChatMessageRef {
+  channel: string;
+  ts: string;
+}
+
+/**
+ * What one request from a chat tool means, in deevy's terms. `normalizeInteraction`
+ * is pure, like a tracker's `normalize`: the parsed request in, this out.
+ */
+export type ChatInteraction =
+  | {
+      kind: "ruling";
+      actor: ChatActor;
+      gateRequestId: string;
+      decision: "approved" | "rejected";
+      note: string | null;
+      /**
+       * A rejection asked for from a button, before its author has said why:
+       * deevy asks for the note first (`askForNote`), and the answer arrives
+       * as a second interaction carrying it.
+       */
+      wantsNote: boolean;
+      /** The message the click was on, so a reply and an update can find it. */
+      message: ChatMessageRef | null;
+      /** Where to answer the clicker alone, for about half an hour. */
+      responseUrl: string | null;
+      /** What opening a dialog in answer needs, for about three seconds. */
+      triggerId: string | null;
+    }
+  | { kind: "link"; actor: ChatActor; responseUrl: string | null }
+  | { kind: "ignored"; why: string };
+
+/** What deevy answers a chat tool's request with, which the tool renders its own way. */
+export type ChatReply =
+  | { kind: "none" }
+  /** Said to the one person who asked, and nobody else. */
+  | { kind: "private"; text: string }
+  /** A dialog's answer that keeps it open and says what is wrong. */
+  | { kind: "dialog_error"; text: string };
+
+/**
+ * A Gate as a chat message shows one: what the Agent proposed, the arithmetic,
+ * and — while it is open — the two buttons. The provider renders it; deevy
+ * decides what it says (ADR-0025).
+ */
+export interface ChatGateMessage {
+  gateRequestId: string;
+  /** The record it is about, as the tracker names it, with its URL. */
+  issueKey: string;
+  issueUrl: string;
+  checkpoint: string;
+  proposal: string;
+  /** The Agent asking, and the Run it asked from. */
+  agentName: string | null;
+  runId: string;
+  status: "open" | "approved" | "rejected" | "superseded";
+  approvals: number;
+  required: number;
+  /** Where a Human opens it in deevy. */
+  url: string;
+  /** Who ruled, and how, once somebody has: a line per Ruling. */
+  rulings: string[];
+}
+
+/** One message deevy sends to a chat tool: words and a link, or a Gate. */
+export type ChatMessage =
+  | { kind: "text"; text: string; link: { url: string; label: string } | null }
+  | { kind: "gate"; gate: ChatGateMessage };
+
+export interface ChatSocket {
+  /**
+   * Whether this request is really from the tool. A chat tool signs a
+   * timestamp with the body, and a request older than a few minutes is a
+   * replay whatever its signature says. Never throws.
+   */
+  verifyInteraction(input: InboundInput): Promise<InboundCheck>;
+  /** Pure. The request, as the tool sent it, in deevy's terms. */
+  normalizeInteraction(eventName: string, rawBody: string): ChatInteraction;
+  /** The HTTP answer the tool expects for this reply. */
+  answer(reply: ChatReply): Response;
+  post(channel: string, message: ChatMessage): Promise<ChatMessageRef>;
+  update(ref: ChatMessageRef, message: ChatMessage): Promise<void>;
+  /** The direct conversation with one user, opened if it was not. */
+  openDm(user: string): Promise<string>;
+  /** A dialog asking why, for a rejection clicked from a button. */
+  askForNote(
+    triggerId: string,
+    input: { gateRequestId: string; checkpoint: string; message: ChatMessageRef | null },
+  ): Promise<void>;
+  /** Says something to the one person who clicked, where only they see it. */
+  respond(responseUrl: string, text: string): Promise<void>;
+}
+
 export interface DocsSocket {
   readPage(ref: { url: string } | { externalId: string }): Promise<{
     title: string;
@@ -189,6 +293,12 @@ export interface SocketIdentity {
   id: string;
   /** What a Human types to name deevy there: `@deevy`. */
   mentionHandle: string;
+  /**
+   * What proving the credential taught deevy about the connection that is not
+   * a secret — a Slack team's id — merged into the Socket's configuration at
+   * connect and never stored as part of the identity.
+   */
+  learned?: Record<string, unknown>;
 }
 
 /**
@@ -251,6 +361,7 @@ export interface SocketModule {
   tracker?: TrackerSocket;
   forge?: ForgeSocket;
   docs?: DocsSocket;
+  chat?: ChatSocket;
 }
 
 export interface SocketModuleInput {

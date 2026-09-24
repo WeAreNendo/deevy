@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 const stub = vi.hoisted(() => ({
   preferences: [
-    { kind: "mention", inbox: true, slack: true },
-    { kind: "assignment", inbox: true, slack: true },
-    { kind: "gate_awaiting", inbox: true, slack: true },
-    { kind: "run_awaiting_input", inbox: true, slack: false },
-    { kind: "run_finished", inbox: false, slack: true },
+    { kind: "mention", inbox: true, slack: true, slackDm: true },
+    { kind: "assignment", inbox: true, slack: true, slackDm: true },
+    { kind: "gate_awaiting", inbox: true, slack: true, slackDm: true },
+    { kind: "run_awaiting_input", inbox: true, slack: false, slackDm: false },
+    { kind: "run_finished", inbox: false, slack: true, slackDm: true },
   ],
   saved: [] as unknown[],
 }));
@@ -55,6 +55,28 @@ describe("the Notifications settings page", () => {
       kind: "gate_awaiting",
       inbox: true,
       slack: false,
+      slackDm: true,
     });
+  });
+
+  it("offers a direct message in Slack beside the room, and saves it", async () => {
+    stub.saved = [];
+    await mountAt("/settings/notifications", { memberName: "Ada" });
+
+    const dm = await screen.findByLabelText("Run awaiting input as a Slack direct message");
+    expect((dm as HTMLInputElement).ariaChecked).toBe("false");
+    fireEvent.click(dm);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(stub.saved).toHaveLength(1));
+    const [saved] = stub.saved as [{ preferences: Array<Record<string, unknown>> }];
+    expect(saved.preferences).toContainEqual({
+      kind: "run_awaiting_input",
+      inbox: true,
+      slack: false,
+      slackDm: true,
+    });
+    // Said beside it, because nothing is sent until an account is linked.
+    expect(screen.getByText(/once your Slack account is linked/)).toBeTruthy();
   });
 });

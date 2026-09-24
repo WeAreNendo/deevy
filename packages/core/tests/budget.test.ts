@@ -1,15 +1,17 @@
-import { account, member as memberTable, socket as socketTable } from "@deevy/db";
+import { account, member as memberTable, memberIdentity, socket as socketTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
 import { newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
+import { sealSecret } from "../src/secrets.ts";
 import type { InboundEvent } from "../src/sockets/port.ts";
 import {
   agentContext,
   countingDb,
   externalIssue,
+  fakeChat,
   memberContext,
   fakeSockets,
   seedProject,
@@ -314,9 +316,11 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
  * up and — the first time — found through the account the Human signs in with,
  * written down and said in the log; then `recordRuling`'s whole cost as the web
  * pays it. Every later comment by the same Human skips the account read, the
- * write and its Event.
+ * write and its Event. Then one more, from slice 10: a Ruling changes what the
+ * Gate's chat messages should say, so it asks where there are any
+ * (sockets/chat-out.ts).
  */
-const rulingFromTracker = 30;
+const rulingFromTracker = 31;
 
 describe(`the D1 request budget: a Ruling from the tracker costs ${String(rulingFromTracker)}`, () => {
   it("is under D1's cap the first time deevy meets the account", async () => {
@@ -387,16 +391,106 @@ describe(`the D1 request budget: a Ruling from the tracker costs ${String(ruling
 });
 
 /**
+ * What a Slack click that rules costs (ADR-0025), which matters more than most
+ * because Slack wants its answer within three seconds, on a Worker that may be
+ * cold.
+ *
+ * The request's own row and its outcome, the Gate, the Identity, then
+ * `recordRuling` as the web pays it — including the one read of where the
+ * Gate's chat messages are, which owes this click's own message its update
+ * through the outbox rather than changing it inline.
+ */
+const slackClick = 24;
+
+describe(`the D1 request budget: a Slack click that rules costs ${String(slackClick)}`, () => {
+  it("is under D1's cap, and changes nothing in Slack on the way", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const grace = await memberContext(db, { name: "Grace", email: "grace@example.com" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const signing = "a-slack-signing-secret-for-tests";
+    const slackId = newId("socket");
+    await db.insert(socketTable).values({
+      id: slackId,
+      workspaceId: ada.workspace.id,
+      provider: "slack",
+      capabilities: ["chat"],
+      name: "Acme Slack",
+      identity: { login: "deevy", id: "U0DEEVY", mentionHandle: "@deevy" },
+      config: { teamId: "T0TEST" },
+      webhookSecret: await sealSecret(testSealingSecret, signing),
+    });
+    await db.insert(memberIdentity).values({
+      id: newId("memberIdentity"),
+      workspaceId: ada.workspace.id,
+      memberId: grace.member.id,
+      provider: "slack",
+      instance: "T0TEST",
+      externalUserId: "U0GRACE",
+      externalLogin: "grace",
+      verifiedBy: "link_code",
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+    const run = await asPlanner.runs.start({ issue: issue.url });
+    const gate = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Go",
+    });
+    const chat = fakeChat();
+    const app = createApp({ db, sockets: chat.sockets, socketSecret: testSealingSecret });
+    const body = JSON.stringify({
+      kind: "ruling",
+      actor: { team: "T0TEST", user: "U0GRACE", login: "grace" },
+      gateRequestId: gate.id,
+      decision: "approved",
+      note: null,
+      wantsNote: false,
+      message: { channel: "C0DEEVY", ts: "1.000100" },
+      responseUrl: "https://hooks.slack.test/actions/1",
+      triggerId: null,
+    });
+
+    statements.length = 0;
+    const answered = await app.request(`/hooks/${slackId}`, {
+      method: "POST",
+      headers: {
+        "x-test-event": "block_actions",
+        "x-test-timestamp": String(Math.floor(Date.now() / 1000)),
+        "x-test-signature": `${signing}:${String(body.length)}`,
+      },
+      body,
+    });
+
+    expect(answered.status).toBe(200);
+    expect(chat.updated).toEqual([]);
+    expect(statements.length).toBe(slackClick);
+    expect(slackClick).toBeLessThan(d1StatementsPerInvocation);
+  });
+});
+
+/**
  * What asking to pass a Checkpoint costs, and what ruling on it costs.
  *
  * Both are ordinary writes with `appendEvent`'s tail on them, and both are on
  * the path a Worker serves: the ask is an MCP tool call and the ruling is a
  * click. The ask pays for the request row, the elicitation Activity, the Run's
  * move and two Events; the ruling pays for the policy, the decision row, the
- * Event and the Run resuming with a third.
+ * Event and the Run resuming with a third — and, since the Slack app, one read
+ * of where the Gate's chat messages are, which a Gate posted nowhere answers
+ * with nothing (sockets/chat-out.ts).
  */
 const asking = 19;
-const ruling = 19;
+const ruling = 20;
 
 describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
   it("stays well under D1's cap on both halves", async () => {
