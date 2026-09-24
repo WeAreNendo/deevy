@@ -981,6 +981,46 @@ rules with no linking step, and one who signs in otherwise links GitLab under **
 Socket on any other GitLab shares nothing with sign-in. A comment by a project or group access token's bot
 rules nothing. When the token expires, connect the Socket again with a new one.
 
+## Working in Notion
+
+A Notion workspace is a Socket, for a Project's records and for its documents: connect it under **Settings ›
+Sockets › Connect Notion**. deevy acts in Notion as an internal integration of your own:
+
+1. In Notion, **Settings › Connections › Develop or manage integrations**, make an internal integration called
+   deevy — every comment it writes is by that name — with **read content**, **update content**, **insert
+   content**, **read comments**, **insert comments** and **read user information including email
+   addresses**. Paste its **internal integration secret** into deevy. Connecting asks Notion who the
+   integration is, and a secret that cannot answer is refused rather than stored.
+2. **Share each database deevy should read** with the integration, from the database's own **⋯ ›
+   Connections**, and the pages its Agents should be able to read as documents. The integration sees what it
+   is shared and nothing else, which is Notion's rule and a good one.
+3. In the integration's settings, **Webhooks › Create a subscription** to the Socket's address, on API version
+   2025-09-03 or later, for page created, properties updated, content updated, moved, deleted and undeleted,
+   and comment created. Notion sends deevy a **verification token**; the Socket's page shows it — **Show the
+   token** — for you to paste into Notion's **Verify**. deevy keeps what Notion sends until the first delivery
+   signed with it proves it was Notion's, and nothing unsigned replaces it after that; if somebody else's
+   token got there first, Notion will not verify it, and **Resend token** replaces it while nothing is
+   verified.
+
+Bind a Project to a data source — one table of a database — under **Settings › Projects**. What the binding
+reads is what the data source's schema says: its first **status** property, with the statuses in its
+**Complete** group counting as closed; its first **multi-select** as labels, so an option `agent:<handle>`
+routes a row to that Agent; its first **people** property as assignees, where the integration itself among
+them hands the row to the Project's default Agent; a relation to its own rows named like a parent — Notion's
+sub-items — as the parent; and its **ID** property, where it has one, as the key a Human types (`TASK-12`).
+A row in the trash is closed. Notion's webhooks name what changed and carry none of it, so deevy reads each
+row back when it is told; a poll reads rows and not their content, and keeps the body it last read.
+
+**Documents.** A Project's documents can live in Notion whatever its tracker is: choose the Socket under
+**Documents** in the Project's settings. An Agent then reads a page there as markdown with `docs_get`, naming
+the Project and the page's URL, and only a page shared with the integration answers.
+
+**Ruling from Notion** is `/approve` and `/reject <why>` in a comment, as elsewhere, with one difference:
+Notion has no account a Human can link, so the only proof of who wrote a comment is the address Notion reports
+for its author. It counts only on a Socket where an admin turned on **Take a verified address as proof** on
+the Socket's page, only against an address a Member verified in deevy, and every Ruling it makes says
+"(email)" wherever it is shown ([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)).
+
 ## How far an Agent may split work up
 
 An Agent can open sub-issues and hand them to other Agents

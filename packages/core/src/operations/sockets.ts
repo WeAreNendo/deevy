@@ -10,7 +10,7 @@ import {
 } from "@deevy/db";
 import { accountCallbackUrl } from "../account-links.ts";
 import { InboundDeliverySchema, SocketSchema } from "../schemas.ts";
-import { requireSealingSecret, sealSecret, signState } from "../secrets.ts";
+import { openSecret, requireSealingSecret, sealSecret, signState } from "../secrets.ts";
 import {
   requireSocket,
   requireTracker,
@@ -215,6 +215,42 @@ export const sockets = {
         webhookSecret: null,
         state: await signState(requireInstanceSecret(context), row.id),
       };
+    },
+  }),
+
+  handshake: defineOperation({
+    name: "sockets.handshake",
+    summary: "Show the token a tool sent to verify its webhook, to paste back into it",
+    method: "GET",
+    path: "/sockets/{socketId}/handshake",
+    auth: "admin",
+    input: z.object({ socketId: z.string() }),
+    output: z.object({
+      /**
+       * What the tool sent, while nothing signed with it has arrived; null
+       * before it sends one, and once a delivery has proved it (hooks.ts).
+       */
+      token: z.string().nullable(),
+      verified: z.boolean(),
+    }),
+    handler: async ({ input, context }) => {
+      const socket = await context.db.query.socket.findFirst({
+        where: { id: input.socketId, workspaceId: context.workspace.id },
+      });
+      if (!socket || socket.status === "removed") {
+        throw new ORPCError("NOT_FOUND", { message: "No such Socket" });
+      }
+      const verified = socket.config.webhookVerified === true;
+      // Shown only while it is the one thing standing between the tool and a
+      // working webhook: after that it is a secret like any other.
+      if (verified || socket.config.webhookVerified !== false || !socket.webhookSecret) {
+        return { token: null, verified };
+      }
+      const token = await openSecret(
+        requireSealingSecret(context.socketSecret),
+        socket.webhookSecret,
+      );
+      return { token, verified };
     },
   }),
 

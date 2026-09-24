@@ -4,7 +4,14 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
 import { applyInbound } from "../src/sockets/apply.ts";
 import type { InboundEvent } from "../src/sockets/port.ts";
-import { agentContext, externalIssue, memberContext, seedProject, testDb } from "./helpers.ts";
+import {
+  agentContext,
+  externalIssue,
+  fakeSockets,
+  memberContext,
+  seedProject,
+  testDb,
+} from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -263,6 +270,91 @@ describe("a comment arriving from a tracker", () => {
 
     expect(result.applied).toBe(0);
     expect(result.skipped[0]).toContain("42");
+  });
+});
+
+/**
+ * A tracker whose deliveries say only what changed — Notion's name a page or a
+ * comment and carry none of it — is read back through the Project's binding,
+ * and what it answers is applied exactly as a delivery that said it would be.
+ */
+describe("a delivery that names what changed and says nothing else", () => {
+  async function reading(db: Parameters<typeof workspace>[0]) {
+    const ready = await workspace(db);
+    const fake = fakeSockets();
+    const module = fake.sockets.stub?.({
+      config: {},
+      credentials: {},
+      fetch: globalThis.fetch,
+      now: () => new Date(),
+    });
+    if (!module?.tracker) throw new Error("the fake is a tracker");
+    const tracker = module.tracker;
+    return {
+      ...ready,
+      fake,
+      read: (events: InboundEvent[]) =>
+        applyInbound({ db, workspace: ready.ada.workspace, socket: ready.socket, events, tracker }),
+    };
+  }
+
+  it("is read back, projected and routed as though the tracker had said it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { read, fake, planner } = await reading(db);
+    fake.records.set("77", externalIssue({ externalId: "77", labels: ["agent:planner"] }));
+
+    const result = await read([
+      { kind: "changed", scopeKey: "acme/deevy", issueExternalId: "77", actor: null },
+    ]);
+
+    expect(result.applied).toBe(1);
+    expect(await db.query.issue.findFirst({ where: { externalId: "77" } })).toMatchObject({
+      assigneeMemberId: planner.member.id,
+    });
+  });
+
+  it("reads a comment back, and treats it as the comment it is", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { apply, read, fake, asPlanner } = await reading(db);
+    await apply([record({ externalId: "42", title: "Checkout rewrite" })]);
+    fake.remarks.set("c9", {
+      externalId: "c9",
+      url: "https://tracker.test/acme/deevy#42",
+      body: "Over to you @planner",
+      author: { login: "Ada", id: "person-1", isBot: false },
+      createdAt: new Date(),
+    });
+
+    const result = await read([
+      { kind: "commented", issueExternalId: "42", commentExternalId: "c9" },
+    ]);
+
+    expect(result.applied).toBe(1);
+    expect((await asPlanner.runs.list({})).runs[0]?.trigger).toBe("mention");
+  });
+
+  it("says why when it cannot read one back", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { apply, read } = await reading(db);
+    await apply([record({ externalId: "42" })]);
+
+    const gone = await read([
+      { kind: "commented", issueExternalId: "42", commentExternalId: "nowhere" },
+    ]);
+    const unbound = await read([
+      { kind: "changed", scopeKey: "acme/nothing", issueExternalId: "77", actor: null },
+    ]);
+    // And with nothing to read it with, it says so rather than guessing.
+    const blind = await apply([
+      { kind: "changed", scopeKey: "acme/deevy", issueExternalId: "42", actor: null },
+    ]);
+
+    expect(gone.skipped[0]).toContain("nowhere");
+    expect(unbound.skipped[0]).toContain("acme/nothing");
+    expect(blind.skipped[0]).toContain("read");
   });
 });
 

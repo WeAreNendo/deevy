@@ -7038,6 +7038,50 @@
         }
       }
     },
+    "/sockets/{socketId}/handshake": {
+      "get": {
+        "operationId": "sockets.handshake",
+        "summary": "Show the token a tool sent to verify its webhook, to paste back into it",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "verified"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sockets/{socketId}/install": {
       "post": {
         "operationId": "sockets.install",
@@ -9290,7 +9334,7 @@
       },
       "patch": {
         "operationId": "projects.update",
-        "summary": "Rename a Project, or change how much deevy says back in its tracker",
+        "summary": "Rename a Project, rebind its code or documents, or change what deevy says back",
         "parameters": [
           {
             "in": "path",
@@ -9339,6 +9383,32 @@
                     ]
                   },
                   "forge": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "socketId": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "socketId",
+                          "scope"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "docs": {
                     "anyOf": [
                       {
                         "type": "object",
@@ -15066,6 +15136,64 @@
                   },
                   "required": [
                     "removed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project}/docs": {
+      "get": {
+        "operationId": "docs.get",
+        "summary": "Read a page from where this Project's documents live, as markdown",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "markdown": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "markdown",
+                    "url"
                   ],
                   "additionalProperties": false
                 }

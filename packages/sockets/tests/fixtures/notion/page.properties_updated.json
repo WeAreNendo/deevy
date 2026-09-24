@@ -1,0 +1,22 @@
+{
+  "id": "5e8c3a1f-7b2d-4c9e-a0f1-3d6b8e2c4a71",
+  "timestamp": "2026-09-24T09:14:05.379Z",
+  "workspace_id": "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9",
+  "workspace_name": "Acme",
+  "subscription_id": "29d75c0d-5546-4414-8459-7b7a92f1fc4b",
+  "integration_id": "0ef2e755-4912-8096-91c1-00376a88a5ca",
+  "type": "page.properties_updated",
+  "authors": [{ "id": "c7c11cca-1d73-471d-9b6e-bdef51470190", "type": "person" }],
+  "accessible_by": [{ "id": "c7c11cca-1d73-471d-9b6e-bdef51470190", "type": "person" }],
+  "attempt_number": 1,
+  "api_version": "2026-03-11",
+  "entity": { "id": "27a104cd-477e-80a1-9c3d-e5f6a7b8c901", "type": "page" },
+  "data": {
+    "parent": {
+      "id": "248104cd-477e-80af-bc30-000bd72bee7f",
+      "type": "database",
+      "data_source_id": "248104cd-477e-80fd-b757-000b4bb3bda2"
+    },
+    "updated_properties": ["XGe%40", "bDf%5B"]
+  }
+}

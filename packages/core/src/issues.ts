@@ -70,7 +70,7 @@ export async function upsertProjection(db: Db, input: ProjectionInput): Promise<
     externalKey: external.key,
     url: external.url,
     title: external.title,
-    body: external.body === null ? null : external.body.slice(0, MAX_BODY),
+    body: external.body == null ? null : external.body.slice(0, MAX_BODY),
     state: external.state,
     stateName: external.stateName,
     assignees: external.assignees,
@@ -93,7 +93,8 @@ export async function upsertProjection(db: Db, input: ProjectionInput): Promise<
         externalKey: values.externalKey,
         url: values.url,
         title: values.title,
-        body: values.body,
+        // A list that did not read the content leaves the body deevy had.
+        ...(external.body === undefined ? {} : { body: values.body }),
         state: values.state,
         stateName: values.stateName,
         assignees: values.assignees,

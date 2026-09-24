@@ -75,6 +75,7 @@ describe("the command line a session runs under", () => {
       "mcp__deevy__runs_get",
       "mcp__deevy__runs_start",
       "mcp__deevy__issues_get",
+      "mcp__deevy__docs_get",
       "mcp__deevy__issues_create",
       "mcp__deevy__comments_create",
       "mcp__deevy__runs_post_activity",

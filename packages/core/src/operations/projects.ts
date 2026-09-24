@@ -71,7 +71,7 @@ export const projects = {
 
   update: defineOperation({
     name: "projects.update",
-    summary: "Rename a Project, or change how much deevy says back in its tracker",
+    summary: "Rename a Project, rebind its code or documents, or change what deevy says back",
     method: "PATCH",
     path: "/projects/{slug}",
     auth: "member",
@@ -89,6 +89,8 @@ export const projects = {
        * under it (ADR-0024).
        */
       forge: BindingInput.nullish(),
+      /** Where its documents are, for an Agent to read (`docs.get`), or null for nowhere. */
+      docs: BindingInput.nullish(),
       /** How a record says which Agent it is for: a label prefix, a mention, or neither. */
       routing: z
         .object({
@@ -129,6 +131,18 @@ export const projects = {
           to: input.forge?.socketId ?? null,
         };
       }
+      if (input.docs !== undefined) {
+        // A Socket that cannot read a page would bind documents nobody can open.
+        if (input.docs) {
+          const docsSocket = await requireSocket(context, input.docs.socketId);
+          if (!(await socketModuleFor(context, docsSocket)).docs) {
+            throw new ORPCError("BAD_REQUEST", {
+              message: `The ${docsSocket.name} Socket cannot read documents`,
+            });
+          }
+        }
+        changes.docs = { from: found.docsSocketId, to: input.docs?.socketId ?? null };
+      }
       if (input.routing !== undefined) {
         changes.routing = { from: found.routing, to: input.routing };
       }
@@ -148,6 +162,11 @@ export const projects = {
             : input.forge
               ? { forgeSocketId: input.forge.socketId, forgeScope: input.forge.scope }
               : { forgeSocketId: null, forgeScope: null }),
+          ...(input.docs === undefined
+            ? {}
+            : input.docs
+              ? { docsSocketId: input.docs.socketId, docsScope: input.docs.scope }
+              : { docsSocketId: null, docsScope: null }),
           ...(input.routing === undefined ? {} : { routing: input.routing }),
         })
         .where(eq(projectTable.id, found.id));

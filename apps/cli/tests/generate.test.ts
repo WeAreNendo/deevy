@@ -70,8 +70,9 @@ describe("what the registry turns into", () => {
       "projects.create.docs",
       "projects.create.forge",
       "projects.create.tracker",
-      // The rest of a binding, changed after the fact: where the code is, and
-      // how a record names the Agent it is for (ADR-0024).
+      // The rest of a binding, changed after the fact: where the documents
+      // and the code are, and how a record names the Agent it is for (ADR-0024).
+      "projects.update.docs",
       "projects.update.forge",
       "projects.update.routing",
       "routing.set.rules",

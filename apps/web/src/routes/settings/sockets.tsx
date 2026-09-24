@@ -5,6 +5,7 @@ import { Cable, ChevronRight } from "lucide-react";
 import { ConnectGithub } from "@/components/connect-github";
 import { ConnectGitlab } from "@/components/connect-gitlab";
 import { ConnectLinear } from "@/components/connect-linear";
+import { ConnectNotion } from "@/components/connect-notion";
 import { ConnectSlack } from "@/components/connect-slack";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
@@ -146,6 +147,13 @@ export function SocketsPage() {
             />
           ) : connecting === "linear" ? (
             <ConnectLinear
+              onConnected={() => {
+                setConnecting(null);
+                void client.invalidateQueries({ queryKey: orpc.sockets.key() });
+              }}
+            />
+          ) : connecting === "notion" ? (
+            <ConnectNotion
               onConnected={() => {
                 setConnecting(null);
                 void client.invalidateQueries({ queryKey: orpc.sockets.key() });

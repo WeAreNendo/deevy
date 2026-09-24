@@ -207,3 +207,83 @@ describe("a delivery arriving at a Socket's hook", () => {
     expect(row).toMatchObject({ status: "failed" });
   });
 });
+
+/**
+ * A tool that establishes its signing secret by sending it once, unsigned:
+ * Notion posts a `verification_token` to the URL, expects it pasted back into
+ * its own settings, and signs everything after with it. deevy keeps what it is
+ * sent until a delivery signed with it proves it was the tool's — and nothing
+ * unsigned replaces it after that, or replaces a secret an admin chose.
+ */
+describe("a tool that sends its signing secret once", () => {
+  async function unverified(db: Db) {
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const { sockets } = fakeSockets();
+    const app = createApp({ db, sockets, socketSecret: testSealingSecret });
+    const asAda = createRouterClient(router, {
+      context: { ...ada, sockets, socketSecret: testSealingSecret },
+    });
+    const handshake = (token: string) =>
+      app.request(`/hooks/${seeded.socketId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ verification_token: token }),
+      });
+    return { app, asAda, seeded, handshake };
+  }
+
+  it("keeps it, and shows it to an admin to paste back until a signed delivery proves it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { app, asAda, seeded, handshake } = await unverified(db);
+
+    expect((await handshake("secret_first")).status).toBe(200);
+    expect(await asAda.sockets.handshake({ socketId: seeded.socketId })).toEqual({
+      token: "secret_first",
+      verified: false,
+    });
+    // The tool's own "resend" is a new token, and it replaces the last while
+    // nothing has been signed with either.
+    await handshake("secret_second");
+    expect(await asAda.sockets.handshake({ socketId: seeded.socketId })).toMatchObject({
+      token: "secret_second",
+    });
+
+    const signed = await app.request(
+      `/hooks/${seeded.socketId}`,
+      delivery(labelled, { secret: "secret_second", socketId: seeded.socketId }),
+    );
+    expect(signed.status).toBe(200);
+    expect(await asAda.sockets.handshake({ socketId: seeded.socketId })).toEqual({
+      token: null,
+      verified: true,
+    });
+
+    // Proven now, so nothing unsigned changes it.
+    expect((await handshake("secret_from_somebody_else")).status).toBe(409);
+    const again = await app.request(
+      `/hooks/${seeded.socketId}`,
+      delivery(labelled, { id: "delivery-2", secret: "secret_second" }),
+    );
+    expect(again.status).toBe(200);
+    const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
+    expect(kinds.filter((kind) => kind === "socket.updated")).toHaveLength(2);
+  });
+
+  it("never replaces a secret an admin chose", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { app, seeded } = await workspace(db);
+
+    const answer = await app.request(`/hooks/${seeded.socketId}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ verification_token: "secret_from_somebody_else" }),
+    });
+
+    expect(answer.status).toBe(409);
+    const kept = await app.request(`/hooks/${seeded.socketId}`, delivery(labelled));
+    expect(kept.status).toBe(200);
+  });
+});

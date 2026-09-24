@@ -13,7 +13,12 @@ import { appendEvent, type EventSource } from "../events.ts";
 import type { JobQueue } from "../jobs.ts";
 import { routeIssueTo, upsertProjection } from "../issues.ts";
 import { resolveMentions } from "../mentions.ts";
-import type { IdentityScope, InboundEvent } from "./port.ts";
+import {
+  parseRulingCommand,
+  type IdentityScope,
+  type InboundEvent,
+  type TrackerSocket,
+} from "./port.ts";
 import { scopeKeyOf } from "./registry.ts";
 import { applyRuling } from "./rulings.ts";
 
@@ -46,6 +51,11 @@ export interface ApplyInboundOptions {
    * own name is the instance and nothing is shared with sign-in.
    */
   identityScope?: IdentityScope;
+  /**
+   * What reads a record or a comment back, for a tool whose deliveries only
+   * name one (`changed`, `commented`): Notion's. Absent, those are skipped.
+   */
+  tracker?: TrackerSocket;
   now?: () => Date;
 }
 
@@ -71,6 +81,7 @@ export async function applyInbound({
   events,
   jobs,
   identityScope,
+  tracker,
   now = () => new Date(),
 }: ApplyInboundOptions): Promise<ApplyInboundResult> {
   const source: EventSource = { db, workspace, member: null, ...(jobs ? { jobs } : {}) };
@@ -81,7 +92,10 @@ export async function applyInbound({
 
   const scope = identityScope ?? { instance: socket.provider };
   for (const event of events) {
-    const why = await applyOne({ db, socket, source, projects, scope, now }, event);
+    const why = await applyOne(
+      { db, socket, source, projects, scope, now, ...(tracker ? { tracker } : {}) },
+      event,
+    );
     if (why === null) result.applied += 1;
     else result.skipped.push(why);
   }
@@ -94,11 +108,16 @@ interface Applying {
   source: EventSource;
   projects: Map<string, Project | null>;
   scope: IdentityScope;
+  tracker?: TrackerSocket;
   now: () => Date;
 }
 
 /** Applies one event, answering null when it changed something and why when it did not. */
 async function applyOne(applying: Applying, event: InboundEvent): Promise<string | null> {
+  if (event.kind === "changed" || event.kind === "commented") {
+    const read = await readBack(applying, event);
+    return typeof read === "string" ? read : applyOne(applying, read);
+  }
   if (event.kind === "issue") return applyIssue(applying, event);
   if (event.kind === "comment") return applyComment(applying, event);
   if (event.kind === "installation") return applyInstallation(applying, event);
@@ -111,6 +130,63 @@ async function applyOne(applying: Applying, event: InboundEvent): Promise<string
     });
   }
   return event.why;
+}
+
+/**
+ * What a delivery that only named something turns into once it is read back:
+ * the `issue`, `comment` or `ruling` event the tool would have sent had it
+ * said it — or why it could not be read.
+ *
+ * A record is read through the Project its container is bound to, so the
+ * binding's own words (which property is the status, which values are closed)
+ * decide what it says. A comment is read through the Project of the record it
+ * is on, and a `/approve` in it is a Ruling like any other (ADR-0025).
+ */
+async function readBack(
+  applying: Applying,
+  event: Extract<InboundEvent, { kind: "changed" | "commented" }>,
+): Promise<InboundEvent | string> {
+  const { tracker } = applying;
+  if (!tracker)
+    return `${applying.socket.name} said something changed and there is nothing to read it with`;
+
+  if (event.kind === "changed") {
+    const project = await projectFor(applying, event.scopeKey);
+    if (!project) return `No Project is bound to ${event.scopeKey}`;
+    const known = await applying.db.query.issue.findFirst({
+      where: { socketId: applying.socket.id, externalId: event.issueExternalId },
+      columns: { url: true },
+    });
+    const issue = await tracker.getIssue(project.trackerScope, {
+      externalId: event.issueExternalId,
+      url: known?.url ?? "",
+    });
+    return { kind: "issue", scopeKey: event.scopeKey, issue, actor: event.actor };
+  }
+
+  const issue = await applying.db.query.issue.findFirst({
+    where: { socketId: applying.socket.id, externalId: event.issueExternalId },
+    with: { project: { columns: { trackerScope: true } } },
+  });
+  if (!issue) return `No record ${event.issueExternalId} has been projected here`;
+  if (!tracker.getComment) return `${applying.socket.name} cannot read a comment back`;
+  const comment = await tracker.getComment(
+    issue.project.trackerScope,
+    { externalId: issue.externalId, url: issue.url },
+    event.commentExternalId,
+  );
+  if (!comment) return `Comment ${event.commentExternalId} is not there any more`;
+  const ruling = parseRulingCommand(comment.body);
+  return ruling
+    ? {
+        kind: "ruling",
+        scopeKey: "",
+        issueExternalId: issue.externalId,
+        comment,
+        decision: ruling.decision,
+        note: ruling.note,
+      }
+    : { kind: "comment", scopeKey: "", issueExternalId: issue.externalId, comment };
 }
 
 async function projectFor(applying: Applying, scopeKey: string): Promise<Project | null> {
