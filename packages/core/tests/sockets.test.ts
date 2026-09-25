@@ -2,6 +2,7 @@ import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
 import { openSecret } from "../src/secrets.ts";
+import type { SocketModules } from "../src/sockets/port.ts";
 import {
   fakeSockets,
   memberContext,
@@ -83,6 +84,71 @@ describe("connecting a tool", () => {
     // in-process stub is: a tool with no credential is not a risk to store.
     const connected = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
     expect(connected.hasCredentials).toBe(false);
+  });
+
+  it("refuses a credential the tool refuses, in the tool's words, and keeps nothing", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    // The tool says no when deevy asks who it is there: what Linear did with a
+    // client id it had never issued, which deevy answered with a bare 500.
+    const refusing: SocketModules = {
+      stub: (options) => {
+        const module = sockets.stub?.(options);
+        if (!module) throw new Error("the fake is a module");
+        return {
+          ...module,
+          identity: () => Promise.reject(new Error("Invalid client: client is invalid")),
+        };
+      },
+    };
+    const asAda = createRouterClient(router, {
+      context: { ...ada, sockets: refusing, socketSecret: testSealingSecret },
+    });
+
+    await expect(
+      asAda.sockets.connect({
+        provider: "stub",
+        name: "Example tracker",
+        credentials: { token: "made-up" },
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message:
+        "the stub tracker would not take these credentials: Invalid client: client is invalid",
+    });
+    expect(await db.query.socket.findFirst({})).toBeUndefined();
+  });
+
+  it("says so in the same words when a connected tool stops taking its credential", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    let refuse = false;
+    const flaky: SocketModules = {
+      stub: (options) => {
+        const module = sockets.stub?.(options);
+        if (!module) throw new Error("the fake is a module");
+        return {
+          ...module,
+          identity: () =>
+            refuse ? Promise.reject(new Error("the secret was rotated")) : module.identity(),
+        };
+      },
+    };
+    const asAda = createRouterClient(router, {
+      context: { ...ada, sockets: flaky, socketSecret: testSealingSecret },
+    });
+    const connected = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+
+    // "Ask who deevy is there", after the tool stopped answering.
+    refuse = true;
+    await expect(asAda.sockets.test({ socketId: connected.id })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "the stub tracker would not take these credentials: the secret was rotated",
+    });
   });
 });
 
@@ -186,6 +252,26 @@ describe("a connected tool", () => {
     expect(await db.query.socket.findFirst({ where: { id: connected.id } })).toMatchObject({
       status: "removed",
     });
+  });
+
+  it("is disconnected too when it is paused, or was never finished", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { context } = await admin(db);
+    // With the secret a flow's redirect is signed with, which `begin` needs.
+    const asAda = createRouterClient(router, {
+      context: { ...context, secret: testSealingSecret },
+    });
+    const paused = await asAda.sockets.connect({ provider: "stub", name: "Rested" });
+    await asAda.sockets.update({ socketId: paused.id, status: "paused" });
+    // Started and abandoned — refused by the tool, or its App never made —
+    // which the Linear check left two of, with no way to take them away.
+    const begun = await asAda.sockets.begin({ provider: "stub", name: "Never finished" });
+
+    await asAda.sockets.remove({ socketId: paused.id });
+    await asAda.sockets.remove({ socketId: begun.id });
+
+    expect((await asAda.sockets.list({})).sockets).toEqual([]);
   });
 });
 

@@ -115,11 +115,10 @@ function teamOf(scope: Scope): string {
 }
 
 class LinearError extends Error {
-  constructor(
-    message: string,
-    readonly unauthenticated: boolean,
-  ) {
+  readonly unauthenticated: boolean;
+  constructor(message: string, unauthenticated: boolean) {
     super(message);
+    this.unauthenticated = unauthenticated;
   }
 }
 
@@ -151,6 +150,20 @@ export function createLinearSocket({
     });
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 300);
+      // OAuth's own refusal is a sentence and a code — `invalid_client` for a
+      // client id Linear never issued — and that is what an admin reads when
+      // connecting fails, rather than the JSON it came in.
+      let said: { error?: unknown; error_description?: unknown } = {};
+      try {
+        said = JSON.parse(detail) as typeof said;
+      } catch {
+        said = {};
+      }
+      if (typeof said.error === "string") {
+        const description =
+          typeof said.error_description === "string" ? said.error_description : "";
+        throw new Error(description ? `${description} (${said.error})` : said.error);
+      }
       throw new Error(`Linear answered ${String(response.status)} for ${path}: ${detail}`);
     }
     return (await response.json()) as T;

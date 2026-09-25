@@ -14,9 +14,9 @@ carries a major changeset; the rest carry ordinary ones.
 **Status: done, 2026-09-24**, in fifteen stacked pull requests (#82 to #96). What each slice found, and the
 questions this plan left open answered as far as a build can answer them, are under "What it found" at the
 end. GitHub's setup was walked against github.com on 2026-09-25, with a real App and Claude Code as the Agent
-in the runtime's image, and what it found is the first entry there. What no test can do is still owed for the
-others: Linear's, GitLab's, Notion's and Slack's setup in OPERATIONS.md, each walked once against the real
-tool.
+in the runtime's image, and what it found is the first entry there. Linear's was checked the same day against
+everything Linear publishes, with no Linear account (the second entry). What no test can do is still owed:
+Linear's, GitLab's, Notion's and Slack's setup in OPERATIONS.md, each walked once against the real tool.
 
 Why this and why now. v1 made deevy a complete tracker: Issues with keys, a Workflow of States and Gates per
 Project, intent/spec/plan Documents materialised from templates and edited live, Labels, Teams, comments, a
@@ -817,6 +817,44 @@ Any change to what an Agent may rule: nothing, on any door.
 ## What it found
 
 Written before the work, to be answered after it; newest first.
+
+**The Linear check, 2026-09-25.** Nobody had a Linear workspace, so instead of a walk the module was held to
+everything Linear publishes. It is repeatable as `vp run sockets#check:linear`:
+
+- **The API.** The module was driven through every operation it has with a recording `fetch` — fourteen sends,
+  ten documents — and each document, and every variable sent with it, validated against the schema Linear's
+  own SDK is generated from (published the day before). All valid, none deprecated. A deliberate typo in a
+  field fails the check, and so do a wrong input key and a wrong enum value, which is how the check itself
+  was found to be skipping variables until it used graphql 17's `validateInputValue`.
+- **Webhooks.** Every field `payloads.ts` reads is in the payload types the same schema describes, except a
+  comment's own `url`, which Linear puts on the envelope — where deevy already looks. Deliveries signed as
+  Linear signs them, tampered with, and sent five minutes late got the same answer from deevy's check and from
+  Linear's `LinearWebhookClient`. The actor's `type` is `user` for a person, as Linear's docs show it.
+- **OAuth.** The client-credentials grant, the authorization URL with `actor=app` and the agent scopes, and the
+  revoke are what Linear's authentication docs describe. Linear's real endpoints, asked with made-up
+  credentials, answer a token they do not know with 401 and `AUTHENTICATION_ERROR` — what deevy's retry
+  keys on — and a client they do not know with 400 `invalid_client`.
+
+What it found, fixed with a test that fails without it, and seen on the walk instance against Linear's real
+token endpoint:
+
+- **A credential the tool refuses was a 500.** `sockets.connect` let the module's error through, so the admin
+  read "Internal Server Error" and the reason was in the server's log; so did **Ask who deevy is there** once
+  a tool stopped answering. Both refuse now in the tool's words, for every provider: "Linear would not take
+  these credentials: Invalid client: client is invalid (invalid_client)".
+- **Linear's OAuth refusal was JSON**, and is its sentence and code now.
+- **Every connect dialog showed its secrets in the clear** — Linear's client and signing secrets, GitLab's
+  tokens, Notion's secret, Slack's token and signing secret, GitHub's webhook secret — and let the browser and
+  password managers autofill them. They are masked and kept from autofill (`SecretInput`).
+- **A Socket that never finished connecting could not be removed**, nor could a paused one: both went through
+  the check that refuses to _use_ such a Socket. Every refused or abandoned connect left a row for good.
+- **The Sockets page said "This deevy was built with no tools it can connect"** while the list was on its way.
+- **A webhook comment's `botActor` is a string**, where the API's is an object, and deevy only read the
+  object. It still counted the comment as a machine's by its missing user and its actor; it reads both
+  shapes now, and one present makes a comment a machine's whatever else it says.
+
+What the check cannot show is what only a workspace can: the consent pages, installing the app as an agent
+and being made an issue's delegate, and the bytes of a real delivery. That is the walk still owed.
 
 **The GitHub walk, 2026-09-25.** deevy built from `main`, on a laptop behind a named Cloudflare Tunnel; a
 GitHub App made from deevy's manifest on a personal account and installed on one private repository; Builder,

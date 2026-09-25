@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { SecretInput } from "@/components/secret-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { orpc } from "@/lib/orpc";
@@ -123,7 +124,7 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="github-webhook">Webhook secret</FieldLabel>
-          <Input
+          <SecretInput
             id="github-webhook"
             value={webhookSecret}
             placeholder="whsec_…"

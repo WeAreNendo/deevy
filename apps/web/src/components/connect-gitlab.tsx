@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { SecretInput } from "@/components/secret-input";
 import { Input } from "@/components/ui/input";
 import { orpc } from "@/lib/orpc";
 
@@ -69,7 +70,7 @@ export function ConnectGitlab({ onConnected }: { onConnected: () => void }) {
         {rotate.error ? <p className="text-sm text-destructive">{rotate.error.message}</p> : null}
         <Field>
           <FieldLabel htmlFor="gitlab-signing-token">Signing token</FieldLabel>
-          <Input
+          <SecretInput
             id="gitlab-signing-token"
             value={signingToken}
             placeholder="whsec_…"
@@ -120,7 +121,7 @@ export function ConnectGitlab({ onConnected }: { onConnected: () => void }) {
       </Field>
       <Field>
         <FieldLabel htmlFor="gitlab-token">Access token</FieldLabel>
-        <Input
+        <SecretInput
           id="gitlab-token"
           value={token}
           placeholder="glpat-…"

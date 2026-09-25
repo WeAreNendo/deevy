@@ -108,7 +108,9 @@ export function SocketsPage() {
 
       <SettingsSection aria-label="Connect a tool" title="Connect a tool">
         <div role="group" aria-label="Connect a tool" className="flex flex-wrap gap-2">
-          {offered.length === 0 ? (
+          {/* Only once the server has said: while the list is on its way, "no
+              tools" is a claim about a deevy built with five. */}
+          {providers.isSuccess && offered.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               This deevy was built with no tools it can connect.
             </p>

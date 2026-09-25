@@ -69,6 +69,9 @@ catalog:
   # tooling: the exact pins above are pre-release lines whose breakage is a
   # runtime error, and this is a released major.
   commander: ^15.0.0
+  # graphql-js, for `vp run sockets#check:linear`: deevy's Linear queries checked
+  # against the schema Linear publishes, with no Linear account needed.
+  graphql: 17.0.2
   "@orpc/server": 2.0.0-beta.32
   "@orpc/client": 2.0.0-beta.32
   "@orpc/contract": 2.0.0-beta.32

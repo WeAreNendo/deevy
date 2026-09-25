@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { SecretInput } from "@/components/secret-input";
 import { Input } from "@/components/ui/input";
 import { orpc } from "@/lib/orpc";
 
@@ -66,7 +67,7 @@ export function ConnectNotion({ onConnected }: { onConnected: () => void }) {
       </Field>
       <Field>
         <FieldLabel htmlFor="notion-secret">Internal integration secret</FieldLabel>
-        <Input
+        <SecretInput
           id="notion-secret"
           value={secret}
           placeholder="ntn_…"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { SecretInput } from "@/components/secret-input";
 import { Input } from "@/components/ui/input";
 import { orpc } from "@/lib/orpc";
 import manifestTemplate from "../../../../docs/slack-manifest.yaml?raw";
@@ -105,7 +106,7 @@ export function ConnectSlack({ onConnected }: { onConnected: () => void }) {
           </Field>
           <Field>
             <FieldLabel htmlFor="slack-token">Bot User OAuth Token</FieldLabel>
-            <Input
+            <SecretInput
               id="slack-token"
               value={botToken}
               placeholder="xoxb-…"
@@ -118,7 +119,7 @@ export function ConnectSlack({ onConnected }: { onConnected: () => void }) {
           </Field>
           <Field>
             <FieldLabel htmlFor="slack-secret">Signing Secret</FieldLabel>
-            <Input
+            <SecretInput
               id="slack-secret"
               value={signingSecret}
               onChange={(changed) => setSigningSecret(changed.target.value)}

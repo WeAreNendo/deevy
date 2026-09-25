@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { SecretInput } from "@/components/secret-input";
 import { Input } from "@/components/ui/input";
 import { leaveFor } from "@/lib/leave";
 import { orpc } from "@/lib/orpc";
@@ -129,7 +130,7 @@ export function ConnectLinear({ onConnected }: { onConnected: () => void }) {
           </Field>
           <Field>
             <FieldLabel htmlFor="linear-client-secret">Client secret</FieldLabel>
-            <Input
+            <SecretInput
               id="linear-client-secret"
               value={clientSecret}
               onChange={(changed) => setClientSecret(changed.target.value)}
@@ -138,7 +139,7 @@ export function ConnectLinear({ onConnected }: { onConnected: () => void }) {
           </Field>
           <Field>
             <FieldLabel htmlFor="linear-signing-secret">Webhook signing secret</FieldLabel>
-            <Input
+            <SecretInput
               id="linear-signing-secret"
               value={signingSecret}
               onChange={(changed) => setSigningSecret(changed.target.value)}

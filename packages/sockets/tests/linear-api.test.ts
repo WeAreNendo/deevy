@@ -56,7 +56,12 @@ type Answer = object | ((variables: Record<string, unknown>, asked: Asked) => un
 /** A Linear that answers each named operation, and mints a token per client-credentials grant. */
 function linearReturning(
   answers: Record<string, Answer>,
-  options: { tokens?: string[]; refuse?: (asked: Asked) => boolean } = {},
+  options: {
+    tokens?: string[];
+    refuse?: (asked: Asked) => boolean;
+    /** Linear does not know the client id and secret. */
+    unknownClient?: boolean;
+  } = {},
 ) {
   const asked: Asked[] = [];
   const tokens = [...(options.tokens ?? ["lin_oauth_app_token_1", "lin_oauth_app_token_2"])];
@@ -80,6 +85,13 @@ function linearReturning(
     asked.push(one);
 
     if (url.endsWith("/oauth/token")) {
+      // As Linear answered a made-up client on 2026-09-25.
+      if (options.unknownClient) {
+        return Response.json(
+          { error: "invalid_client", error_description: "Invalid client: client is invalid" },
+          { status: 400 },
+        );
+      }
       if (form.grant_type === "client_credentials") {
         return Response.json({
           access_token: tokens.shift() ?? "lin_oauth_app_token_n",
@@ -95,16 +107,25 @@ function linearReturning(
     }
     if (url.endsWith("/oauth/revoke")) return new Response(null, { status: 200 });
     if (options.refuse?.(one)) {
+      // As Linear answered a token it did not know on 2026-09-25.
       return Response.json(
         {
           errors: [
             {
               message: "Authentication required, not authenticated",
-              extensions: { code: "AUTHENTICATION_ERROR" },
+              extensions: {
+                type: "authentication error",
+                code: "AUTHENTICATION_ERROR",
+                statusCode: 401,
+                userError: true,
+                userPresentableMessage: "You need to authenticate to access this operation.",
+                meta: {},
+                http: { status: 401 },
+              },
             },
           ],
         },
-        { status: 400 },
+        { status: 401 },
       );
     }
     const answer = answers[operation];
@@ -169,6 +190,16 @@ describe("how deevy authenticates", () => {
 
     expect(asked.filter((one) => one.operation === "client_credentials")).toHaveLength(2);
     expect(asked.at(-1)?.authorization).toBe("Bearer lin_oauth_app_token_2");
+  });
+
+  it("says in Linear's words when it does not know the client id and secret", async () => {
+    const { module } = linearReturning({ DeevyWho: who }, { unknownClient: true });
+
+    // A sentence and Linear's code, never the JSON it came in: this is what an
+    // admin reads when connecting fails (operations/sockets.ts).
+    await expect(module.identity()).rejects.toThrow(
+      /^Invalid client: client is invalid \(invalid_client\)$/,
+    );
   });
 
   it("says what Linear said when it refuses something else", async () => {
