@@ -1,9 +1,9 @@
 ---
-"@deevy/core": major
-"@deevy/db": major
-"@deevy/web": major
-"@deevy/server": major
-"@deevy/sockets": major
+"@deevy/core": minor
+"@deevy/db": minor
+"@deevy/web": minor
+"@deevy/server": minor
+"@deevy/sockets": minor
 ---
 
 **deevy no longer has a tracker of its own. Your work stays where it already is, and deevy connects to it.**

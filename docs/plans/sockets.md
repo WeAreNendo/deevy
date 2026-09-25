@@ -9,7 +9,8 @@ proposal where the issue lives, rule on it there, in Slack or in deevy, and get 
 deevy holds no Issue, Document, Workflow or Label of its own.
 
 Fifteen slices, 0 to 14, in dependency order. Each is one PR on `main` and carries its own tests. The first
-carries a major changeset; the rest carry ordinary ones.
+carries the breaking changeset; the rest carry ordinary ones. It was written as a major and shipped as a
+minor: the milestone went out as 0.9.0, because 1.0 says deevy is stable, and it is not yet (2026-09-25).
 
 **Status: done, 2026-09-24**, in fifteen stacked pull requests (#82 to #96). What each slice found, and the
 questions this plan left open answered as far as a build can answer them, are under "What it found" at the
