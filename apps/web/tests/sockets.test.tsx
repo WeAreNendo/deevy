@@ -357,14 +357,18 @@ describe("connecting GitLab", () => {
 });
 
 describe("connecting Notion", () => {
-  it("takes the integration's secret, then says where Notion sends its webhook", async () => {
+  it("takes an internal connection's token, then says where Notion sends its webhook", async () => {
     state.sockets = [];
     calls.connect.mockClear();
     await mountAt("/settings/sockets");
 
     fireEvent.click(await screen.findByRole("button", { name: "Connect Notion" }));
+    // Where Notion keeps internal connections since it renamed integrations.
+    expect(
+      screen.getByRole("link", { name: "Notion's Developer portal" }).getAttribute("href"),
+    ).toBe("https://app.notion.com/developers/connections");
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme's Notion" } });
-    fireEvent.change(secret("Internal integration secret"), {
+    fireEvent.change(secret("Installation access token"), {
       target: { value: "ntn_pasted_secret" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));

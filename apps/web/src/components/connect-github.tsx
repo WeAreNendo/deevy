@@ -98,7 +98,7 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
             placeholder="acme on GitHub"
             onChange={(changed) => setName(changed.target.value)}
           />
-          <FieldDescription>What this connection is called in deevy.</FieldDescription>
+          <FieldDescription>What this Socket is called in deevy.</FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="github-app-id">App id</FieldLabel>

@@ -38,7 +38,7 @@ interface Asked {
   body: Record<string, unknown> | undefined;
 }
 
-type Answer = object | ((asked: Asked) => object | null);
+type Answer = object | Response | ((asked: Asked) => object | Response | null);
 
 /** A Notion that answers what each `METHOD /path` is recorded to answer. */
 function notionReturning(answers: Record<string, Answer>) {
@@ -65,7 +65,7 @@ function notionReturning(answers: Record<string, Answer>) {
         { status: 404 },
       );
     }
-    return Response.json(said);
+    return said instanceof Response ? said : Response.json(said);
   }) as typeof fetch;
 
   const module = createNotionSocket({
@@ -114,6 +114,24 @@ describe("who deevy is on Notion", () => {
     // an address a Member verified is the most Notion offers (ADR-0025).
     expect(module.identityScope).toEqual({ instance: WORKSPACE });
     expect(module.accountLink).toBeUndefined();
+  });
+
+  it("is never a person: a personal access token would write as them, and drop their comments", async () => {
+    const { module } = notionReturning({
+      // What a personal access token answers: the Human who made it, not a bot.
+      "GET /v1/users/me": {
+        object: "user",
+        id: GRACE,
+        type: "person",
+        name: "Grace Hopper",
+        avatar_url: null,
+        person: { email: "grace@example.com" },
+      },
+    });
+
+    await expect(module.identity()).rejects.toThrow(
+      "This is Grace Hopper's personal access token: deevy would write as them, and take their comments for its own. Make an internal connection in Notion's Developer portal and paste its installation access token.",
+    );
   });
 });
 
@@ -363,10 +381,35 @@ describe("the tracker", () => {
     expect(asked).toEqual([]);
   });
 
-  it("says what Notion said when it refuses", async () => {
-    const { tracker } = notionReturning({});
+  it("says what Notion said when it refuses, in its words and then its code", async () => {
+    const { module, tracker } = notionReturning({
+      // What api.notion.com answers a made-up secret, byte for byte but the request id.
+      "GET /v1/users/me": Response.json(
+        {
+          object: "error",
+          status: 401,
+          code: "unauthorized",
+          message: "API token is invalid.",
+          request_id: "5d1c2f0e-7a3b-4c8d-9e1f-2a3b4c5d6e7f",
+        },
+        { status: 401 },
+      ),
+    });
 
-    await expect(tracker.getIssue(scope, ref)).rejects.toThrow("Notion answered 404");
+    await expect(module.identity()).rejects.toThrow(
+      "API token is invalid. (unauthorized, GET /users/me)",
+    );
+    await expect(tracker.getIssue(scope, ref)).rejects.toThrow(
+      `Could not find it. (object_not_found, GET /pages/${PAGE})`,
+    );
+  });
+
+  it("says what failed when Notion answers with no words", async () => {
+    const { module } = notionReturning({
+      "GET /v1/users/me": new Response("upstream timed out", { status: 502 }),
+    });
+
+    await expect(module.identity()).rejects.toThrow("Notion answered 502 (GET /users/me)");
   });
 });
 
@@ -403,6 +446,53 @@ describe("documents", () => {
     });
     expect(byId).toEqual(byUrl);
     expect(asked[0]?.path).toBe(`/v1/pages/${plan.id}`);
+  });
+
+  it("say where Notion left part of a page out, and where the whole page is", async () => {
+    const gaps = {
+      ...markdown,
+      markdown:
+        'A 10% coupon takes the total below zero.\n\n<unknown url="https://www.notion.so/acme/Coupon-9f8e7d6c5b4a4f3e8d2c1b0a9f8e7d6c" alt="bookmark"/>',
+      unknown_block_ids: ["9f8e7d6c-5b4a-4f3e-8d2c-1b0a9f8e7d6c"],
+    };
+    const { docs, tracker } = notionReturning({
+      [`GET /v1/pages/${PAGE}`]: page,
+      [`GET /v1/pages/${PAGE}/markdown`]: gaps,
+    });
+
+    const read = await docs.readPage({ externalId: PAGE });
+    expect(read.markdown).toBe(
+      `${gaps.markdown}\n\n> Notion left 1 block of this page out, marked \`<unknown>\` above: one not shared with deevy, or of a kind Notion does not write as markdown. The page is at ${page.url}.`,
+    );
+    expect((await tracker.getIssue(scope, ref)).body).toBe(read.markdown);
+  });
+
+  it("say when Notion stopped reading a page before its end", async () => {
+    const cut = {
+      ...markdown,
+      markdown: 'Step 1.\n\n<unknown url="https://www.notion.so/acme/x" alt="paragraph"/>',
+      truncated: true,
+      unknown_block_ids: [
+        "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+        "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e",
+      ],
+    };
+    const { docs } = notionReturning({
+      [`GET /v1/pages/${PAGE}`]: page,
+      [`GET /v1/pages/${PAGE}/markdown`]: cut,
+    });
+
+    expect((await docs.readPage({ externalId: PAGE })).markdown).toBe(
+      `${cut.markdown}\n\n> Notion stopped reading this page at about 20,000 blocks, so 2 blocks are missing here, marked \`<unknown>\` above. The whole page is at ${page.url}.`,
+    );
+
+    const { docs: unlisted } = notionReturning({
+      [`GET /v1/pages/${PAGE}`]: page,
+      [`GET /v1/pages/${PAGE}/markdown`]: { ...cut, markdown: "Step 1.", unknown_block_ids: [] },
+    });
+    expect((await unlisted.readPage({ externalId: PAGE })).markdown).toBe(
+      `Step 1.\n\n> Notion stopped reading this page at about 20,000 blocks, so its end is missing here. The whole page is at ${page.url}.`,
+    );
   });
 
   it("refuses a URL that names no Notion page", async () => {

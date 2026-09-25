@@ -31,7 +31,7 @@ complete tracker of its own — Issues with `DEV-42` keys, Documents, a Workflow
 comments, a board — and every one of those was a thing a team already had somewhere else. Asking them to move
 it into deevy, or to keep two of everything, to get the four things above was a heavy layer nobody asked for.
 So the tracker came out, and deevy connects to the team's tools instead: a **Socket** is one connected tool
-under one identity — a GitHub App, a Linear application, a GitLab user, a Notion integration, a Slack app.
+under one identity — a GitHub App, a Linear application, a GitLab user, a Notion connection, a Slack app.
 The plan was [sockets.md](./plans/sockets.md); the choices that are expensive to reverse are
 [ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
 [ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md); what each slice found is at the end of

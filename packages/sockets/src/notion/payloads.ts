@@ -167,7 +167,7 @@ export function issueOf(page: unknown, scope: Scope, markdown?: string): Externa
     .filter((user) => text(user.type) !== "bot")
     .map((user) => ({ login: text(user.name), id: text(user.id) }))
     .filter((user) => user.id.length > 0);
-  // The integration among a row's people is the row handed to deevy, as
+  // The connection's bot among a row's people is the row handed to deevy, as
   // Linear's delegate is: the Project's default Agent answers it.
   const delegate = people.find((user) => text(user.type) === "bot");
 
