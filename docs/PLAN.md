@@ -314,7 +314,8 @@ them. Plan and findings in [sockets.md](./plans/sockets.md), decisions in
 this shape starts from an empty database. What no test can do is still owed: each provider's setup walked
 once against the real tool.
 
-**After Sockets**, in rough order: cost and time accounting per Run; per-Agent identities on a Socket
+**After Sockets**, in rough order: cost and time accounting per Run (planned in
+[run-usage.md](./plans/run-usage.md)); per-Agent identities on a Socket
 where a provider makes them cheap; Jira and Asana; email Channel; private Projects; Postgres adapter.
 
 ## Risks worth naming
