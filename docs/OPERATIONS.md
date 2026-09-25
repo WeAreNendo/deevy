@@ -987,7 +987,8 @@ Sockets › Connect GitLab**. deevy acts on GitLab as one user, so the first ste
    the `api` scope. Give its user **Developer** on each project deevy works, and nothing more: every comment,
    label, branch and merge request is by that user.
 2. Paste the token, and the instance's address if it is not gitlab.com. Connecting asks GitLab who the token
-   belongs to, and a token that cannot answer is refused rather than stored.
+   belongs to and what it may do, and a token that cannot answer, or has no `api` scope, is refused rather
+   than stored, in GitLab's words.
 3. deevy then mints a **secret token** and shows it once, beside the webhook URL. On each project (or group)
    you bind, add a webhook in GitLab — **Settings › Webhooks** — with that URL and secret token, and choose
    **Issues events** and **Comments** (the confidential ones too, if deevy should see those). Instead of the
@@ -1014,6 +1015,10 @@ with — gitlab.com, or `GITLAB_ISSUER` — takes its accounts from sign-in, so 
 rules with no linking step, and one who signs in otherwise links GitLab under **Settings › Identities**. A
 Socket on any other GitLab shares nothing with sign-in. A comment by a project or group access token's bot
 rules nothing. When the token expires, connect the Socket again with a new one.
+
+This section has been checked against what GitLab publishes — its webhook docs' own examples, the Standard
+Webhooks reference implementation, its API docs, and gitlab.com's API answering a public project's reads —
+but **not yet walked on a GitLab instance** (docs/plans/sockets.md, "The GitLab check").
 
 ### Working in Notion
 

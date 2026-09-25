@@ -91,6 +91,37 @@ function pathOf(url: string): string | null {
   }
 }
 
+/**
+ * What GitLab said, as words. It refuses in three shapes — a `message` that is
+ * a sentence ("401 Unauthorized"), a `message` that is fields and what is
+ * wrong with each, and OAuth's `error` with a description and the scope it
+ * wanted — and an admin reading why connecting failed should get the words,
+ * not the JSON. Null where it said nothing deevy recognises.
+ */
+export function gitlabSaid(detail: string): string | null {
+  let said: unknown;
+  try {
+    said = JSON.parse(detail);
+  } catch {
+    return null;
+  }
+  const found = said && typeof said === "object" ? (said as Record<string, unknown>) : {};
+  if (typeof found.error === "string") {
+    const description = typeof found.error_description === "string" ? found.error_description : "";
+    const needs = typeof found.scope === "string" ? `, needs ${found.scope}` : "";
+    return description ? `${description} (${found.error}${needs})` : `${found.error}${needs}`;
+  }
+  if (typeof found.message === "string") return found.message;
+  if (found.message && typeof found.message === "object") {
+    return Object.entries(found.message as Record<string, unknown>)
+      .map(
+        ([field, wrong]) => `${field}: ${Array.isArray(wrong) ? wrong.join(", ") : String(wrong)}`,
+      )
+      .join("; ");
+  }
+  return null;
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname;
@@ -165,8 +196,12 @@ export function createGitlabSocket(
     });
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 300);
+      const where = `${method} ${path.split("?")[0] ?? path}`;
+      const said = gitlabSaid(detail);
       throw new Error(
-        `GitLab answered ${String(response.status)} for ${method} ${path.split("?")[0] ?? path}: ${detail}`,
+        said
+          ? `${said} (${where})`
+          : `GitLab answered ${String(response.status)} for ${where}: ${detail}`,
       );
     }
     return (await response.json()) as T;
@@ -179,9 +214,27 @@ export function createGitlabSocket(
     capabilities: new Set(["tracker", "forge"] as const),
     identityScope: gitlabIdentityScope(base, options.signInIssuer),
 
-    /** The user the token belongs to, which is who every comment and merge request is by. */
+    /**
+     * The user the token belongs to, which is who every comment and merge
+     * request is by — and a refusal for a token that cannot write. `/user`
+     * answers any token at all, so a `read_user` one connected and then failed
+     * at every comment; GitLab says what an access token may do at
+     * `/personal_access_tokens/self`, and where it cannot say — an OAuth token,
+     * or an older GitLab — `/user` stays the proof.
+     */
     async identity(): Promise<SocketIdentity> {
       const user = await call<{ id: number; username: string }>("GET", "/user");
+      const own = await call<{ scopes?: unknown }>("GET", "/personal_access_tokens/self").catch(
+        () => null,
+      );
+      const scopes = Array.isArray(own?.scopes)
+        ? own.scopes.filter((one): one is string => typeof one === "string")
+        : null;
+      if (scopes && !scopes.includes("api")) {
+        throw new Error(
+          `This token has ${scopes.join(", ") || "no scopes"}; deevy needs the api scope to comment, label and open merge requests`,
+        );
+      }
       return { login: user.username, id: String(user.id), mentionHandle: `@${user.username}` };
     },
 

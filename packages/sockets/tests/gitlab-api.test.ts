@@ -56,6 +56,8 @@ function gitlabReturning(
           : undefined,
     });
     const answer = answers[`${method} ${path}`] ?? answers[`${method} ${path.split("?")[0] ?? ""}`];
+    // A refusal, answered exactly as GitLab answered it.
+    if (answer instanceof Response) return answer.clone();
     if (answer === undefined) {
       return Response.json({ message: "404 Not found" }, { status: 404 });
     }
@@ -82,6 +84,7 @@ describe("who deevy is on GitLab", () => {
   it("is the user its token belongs to, asked with that token", async () => {
     const { module, asked } = gitlabReturning({
       "GET /user": { id: 7001, username: "deevy-bot", name: "deevy", bot: true },
+      "GET /personal_access_tokens/self": { id: 11, name: "deevy", scopes: ["api"], active: true },
     });
 
     expect(await module.identity()).toEqual({
@@ -90,6 +93,62 @@ describe("who deevy is on GitLab", () => {
       mentionHandle: "@deevy-bot",
     });
     expect(asked[0]?.authorization).toBe("Bearer glpat-deevy-bot-token");
+    // And what the token may do, which `/user` answers for any token at all.
+    expect(asked.map((one) => one.path)).toContain("/personal_access_tokens/self");
+  });
+
+  it("refuses a token that cannot write, and says which scope it needs", async () => {
+    // A `read_user` token answers `/user` and nothing else deevy asks: it
+    // connected, and then every comment, label and merge request failed.
+    const { module } = gitlabReturning({
+      "GET /user": { id: 7001, username: "deevy-bot", name: "deevy", bot: true },
+      "GET /personal_access_tokens/self": {
+        id: 11,
+        name: "deevy",
+        scopes: ["read_user", "read_api"],
+        active: true,
+      },
+    });
+
+    await expect(module.identity()).rejects.toThrow(
+      "This token has read_user, read_api; deevy needs the api scope to comment, label and open merge requests",
+    );
+  });
+
+  it("trusts a GitLab that cannot say what a token may do", async () => {
+    // An OAuth token, or a GitLab older than the endpoint: `/user` is proof enough.
+    const { module } = gitlabReturning({
+      "GET /user": { id: 7001, username: "deevy-bot", name: "deevy", bot: true },
+    });
+
+    await expect(module.identity()).resolves.toMatchObject({ login: "deevy-bot" });
+  });
+
+  it("says in GitLab's words when it does not know the token", async () => {
+    const { module } = gitlabReturning({
+      // As gitlab.com answered a made-up token on 2026-09-25.
+      "GET /user": Response.json({ message: "401 Unauthorized" }, { status: 401 }),
+    });
+
+    await expect(module.identity()).rejects.toThrow(/^401 Unauthorized \(GET \/user\)$/);
+  });
+
+  it("says which scope a refused call needed", async () => {
+    const { tracker } = gitlabReturning({
+      [`POST /projects/4211/issues/42/notes`]: Response.json(
+        {
+          error: "insufficient_scope",
+          error_description:
+            "The request requires higher privileges than provided by the access token.",
+          scope: "api",
+        },
+        { status: 403 },
+      ),
+    });
+
+    await expect(tracker.createComment(scope, ref, "Said")).rejects.toThrow(
+      "The request requires higher privileges than provided by the access token. (insufficient_scope, needs api) (POST /projects/4211/issues/42/notes)",
+    );
   });
 
   it("lives on gitlab.com, whose accounts are the ones deevy signs people in with", () => {
@@ -294,7 +353,9 @@ describe("the tracker", () => {
   it("says what GitLab said when it refuses", async () => {
     const { tracker } = gitlabReturning({});
 
-    await expect(tracker.getIssue(scope, ref)).rejects.toThrow("GitLab answered 404");
+    await expect(tracker.getIssue(scope, ref)).rejects.toThrow(
+      "404 Not found (GET /projects/4211/issues/42)",
+    );
   });
 });
 
