@@ -2,14 +2,15 @@
 #
 # Settings › Sockets › Connect Slack shows this with your instance's own request
 # URL in place of the one below, ready to paste into https://api.slack.com/apps
-# → Create New App → From an app manifest. Install it to your workspace, then
+# → Create New App → From a manifest. Install it to your workspace, then
 # paste the Bot User OAuth Token and the Signing Secret back into deevy.
 #
 # What it may do, and why:
 #   chat:write   post a Gate with Approve and Reject, and change it when somebody rules
 #   im:write     open a direct message with a Human who linked their account
-#   users:read   name who clicked
 #   commands     `/deevy link`, which is how a Human links their Slack account
+# Nothing else: a click already says who clicked, so deevy never asks Slack
+# about people. Posting to a channel needs deevy in it (`/invite @deevy`).
 display_information:
   name: deevy
   description: Approve and reject what your Agents ask, where you already are.
@@ -29,7 +30,6 @@ oauth_config:
     bot:
       - chat:write
       - im:write
-      - users:read
       - commands
 settings:
   interactivity:

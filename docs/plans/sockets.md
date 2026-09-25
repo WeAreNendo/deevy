@@ -14,8 +14,8 @@ carries a major changeset; the rest carry ordinary ones.
 **Status: done, 2026-09-24**, in fifteen stacked pull requests (#82 to #96). What each slice found, and the
 questions this plan left open answered as far as a build can answer them, are under "What it found" at the
 end. GitHub's setup was walked against github.com on 2026-09-25, with a real App and Claude Code as the Agent
-in the runtime's image, and what it found is an entry there. Linear, GitLab and Notion were checked the same
-day against everything each publishes, with no account on any (an entry each). What no test can
+in the runtime's image, and what it found is an entry there. Linear, GitLab, Notion and Slack were checked
+the same day against everything each publishes, with no account on any (an entry each). What no test can
 do is still owed: Linear's, GitLab's, Notion's and Slack's setup in OPERATIONS.md, each walked once against the
 real tool.
 
@@ -818,6 +818,37 @@ Any change to what an Agent may rule: nothing, on any door.
 ## What it found
 
 Written before the work, to be answered after it; newest first.
+
+**The Slack check, 2026-09-25.** No workspace either. Slack publishes its SDKs (`@slack/web-api` 8.1,
+`@slack/types` 3.1, Bolt 5.1), a reference for each method, block and manifest field, and example payloads:
+
+- **Signing.** deevy's check agrees with Slack's own worked example (a signature Slack made) and with Bolt's
+  `isValidSlackRequest` on that request tampered with, keyed with another secret, 4'59" and 5'01" late, with
+  a `v1=` prefix and unsigned. Bolt also takes a request stamped more than five minutes in the future;
+  deevy refuses it, as the docs' absolute difference says, and keeps doing so.
+- **The Web API.** Every request the module sends — `auth.test`, `chat.postMessage` and `chat.update` with a
+  Gate open and decided and a plain line with a link, `conversations.open`, `views.open`, and the answer to a
+  `response_url` — type-checks against the SDK's argument types, where a misspelt key in a block or a view
+  fails. A Gate built from the longest inputs the core allows (a 60-character Checkpoint, an 80-character
+  Agent name, a 100,000-character proposal full of `&` and `<`, nineteen rulings) stays inside every
+  documented limit: section text, context, buttons, block counts, the dialog's title, metadata and label.
+- **Interactions.** Slack's documented `block_actions`, `view_submission` and slash command, with deevy's own
+  button and dialog ids put in, read as the click, the reason and `/deevy link`; as Slack wrote them, they are
+  somebody else's and ignored. Every manifest field is one the reference has, within its limits.
+
+It found four things, each fixed with a test that fails without it:
+
+- **Every Slack link went nowhere.** A Notification in Slack — by the app or through the incoming-webhook
+  Channel — linked to `/issues/<key>`, which went with deevy's own tracker; it links to the record's Work
+  item now, `/work/<issue id>`. Nothing had redirected it, whatever the breadcrumb's comment said.
+- **A user's token connected, and deevy would have posted as that person.** `auth.test` answers a user token
+  as that user, with no `bot_id`; connecting refuses one and asks for the Bot User OAuth Token.
+- **The manifest asked for `users:read`**, which no method deevy calls needs: a click names who clicked. The
+  app asks for `chat:write`, `im:write` and `commands` now, and Slack's "From an app manifest" is "From a
+  manifest" in deevy's words too.
+- **Slack's refusals read as a bare code.** Slack gives no sentence, so the codes an operator can act on have
+  words: "Slack would not take these credentials: Slack does not know this token (invalid_auth, auth.test)",
+  or `not_in_channel` saying to `/invite @deevy`, and `missing_scope` naming the scope it needs.
 
 **The Notion check, 2026-09-25.** No account again. Notion publishes its SDK (`@notionhq/client` 5.26, a type
 for every request and answer), a reference for each endpoint, example deliveries and a signing helper:

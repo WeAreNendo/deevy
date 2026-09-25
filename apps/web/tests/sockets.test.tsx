@@ -274,7 +274,9 @@ describe("the tools this Workspace is connected to", () => {
     const text = manifest.textContent ?? "";
     expect(text.match(/https:\/\/deevy\.test\/hooks\/sock_pending0000/g)).toHaveLength(2);
     expect(text).not.toContain("SOCKET_ID");
-    expect(text).toContain("chat:write");
+    // Only the scopes a method deevy calls needs: a click names who clicked,
+    // so nothing asks Slack about people (users:read).
+    expect(text).toMatch(/bot:\n\s+- chat:write\n\s+- im:write\n\s+- commands\n/);
     expect(text).toContain("command: /deevy");
 
     fireEvent.change(secret("Bot User OAuth Token"), {

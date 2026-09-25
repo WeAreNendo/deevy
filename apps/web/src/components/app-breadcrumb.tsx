@@ -39,8 +39,8 @@ export function crumbsFor(pathname: string, names: CrumbNames): Crumb[] {
   const parts = pathname.split("/").filter(Boolean);
   const [head] = parts;
 
-  // Home is what needs you; `/projects` and `/issues/…` only redirect now, so
-  // neither ever asks for a crumb (ADR-0024).
+  // Home is what needs you; `/projects` only redirects now, so it never asks
+  // for a crumb, and a record's page is `/work/<id>` (ADR-0024).
   if (parts.length === 0) return [{ label: "Home" }];
   if (head === "inbox") return [{ label: "Inbox" }];
   // A Gate is the link an Agent hands a Human: they did not come from a list,

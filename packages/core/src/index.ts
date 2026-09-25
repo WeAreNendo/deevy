@@ -70,7 +70,7 @@ export {
 } from "./operations/registry.ts";
 export { EventSchema, MemberSchema, UserSchema, WorkspaceSchema } from "./schemas.ts";
 export {
-  issueUrl,
+  workItemUrl,
   postSlackMessage,
   slackMessage,
   type FetchLike,

@@ -33,7 +33,7 @@ function slack(answers: Record<string, unknown> = {}) {
       });
       const method = url.split("/").pop() ?? "";
       const answer = answers[method] ?? { ok: true };
-      return Response.json(answer);
+      return answer instanceof Response ? answer : Response.json(answer);
     },
     now: () => now,
   });
@@ -243,6 +243,24 @@ describe("what deevy asks of Slack", () => {
     expect(module.identityScope).toEqual({ instance: "T07ACME001" });
   });
 
+  it("refuses a user's token, which would post as them", async () => {
+    // auth.test's answer for a user token, as Slack documents it: no bot_id.
+    const { module } = slack({
+      "auth.test": {
+        ok: true,
+        url: "https://acme.slack.com/",
+        team: "Acme",
+        user: "grace",
+        team_id: "T07ACME001",
+        user_id: "U07GRACE01",
+      },
+    });
+
+    await expect(module.identity()).rejects.toThrow(
+      "This is grace's user token: deevy would post as them. Paste the app's Bot User OAuth Token, which starts xoxb-, instead.",
+    );
+  });
+
   it("posts an open Gate with its two buttons, and a decided one with none", async () => {
     const { chat, calls } = slack({
       "chat.postMessage": { ok: true, channel: "C07DEEVY01", ts: "1758625200.000100" },
@@ -301,12 +319,36 @@ describe("what deevy asks of Slack", () => {
     });
   });
 
-  it("says what Slack said when it refuses, rather than carrying on", async () => {
-    const { chat } = slack({ "chat.postMessage": { ok: false, error: "channel_not_found" } });
+  it("says what Slack said when it refuses, in words and then its code", async () => {
+    const { module, chat } = slack({
+      // What slack.com answers a made-up token, byte for byte.
+      "auth.test": { ok: false, error: "invalid_auth" },
+      "chat.postMessage": { ok: false, error: "not_in_channel" },
+      "conversations.open": {
+        ok: false,
+        error: "missing_scope",
+        needed: "im:write",
+        provided: "chat:write,commands",
+      },
+      "chat.update": { ok: false, error: "fatal_error" },
+      "views.open": new Response("upstream timed out", { status: 502 }),
+    });
 
-    await expect(chat.post("C07GONE", { kind: "gate", gate: openGate })).rejects.toThrow(
-      /channel_not_found/,
+    await expect(module.identity()).rejects.toThrow(
+      "Slack does not know this token (invalid_auth, auth.test)",
     );
+    await expect(chat.post("C07GATES", { kind: "gate", gate: openGate })).rejects.toThrow(
+      "deevy is not in that channel: /invite @deevy there (not_in_channel, chat.postMessage)",
+    );
+    await expect(chat.openDm("U07GRACE01")).rejects.toThrow(
+      "The app is missing the im:write scope: add it under OAuth & Permissions and reinstall it (missing_scope, conversations.open)",
+    );
+    await expect(
+      chat.update({ channel: "C07GATES", ts: "1.2" }, { kind: "gate", gate: openGate }),
+    ).rejects.toThrow("Slack answered fatal_error (chat.update)");
+    await expect(
+      chat.askForNote("1.2.3", { gateRequestId: "gate_1", checkpoint: "plan", message: null }),
+    ).rejects.toThrow("Slack answered HTTP 502 (views.open)");
   });
 
   it("answers each kind of reply the way Slack reads it", async () => {
