@@ -107,7 +107,7 @@ async function posting(db: Db) {
       body,
     });
   };
-  return { ada, grace, asAda, asGrace, asPlanner, run, chat, slackId, send, click, seeded };
+  return { ada, grace, asAda, asGrace, asPlanner, run, chat, slackId, send, click, seeded, issue };
 }
 
 describe("a Gate in a Slack room", () => {
@@ -229,13 +229,37 @@ describe("a direct message in Slack", () => {
     await send();
     expect(chat.dms).toEqual(["U0GRACE"]);
   });
+
+  it("links anything but a Gate to the record's page in deevy", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asPlanner, issue, chat, send } = await posting(db);
+
+    await asPlanner.comments.create({ issue: issue.url, body: "@grace can you look?" });
+    await send();
+
+    // The Work item, by the id deevy gave the record: `/issues/<key>` went
+    // with deevy's own tracker (ADR-0024), and a key is the tracker's.
+    expect(chat.posted).toMatchObject([
+      {
+        channel: "D-U0GRACE",
+        message: {
+          kind: "text",
+          link: {
+            url: `https://deevy.test/work/${issue.id}`,
+            label: `${issue.externalKey} Checkout rewrite`,
+          },
+        },
+      },
+    ]);
+  });
 });
 
 describe("the incoming-webhook Channel", () => {
   it("still posts a link and nothing to click", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { ada, asAda, asPlanner, run } = await posting(db);
+    const { ada, asAda, asPlanner, run, issue } = await posting(db);
     const hook = await asAda.channels.create({
       name: "#alerts",
       webhookUrl: "https://hooks.slack.com/services/T0/B0/xyz",
@@ -258,6 +282,7 @@ describe("the incoming-webhook Channel", () => {
 
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toContain("A Gate is waiting for a Human");
+    expect(bodies[0]).toContain(`<https://deevy.test/work/${issue.id}|`);
     expect(bodies[0]).not.toContain("deevy_approve");
   });
 });

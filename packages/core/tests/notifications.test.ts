@@ -155,13 +155,14 @@ describe("the Slack message a Notification becomes", () => {
     const message = slackMessage({
       // The key is the tracker's, so it is what a Human recognises (ADR-0024).
       kind: "mention",
-      issue: { key: "acme/deevy#1", title: "Ship the thing" },
+      issue: { id: "iss_0123456789ab", key: "acme/deevy#1", title: "Ship the thing" },
       baseUrl: "https://deevy.example",
     });
 
     expect(message.text).toContain("acme/deevy#1");
     const rendered = JSON.stringify(message);
-    expect(rendered).toContain("https://deevy.example/issues/acme%2Fdeevy%231");
+    // The Work item, where the record is in deevy (ADR-0024).
+    expect(rendered).toContain("https://deevy.example/work/iss_0123456789ab|acme/deevy#1");
     expect(rendered).toContain("mentioned");
     expect(message.blocks[0]?.type).toBe("section");
   });
@@ -227,7 +228,7 @@ describe("delivering what is owed to a Slack Channel", () => {
     expect(slack.posted).toHaveLength(1);
     expect(slack.posted[0]?.url).toBe(webhookUrl);
     expect(slack.posted[0]?.body).toContain("acme/deevy#1");
-    expect(slack.posted[0]?.body).toContain("https://deevy.example/issues/acme%2Fdeevy%231");
+    expect(slack.posted[0]?.body).toContain(`https://deevy.example/work/${issue.id}`);
     const [row] = await db.query.delivery.findMany();
     expect(row?.deliveredAt).not.toBeNull();
     expect(row).toMatchObject({ attempts: 1, lastStatus: 200 });

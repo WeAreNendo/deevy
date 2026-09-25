@@ -48,6 +48,36 @@ const ACTIONS = { deevy_approve: "approved", deevy_reject: "rejected" } as const
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
+/**
+ * Slack answers a refusal with a code and no sentence. These are the ones an
+ * operator can do something about, in words; any other is said as the code.
+ */
+const REFUSALS: Record<string, string | ((said: Record<string, unknown>) => string)> = {
+  invalid_auth: "Slack does not know this token",
+  not_authed: "No token was sent",
+  account_inactive: "This token was revoked, or the app was removed from the workspace",
+  token_revoked: "This token was revoked, or the app was removed from the workspace",
+  token_expired: "This token has expired",
+  not_allowed_token_type:
+    "Slack does not take this kind of token here; paste the Bot User OAuth Token, which starts xoxb-",
+  missing_scope: (said) =>
+    `The app is missing the ${text(said.needed) || "needed"} scope: add it under OAuth & Permissions and reinstall it`,
+  not_in_channel: "deevy is not in that channel: /invite @deevy there",
+  channel_not_found: "deevy cannot see a channel with that ID",
+  is_archived: "That channel is archived",
+  message_not_found: "The message to change is gone",
+  ratelimited: "Slack asked deevy to slow down",
+};
+
+/** A Slack refusal, as the words above and then the code and the method. */
+function refusal(method: string, said: Record<string, unknown>, status: number): string {
+  const code = text(said.error);
+  if (!code) return `Slack answered HTTP ${String(status)} (${method})`;
+  const words = REFUSALS[code];
+  if (!words) return `Slack answered ${code} (${method})`;
+  return `${typeof words === "function" ? words(said) : words} (${code}, ${method})`;
+}
+
 /** The JSON a Slack form carries under `payload`, or null when it is a slash command. */
 function payloadOf(rawBody: string): Record<string, unknown> | null {
   const raw = new URLSearchParams(rawBody).get("payload");
@@ -171,11 +201,9 @@ export function createSlackSocket({
       },
       body: JSON.stringify(body),
     });
-    const answer = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    const answer = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok || answer.ok !== true) {
-      throw new Error(
-        `Slack refused ${method}: ${answer.error ?? `HTTP ${String(response.status)}`}`,
-      );
+      throw new Error(refusal(method, answer, response.status));
     }
     return answer as T;
   }
@@ -187,6 +215,11 @@ export function createSlackSocket({
     // linked by a code Slack delivered to them alone (ADR-0025).
     identityScope: { instance: settings.teamId ?? "slack" },
 
+    /**
+     * The app's bot, proved by its token. A user's token proves too, as that
+     * user — no `bot_id` in the answer — and is refused: deevy would post
+     * every Gate as them.
+     */
     async identity(): Promise<SocketIdentity> {
       const who = await call<{
         user: string;
@@ -194,7 +227,13 @@ export function createSlackSocket({
         team: string;
         team_id: string;
         url: string;
+        bot_id?: string;
       }>("auth.test", {});
+      if (!who.bot_id) {
+        throw new Error(
+          `This is ${who.user ? `${who.user}'s` : "a"} user token: deevy would post as them. Paste the app's Bot User OAuth Token, which starts xoxb-, instead.`,
+        );
+      }
       return {
         login: who.user,
         id: who.user_id,

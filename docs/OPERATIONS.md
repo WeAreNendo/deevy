@@ -1076,9 +1076,11 @@ Notion workspace** (docs/plans/sockets.md, "The Notion check").
 
 A Slack app is a Socket too: connect it under **Settings › Sockets › Connect Slack**. deevy starts the Socket
 first and shows the app manifest (`docs/slack-manifest.yaml`) with this instance's own request URL in it, so
-creating the app in Slack — Create New App → From an app manifest — is one trip. Install it to the
-workspace, then paste the **Bot User OAuth Token** and the **Signing Secret** back into deevy. The URL must
-be one Slack can reach; an instance with no public address can post to Slack but hears no clicks.
+creating the app in Slack — Create New App → From a manifest — is one trip. Install it to the
+workspace, then paste the **Bot User OAuth Token** and the **Signing Secret** back into deevy. A user's token
+is refused, because deevy would post as that person. The app asks for three scopes — `chat:write`,
+`im:write` and `commands` — and nothing about people: a click already says who clicked. The URL must be one
+Slack can reach; an instance with no public address can post to Slack but hears no clicks.
 
 Then, under **Settings › Channels**, add a room in the app (its Slack channel ID, after `/invite @deevy`
 there) and route `Gate awaiting` to it. A Gate arrives with **Approve** and **Reject**; Reject asks why first.
@@ -1093,9 +1095,18 @@ linking is its own step: an unlinked click, or `/deevy link`, gets a code only t
 enter under **Settings › Identities** within ten minutes. deevy names the account before linking it,
 because a code handed over by somebody else would link _their_ account. Codes are kept only as a hash.
 
-Slack signs every request with a timestamp, and one older than five minutes is refused however it is signed.
+Slack signs every request with a timestamp, and one more than five minutes from deevy's clock, either way, is
+refused however it is signed, as Slack's docs say.
 Slack's signing secret is rotated in Slack; paste the new one with `sockets.update` (`webhookSecret`) and
 deevy keeps taking the old one for a day, so the two can be changed in either order.
+
+When Slack refuses something, deevy says it in words with Slack's code: "deevy is not in that channel:
+/invite @deevy there (not_in_channel, chat.postMessage)" on a Channel's **Test**, for instance.
+
+This section has been checked against what Slack publishes — its signing docs' worked example and Bolt's
+check, the Web API's and Block Kit's types, the manifest reference, example interactions, and slack.com
+answering a made-up token — but **not yet walked in a Slack workspace** (docs/plans/sockets.md, "The Slack
+check").
 
 ## Ruling from the tracker
 

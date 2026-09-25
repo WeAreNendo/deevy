@@ -89,7 +89,7 @@ export function ConnectSlack({ onConnected }: { onConnected: () => void }) {
               >
                 Create New App
               </a>{" "}
-              → From an app manifest, paste this, and install the app to your workspace.
+              → From a manifest, paste this, and install the app to your workspace.
             </FieldDescription>
             <div>
               <Button

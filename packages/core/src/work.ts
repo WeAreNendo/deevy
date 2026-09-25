@@ -37,7 +37,7 @@ import { forgetOldDeliveries } from "./sockets/hooks.ts";
 import type { ChatMessage, InboundEvent, SocketModules } from "./sockets/port.ts";
 import { socketModuleFor } from "./sockets/registry.ts";
 import {
-  issueUrl,
+  workItemUrl,
   postSlackMessage,
   slackMessage,
   type FetchLike,
@@ -773,7 +773,9 @@ export async function deliverDueChannelMessages({
         .from(issueTable)
         .where(inArray(issueTable.id, issueIds))
     : [];
-  const issueById = new Map(issues.map((row) => [row.id, { key: row.key, title: row.title }]));
+  const issueById = new Map(
+    issues.map((row) => [row.id, { id: row.id, key: row.key, title: row.title }]),
+  );
 
   // A delivery whose Channel or Event is gone can never be sent, so it is
   // retired rather than retried: the Channel was deleted after the Event.
@@ -953,14 +955,14 @@ export async function deliverDueChatMessages({
     const issue = issueId ? issueById.get(issueId) : undefined;
     const said = slackMessage({
       kind,
-      issue: issue ? { key: issue.externalKey, title: issue.title } : null,
+      issue: issue ? { id: issue.id, key: issue.externalKey, title: issue.title } : null,
       baseUrl: origin,
     });
     return {
       kind: "text",
       text: said.text,
       link: issue
-        ? { url: issueUrl(origin, issue.externalKey), label: `${issue.externalKey} ${issue.title}` }
+        ? { url: workItemUrl(origin, issue.id), label: `${issue.externalKey} ${issue.title}` }
         : null,
     };
   };

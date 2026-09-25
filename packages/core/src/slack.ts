@@ -25,6 +25,9 @@ export interface SlackPayload {
 }
 
 export interface SlackIssue {
+  /** deevy's own id for the record, which its page in deevy is named by. */
+  id: string;
+  /** The tracker's key, which is what a Human recognises. */
   key: string;
   title: string;
 }
@@ -56,9 +59,13 @@ const headlines: Record<HumanNotificationKind, string> = {
   delegation: "An Agent split work into sub-issues",
 };
 
-/** The Issue's page on this instance. `issueKey` is what a Human recognises. */
-export function issueUrl(baseUrl: string, issueKey: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/issues/${encodeURIComponent(issueKey)}`;
+/**
+ * The Issue's page on this instance: its Work item, by deevy's id for it. The
+ * key names it in the words; it is the tracker's, and `/issues/<key>` went
+ * with deevy's own tracker (ADR-0024).
+ */
+export function workItemUrl(baseUrl: string, issueId: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/work/${encodeURIComponent(issueId)}`;
 }
 
 /**
@@ -78,7 +85,7 @@ function escape(text: string): string {
 export function slackMessage({ kind, issue, baseUrl }: SlackMessageInput): SlackPayload {
   const headline = headlines[kind];
   const link = issue
-    ? `<${issueUrl(baseUrl, issue.key)}|${escape(issue.key)} ${escape(issue.title)}>`
+    ? `<${workItemUrl(baseUrl, issue.id)}|${escape(issue.key)} ${escape(issue.title)}>`
     : null;
   const text = issue ? `${headline}: ${issue.key} ${issue.title}` : headline;
 
