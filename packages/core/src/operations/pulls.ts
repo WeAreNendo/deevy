@@ -81,8 +81,18 @@ export const pulls = {
         title: input.title ?? titleFor(key, input.summary),
         body:
           input.body === undefined
-            ? pullBody({ summary: input.summary, issueUrl: issue.url, runId: run.id })
-            : `${input.body}\n\nCloses ${issue.url}\n\nOpened by a deevy Agent · Run ${run.id}`,
+            ? pullBody({
+                summary: input.summary,
+                issueUrl: issue.url,
+                runId: run.id,
+                agentName: context.session.user.name,
+              })
+            : pullBody({
+                summary: input.body,
+                issueUrl: issue.url,
+                runId: run.id,
+                agentName: context.session.user.name,
+              }),
       });
       if (!opened.url) {
         throw new ORPCError("BAD_GATEWAY", { message: "The forge opened no pull request" });

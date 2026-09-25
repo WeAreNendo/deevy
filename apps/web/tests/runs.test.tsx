@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 /**
@@ -8,7 +8,12 @@ import { describe, expect, it, vi } from "vite-plus/test";
  * this is the one list deevy still owns. Its filters ride in the URL, like
  * every list before it, and each of them is the server's.
  */
-const seen = vi.hoisted(() => ({ input: null as Record<string, unknown> | null }));
+const seen = vi.hoisted(() => ({
+  input: null as Record<string, unknown> | null,
+  status: "active",
+  trigger: "assignment",
+  retried: [] as unknown[],
+}));
 
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
@@ -31,7 +36,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
         };
       },
       get: async () => ({
-        ...stubRun({ id: "run_1", status: "active", summary: null }),
+        ...stubRun({ id: "run_1", status: seen.status, trigger: seen.trigger, summary: null }),
         activities: [
           {
             id: "act_1",
@@ -51,6 +56,10 @@ vi.mock("../src/lib/orpc.ts", async () => {
           },
         ],
       }),
+      retry: async (input: Record<string, unknown>) => {
+        seen.retried.push(input);
+        return stubRun({ id: "run_9", status: "pending", trigger: "retry" });
+      },
     },
     gates: { list: async () => ({ gates: [stubGate({ status: "approved", approvals: 1 })] }) },
   });
@@ -101,5 +110,38 @@ describe("one Run", () => {
 
     const gates = screen.getByRole("list", { name: "Gates" });
     expect(within(gates).getByRole("link", { name: /ship/ })).toBeTruthy();
+  });
+});
+
+describe("a Run that did not finish", () => {
+  it("offers to try again, and goes to the fresh Run it asked for", async () => {
+    seen.status = "failed";
+    seen.retried = [];
+    const router = await mountAt("/runs/run_1");
+
+    // The first real GitHub walk had a Run fail on the environment and no way
+    // to ask again from deevy: only a mention in the tracker.
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(seen.retried).toEqual([{ runId: "run_1" }]));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/runs/run_9"));
+    seen.status = "active";
+  });
+
+  it("offers nothing to a Run that is still going", async () => {
+    seen.status = "active";
+    await mountAt("/runs/run_1");
+
+    await screen.findByRole("heading", { name: /acme\/deevy#/ });
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("says what started it in words, never the value behind it", async () => {
+    seen.status = "active";
+    seen.trigger = "children_done";
+    await mountAt("/runs/run_1");
+
+    expect(await screen.findByText("started when its sub-issues finished")).toBeTruthy();
+    seen.trigger = "assignment";
   });
 });

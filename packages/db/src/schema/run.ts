@@ -17,6 +17,11 @@ export const runTriggers = [
    * delegating Run finishes rather than waiting, and this is how it is woken.
    */
   "children_done",
+  /**
+   * A Human asked for a fresh attempt after one failed or went stale: the
+   * Agent's Sponsor or an admin, from the Run's page (`runs.retry`).
+   */
+  "retry",
 ] as const;
 
 /**

@@ -4,7 +4,7 @@ import { DataTable, type DataColumn } from "@/components/data-table";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { socketStanding } from "@/routes/settings/sockets";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
@@ -77,6 +77,20 @@ export function SocketPage({ socketId }: { socketId: string }) {
 
   const standing = socketStanding(socket);
   const config = socket.config as Record<string, unknown>;
+  // Where a GitHub App is installed: an account per installation, written by
+  // the install's redirect and by GitHub's own `installation` delivery.
+  const installations = Array.isArray(config.installations)
+    ? (config.installations as Array<{ id?: unknown; account?: unknown }>).map((one) => ({
+        id: typeof one.id === "string" || typeof one.id === "number" ? String(one.id) : "",
+        account: typeof one.account === "string" ? one.account : "",
+      }))
+    : [];
+  const appPage =
+    typeof config.htmlUrl === "string"
+      ? config.htmlUrl.replace(/\/+$/, "")
+      : typeof config.slug === "string"
+        ? `https://github.com/apps/${config.slug}`
+        : null;
   const quiet = standing.tone === "quiet" && socket.status === "active";
   const columns: DataColumn<Delivery>[] = [
     {
@@ -190,6 +204,40 @@ export function SocketPage({ socketId }: { socketId: string }) {
           </p>
         )}
       </SettingsSection>
+
+      {socket.provider === "github" && socket.status !== "pending" ? (
+        <SettingsSection
+          aria-label="Where it is installed"
+          title="Where it is installed"
+          description="A GitHub App works only the repositories it is installed on, and installing it is GitHub's to do."
+        >
+          {installations.length > 0 ? (
+            <ul className="flex flex-wrap gap-2">
+              {installations.map((one) => (
+                <li key={one.id}>
+                  <Badge variant="outline">{one.account || one.id}</Badge>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Installed nowhere yet, so it can see no repository and no Project can be bound to it.
+            </p>
+          )}
+          {appPage ? (
+            <div>
+              <a
+                href={`${appPage}/installations/new`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                {installations.length > 0 ? "Install it on more repositories" : "Install it"}
+              </a>
+            </div>
+          ) : null}
+        </SettingsSection>
+      ) : null}
 
       {socket.provider === "notion" ? (
         <SettingsSection

@@ -194,16 +194,25 @@ describe("what a pull request is called, and what it says", () => {
     expect(titleFor("acme/deevy#42", "x".repeat(200)).length).toBeLessThanOrEqual(100);
   });
 
-  it("closes the record it is for, and names the Run", () => {
+  it("closes the record it is for, and names the Agent and the Run", () => {
     const body = pullBody({
       summary: "Cap the coupon at the basket total",
       issueUrl: "https://github.com/acme/deevy/issues/42",
       runId: "run_abc123def456",
+      agentName: "Planner",
     });
 
-    expect(body).toContain("Closes https://github.com/acme/deevy/issues/42");
-    expect(body).toContain("run_abc123def456");
-    expect(body.startsWith("Cap the coupon")).toBe(true);
+    // Signed as a comment on the record is, because the forge shows the App as
+    // the author of both (sockets/mirror.ts).
+    expect(body).toBe(
+      [
+        "Cap the coupon at the basket total",
+        "",
+        "Closes https://github.com/acme/deevy/issues/42",
+        "",
+        "— Planner · run_abc123def456 · via deevy",
+      ].join("\n"),
+    );
   });
 
   it("names a branch after the record and the attempt", () => {

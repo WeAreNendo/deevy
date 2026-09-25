@@ -11,6 +11,7 @@ import {
   ProjectSlug,
   ProjectSlugLookup,
   QueryFlag,
+  grantProject,
   loadProject,
   requireProject,
   requireProjectOrAdmin,
@@ -110,6 +111,23 @@ export const projects = {
       if (input.description !== undefined && input.description !== found.description) {
         changes.description = { from: found.description, to: input.description ?? null };
       }
+      // An Agent of this Workspace, or nobody: a record routed to a Human or to
+      // a stranger by default would be one nothing ever picks up.
+      if (input.defaultAgentMemberId) {
+        const agent = await context.db.query.member.findFirst({
+          where: {
+            id: input.defaultAgentMemberId,
+            workspaceId: context.workspace.id,
+            kind: "agent",
+          },
+          columns: { id: true },
+        });
+        if (!agent) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "The default has to be one of this Workspace's Agents",
+          });
+        }
+      }
       if (
         input.defaultAgentMemberId !== undefined &&
         input.defaultAgentMemberId !== found.defaultAgentMemberId
@@ -177,6 +195,11 @@ export const projects = {
         projectId: found.id,
         payload: changes,
       });
+      // Choosing an Agent as the default is letting it see the Project: after
+      // the change, so the log reads in the order it happened.
+      if (input.defaultAgentMemberId && changes.defaultAgentMemberId) {
+        await grantProject(context, input.defaultAgentMemberId, found);
+      }
       return loadProject(context.db, found.id);
     },
   }),

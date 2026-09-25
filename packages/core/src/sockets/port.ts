@@ -357,7 +357,11 @@ export interface SetupResult {
   webhookSecret?: string;
   /** Who deevy turned out to be there, where the flow settled it. */
   identity?: SocketIdentity;
-  /** Where to send the operator's browser next, relative to deevy's own origin. */
+  /**
+   * Where to send the operator's browser next: a path on deevy's own origin,
+   * or an absolute https address on the tool itself, for a flow whose next
+   * step is there (a GitHub App is made, then installed).
+   */
   redirectTo?: string;
   /** What the log should say happened. */
   summary?: string;

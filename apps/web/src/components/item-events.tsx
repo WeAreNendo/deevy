@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MemberChip } from "@/components/member-chip";
 import { RailHeading } from "@/components/rail-heading";
 import { describeEvent } from "@/lib/event-text";
+import { useEventContext } from "@/lib/mentions";
 import { orpc } from "@/lib/orpc";
 import { ago } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -27,11 +28,14 @@ export function ItemEvents({ issueId }: { issueId: string }) {
       input: { subjectId: issueId, order: "desc", limit: 50 },
     }),
   );
+  // Routing writes a Member's id and no name (sockets/apply.ts), so the names
+  // come from the Workspace's Members, as the Event log's do.
+  const named = useEventContext();
   const rows = (events.data?.events ?? []).map((event) => ({
     event,
     text: describeEvent(
       { kind: event.kind, payload: event.payload, actorKind: event.actor?.kind ?? null },
-      { memberName: () => undefined },
+      named,
     ),
   }));
 

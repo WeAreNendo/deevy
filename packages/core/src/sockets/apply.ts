@@ -153,6 +153,7 @@ async function readBack(
   if (event.kind === "changed") {
     const project = await projectFor(applying, event.scopeKey);
     if (!project) return `No Project is bound to ${event.scopeKey}`;
+    if (project.archivedAt) return archivedSkip(project);
     const known = await applying.db.query.issue.findFirst({
       where: { socketId: applying.socket.id, externalId: event.issueExternalId },
       columns: { url: true },
@@ -189,6 +190,15 @@ async function readBack(
     : { kind: "comment", scopeKey: "", issueExternalId: issue.externalId, comment };
 }
 
+/**
+ * Why a delivery for an archived Project changes nothing. Archiving closes a
+ * Project down: polling already passes it by (work.ts), and a delivery that
+ * went on projecting and routing its records kept starting Runs for it.
+ */
+function archivedSkip(project: Project): string {
+  return `${project.name} is archived, so deevy takes nothing more from it`;
+}
+
 async function projectFor(applying: Applying, scopeKey: string): Promise<Project | null> {
   const stored = scopeKeyOf(applying.socket.provider, { scopeKey });
   const known = applying.projects.get(stored);
@@ -208,6 +218,7 @@ async function applyIssue(
   const { db, socket, source } = applying;
   const project = await projectFor(applying, event.scopeKey);
   if (!project) return `No Project is bound to ${event.scopeKey}`;
+  if (project.archivedAt) return archivedSkip(project);
 
   const external = event.issue;
   const before = await db.query.issue.findFirst({

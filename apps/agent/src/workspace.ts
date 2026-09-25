@@ -50,6 +50,13 @@ export function authArgs(token: string | undefined, username = "x-access-token")
 export interface WorkspaceOptions {
   /** Where working directories are made. Defaults to the system temporary one. */
   root?: string;
+  /**
+   * Who the clone commits as: the Agent, by its name and deevy's address for
+   * it. The session commits in the clone itself (ADR-0019), and git refuses a
+   * commit with no identity, so it is set once here rather than left for
+   * every session to find out.
+   */
+  author?: { name: string; email: string };
   /** The repository to clone, or null for an empty directory. */
   repo?: RepoConfig | null;
   /** Names the directory after the Run, so two Runs cannot share one. */
@@ -120,6 +127,10 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
   // loopback address, so a `git remote -v` in the session shows the supervisor
   // and a push reaches the world through it (docs/plans/agent-owns-git.md).
   if (repo && options.originUrl) await git(["remote", "set-url", "origin", options.originUrl]);
+  if (repo && options.author) {
+    await git(["config", "--local", "user.name", options.author.name]);
+    await git(["config", "--local", "user.email", options.author.email]);
+  }
 
   return {
     cwd,

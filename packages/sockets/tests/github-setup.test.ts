@@ -57,6 +57,7 @@ describe("the App an operator just made", () => {
         client_id: "Iv1.9f8e7d6c5b4a",
         client_secret: "0123456789abcdef0123456789abcdef01234567",
         owner: { login: "acme" },
+        html_url: "https://github.com/apps/deevy-acme",
       },
     });
 
@@ -67,7 +68,12 @@ describe("the App an operator just made", () => {
     ]);
     // The App's id and slug are configuration; the key and the client secret
     // are credentials and are sealed by the route (secrets.ts).
-    expect(result.config).toMatchObject({ appId: "1284461", slug: "deevy-acme" });
+    expect(result.config).toMatchObject({
+      appId: "1284461",
+      slug: "deevy-acme",
+      // Where the App lives on GitHub, for the Socket's page to link to.
+      htmlUrl: "https://github.com/apps/deevy-acme",
+    });
     expect(result.credentials).toMatchObject({
       privateKey,
       clientId: "Iv1.9f8e7d6c5b4a",
@@ -81,6 +87,11 @@ describe("the App an operator just made", () => {
       mentionHandle: "@deevy-acme",
     });
     expect(result.summary).toContain("deevy (acme)");
+    // Straight on to installing it, which is the step that gives it anything
+    // to work: the first real walk landed back in deevy with an App installed
+    // nowhere and no way on from there. GitHub's own address for the App, so a
+    // GitHub Enterprise Server's is right too.
+    expect(result.redirectTo).toBe("https://github.com/apps/deevy-acme/installations/new");
   });
 
   it("refuses a code GitHub will not take, rather than half-connecting", async () => {

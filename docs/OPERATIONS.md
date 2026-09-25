@@ -830,6 +830,11 @@ What is worth knowing before turning either on:
   one visit later, and the approvals before it are spent.
 - **A changed Proposal is a new question.** Asking again with the same words is the same Gate; asking with
   different ones supersedes it, and any approvals on the old one do not carry over.
+- **An approval stands for its record.** A Run that fails after its plan was approved, and the Run that tries
+  again, is still the same question: asking with the same Proposal at the same Checkpoint on the same record
+  is answered with the Gate already approved, and the new Run goes on without asking anybody — provided that
+  Gate's approvals still meet the Checkpoint as it is set now
+  ([ADR-0026](./adr/0026-an-approval-stands-for-its-record.md)). The Run's feed names the Gate it went past on.
 - **Excluding the Human the work is for costs a Human from every count.** Saving the policy refuses a
   threshold that could not be met once they are left out: **a Workspace with one Human cannot turn it on at
   all**, and a Checkpoint wanting two approvals with it on needs three Humans.
@@ -889,20 +894,33 @@ A GitHub App is a Socket, for a Project's issues and its code at once: connect i
 Connect GitHub**. **Create the App on GitHub** posts a manifest deevy writes — the Socket's own webhook
 address, and exactly the permissions it needs: issues (read and write), contents and pull requests (write),
 metadata (read) — so GitHub makes the App and hands its credentials back without anybody copying a private key
-out of a browser. Install it on the repositories deevy should work, from the page GitHub then shows; each
-installation is written on the Socket. **Paste an App you already have** is the other way in, for an
-organisation that makes its Apps centrally: its id, its private key (PKCS#1 as GitHub gives it, or PKCS#8)
-and its webhook secret.
+out of a browser. Once GitHub has made it, you are sent straight on to its install page: install it on the
+repositories deevy should work, and GitHub sends you back. An App installed nowhere sees no repository, so
+nothing can be bound to it; the Socket's page says where it is installed, under **Where it is installed**,
+with a link to install it on more. **Paste an App you already have** is the other way in, for an organisation
+that makes its Apps centrally: its id, its private key (PKCS#1 as GitHub gives it, or PKCS#8) and its webhook
+secret.
 
-Bind a Project to a repository under **Settings › Projects**, as its tracker and its repository — they are
-usually the same. A label `agent:<handle>` routes an issue to that Agent. GitHub cannot assign an App, so the
-label and the Project's default Agent are how "give this to deevy" is said there. deevy writes its own
-`deevy:awaiting-approval` label the first time it needs it, and an Agent's sub-issues are GitHub's own.
+Bind a Project to a repository under **Settings › Projects › Bind a Project**. A tool that holds code binds
+the repository as both — where the Project's issues come from, and where its Agents push — unless you untick
+**Its code is here too**, and the base branch a Run starts from is the repository's own default. The
+Project's **Repository** and **Base branch** change either later, or bind code that lives somewhere else. A
+Project with no repository is one whose Agents read, plan and say things, and push nothing.
+
+A label `agent:<handle>` routes an issue to that Agent. GitHub cannot assign an App, so the label and the
+Project's **Default Agent** are how "give this to deevy" is said there; choosing an Agent as the default also
+lets it see the Project. A comment mentioning the App and an Agent — `@<app> builder, try again` — starts a Run
+for that Agent too. deevy writes its own `deevy:awaiting-approval` label the first time it needs it, and an
+Agent's sub-issues are GitHub's own.
 
 **The code.** A Run clones with an installation token GitHub mints for that one repository, which lives an
 hour and never leaves the runtime's supervisor; a Run resumed after a Gate is given a fresh one. deevy opens
 the pull request through the App, saying `Closes <issue URL>` — so merging it closes the issue on GitHub — and
-naming the Run.
+signed with the Agent and the Run, as its comments are.
+
+This section was walked against github.com on 2026-09-25: an App made from the manifest on a personal
+account, installed on one private repository, and a record taken from a label to a merged pull request with
+the ruling made by commenting `/approve` (docs/plans/sockets.md, "The GitHub walk").
 
 **Ruling from GitHub** needs no linking step for a Human who signs in to deevy with GitHub: github.com's
 accounts are the ones deevy signs people in with ([Ruling from the tracker](#ruling-from-the-tracker)). A
@@ -1157,12 +1175,20 @@ told to read it and revise rather than to ask again.
 
 Whatever the session does, the Run does not rot. A session that crashes, hangs or simply stops gets an error
 Activity and a failed Run, because a Run left `active` and silent tells a Human nothing until the sweep calls
-it `stale` half an hour later.
+it `stale` half an hour later. A failed or stale Run is tried again from its page — **Try again**, which the
+Agent's Sponsor or an admin may press — as a fresh Run for the same Agent on the same record, and the runtime
+picks it up like any other; a stale one is closed as failed first, since a record has one open Run per Agent.
+
+A session is refused what it may not do, and a refusal is an error Activity in the Run naming the tool and,
+where the harness says, the call itself — the command, the path — so a Human can see what the Agent reached
+for.
 
 ### What it produces
 
 A Run that changed files gets a branch named after the attempt, a commit, a push, and a pull request that
-deevy opens through the forge Socket, saying `Closes <record URL>` and naming the Run. The pull request's URL
+deevy opens through the forge Socket, saying `Closes <record URL>` and naming the Agent and the Run. Every
+commit is the Agent's: the clone is given its name and the address deevy has for it, so a session's own
+`git commit` has an author without setting one. The pull request's URL
 becomes a Link on the record carrying the Run's id, which is what makes "this pull request came from that
 attempt" a fact rather than a coincidence. Nothing is ever pushed to the base branch. A Run that changed
 nothing attaches nothing.
@@ -1342,6 +1368,10 @@ docker run -d --name deevy ... ghcr.io/wearenendo/deevy:<version>   # same -v de
 
 Take a backup first (below). Migrations only ever move forward: there is no down migration, so restoring a
 backup is how you go back.
+
+A browser picks the new version up on its next page load: the image serves `index.html` to be revalidated
+every time and the content-hashed files it names to be kept for good, so nobody runs the old app against the
+new server for longer than a tab stays open.
 
 ### Coming from 0.x: start again
 

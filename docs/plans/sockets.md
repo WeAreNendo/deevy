@@ -13,9 +13,10 @@ carries a major changeset; the rest carry ordinary ones.
 
 **Status: done, 2026-09-24**, in fifteen stacked pull requests (#82 to #96). What each slice found, and the
 questions this plan left open answered as far as a build can answer them, are under "What it found" at the
-end. What no test can do is still owed: each provider's setup in OPERATIONS.md walked once against the real
-tool — GitHub's with an App, Linear's, GitLab's and Notion's — and the live test of the runtime against a real
-model (`docs/sockets-acceptance.md`).
+end. GitHub's setup was walked against github.com on 2026-09-25, with a real App and Claude Code as the Agent
+in the runtime's image, and what it found is the first entry there. What no test can do is still owed for the
+others: Linear's, GitLab's, Notion's and Slack's setup in OPERATIONS.md, each walked once against the real
+tool.
 
 Why this and why now. v1 made deevy a complete tracker: Issues with keys, a Workflow of States and Gates per
 Project, intent/spec/plan Documents materialised from templates and edited live, Labels, Teams, comments, a
@@ -816,6 +817,58 @@ Any change to what an Agent may rule: nothing, on any door.
 ## What it found
 
 Written before the work, to be answered after it; newest first.
+
+**The GitHub walk, 2026-09-25.** deevy built from `main`, on a laptop behind a named Cloudflare Tunnel; a
+GitHub App made from deevy's manifest on a personal account and installed on one private repository; Builder,
+an Agent, run by the runtime's image with Claude Code signed in by a subscription token. An issue labelled
+`agent:builder` was routed, Builder read it and asked at `plan`, the Proposal arrived as the App's comment, a
+`/approve` on GitHub counted as the Human who signs in with that account with no linking step, the Run pushed
+a branch, deevy opened the pull request as the App saying `Closes`, and merging it closed the issue in GitHub
+and in deevy. It took two Runs, a mention to start the second, and these fixes, each with a test that fails
+without it:
+
+- **A Socket made through GitHub's manifest flow could do nothing.** `sockets.begin` wrote the row with no
+  capabilities and the redirect that made it live never added them, so no Project could be bound to it. The
+  acceptance walk pastes its Socket, which is the path that did. `begin` now writes the provider's own.
+- **No screen could bind a repository.** The API took `forge` and nothing sent it: a Project bound from the
+  screens had no code, and no Agent could push from it. Binding a Project to a tool that holds code binds the
+  same container as its code unless told otherwise, and the Binding panel has a Repository and a Base
+  branch; GitHub and GitLab list each repository with the branch it defaults to.
+- **The runtime gave the file and shell tools only to its own override.** A session was granted Write, Edit
+  and Bash when `DEEVY_AGENT_REPO` was set, and deevy's own `runs.checkout` never sets it: the first Run
+  cloned, read and planned, and was refused every write. The session is told per Run whether it has a
+  repository, in all four harnesses. The acceptance walk's scripted session pushes whatever its tool list
+  says, which is why it never showed.
+- **Every tool that acts in a tool failed over MCP.** The MCP surface was built without the key a Socket's
+  credentials are sealed under, and `app.ts` handed it over in a spread TypeScript does not check, so
+  `comments_create`, `issues_create`, `pulls_open` and `docs_get` answered "could not complete". Over HTTP
+  and from a webhook they worked. The MCP test's stub Socket held no credential, so nothing needed opening.
+- **Making the App did not lead to installing it.** GitHub sent the operator back to deevy with an App
+  installed nowhere and no way on. The redirect now goes to the App's own install page, and a GitHub
+  Socket's page says where the App is installed with a link to install it on more.
+- **The clone had no git identity**, so the Agent's own commit failed with "Author identity unknown" until it
+  set one itself. The runtime sets the Agent's name and deevy's address for it on every clone.
+- **The image served the app with no caching headers**, so a browser kept a page from before an upgrade
+  until its own guess ran out. `index.html` is revalidated every time and the hashed assets are kept for good.
+- **An archived Project went on routing.** Polling passed it by, but a delivery still projected its records
+  and started Runs. A delivery for an archived Project is skipped now, and says why.
+- **Mirrored comments lost their paragraphs.** Built as lines with the blank ones filtered out, a comment's
+  footer folded into the last bullet of its links, and a note's quote took the signature into it.
+- **`issues_get` passed an unread conversation off as an empty one.** A tracker that did not answer gave
+  `comments: []`; it gives `null` and `commentsUnavailable` now, and the instructions say what to do.
+- Smaller: the Tool and Container selects, a Socket's and a record's breadcrumb and a Run's trigger showed
+  raw values; a routed assignment read "unassigned it"; the sign-in legend still said copper and teal and the
+  Archive card "Issues home"; a refusal named the tool and not the command; a pull request's footer did not
+  name the Agent; and a select's list was as narrow as its trigger, which clipped a Socket's name.
+
+Three questions came out of it, and were decided with Matt the same day. Choosing a Project's default Agent
+grants it the Project, since a default that cannot see the Project is routed records it cannot read. A
+failed or stale Run can be tried again from its page, by the Agent's Sponsor or an admin (`runs.retry`, the
+`retry` trigger); the only way back in had been a mention in the tracker. And whether an approval carries to
+the next Run on the same record is deevy's to decide rather than the Agent's
+([ADR-0026](../adr/0026-an-approval-stands-for-its-record.md)): the Agent always asks, and an identical
+Proposal already approved at that Checkpoint, with as many approvals as the Checkpoint wants now, is answered
+with that Gate.
 
 **Slice 14, as built.** The record is OPERATIONS.md, DEVELOPMENT.md, the `deevy-ui` skill, PLAN.md, CLAUDE.md
 and the README rewritten for the shape that shipped, and the screenshots taken again. Four things came out of

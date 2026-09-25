@@ -336,6 +336,76 @@ describe("the Run lifecycle", () => {
   });
 });
 
+describe("trying a Run again", () => {
+  it("is a fresh Run for the same Agent, asked for by the Human who wants it", async () => {
+    const { admin, asAdmin, asAgent, issue, agent } = await workspaceWithAgent();
+    const first = await asAgent.runs.start({ issue: issue.url });
+    await asAgent.runs.finish({ runId: first.id, status: "failed", summary: "Could not write" });
+
+    // The first real GitHub walk had a Run fail on the environment, and the
+    // only way back in was a mention in the tracker. The Sponsor asks here.
+    const again = await asAdmin.runs.retry({ runId: first.id });
+
+    expect(again).toMatchObject({
+      issueKey: issue.externalKey,
+      agentMemberId: agent.member.id,
+      trigger: "retry",
+      triggeredByMemberId: admin.member.id,
+      status: "pending",
+    });
+    expect(again.id).not.toBe(first.id);
+    const { events } = await asAdmin.events.list({});
+    expect(
+      events.find((event) => event.kind === "run.started" && event.subjectId === again.id),
+    ).toMatchObject({ payload: { trigger: "retry", retryOf: first.id } });
+    // And the Agent finds it the way it finds any Run: pending, in its queue.
+    const queue = await asAgent.runs.list({});
+    expect(queue.runs.map((one) => one.id)).toContain(again.id);
+  });
+
+  it("closes a stale Run first, since one record has one open Run per Agent", async () => {
+    const { db, asAdmin, asAgent, issue } = await workspaceWithAgent();
+    const first = await asAgent.runs.start({ issue: issue.url });
+    await db.update(run).set({ status: "stale" }).where(eq(run.id, first.id));
+
+    const again = await asAdmin.runs.retry({ runId: first.id });
+
+    const old = await asAdmin.runs.get({ runId: first.id });
+    expect(old.status).toBe("failed");
+    expect(old.summary).toMatch(/tried again/i);
+    expect(again.status).toBe("pending");
+  });
+
+  it("is refused for a Run that finished well, or is still going", async () => {
+    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
+    const going = await asAgent.runs.start({ issue: issue.url });
+
+    await expect(asAdmin.runs.retry({ runId: going.id })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await asAgent.runs.finish({ runId: going.id, status: "completed", summary: "Done" });
+    await expect(asAdmin.runs.retry({ runId: going.id })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+  });
+
+  it("is the Sponsor's or an admin's, and never the Agent's own", async () => {
+    const { db, asAgent, issue } = await workspaceWithAgent();
+    const first = await asAgent.runs.start({ issue: issue.url });
+    await asAgent.runs.finish({ runId: first.id, status: "failed", summary: "No" });
+    const bob = await memberContext(db, { role: "member", name: "Bob" });
+    const asBob = createRouterClient(router, { context: bob });
+
+    await expect(asBob.runs.retry({ runId: first.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    // An Agent starts its own with `runs.start`; trying again is a Human's call.
+    await expect(asAgent.runs.retry({ runId: first.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
+
 describe("what a Human says into a Run", () => {
   it("is a prompt, not the Agent's own response, so a ported agent can tell them apart", async () => {
     const { asAgent, asAdmin, issue } = await workspaceWithAgent();

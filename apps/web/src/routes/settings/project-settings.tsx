@@ -128,8 +128,9 @@ export function ProjectSettingsForm({ projectSlug }: { projectSlug: string }) {
         <section className="flex flex-col gap-2 rounded-md border border-destructive/30 p-4">
           <h2 className="text-sm font-medium">Archive this Project</h2>
           <p className="text-sm text-muted-foreground">
-            The Project disappears from your Projects list and Issues home. Nothing is deleted — its
-            Issues and their history are kept.
+            The Project leaves your Projects list and the Work list, and deevy takes nothing more
+            from where its records live, so nothing new reaches an Agent. Nothing is deleted — its
+            records, Runs and history stay readable.
           </p>
           <div className="flex gap-2">
             {confirming ? (

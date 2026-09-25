@@ -1,7 +1,7 @@
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
-import { fakeSockets, memberContext, testDb, type MemberContext } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, testDb, type MemberContext } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -227,6 +227,51 @@ describe("projects.update", () => {
    * A binding names a Socket and a container, and pointing a Project at
    * somebody else's repository is not a Project-level decision (ADR-0024).
    */
+  it("lets the Agent it makes the default see the Project, rather than route to it blind", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, bind } = await withSocket(db);
+    const project = await client.projects.create({
+      slug: "deevy",
+      name: "deevy",
+      tracker: bind("acme/deevy"),
+    });
+    const builder = await agentContext(db, { name: "Builder", sponsor: admin.member });
+
+    // The first real GitHub walk made Builder the default before it could see
+    // the Project, and every record routed to it would have been one it could
+    // not read. Choosing it is granting it.
+    await client.projects.update({ slug: "deevy", defaultAgentMemberId: builder.member.id });
+
+    const granted = await client.agents.grants.list({ memberId: builder.member.id });
+    expect(granted.projects.map((one) => one.id)).toEqual([project.id]);
+    const { events } = await client.events.list({});
+    expect(events.filter((event) => event.kind === "agent.project_granted")).toEqual([
+      expect.objectContaining({
+        subjectId: builder.member.id,
+        projectId: project.id,
+        actorMemberId: admin.member.id,
+      }),
+    ]);
+
+    // Once: an Agent that can see it already is not granted it twice.
+    await client.projects.update({ slug: "deevy", defaultAgentMemberId: null });
+    await client.projects.update({ slug: "deevy", defaultAgentMemberId: builder.member.id });
+    const again = await client.events.list({});
+    expect(again.events.filter((event) => event.kind === "agent.project_granted")).toHaveLength(1);
+  });
+
+  it("refuses a default that is not one of this Workspace's Agents", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, bind } = await withSocket(db);
+    await client.projects.create({ slug: "deevy", name: "deevy", tracker: bind("acme/deevy") });
+
+    await expect(
+      client.projects.update({ slug: "deevy", defaultAgentMemberId: admin.member.id }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("refuses a Member who is not an admin", async () => {
     const { db, close } = testDb();
     closers.push(close);

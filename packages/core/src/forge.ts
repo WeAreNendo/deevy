@@ -42,6 +42,8 @@ export interface PullBodyInput {
   /** The record's own URL in the tracker, which is what GitHub closes on merge. */
   issueUrl: string;
   runId: string;
+  /** The Agent that opened it: the forge shows the App as the author. */
+  agentName?: string | null;
 }
 
 /**
@@ -52,15 +54,16 @@ export interface PullBodyInput {
  * is canonical in deevy: a merge closes the record where the team reads it,
  * without deevy writing anything.
  */
-export function pullBody({ summary, issueUrl, runId }: PullBodyInput): string {
-  const said = (summary ?? "").trim();
-  return [
-    said,
-    said ? "" : null,
-    `Closes ${issueUrl}`,
-    "",
-    `Opened by a deevy Agent · Run ${runId}`,
-  ]
-    .filter((line) => line !== null)
-    .join("\n");
+export function pullBody({ summary, issueUrl, runId, agentName }: PullBodyInput): string {
+  return [(summary ?? "").trim(), `Closes ${issueUrl}`, pullSignature(runId, agentName)]
+    .filter((block) => block !== "")
+    .join("\n\n");
+}
+
+/**
+ * The line a pull request ends with, as a comment on the record ends
+ * (sockets/mirror.ts): which Agent, which attempt, and that deevy carried it.
+ */
+export function pullSignature(runId: string, agentName?: string | null): string {
+  return `— ${agentName ?? "A deevy Agent"} · ${runId} · via deevy`;
 }

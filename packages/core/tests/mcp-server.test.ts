@@ -7,7 +7,7 @@ import { createApp } from "../src/app.ts";
 import { createAuth } from "../src/auth.ts";
 import { opaqueToolError, toolError } from "../src/mcp/errors.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, fakeSockets, memberContext, testDb } from "./helpers.ts";
+import { agentContext, fakeSockets, memberContext, testDb, testSealingSecret } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -121,9 +121,18 @@ async function workspaceWithAgent() {
   const { db, auth } = testAuth();
   const { sockets } = fakeSockets();
   const admin = await memberContext(db, { role: "admin", name: "Ada" });
-  const client = createRouterClient(router, { context: { ...admin, sockets } });
+  const client = createRouterClient(router, {
+    context: { ...admin, sockets, socketSecret: testSealingSecret },
+  });
 
-  const socket = await client.sockets.connect({ provider: "stub", name: "Example tracker" });
+  // With a credential, as every real Socket has: a tool that reaches the
+  // tracker opens it, which a Socket holding nothing never had to — and so the
+  // first real GitHub App found the MCP surface had no secret to open it with.
+  const socket = await client.sockets.connect({
+    provider: "stub",
+    name: "Example tracker",
+    credentials: { token: "stub-token-for-tests" },
+  });
   const granted = await client.projects.create({
     slug: "deevy",
     name: "deevy",
@@ -160,7 +169,7 @@ async function workspaceWithAgent() {
     ungranted,
     sockets,
     key: issued.key,
-    app: createApp({ db, auth, sockets }),
+    app: createApp({ db, auth, sockets, socketSecret: testSealingSecret }),
   };
 }
 

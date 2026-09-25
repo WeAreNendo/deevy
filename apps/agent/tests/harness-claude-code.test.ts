@@ -16,13 +16,15 @@ import { testConfig } from "./helpers.ts";
 const input = {
   prompt: "Work Run r1 on Issue DEV-1.",
   cwd: "/tmp/run",
+  repository: false,
   mcpUrl: "http://127.0.0.1:1/mcp",
   signal: AbortSignal.abort(),
 };
 
 const context = (config = testConfig): HarnessContext => ({
   config,
-  input,
+  // The override configured is a Run with a repository, as src/work.ts makes it.
+  input: { ...input, repository: config.repo !== null },
   home: "/tmp/home",
   instructions: "/app/dist/instructions.md",
 });
@@ -85,8 +87,8 @@ describe("the command line a session runs under", () => {
       "mcp__deevy__links_add",
       "mcp__deevy__runs_finish",
       // No repository, so no shell and no denylist: a session with nothing to
-      // run has no use for one, and the tool surface follows the configuration
-      // rather than a flag somebody has to remember.
+      // run has no use for one, and the tool surface follows the Run's own
+      // checkout rather than a flag somebody has to remember.
       "--append-system-prompt-file",
       "/app/dist/instructions.md",
       "--model",
@@ -120,6 +122,18 @@ describe("the command line a session runs under", () => {
     // (ADR-0019). The flag is left out rather than passed empty.
     expect(argv).not.toContain("--disallowedTools");
     expect(deniedTools).toEqual([]);
+  });
+
+  it("gives them to a Run whose repository deevy named, with nothing configured here", () => {
+    // The Run's checkout says there is a repository, not this runtime's own
+    // override (ADR-0024): the first real GitHub walk cloned it, read it, and
+    // was refused every Write, Edit and Bash, because the tool list asked
+    // `DEEVY_AGENT_REPO` instead.
+    const argv = claudeCode.argv({ ...context(), input: { ...input, repository: true } });
+    const allowed = argv.indexOf("--allowedTools");
+    const next = argv.indexOf("--append-system-prompt-file");
+
+    expect(argv.slice(allowed + 1, next)).toEqual([...deevyTools, ...repositoryTools]);
   });
 
   it("puts the prompt before the variadic tool lists, which would otherwise swallow it", () => {
@@ -236,6 +250,30 @@ describe("reading the stream", () => {
     expect(toSessionEvents(success)).toEqual([{ type: "done", ok: true, detail: "Planned it" }]);
     expect(toSessionEvents(failed)).toEqual([
       { type: "done", ok: false, detail: "The session ended: error_during_execution" },
+    ]);
+  });
+
+  it("says what was refused as well as why, where the CLI says both", () => {
+    // The CLI the first real GitHub walk ran gives a reason beside the message
+    // that names the call, and reading only the reason left a Human looking at
+    // "Refused Bash: no approval surface in this session" with no command.
+    const denied = JSON.stringify({
+      type: "system",
+      subtype: "permission_denied",
+      tool_name: "Bash",
+      decision_reason:
+        "no approval surface in this session; permission request denied automatically",
+      message: "Permission to use Bash with command ls -la /etc has been denied.",
+    });
+
+    expect(toSessionEvents(denied)).toEqual([
+      {
+        type: "denied",
+        name: "Bash",
+        reason:
+          "Permission to use Bash with command ls -la /etc has been denied. " +
+          "(no approval surface in this session; permission request denied automatically)",
+      },
     ]);
   });
 

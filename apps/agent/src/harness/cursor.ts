@@ -64,7 +64,7 @@ export const deniedWithoutRepository: ReadonlyArray<string> = [
  * because the only field that bounds anything is `permissions`.
  */
 export function cliConfig(context: HarnessContext): Record<string, unknown> {
-  const repo = context.config.repo !== null;
+  const repo = context.input.repository;
   return {
     version: 1,
     editor: { vimMode: false },

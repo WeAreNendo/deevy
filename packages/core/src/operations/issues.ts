@@ -300,7 +300,8 @@ export const issues = {
 
       // Best effort, and said so: a tracker that is down or a Socket that was
       // paused should not turn reading a record into a failure, and the
-      // record itself is deevy's own (ADR-0024).
+      // record itself is deevy's own (ADR-0024). Said so in the answer, not
+      // only here: an empty list would tell the reader nobody said anything.
       try {
         const row = await requireSocket(context, project.trackerSocketId);
         const tracker = requireTracker(await socketModuleFor(context, row));
@@ -310,8 +311,13 @@ export const issues = {
           50,
         );
         return { ...found, comments };
-      } catch {
-        return { ...found, comments: [] };
+      } catch (error) {
+        const why = error instanceof Error ? error.message : String(error);
+        return {
+          ...found,
+          comments: null,
+          commentsUnavailable: `The tracker did not answer, so the conversation is unread: ${why}`,
+        };
       }
     },
   }),

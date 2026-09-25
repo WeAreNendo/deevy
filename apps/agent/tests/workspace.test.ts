@@ -67,6 +67,23 @@ describe("a working directory", () => {
     );
   });
 
+  it("commits as the Agent, so the session's own commit has somebody to be", async () => {
+    const workspace = await openWorkspace({
+      runId: "run-1",
+      repo: repoFor(await origin()),
+      author: { name: "Builder", email: "builder@agents.deevy.invalid" },
+    });
+    scratch.push(workspace.cwd);
+
+    // The Agent commits in the clone itself (ADR-0019). With no identity git
+    // refuses the commit — "Author identity unknown" — which the first real
+    // GitHub walk's Agent met and had to set for itself.
+    expect(await workspace.git(["config", "--local", "user.name"])).toBe("Builder");
+    expect(await workspace.git(["config", "--local", "user.email"])).toBe(
+      "builder@agents.deevy.invalid",
+    );
+  });
+
   it("is empty when this runtime has no repository, and still cleans up", async () => {
     const workspace = await openWorkspace({ runId: "run-1" });
 

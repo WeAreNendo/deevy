@@ -428,6 +428,7 @@ describe("the evidence a Run leaves on the Issue", () => {
     closers.push(it.close);
     await it.assign("Give the runtime a health endpoint");
     const [waiting] = await it.deevy.runs("pending");
+    let toldOfRepository: boolean | undefined;
 
     const pass = await runOnce({
       ...options,
@@ -437,12 +438,18 @@ describe("the evidence a Run leaves on the Issue", () => {
         // The session writes a file and says nothing about git: what it leaves
         // behind is committed and pushed for it (docs/plans/agent-owns-git.md).
         async (input) => {
+          toldOfRepository = input.repository;
           await writeFile(join(input.cwd, "health.ts"), "export const ok = true;\n");
           await it.deevy.finishRun(waiting.id, "completed", "Added a health endpoint");
         },
         finished,
       ]),
     });
+
+    // deevy named the repository and nothing here did (the test configuration
+    // has no override), and the session was told it has one: what grants the
+    // file and shell tools (src/harness).
+    expect(toldOfRepository).toBe(true);
 
     const branch = pass.worked[0]?.delivered?.branch ?? "";
     expect(branch).toBe("deevy/acme-deevy-1-" + waiting.id.replace("run_", "").slice(0, 8));

@@ -14,6 +14,13 @@ export interface SessionInput {
   /** The directory the session runs in. A clone of the repository, or empty. */
   cwd: string;
   /**
+   * Whether `cwd` is a clone this Run may change: deevy named a repository for
+   * it (`runs.checkout`), or this runtime's override did. What decides the file
+   * and shell tools, per Run — never the configuration alone, which names a
+   * repository only for the override.
+   */
+  repository: boolean;
+  /**
    * Where deevy is, from inside the session: the supervisor's own loopback
    * proxy, which adds the Agent's key and enforces the tool list (src/proxy.ts).
    * The session is configured with this URL and no credential.

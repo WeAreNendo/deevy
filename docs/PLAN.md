@@ -59,7 +59,10 @@ A Project names the points a Run stops at — `plan` and `ship` are the usual tw
 with how many distinct Humans must approve, whether the Human the work is for may count, and who may rule. A
 Checkpoint an Agent names that the Project does not list gets the default: one approval, from any Human. There
 are no States and no templates: a Proposal is the Agent's own markdown, and where a team keeps plans
-afterwards is the Agent's job and a Link.
+afterwards is the Agent's job and a Link. An approval stands for its record rather than for the attempt: a Run
+that fails after its plan was approved, and the one that tries again, are the same question when the Proposal
+is, and deevy answers the second with the first's approval rather than asking the Humans twice
+([ADR-0026](./adr/0026-an-approval-stands-for-its-record.md)).
 
 ## The agent loop
 

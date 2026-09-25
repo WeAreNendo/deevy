@@ -19,6 +19,7 @@ import { testConfig } from "./helpers.ts";
 const input = {
   prompt: "Work Run r1 on Issue DEV-1.",
   cwd: "/tmp/run",
+  repository: false,
   mcpUrl: "http://127.0.0.1:1/mcp",
   signal: AbortSignal.abort(),
 };
@@ -33,7 +34,8 @@ const withRepo = {
 
 const context = (cfg = config): HarnessContext => ({
   config: cfg,
-  input,
+  // The override configured is a Run with a repository, as src/work.ts makes it.
+  input: { ...input, repository: cfg.repo !== null },
   home: "/tmp/home",
   instructions: "/app/dist/instructions.md",
 });
@@ -170,6 +172,17 @@ describe("the inline configuration", () => {
         },
       },
     });
+  });
+
+  it("grants the repository tools to a Run whose repository deevy named, with nothing configured here", () => {
+    // The Run's checkout says there is a repository, not this runtime's own
+    // override (ADR-0024): the first real GitHub walk was refused every write
+    // because the tool list asked `DEEVY_AGENT_REPO` instead.
+    const granted = permissions({ ...context(), input: { ...input, repository: true } });
+
+    expect(granted).toMatchObject(
+      Object.fromEntries(repositoryPermissions.map((name) => [name, expect.anything()])),
+    );
   });
 
   it("grants only the deevy tools when there is no repository", () => {

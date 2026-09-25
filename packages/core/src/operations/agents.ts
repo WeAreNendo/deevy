@@ -19,6 +19,7 @@ import { NoInput, defineOperation } from "./registry.ts";
 import {
   HandleInput,
   findMember,
+  grantProject,
   grantedProjects,
   reloadAgent,
   requireSponsoredAgent,
@@ -372,23 +373,7 @@ export const agents = {
         });
         if (!project) throw new ORPCError("NOT_FOUND", { message: "No such Project" });
 
-        const already = await context.db.query.projectGrant.findFirst({
-          where: { memberId: found.id, projectId: project.id },
-        });
-        if (!already) {
-          await context.db.insert(projectGrantTable).values({
-            memberId: found.id,
-            projectId: project.id,
-            grantedBy: context.member.id,
-          });
-          await appendEvent(context, {
-            kind: "agent.project_granted",
-            subjectType: "member",
-            subjectId: found.id,
-            projectId: project.id,
-            payload: { projectSlug: project.slug },
-          });
-        }
+        await grantProject(context, found.id, project);
         return grantedProjects(context, found.id);
       },
     }),

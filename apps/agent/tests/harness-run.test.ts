@@ -45,7 +45,7 @@ function fake(script: string, extra: Partial<Harness> = {}): Harness {
 }
 
 async function inputFor(cwd: string, signal = new AbortController().signal): Promise<SessionInput> {
-  return { prompt: "p", cwd, mcpUrl: "http://127.0.0.1:1/mcp", signal };
+  return { prompt: "p", cwd, repository: false, mcpUrl: "http://127.0.0.1:1/mcp", signal };
 }
 
 async function collect(events: AsyncIterable<SessionEvent>): Promise<SessionEvent[]> {

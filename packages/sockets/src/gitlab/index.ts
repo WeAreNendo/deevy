@@ -328,12 +328,20 @@ export function createGitlabSocket(
 
       /** The projects its user can push to and comment on: Developer or more. */
       async listContainers(): Promise<Container[]> {
-        const rows = await call<Array<{ id: number; path_with_namespace: string }>>(
+        const rows = await call<
+          Array<{ id: number; path_with_namespace: string; default_branch?: string | null }>
+        >(
           "GET",
           "/projects?membership=true&min_access_level=30&simple=true&per_page=100&order_by=path&sort=asc",
         );
+        // With the branch each defaults to, which is what a Run starts from
+        // once the project is bound as a Project's code (forgeBindingOf).
         return rows.map((row) => ({
-          scope: { scopeKey: String(row.id), path: row.path_with_namespace },
+          scope: {
+            scopeKey: String(row.id),
+            path: row.path_with_namespace,
+            ...(row.default_branch ? { baseBranch: row.default_branch } : {}),
+          },
           scopeKey: String(row.id),
           name: row.path_with_namespace,
         }));

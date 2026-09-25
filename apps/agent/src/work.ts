@@ -64,6 +64,7 @@ export interface WorkOptions {
     runId: string;
     repo: RepoConfig | null;
     originUrl?: string;
+    author?: { name: string; email: string };
   }) => Promise<Workspace>;
   /** How a Run's work becomes a branch and a pull request. */
   deliver?: (options: DeliverOptions) => Promise<Delivery | null>;
@@ -255,6 +256,8 @@ export async function workRun(
       runId: run.id,
       repo: repoFor(checkout),
       ...(git ? { originUrl: git.url } : {}),
+      // The session commits in the clone itself, as the Agent.
+      author: authorOf(options),
     });
   } catch (error) {
     await git?.close();
@@ -311,6 +314,7 @@ export async function workRun(
       for await (const event of session({
         prompt,
         cwd: workspace.cwd,
+        repository: workspace.repo !== null,
         mcpUrl: proxy.url,
         signal,
       })) {
@@ -350,10 +354,7 @@ export async function workRun(
                 issueKey: run.issueKey,
                 runId: run.id,
                 branch: checkout?.headBranch ?? branchFor(run.issueKey, run.id),
-                author: options.author ?? {
-                  name: "deevy Agent",
-                  email: "agent@deevy.invalid",
-                },
+                author: authorOf(options),
                 ...(said ? { summary: said } : {}),
               });
       } catch (error) {
@@ -400,6 +401,11 @@ export async function workRun(
     failedBy: detail,
     ...evidence,
   };
+}
+
+/** Who a commit is by: the Agent, or a stand-in where nobody said which. */
+function authorOf(options: { author?: { name: string; email: string } }) {
+  return options.author ?? { name: "deevy Agent", email: "agent@deevy.invalid" };
 }
 
 /** The repository a checkout names, as the workspace and the proxy want it. */

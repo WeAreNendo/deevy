@@ -487,9 +487,11 @@ describe(`the D1 request budget: a Slack click that rules costs ${String(slackCl
  * move and two Events; the ruling pays for the policy, the decision row, the
  * Event and the Run resuming with a third — and, since the Slack app, one read
  * of where the Gate's chat messages are, which a Gate posted nowhere answers
- * with nothing (sockets/chat-out.ts).
+ * with nothing (sockets/chat-out.ts). Since the first real GitHub walk the ask
+ * also reads whether this exact Proposal was already approved on the record,
+ * which is how an approval that stands is carried rather than asked twice.
  */
-const asking = 19;
+const asking = 20;
 const ruling = 20;
 
 describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {

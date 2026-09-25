@@ -10,6 +10,7 @@ import {
   issueLink as issueLinkTable,
   issueLinkKinds,
   member as memberTable,
+  projectGrant as projectGrantTable,
 } from "@deevy/db";
 import { loadAgent } from "../agents.ts";
 import { appendEvent } from "../events.ts";
@@ -73,6 +74,35 @@ export async function reloadAgent(context: ContextFor<"member">, memberId: strin
   const row = await loadAgent(context.db, memberId);
   if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
   return row;
+}
+
+/**
+ * Lets an Agent see a Project, once, and says so in the log. The one way a
+ * grant is written: by the grant itself, and by choosing an Agent as the
+ * Project's default, which is granting it (a default that cannot see the
+ * Project would be routed records it cannot read).
+ */
+export async function grantProject(
+  context: ContextFor<"member">,
+  agentMemberId: string,
+  project: Pick<Project, "id" | "slug">,
+): Promise<void> {
+  const already = await context.db.query.projectGrant.findFirst({
+    where: { memberId: agentMemberId, projectId: project.id },
+  });
+  if (already) return;
+  await context.db.insert(projectGrantTable).values({
+    memberId: agentMemberId,
+    projectId: project.id,
+    grantedBy: context.member.id,
+  });
+  await appendEvent(context, {
+    kind: "agent.project_granted",
+    subjectType: "member",
+    subjectId: agentMemberId,
+    projectId: project.id,
+    payload: { projectSlug: project.slug },
+  });
 }
 
 /** The Projects an Agent may see, read back after a grant changed. */
