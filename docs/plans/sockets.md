@@ -14,9 +14,10 @@ carries a major changeset; the rest carry ordinary ones.
 **Status: done, 2026-09-24**, in fifteen stacked pull requests (#82 to #96). What each slice found, and the
 questions this plan left open answered as far as a build can answer them, are under "What it found" at the
 end. GitHub's setup was walked against github.com on 2026-09-25, with a real App and Claude Code as the Agent
-in the runtime's image, and what it found is the first entry there. Linear's was checked the same day against
-everything Linear publishes, with no Linear account (the second entry). What no test can do is still owed:
-Linear's, GitLab's, Notion's and Slack's setup in OPERATIONS.md, each walked once against the real tool.
+in the runtime's image, and what it found is an entry there. Linear and GitLab were checked the same day
+against everything each publishes, with no account on either (an entry each). What no test can
+do is still owed: Linear's, GitLab's, Notion's and Slack's setup in OPERATIONS.md, each walked once against the
+real tool.
 
 Why this and why now. v1 made deevy a complete tracker: Issues with keys, a Workflow of States and Gates per
 Project, intent/spec/plan Documents materialised from templates and edited live, Labels, Teams, comments, a
@@ -817,6 +818,35 @@ Any change to what an Agent may rule: nothing, on any door.
 ## What it found
 
 Written before the work, to be answered after it; newest first.
+
+**The GitLab check, 2026-09-25.** No account either, and nothing as tidy as Linear's schema to hold the module
+to, but GitLab publishes more than enough:
+
+- **Its own examples.** The issue event and the comment on an issue in GitLab's webhook docs, run through
+  deevy's `normalize`, come out as the record and the comment they are. Issues still arrive as `Issue Hook`
+  with `object_kind: "issue"`; the docs now file them under work items, and other work items — tasks,
+  epics — say `work_item`, which deevy leaves alone. The docs' example assignees carry no id, but GitLab's
+  source (`User#hook_attrs`) sends one, which is what deevy reads.
+- **Signing.** A signing token is Standard Webhooks, as the docs say and deevy implements; deevy and the
+  specification's reference implementation give the same answer on a delivery as signed, one byte changed,
+  signed with another key, and ten minutes old. `webhook-id` is the delivery's id across retries, equal to
+  `Idempotency-Key`, and deevy reads both.
+- **The API itself.** gitlab.com answers a public project's reads with no token, so deevy's own calls ran
+  unchanged against `gitlab-org/gitlab` with only the token taken off: reading one issue, listing what
+  changed since yesterday, and the repository's clone address all came back and read correctly, the list
+  honouring deevy's paging. An issue's URL is `/-/work_items/1` now, which deevy's reader already took, and
+  GitLab's closing pattern reads a work item's link, so `Closes` still closes. Every parameter of every write
+  deevy sends is in GitLab's API docs.
+
+It found two things, both fixed with a test that fails without them:
+
+- **A token that could not write connected.** `/user` answers any token, so a `read_user` one was accepted and
+  then failed at every comment, label and merge request. Connecting asks `/personal_access_tokens/self` what
+  the token may do and refuses one without `api`, saying so; where GitLab cannot say — an OAuth token, an older
+  GitLab — `/user` stays the proof.
+- **GitLab's refusals came through as JSON.** Its three shapes — a sentence, fields and what is wrong with
+  each, and OAuth's `insufficient_scope` with the scope it wanted — read as words now: "GitLab would not take
+  these credentials: 401 Unauthorized (GET /user)".
 
 **The Linear check, 2026-09-25.** Nobody had a Linear workspace, so instead of a walk the module was held to
 everything Linear publishes. It is repeatable as `vp run sockets#check:linear`:
