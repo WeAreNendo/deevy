@@ -53,7 +53,7 @@ export function ConnectSlack({ onConnected }: { onConnected: () => void }) {
           disabled={begun !== null}
           onChange={(changed) => setName(changed.target.value)}
         />
-        <FieldDescription>What this connection is called in deevy.</FieldDescription>
+        <FieldDescription>What this Socket is called in deevy.</FieldDescription>
       </Field>
 
       {begun === null ? (

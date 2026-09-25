@@ -13,7 +13,7 @@ plan in `docs/plans/`, followed by the harness spike (ADR-0018), the agent ownin
 invitations, four-eyes Gates (ADR-0020), live Documents (ADR-0021) and sub-issue delegation (ADR-0022). Then
 the **Sockets** milestone (`docs/plans/sockets.md`, ADR-0024 and ADR-0025), done in fifteen slices, cut
 deevy's own tracker out: an Issue is a projection of a record in a Socket (a GitHub App, a Linear
-application, a GitLab user, a Notion integration, a Slack app), a Project is a binding, a Gate is a request on
+application, a GitLab user, a Notion connection, a Slack app), a Project is a binding, a Gate is a request on
 a Run with a Proposal, a Ruling may come from deevy, the tracker or Slack, and Documents, the Workflow,
 Labels, Teams, stored comments and the board are gone. What each slice found is at the end of that plan. The
 acceptance walk is a script (`vp run agent#acceptance`, `docs/sockets-acceptance.md`) that runs a record

@@ -252,8 +252,8 @@ export function SocketPage({ socketId }: { socketId: string }) {
           ) : socket.hasWebhookSecret ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Notion sent its verification token. Paste it into Verify on the webhook in the
-                integration&apos;s settings; the first delivery signed with it settles it.
+                Notion sent its verification token. Paste it into Verify on the connection&apos;s
+                Webhooks tab in Notion; the first delivery signed with it settles it.
               </p>
               {handshake.data?.token ? (
                 <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
@@ -277,8 +277,8 @@ export function SocketPage({ socketId }: { socketId: string }) {
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Waiting for Notion. Create a subscription in the integration&apos;s Webhooks, to this
-              Socket&apos;s address, and the token Notion sends appears here.
+              Waiting for Notion. Create a subscription on the connection&apos;s Webhooks tab, to
+              this Socket&apos;s address, and the token Notion sends appears here.
             </p>
           )}
         </SettingsSection>

@@ -76,7 +76,7 @@ export function ConnectLinear({ onConnected }: { onConnected: () => void }) {
           disabled={begun !== undefined}
           onChange={(changed) => setName(changed.target.value)}
         />
-        <FieldDescription>What this connection is called in deevy.</FieldDescription>
+        <FieldDescription>What this Socket is called in deevy.</FieldDescription>
       </Field>
 
       {begun === undefined ? (

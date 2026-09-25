@@ -10,12 +10,16 @@ import { orpc } from "@/lib/orpc";
 /**
  * Connecting Notion (ADR-0024, docs/OPERATIONS.md "Working in Notion").
  *
- * deevy acts in Notion as an internal integration of the workspace's own, so
- * the operator makes one and pastes its secret. Notion's webhook is made on
+ * deevy acts in Notion as an internal connection of the workspace's own (what
+ * Notion called an internal integration until it renamed them), so the
+ * operator makes one and pastes its token. Notion's webhook is made on
  * Notion's side after that, and Notion answers it with a token of its own that
  * has to be pasted back into Notion — which deevy receives, and the Socket's
  * page shows, so this dialog only says where to point it.
  */
+/** Where Notion keeps a workspace's internal connections. */
+const DEVELOPER_PORTAL = "https://app.notion.com/developers/connections";
+
 export function ConnectNotion({ onConnected }: { onConnected: () => void }) {
   const [name, setName] = useState("");
   const [secret, setSecret] = useState("");
@@ -26,17 +30,17 @@ export function ConnectNotion({ onConnected }: { onConnected: () => void }) {
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm">
-          Connected as <span className="font-medium">{connected.identity.login}</span>. In the
-          integration&apos;s settings in Notion, open Webhooks and create a subscription to this
-          address, for pages and comments:
+          Connected as <span className="font-medium">{connected.identity.login}</span>. On the
+          connection&apos;s Webhooks tab in Notion, create a subscription to this address, for pages
+          and comments:
         </p>
         <p className="rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all">
           {connected.inboundUrl}
         </p>
         <p className="text-sm text-muted-foreground">
           Notion then sends deevy a verification token. It appears on the Socket&apos;s page, for
-          you to paste into Notion&apos;s Verify. Share each database deevy should read with the
-          integration, from the database&apos;s own Connections menu.
+          you to paste into Notion&apos;s Verify. Give the connection each database deevy should
+          read, on its Content access tab or from the database&apos;s own ••• › Connections.
         </p>
         <div className="flex flex-wrap gap-2">
           <Link
@@ -63,10 +67,10 @@ export function ConnectNotion({ onConnected }: { onConnected: () => void }) {
           placeholder="Acme's Notion"
           onChange={(changed) => setName(changed.target.value)}
         />
-        <FieldDescription>What this connection is called in deevy.</FieldDescription>
+        <FieldDescription>What this Socket is called in deevy.</FieldDescription>
       </Field>
       <Field>
-        <FieldLabel htmlFor="notion-secret">Internal integration secret</FieldLabel>
+        <FieldLabel htmlFor="notion-secret">Installation access token</FieldLabel>
         <SecretInput
           id="notion-secret"
           value={secret}
@@ -74,10 +78,13 @@ export function ConnectNotion({ onConnected }: { onConnected: () => void }) {
           onChange={(changed) => setSecret(changed.target.value)}
         />
         <FieldDescription>
-          From an internal integration in Notion — Settings → Connections → Develop or manage
-          integrations — with read content, update content, insert content, read comments, insert
-          comments and user information including email addresses. deevy seals it and never shows it
-          again.
+          From an internal connection in{" "}
+          <a href={DEVELOPER_PORTAL} target="_blank" rel="noreferrer" className="underline">
+            Notion&apos;s Developer portal
+          </a>
+          , on its Configuration tab, with read content, update content, insert content, read
+          comments, insert comments and user information with email addresses. Not a personal access
+          token: deevy would write as you. deevy seals it and never shows it again.
         </FieldDescription>
       </Field>
       {connect.error ? <p className="text-sm text-destructive">{connect.error.message}</p> : null}

@@ -108,7 +108,7 @@ export function ConnectGitlab({ onConnected }: { onConnected: () => void }) {
           placeholder="Acme on GitLab"
           onChange={(changed) => setName(changed.target.value)}
         />
-        <FieldDescription>What this connection is called in deevy.</FieldDescription>
+        <FieldDescription>What this Socket is called in deevy.</FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="gitlab-url">GitLab URL</FieldLabel>

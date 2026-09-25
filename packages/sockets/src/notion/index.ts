@@ -28,11 +28,12 @@ import {
 /**
  * Notion, as a tracker and as where a team's documents live (ADR-0024).
  *
- * One internal integration is one Socket, in the one workspace it was made in,
- * and deevy acts as its bot through the secret the operator pasted. A data
+ * One internal connection (Notion's internal integration, renamed) is one
+ * Socket, in the one workspace it was made in, and deevy acts as its bot
+ * through the installation access token the operator pasted. A data
  * source — one table of a database — is a container: its rows are records,
  * and a Project's binding says which of its properties mean what. It sees only
- * the pages shared with the integration, which is Notion's own rule.
+ * the pages shared with the connection, which is Notion's own rule.
  *
  * Notion's webhooks name what changed and carry none of it, so a delivery is
  * read back here (`getIssue`, `getComment`); and Notion has no account a Human
@@ -43,7 +44,7 @@ import {
  */
 
 export interface NotionConfig {
-  /** The workspace the integration is in, learned at connect: an Identity's instance. */
+  /** The workspace the connection is in, learned at connect: an Identity's instance. */
   workspaceId?: string;
   workspaceName?: string;
   /** Notion's API root. The tests set it; nobody else needs to. */
@@ -51,7 +52,7 @@ export interface NotionConfig {
 }
 
 export interface NotionCredentials {
-  /** The integration's internal secret, `ntn_…`. */
+  /** The connection's installation access token, `ntn_…`. */
   token?: string;
 }
 
@@ -91,9 +92,15 @@ export function createNotionSocket({
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (!response.ok) {
-      const said = (await response.json().catch(() => ({}))) as { message?: string };
+      const said = (await response.json().catch(() => ({}))) as {
+        code?: unknown;
+        message?: unknown;
+      };
+      const where = `${method} ${path.split("?")[0] ?? path}`;
       throw new NotionError(
-        `Notion answered ${String(response.status)} for ${method} ${path.split("?")[0] ?? path}: ${said.message ?? "nothing"}`,
+        typeof said.message === "string" && said.message
+          ? `${said.message} (${typeof said.code === "string" ? `${said.code}, ` : ""}${where})`
+          : `Notion answered ${String(response.status)} (${where})`,
         response.status,
       );
     }
@@ -103,8 +110,18 @@ export function createNotionSocket({
   /** A page and its content, which Notion reads out as markdown itself. */
   async function pageWithMarkdown(id: string): Promise<{ page: unknown; markdown: string }> {
     const page = await call<unknown>("GET", `/pages/${id}`);
-    const content = await call<{ markdown?: string }>("GET", `/pages/${id}/markdown`);
-    return { page, markdown: content.markdown ?? "" };
+    const content = await call<{
+      markdown?: string;
+      truncated?: boolean;
+      unknown_block_ids?: unknown[];
+    }>("GET", `/pages/${id}/markdown`);
+    const markdown = content.markdown ?? "";
+    const gap = gapNote(
+      content.truncated === true,
+      content.unknown_block_ids?.length ?? 0,
+      (page as { url?: string }).url,
+    );
+    return { page, markdown: gap ? `${markdown}\n\n${gap}` : markdown };
   }
 
   /** Who a user is, asked once per call however many comments they wrote. */
@@ -163,13 +180,24 @@ export function createNotionSocket({
     // (ADR-0025).
     identityScope: { instance: settings.workspaceId ?? "notion" },
 
-    /** The integration's bot, which is who every comment deevy writes is by. */
+    /**
+     * The connection's bot, which is who every comment deevy writes is by. A
+     * personal access token answers with the Human who made it instead, and
+     * is refused: deevy would write as them, and its echo guard would drop
+     * every comment of theirs — their `/approve` too — as its own.
+     */
     async identity(): Promise<SocketIdentity> {
       const me = await call<{
         id: string;
+        type?: string;
         name?: string;
         bot?: { workspace_id?: string; workspace_name?: string };
       }>("GET", "/users/me");
+      if (me.type === "person") {
+        throw new Error(
+          `This is ${me.name ? `${me.name}'s` : "somebody's"} personal access token: deevy would write as them, and take their comments for its own. Make an internal connection in Notion's Developer portal and paste its installation access token.`,
+        );
+      }
       const login = me.name ?? "deevy";
       return {
         login,
@@ -359,7 +387,7 @@ export function createNotionSocket({
         });
       },
 
-      /** Every data source the integration was shared, with what its schema says to read. */
+      /** Every data source the connection was shared, with what its schema says to read. */
       async listContainers(): Promise<Container[]> {
         const answer = await call<{ results: unknown[] }>("POST", "/search", {
           filter: { property: "object", value: "data_source" },
@@ -391,6 +419,29 @@ export function createNotionSocket({
       },
     },
   };
+}
+
+/**
+ * What a reader is owed when Notion's markdown is not the whole page. Notion
+ * marks each block it could not load `<unknown url alt/>` and lists their ids:
+ * past about 20,000 blocks it stops, and short of that it leaves out a child
+ * page the connection was not shared and the kinds it does not write out
+ * (bookmarks, embeds, link previews). Notion offers asking again for each id,
+ * and says an unshared one answers 404; a request per block on every read
+ * would buy little past the rare 20,000, so deevy says so instead: an Agent
+ * reading the record knows the text is not all of it, and where the rest is.
+ */
+function gapNote(truncated: boolean, unknown: number, url: string | undefined): string | null {
+  if (!truncated && unknown === 0) return null;
+  const blocks = `${String(unknown)} block${unknown === 1 ? "" : "s"}`;
+  const where = url ? ` is at ${url}` : " is in Notion";
+  const missing =
+    unknown === 0
+      ? "its end is missing here"
+      : `${blocks} ${unknown === 1 ? "is" : "are"} missing here, marked \`<unknown>\` above`;
+  return truncated
+    ? `> Notion stopped reading this page at about 20,000 blocks, so ${missing}. The whole page${where}.`
+    : `> Notion left ${blocks} of this page out, marked \`<unknown>\` above: ${unknown === 1 ? "one" : "each"} not shared with deevy, or of a kind Notion does not write as markdown. The page${where}.`;
 }
 
 class NotionError extends Error {

@@ -360,7 +360,7 @@ awaiting your answer"`, `region "Your Agents' Runs"`.
   GitHub's `form "Create the App on GitHub"` and `Paste an App you already have`; Slack's `Show the app
 manifest` and `App manifest`; Linear's `Show the addresses`, `Callback URLs`, `Client ID`, `Client secret`,
   `Webhook signing secret`, `Install deevy as an agent`; GitLab's `GitLab URL`, `Access token`, `Signing
-token`, `Use the signing token`; Notion's `Internal integration secret` and link `Open the Socket's page`;
+token`, `Use the signing token`; Notion's `Installation access token`, link `Notion's Developer portal` and link `Open the Socket's page`;
   `Connect`, `Done`; every secret field is `type="password"` with `autocomplete="off"`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
 at this address`, `region "Where it is installed"` with link `Install it` or `Install it on more
 repositories`, `Pause`, `Mint a webhook secret`, `region "Verifying the webhook"` with `Show the token`,

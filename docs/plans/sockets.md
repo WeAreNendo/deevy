@@ -14,8 +14,8 @@ carries a major changeset; the rest carry ordinary ones.
 **Status: done, 2026-09-24**, in fifteen stacked pull requests (#82 to #96). What each slice found, and the
 questions this plan left open answered as far as a build can answer them, are under "What it found" at the
 end. GitHub's setup was walked against github.com on 2026-09-25, with a real App and Claude Code as the Agent
-in the runtime's image, and what it found is an entry there. Linear and GitLab were checked the same day
-against everything each publishes, with no account on either (an entry each). What no test can
+in the runtime's image, and what it found is an entry there. Linear, GitLab and Notion were checked the same
+day against everything each publishes, with no account on any (an entry each). What no test can
 do is still owed: Linear's, GitLab's, Notion's and Slack's setup in OPERATIONS.md, each walked once against the
 real tool.
 
@@ -818,6 +818,38 @@ Any change to what an Agent may rule: nothing, on any door.
 ## What it found
 
 Written before the work, to be answered after it; newest first.
+
+**The Notion check, 2026-09-25.** No account again. Notion publishes its SDK (`@notionhq/client` 5.26, a type
+for every request and answer), a reference for each endpoint, example deliveries and a signing helper:
+
+- **The API.** Every route the module calls is one the SDK has, and the five bodies it sends — a row
+  created, a comment in markdown, labels set, a data source queried, a search — type-check against the SDK's
+  parameter types, where a wrong key fails. `2026-03-11`, the version deevy sends, is Notion's newest, and its
+  one change deevy meets, `archived` becoming `in_trash`, is the field deevy already read. api.notion.com
+  answers a made-up token with a sentence of its own, which deevy now passes on.
+- **Webhooks.** Notion's documented deliveries through `normalize`: a page under a page or a workspace is
+  ignored, as it should be, a comment is a comment, and the upgrade guide's row delivery — a parent of type
+  `database` carrying its `data_source_id` — is a change to that row, found by its data source. Deliveries
+  signed with the SDK's `signWebhookPayload`, one byte changed, signed with another token and unsigned get the
+  same answer from deevy's check as from the SDK's `verifyWebhookSignature`, and so does the docs' sample
+  header, the one signature here Notion made itself.
+
+It found four things, each fixed with a test that fails without it:
+
+- **A personal access token connected, and would have been taken for deevy.** Notion's quickstart now hands
+  out personal access tokens, which act as the Human who made them. `/users/me` answers with that Human, so
+  deevy would have written every comment as them and, taking them for its own bot, dropped every comment of
+  theirs — their `/approve` too. Connecting refuses a token that is a person, and says what to make instead.
+- **Notion renamed integrations.** They are internal connections in a Developer portal now, and the secret
+  is an installation access token. Connect Notion, the Socket's page and OPERATIONS.md sent people to menus
+  that are gone; they use Notion's words now, and the dialog links the portal.
+- **A page Notion only partly read looked whole.** Notion's markdown stops at about 20,000 blocks and leaves
+  out child pages the connection was not given and the kinds of block it does not write out, marking each
+  `<unknown>` and listing their ids. deevy dropped the list; now what an Agent reads ends saying what is
+  missing and where the whole page is. Asking again for each block, which Notion offers, buys little: an
+  unshared one answers 404, and the 20,000 is rare in a record.
+- **Notion's refusals read as a status line.** They read as Notion's sentence and its code now: "Notion
+  would not take these credentials: API token is invalid. (unauthorized, GET /users/me)".
 
 **The GitLab check, 2026-09-25.** No account either, and nothing as tidy as Linear's schema to hold the module
 to, but GitLab publishes more than enough:

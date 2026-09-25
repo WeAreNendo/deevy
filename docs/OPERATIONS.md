@@ -852,7 +852,7 @@ who has not ruled on a Gate waiting on them is reminded after `DEEVY_GATE_REMIND
 ## Connecting your tools
 
 A Socket is one tool deevy is connected to, under one identity of its own — a GitHub App, a Linear
-application, a GitLab user, a Notion integration, a Slack app — and every Agent works through it
+application, a GitLab user, a Notion connection, a Slack app — and every Agent works through it
 ([ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)). Connect one under **Settings ›
 Sockets**; a Project is then a binding to what is in it, under **Settings › Projects**. Each Socket's
 credential is sealed under `DEEVY_SECRET`, so an instance without one can connect nothing that holds a
@@ -863,7 +863,7 @@ credential.
 | GitHub | records (issues), and code (a repository to push to)    | a GitHub App deevy writes the manifest for, installed on your repositories |
 | Linear | records                                                 | an OAuth application with client credentials and a webhook                 |
 | GitLab | records, and code                                       | an access token for the user deevy acts as, and a webhook on each project  |
-| Notion | records (a database's rows), and a Project's documents  | an internal integration's secret, and a webhook subscription               |
+| Notion | records (a database's rows), and a Project's documents  | an internal connection's token, and a webhook subscription                 |
 | Slack  | Gates in a room or a direct message, ruled with buttons | an app from deevy's manifest                                               |
 
 ### Where a tool delivers
@@ -1023,17 +1023,22 @@ but **not yet walked on a GitLab instance** (docs/plans/sockets.md, "The GitLab 
 ### Working in Notion
 
 A Notion workspace is a Socket, for a Project's records and for its documents: connect it under **Settings ›
-Sockets › Connect Notion**. deevy acts in Notion as an internal integration of your own:
+Sockets › Connect Notion**. deevy acts in Notion as an internal connection of your own — what Notion called an
+internal integration until it renamed them:
 
-1. In Notion, **Settings › Connections › Develop or manage integrations**, make an internal integration called
-   deevy — every comment it writes is by that name — with **read content**, **update content**, **insert
-   content**, **read comments**, **insert comments** and **read user information including email
-   addresses**. Paste its **internal integration secret** into deevy. Connecting asks Notion who the
-   integration is, and a secret that cannot answer is refused rather than stored.
-2. **Share each database deevy should read** with the integration, from the database's own **⋯ ›
-   Connections**, and the pages its Agents should be able to read as documents. The integration sees what it
-   is shared and nothing else, which is Notion's rule and a good one.
-3. In the integration's settings, **Webhooks › Create a subscription** to the Socket's address, on API version
+1. In Notion's [Developer portal](https://app.notion.com/developers/connections), which a Workspace Owner can
+   use, **Build › Internal connections › Create a new connection** called deevy — every comment it writes is
+   by that name. On its **Configuration** tab give it **read content**, **update content**, **insert
+   content**, **read comments**, **insert comments** and **user information with email addresses**, and
+   paste its **installation access token** into deevy. Connecting asks Notion who the connection is, and a
+   token that cannot answer is refused rather than stored. So is a personal access token: it acts as the
+   person who made it, so deevy would write as them and take their comments — their `/approve` too — for
+   its own.
+2. **Give the connection each database deevy should read**, and the pages its Agents should be able to read as
+   documents: on its **Content access** tab (**Edit access**), or from a database's own **••• › Connections ›
+   Add connection**. The connection sees what it is given and the pages under it, and nothing else, which is
+   Notion's rule and a good one.
+3. On the connection's **Webhooks** tab, **Create a subscription** to the Socket's address, on API version
    2025-09-03 or later, for page created, properties updated, content updated, moved, deleted and undeleted,
    and comment created. Notion sends deevy a **verification token**; the Socket's page shows it — **Show the
    token** — for you to paste into Notion's **Verify**. deevy keeps what Notion sends until the first delivery
@@ -1052,13 +1057,20 @@ row back when it is told; a poll reads rows and not their content, and keeps the
 
 **Documents.** A Project's documents can live in Notion whatever its tracker is: choose the Socket under
 **Documents** in the Project's settings. An Agent then reads a page there as markdown with `docs_get`, naming
-the Project and the page's URL, and only a page shared with the integration answers.
+the Project and the page's URL, and only a page shared with the connection answers. Where Notion could not
+read all of a page — past about 20,000 blocks, a child page not shared with the connection, or a kind of block
+it does not write as markdown, such as a bookmark or an embed — each gap is marked `<unknown>` and the
+markdown ends saying so, with the page's link.
 
 **Ruling from Notion** is `/approve` and `/reject <why>` in a comment, as elsewhere, with one difference:
 Notion has no account a Human can link, so the only proof of who wrote a comment is the address Notion reports
 for its author. It counts only on a Socket where an admin turned on **Take a verified address as proof** on
 the Socket's page, only against an address a Member verified in deevy, and every Ruling it makes says
 "(email)" wherever it is shown ([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)).
+
+This section has been checked against what Notion publishes — its SDK's types, its API reference, its example
+deliveries and its signing helper, and api.notion.com answering a made-up token — but **not yet walked in a
+Notion workspace** (docs/plans/sockets.md, "The Notion check").
 
 ### Working in Slack
 
