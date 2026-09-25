@@ -198,6 +198,13 @@ icon, title, description, action? }}`. **The words say what emptied the list**: 
   kind comes from the group's label, never from a chip. `ui/select`'s popup is at least as wide as its
   trigger and grows to fit its items (`w-max min-w-(--anchor-width) max-w-(--available-width)`), because a
   short trigger clipped a Socket's name; re-apply it after a `shadcn add --overwrite` of the file.
+- **A secret is typed into `SecretInput`** (`components/secret-input.tsx`): masked, `autoComplete="off"`,
+  and marked for 1Password, LastPass, Bitwarden and Dashlane to leave alone — a token an admin pastes from a
+  tool is not their password, and a manager that saves or fills one is wrong both ways. Every connect dialog
+  showed its secrets in the clear until the Linear check. A PEM in a `Textarea` stays a `Textarea`.
+- **A list says it is empty only once the server has said so.** Gate the empty sentence on `isSuccess`, not
+  on `data ?? []`: the Sockets page told a deevy built with five tools it had none, for as long as the list
+  took to arrive.
 - **A stored value is never a sentence.** A Run's trigger reads through `lib/run-trigger.ts` ("started when
   its sub-issues finished"), a breadcrumb names a Socket by its name and a record by its tracker's key, and a
   routed assignment a page cannot name still says "routed it to an Agent", never "unassigned it".
@@ -354,7 +361,7 @@ awaiting your answer"`, `region "Your Agents' Runs"`.
 manifest` and `App manifest`; Linear's `Show the addresses`, `Callback URLs`, `Client ID`, `Client secret`,
   `Webhook signing secret`, `Install deevy as an agent`; GitLab's `GitLab URL`, `Access token`, `Signing
 token`, `Use the signing token`; Notion's `Internal integration secret` and link `Open the Socket's page`;
-  `Connect`, `Done`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
+  `Connect`, `Done`; every secret field is `type="password"` with `autocomplete="off"`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
 at this address`, `region "Where it is installed"` with link `Install it` or `Install it on more
 repositories`, `Pause`, `Mint a webhook secret`, `region "Verifying the webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.

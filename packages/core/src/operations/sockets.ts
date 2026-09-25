@@ -17,6 +17,7 @@ import {
   socketModuleFor,
   type SocketFor,
 } from "../sockets/registry.ts";
+import type { SocketModule } from "../sockets/port.ts";
 import { appendEvent } from "../events.ts";
 import { newId } from "../ids.ts";
 import { defineOperation } from "./registry.ts";
@@ -70,6 +71,26 @@ function capabilitiesOf(
     now: () => new Date(),
   });
   return [...(module?.capabilities ?? [])];
+}
+
+/**
+ * Who deevy is on the tool, or a refusal an admin can read.
+ *
+ * A tool that will not answer has refused the credential, and that is the
+ * admin's to hear in the tool's own words — not a 500 with the reason in the
+ * server's log, which is what Linear's refusal of a client id it never issued
+ * was until the Linear check.
+ */
+async function provenIdentity(module: SocketModule, provider: string) {
+  try {
+    return await module.identity();
+  } catch (error) {
+    if (error instanceof ORPCError) throw error;
+    const why = error instanceof Error ? error.message : String(error);
+    throw new ORPCError("BAD_REQUEST", {
+      message: `${providerLabels[provider] ?? provider} would not take these credentials: ${why}`,
+    });
+  }
 }
 
 /** What a provider signs with, when deevy is the one that decides it. */
@@ -394,7 +415,7 @@ export const sockets = {
       );
       // What proving the credential taught deevy that is not a secret — a
       // Slack team's id — goes in the configuration, not the identity.
-      const { learned, ...identity } = await module.identity();
+      const { learned, ...identity } = await provenIdentity(module, input.provider);
 
       const values = {
         capabilities: [...module.capabilities],
@@ -590,7 +611,7 @@ export const sockets = {
       const module = await socketModuleFor(context as SocketFor, row);
       // An account renamed on the tool's side is a thing that happens, and the
       // loop guard reads this, so what comes back is what is kept.
-      const { learned, ...identity } = await module.identity();
+      const { learned, ...identity } = await provenIdentity(module, row.provider);
       await context.db
         .update(socketTable)
         .set({
@@ -633,7 +654,14 @@ export const sockets = {
     input: z.object({ socketId: z.string() }),
     output: SocketSchema,
     handler: async ({ input, context }) => {
-      const found = await requireSocket(context, input.socketId);
+      // Whatever state it is in: a paused Socket is still one an admin may
+      // take away, and one that never finished connecting — refused by the
+      // tool, or its App never made — is otherwise in the list for good.
+      // `requireSocket` refuses both, rightly, for anything that uses one.
+      const found = await context.db.query.socket.findFirst({
+        where: { id: input.socketId, workspaceId: context.workspace.id, status: { ne: "removed" } },
+      });
+      if (!found) throw new ORPCError("NOT_FOUND", { message: "No such Socket" });
       const [row] = await context.db
         .update(socketTable)
         // The credential goes with the connection: a removed Socket is a row

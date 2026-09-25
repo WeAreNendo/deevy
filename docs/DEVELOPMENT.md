@@ -185,6 +185,16 @@ http://localhost:3030 deevy-walk`. `cloudflared tunnel route dns` writes the rec
 
 A browser that loaded the app before a rebuild may keep the old page; one reload fetches the new one.
 
+### Checking a tool without an account
+
+Where nobody has the tool, what it publishes still says a great deal. `vp run sockets#check:linear` drives the
+Linear module through every operation with a recording `fetch`, and validates each GraphQL document and its
+variables against the schema Linear's SDK is generated from — fetched from GitHub each time, so it runs when
+Linear changes rather than in `vp run -r test` — and looks up every webhook field deevy reads in the payload
+types the same schema describes. It fails on a field, argument, input key or enum value Linear does not have,
+and says which ones Linear has deprecated. It cannot show a consent page or a real delivery: that is still
+the walk's.
+
 ## Everyday commands
 
 | Command                          | What it does                                                                                                  |

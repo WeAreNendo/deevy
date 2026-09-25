@@ -8,7 +8,9 @@
     "./stub": "./src/stub/index.ts",
     "./package.json": "./package.json"
   },
-  "scripts": {},
+  "scripts": {
+    "check:linear": "node scripts/check-linear.ts"
+  },
   "dependencies": {
     "@deevy/core": "workspace:*"
   },
@@ -17,6 +19,7 @@
     "@deevy/db": "workspace:*",
     "@orpc/server": "catalog:",
     "@types/node": "catalog:",
+    "graphql": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"

@@ -253,6 +253,36 @@ describe("a comment", () => {
     });
   });
 
+  it("with a bot actor is a machine's, whatever else it says, in the shape Linear sends it", () => {
+    // Linear's schema types a webhook comment's `botActor` as a string — the
+    // API's is an object — and a comment an integration brought in can carry
+    // a user beside it. Checked against Linear's published schema, 2026-09-25.
+    const synced = {
+      ...commented,
+      data: {
+        ...commented.data,
+        botActor: JSON.stringify({ id: "int_1", type: "integration", name: "Slack" }),
+      },
+    };
+    const byNobody = {
+      ...commented,
+      actor: { id: "int_1", type: "integration", service: "slack" },
+      data: {
+        ...commented.data,
+        userId: null,
+        user: null,
+        botActor: JSON.stringify({ id: "int_1", type: "integration", name: "Slack" }),
+      },
+    };
+
+    expect(tracker().normalize("Comment", synced)).toMatchObject([
+      { comment: { author: { login: "Grace Hopper", isBot: true } } },
+    ]);
+    expect(tracker().normalize("Comment", byNobody)).toMatchObject([
+      { comment: { author: { login: "Slack", isBot: true } } },
+    ]);
+  });
+
   it("that was edited or removed means nothing: deevy acts on what was said first", () => {
     for (const action of ["update", "remove"]) {
       expect(tracker().normalize("Comment", { ...commented, action })).toMatchObject([

@@ -947,7 +947,9 @@ do so that it can show you the three addresses the application needs with their 
    events** off: deevy does not answer them.
 5. Paste the **client ID**, the **client secret** and the webhook's **signing secret** back into deevy.
    Connecting asks Linear who deevy is there — the application's own user — and in which workspace, and a
-   credential that cannot answer is refused rather than stored.
+   credential that cannot answer is refused rather than stored, in Linear's words: a client id Linear does not
+   know reads "Linear would not take these credentials: Invalid client: client is invalid (invalid_client)".
+   A connection you started and did not finish stays on the Sockets page as _pending_; disconnect it there.
 
 Bind a Project to a team under **Settings › Projects**. A label `agent:<handle>` on an issue in that team
 routes it to that Agent, by the label's name, as on GitHub; deevy makes its `deevy:awaiting-approval` label
@@ -969,6 +971,11 @@ links theirs once, under **Settings › Identities › Link Linear**: Linear ask
 deevy reads which account and which workspace said yes, and gives the token back at once. An account in
 another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
 deevy minted with the old one; connect the Socket again with the new one.
+
+This section has been checked against everything Linear publishes — its GraphQL schema, its SDK's webhook
+verification, its authentication docs and its real endpoints — but **not yet walked in a Linear workspace**
+(docs/plans/sockets.md, "The Linear check"). `vp run sockets#check:linear` repeats the check whenever Linear
+changes its API.
 
 ### Working in GitLab
 

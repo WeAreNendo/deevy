@@ -99,8 +99,30 @@ export function teamOf(issue: unknown): string {
 }
 
 /**
- * One comment. Its author is the user who wrote it; a comment an app wrote
- * carries a `botActor`, and an app with no user at all has only an id.
+ * A comment's bot actor, whichever way Linear sent it: an object from the API,
+ * a string from a webhook — Linear's schema types it so — holding the same
+ * thing as JSON, or just a name. Null where there is none.
+ */
+function botActorOf(value: unknown): Record<string, unknown> | null {
+  if (typeof value === "string") {
+    if (value.trim() === "") return null;
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : { name: value };
+    } catch {
+      return { name: value };
+    }
+  }
+  const found = record(value);
+  return Object.keys(found).length > 0 ? found : null;
+}
+
+/**
+ * One comment. Its author is the user who wrote it; a comment an app or an
+ * integration wrote carries a `botActor`, which makes it a machine's whatever
+ * else it says, and an app with no user at all has only an id.
  */
 export function commentOf(comment: unknown, url = ""): ExternalComment | null {
   const found = record(comment);
@@ -109,13 +131,14 @@ export function commentOf(comment: unknown, url = ""): ExternalComment | null {
   const user = record(found.user);
   const authorId = text(user.id) || text(found.userId);
   const email = text(user.email);
-  const isBot = Object.keys(record(found.botActor)).length > 0 || !text(user.id);
+  const bot = botActorOf(found.botActor);
+  const isBot = bot !== null || !text(user.id);
   return {
     externalId,
     url: text(found.url) || url,
     body: text(found.body),
     author: {
-      login: text(user.displayName) || text(user.name) || text(record(found.botActor).name),
+      login: text(user.displayName) || text(user.name) || text(bot?.name),
       id: authorId,
       isBot,
       ...(email ? { email } : {}),

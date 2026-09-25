@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 /**
  * Connecting a tool, and reading how it is doing (docs/plans/sockets.md).
@@ -28,23 +28,31 @@ vi.mock("../src/lib/leave.ts", () => ({
   },
 }));
 
-const state = vi.hoisted(() => ({ sockets: [] as unknown[], lastInboundAt: null as Date | null }));
+const state = vi.hoisted(() => ({
+  sockets: [] as unknown[],
+  lastInboundAt: null as Date | null,
+  /** Holds the providers' answer back, as a slow first load does. */
+  providersPending: false,
+}));
 
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
   const { stubClient, stubSocket } = await import("./stub-client.ts");
   const client = stubClient({
     sockets: {
-      providers: async () => ({
-        providers: [
-          { id: "github", label: "GitHub", capabilities: ["tracker", "forge"] },
-          { id: "gitlab", label: "GitLab", capabilities: ["tracker", "forge"] },
-          { id: "linear", label: "Linear", capabilities: ["tracker"] },
-          { id: "notion", label: "Notion", capabilities: ["tracker", "docs"] },
-          { id: "slack", label: "Slack", capabilities: ["chat"] },
-          { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
-        ],
-      }),
+      providers: async () =>
+        state.providersPending
+          ? new Promise<never>(() => undefined)
+          : {
+              providers: [
+                { id: "github", label: "GitHub", capabilities: ["tracker", "forge"] },
+                { id: "gitlab", label: "GitLab", capabilities: ["tracker", "forge"] },
+                { id: "linear", label: "Linear", capabilities: ["tracker"] },
+                { id: "notion", label: "Notion", capabilities: ["tracker", "docs"] },
+                { id: "slack", label: "Slack", capabilities: ["chat"] },
+                { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
+              ],
+            },
       list: async () => ({ sockets: state.sockets }),
       begin: async (input: { provider: string; name: string }) => {
         void calls.begin(input);
@@ -126,9 +134,38 @@ vi.mock("../src/lib/orpc.ts", async () => {
 });
 
 const { mountAt } = await import("./mount.tsx");
+
+/**
+ * A field that holds a secret: masked, and kept from the browser's and the
+ * password manager's autofill. Every connect dialog showed them in the clear
+ * until the Linear check typed one (2026-09-25).
+ */
+function secret(label: string): HTMLElement {
+  const field = screen.getByLabelText(label);
+  expect(field.getAttribute("type")).toBe("password");
+  expect(field.getAttribute("autocomplete")).toBe("off");
+  expect(field.hasAttribute("data-1p-ignore")).toBe(true);
+  return field;
+}
 const { stubSocket } = await import("./stub-client.ts");
 
+afterEach(() => {
+  state.providersPending = false;
+});
+
 describe("the tools this Workspace is connected to", () => {
+  it("says nothing about which tools there are until the server has said", async () => {
+    state.sockets = [];
+    state.providersPending = true;
+
+    await mountAt("/settings/sockets");
+    const connect = await screen.findByRole("region", { name: "Connect a tool" });
+
+    // The Linear check read "built with no tools it can connect" on a deevy
+    // built with five, for as long as the list took to arrive.
+    expect(within(connect).queryByText(/built with no tools/)).toBeNull();
+  });
+
   it("lists them, and offers only the ones this deevy can speak", async () => {
     state.sockets = [
       { ...stubSocket, name: "acme on GitHub", provider: "github", hasCredentials: true },
@@ -206,7 +243,7 @@ describe("the tools this Workspace is connected to", () => {
     fireEvent.change(screen.getByLabelText("Private key"), {
       target: { value: "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----" },
     });
-    fireEvent.change(screen.getByLabelText("Webhook secret"), {
+    fireEvent.change(secret("Webhook secret"), {
       target: { value: "whsec_pasted_from_github" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -240,10 +277,10 @@ describe("the tools this Workspace is connected to", () => {
     expect(text).toContain("chat:write");
     expect(text).toContain("command: /deevy");
 
-    fireEvent.change(screen.getByLabelText("Bot User OAuth Token"), {
+    fireEvent.change(secret("Bot User OAuth Token"), {
       target: { value: "xoxb-pasted-from-slack" },
     });
-    fireEvent.change(screen.getByLabelText("Signing Secret"), {
+    fireEvent.change(secret("Signing Secret"), {
       target: { value: "8f14e45fceea167a5a36dedd4bea2543" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -272,7 +309,7 @@ describe("connecting GitLab", () => {
     fireEvent.change(screen.getByLabelText("GitLab URL"), {
       target: { value: "https://gitlab.example.com/" },
     });
-    fireEvent.change(screen.getByLabelText("Access token"), {
+    fireEvent.change(secret("Access token"), {
       target: { value: "glpat-pasted-token" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -291,7 +328,7 @@ describe("connecting GitLab", () => {
     expect(screen.getByText("https://deevy.test/hooks/sock_stub00000")).toBeTruthy();
 
     // Or GitLab's own signing token, which signs every delivery, pasted back.
-    fireEvent.change(screen.getByLabelText("Signing token"), {
+    fireEvent.change(secret("Signing token"), {
       target: { value: "whsec_Z2l0bGFiLXNpZ25pbmc=" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Use the signing token" }));
@@ -309,7 +346,7 @@ describe("connecting GitLab", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Connect GitLab" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme on GitLab" } });
-    fireEvent.change(screen.getByLabelText("Access token"), {
+    fireEvent.change(secret("Access token"), {
       target: { value: "glpat-pasted-token" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -327,7 +364,7 @@ describe("connecting Notion", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Connect Notion" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme's Notion" } });
-    fireEvent.change(screen.getByLabelText("Internal integration secret"), {
+    fireEvent.change(secret("Internal integration secret"), {
       target: { value: "ntn_pasted_secret" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -366,10 +403,10 @@ describe("connecting Linear", () => {
     expect(callbacks.textContent).toContain("https://deevy.test/hooks/sock_pending0000/setup");
 
     fireEvent.change(screen.getByLabelText("Client ID"), { target: { value: "lin_client_id" } });
-    fireEvent.change(screen.getByLabelText("Client secret"), {
+    fireEvent.change(secret("Client secret"), {
       target: { value: "lin_client_secret" },
     });
-    fireEvent.change(screen.getByLabelText("Webhook signing secret"), {
+    fireEvent.change(secret("Webhook signing secret"), {
       target: { value: "lin_wh_signing_secret" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
