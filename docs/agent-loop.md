@@ -107,7 +107,9 @@ Work one Issue at a time, in this order.
    the tracker. That conversation is the brief. Where it links a page the team keeps its plans in — a Notion
    page — read it with `docs_get`, naming your Project by the `project.slug` the record came with and the page
    by its URL; a Project with no documents bound says so, and then the record is all there is. If the record
-   does not say enough to act on, say so in a comment and ask.
+   does not say enough to act on, say so in a comment and ask. An answer with `commentsUnavailable` means the
+   tracker did not answer and the conversation is unread, not empty: ask again once, and if it is still
+   unread, say so in an Activity and do not plan as if nobody had said anything.
 
    The same answer carries `checkpoints`: the names this Project asks a Run to stop at. It is usually `plan`,
    `ship`, both or neither, and it is what decides steps 5 and 10. A Project that asks for none is one where
@@ -124,6 +126,9 @@ Work one Issue at a time, in this order.
 
    Your Run goes to `awaiting_input` and the Humans who rule that Checkpoint are asked. Asking again with the
    same Proposal is the same question, not a second one. Changing the Proposal supersedes it and asks afresh.
+   Ask even when an earlier Run on this record had its plan approved: whether that approval still stands is
+   deevy's to decide, not yours. When it does, the answer comes back already `approved` — the Checkpoint is
+   passed, your Run keeps going, and you carry on to the work without stopping.
    `gates_get` says where it stands and what anyone has said. **Do not rule on it yourself**: you cannot, deevy
    refuses it whoever asks, and failing at it is not a plan.
 

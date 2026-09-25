@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { MemberChip } from "@/components/member-chip";
 import { PageHeader } from "@/components/page-header";
@@ -7,9 +7,11 @@ import { Markdown } from "@/components/markdown";
 import { RailHeading } from "@/components/rail-heading";
 import { RunStatus, type RunStatusValue } from "@/components/run-status";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { NotFoundPage, isNotFound } from "@/routes/not-found";
 import { orpc } from "@/lib/orpc";
 import { useMembersById } from "@/lib/members";
+import { startedBy } from "@/lib/run-trigger";
 import { ago } from "@/lib/time";
 
 /** How an Activity reads, by kind: the Agent's voice, a Human's, an error. */
@@ -32,6 +34,14 @@ export function RunPage({ runId }: { runId: string }) {
   const run = useQuery(orpc.runs.get.queryOptions({ input: { runId } }));
   const gates = useQuery(orpc.gates.list.queryOptions({ input: { runId } }));
   const nameOf = useMembersById();
+  const navigate = useNavigate();
+  // A fresh attempt for the same Agent, asked for by its Sponsor or an admin;
+  // anybody else is told so by the server, in its words.
+  const retry = useMutation(
+    orpc.runs.retry.mutationOptions({
+      onSuccess: (fresh) => navigate({ to: "/runs/$runId", params: { runId: fresh.id } }),
+    }),
+  );
 
   if (run.isError && isNotFound(run.error)) {
     return <NotFoundPage what="Run" detail={run.error.message} />;
@@ -51,10 +61,27 @@ export function RunPage({ runId }: { runId: string }) {
           <span className="flex flex-wrap items-center gap-2">
             <RunStatus status={found.status as RunStatusValue} />
             {agent ? <MemberChip member={agent} size="inline" /> : null}
-            <span className="text-xs">started by {found.trigger}</span>
+            <span className="text-xs">started {startedBy(found.trigger)}</span>
             <span aria-hidden>·</span>
             <span className="text-xs">{ago(found.lastActivityAt)}</span>
           </span>
+        }
+        actions={
+          found.status === "failed" || found.status === "stale" ? (
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={retry.isPending}
+                onClick={() => retry.mutate({ runId: found.id })}
+              >
+                Try again
+              </Button>
+              {retry.error ? (
+                <span className="text-xs text-destructive">{retry.error.message}</span>
+              ) : null}
+            </div>
+          ) : null
         }
       />
 

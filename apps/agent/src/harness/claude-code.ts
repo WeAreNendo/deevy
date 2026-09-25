@@ -68,7 +68,7 @@ export const claudeCode: Harness = {
   // is input, and input is untrusted rather than forbidden (ADR-0014).
   strip: [".mcp.json", ".claude"],
   argv({ config, input, instructions }: HarnessContext): string[] {
-    const tools = config.repo ? [...deevyTools, ...repositoryTools] : [...deevyTools];
+    const tools = input.repository ? [...deevyTools, ...repositoryTools] : [...deevyTools];
     return [
       // The prompt first: the tool lists below are variadic and would take a
       // positional argument after them as one more tool.
@@ -97,7 +97,7 @@ export const claudeCode: Harness = {
       ...tools,
       // Only when there is something to deny: the flag with no values after it
       // would take the next flag as one.
-      ...(config.repo && deniedTools.length > 0 ? ["--disallowedTools", ...deniedTools] : []),
+      ...(input.repository && deniedTools.length > 0 ? ["--disallowedTools", ...deniedTools] : []),
       "--append-system-prompt-file",
       instructions,
       "--model",
@@ -153,12 +153,15 @@ export function toSessionEvents(line: string): SessionEvent[] {
     return [{ type: "ready", tools: message.tools ?? [], servers: message.mcp_servers ?? [] }];
   }
   if (message.type === "system" && message.subtype === "permission_denied") {
+    // The message names the call (the command, the path) and the reason says
+    // why; a Human reading the Run needs the first as much as the second.
     const said = typeof message.message === "string" ? message.message : "";
+    const why = message.decision_reason ?? "";
     return [
       {
         type: "denied",
         name: message.tool_name ?? "?",
-        reason: message.decision_reason ?? said,
+        reason: said && why ? `${said} (${why})` : said || why,
       },
     ];
   }

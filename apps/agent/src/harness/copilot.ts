@@ -174,7 +174,7 @@ export const copilot: Harness = {
       ...deevyTools.flatMap((tool) => ["--allow-tool", tool]),
       // The repository tools only when there is a repository, and the git
       // denials alongside them because deny beats allow.
-      ...(config.repo
+      ...(input.repository
         ? ["--allow-tool", repositoryTools, ...deniedTools.flatMap((tool) => ["--deny-tool", tool])]
         : []),
       "--model",

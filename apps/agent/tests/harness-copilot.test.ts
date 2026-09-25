@@ -21,13 +21,15 @@ import { testConfig } from "./helpers.ts";
 const input = {
   prompt: "Work Run r1 on Issue DEV-1.",
   cwd: "/tmp/run",
+  repository: false,
   mcpUrl: "http://127.0.0.1:1/mcp",
   signal: AbortSignal.abort(),
 };
 
 const context = (config = testConfig, home = "/tmp/home"): HarnessContext => ({
   config,
-  input,
+  // The override configured is a Run with a repository, as src/work.ts makes it.
+  input: { ...input, repository: config.repo !== null },
   home,
   // The real file, since `prepare` reads it into the agent file it writes.
   instructions: instructionsPath(),
@@ -128,6 +130,15 @@ describe("the command line a session runs under", () => {
     // forge's own protections (ADR-0019).
     expect(argv.slice(allow + 2, model)).toEqual([]);
     expect(deniedTools).toEqual([]);
+  });
+
+  it("gives the grant to a Run whose repository deevy named, with nothing configured here", () => {
+    // The Run's checkout says there is a repository, not this runtime's own
+    // override (ADR-0024): the first real GitHub walk was refused every write
+    // because the tool list asked `DEEVY_AGENT_REPO` instead.
+    const argv = copilot.argv({ ...context(), input: { ...input, repository: true } });
+
+    expect(argv[argv.lastIndexOf("--allow-tool") + 1]).toEqual("read,write,shell");
   });
 
   it("grants tools by name, so deevy widening is not this program widening", () => {

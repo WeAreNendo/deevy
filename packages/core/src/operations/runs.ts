@@ -29,6 +29,7 @@ import {
   resolveIssueRef,
   forgeBindingOf,
   requireRun,
+  requireSponsoredAgent,
   runView,
 } from "./shared.ts";
 import { branchFor } from "../forge.ts";
@@ -102,6 +103,74 @@ export const runs = {
         payload: { issueId: issue.id, trigger: row.trigger, agentMemberId: context.member.id },
       });
       return runView(row, issue.externalKey);
+    },
+  }),
+
+  retry: defineOperation({
+    name: "runs.retry",
+    summary: "Try a failed or stale Run again: a fresh Run for the same Agent on the same record",
+    method: "POST",
+    path: "/runs/{runId}/retry",
+    // A Human's call, the Agent's Sponsor's or an admin's: an Agent starts its
+    // own with `runs.start`, and a Run it gave up on is somebody else's to
+    // send it back to.
+    auth: "member",
+    input: z.object({ runId: z.string() }),
+    output: RunSchema,
+    handler: async ({ input, context }) => {
+      const { run, issue, project, key } = await requireRun(context, input.runId);
+      await requireSponsoredAgent(context, run.agentMemberId);
+      if (run.status !== "failed" && run.status !== "stale") {
+        throw new ORPCError("BAD_REQUEST", {
+          message: `This Run is ${run.status}; only a failed or stale Run is tried again`,
+        });
+      }
+
+      // A stale Run still counts as open, and one record has one open Run per
+      // Agent, so the old attempt is closed before the new one opens — as a
+      // failure, which is what an attempt nobody could get an answer from is.
+      if (run.status === "stale") {
+        const summary = `Tried again by ${context.session.user.name ?? "a Human"}`;
+        await setRunStatus(context.db, run, "failed", { summary });
+        await appendEvent(context, {
+          kind: "run.failed",
+          subjectType: "run",
+          subjectId: run.id,
+          projectId: project.id,
+          payload: { issueId: issue.id, summary },
+        });
+      }
+
+      const [inserted] = await context.db
+        .insert(runTable)
+        .values({
+          id: newId("run"),
+          issueId: issue.id,
+          agentMemberId: run.agentMemberId,
+          triggeredByMemberId: context.member.id,
+          trigger: "retry",
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (!inserted) {
+        throw new ORPCError("CONFLICT", {
+          message: "This Agent already has an open Run on this record",
+        });
+      }
+      const row = inserted as Run;
+      await appendEvent(context, {
+        kind: "run.started",
+        subjectType: "run",
+        subjectId: row.id,
+        projectId: project.id,
+        payload: {
+          issueId: issue.id,
+          trigger: row.trigger,
+          agentMemberId: row.agentMemberId,
+          retryOf: run.id,
+        },
+      });
+      return runView(row, key);
     },
   }),
 

@@ -415,6 +415,50 @@ describe("one Socket's own page", () => {
     expect(await within(delivers).findByText(/GitHub delivers here now/)).toBeTruthy();
   });
 
+  it("says where a GitHub App is installed, and how to install it on more", async () => {
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "github",
+        name: "acme on GitHub",
+        config: {
+          slug: "deevy-acme",
+          htmlUrl: "https://github.test/apps/deevy-acme",
+          installations: [{ id: "61892041", account: "acme" }],
+        },
+      },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const installed = await screen.findByRole("region", { name: "Where it is installed" });
+    expect(within(installed).getByText("acme")).toBeTruthy();
+    // GitHub's own page, since installing is GitHub's to do: the first real
+    // walk found no way from here to it.
+    expect(
+      within(installed)
+        .getByRole("link", { name: "Install it on more repositories" })
+        .getAttribute("href"),
+    ).toBe("https://github.test/apps/deevy-acme/installations/new");
+  });
+
+  it("says a GitHub App installed nowhere can work nothing yet", async () => {
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "github",
+        name: "acme on GitHub",
+        config: { slug: "deevy-acme", htmlUrl: "https://github.test/apps/deevy-acme" },
+      },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const installed = await screen.findByRole("region", { name: "Where it is installed" });
+    expect(within(installed).getByText(/Installed nowhere yet/)).toBeTruthy();
+    expect(within(installed).getByRole("link", { name: "Install it" }).getAttribute("href")).toBe(
+      "https://github.test/apps/deevy-acme/installations/new",
+    );
+  });
+
   it("leaves the address for an admin to paste where the tool keeps it itself", async () => {
     state.sockets = [
       {

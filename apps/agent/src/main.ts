@@ -96,18 +96,6 @@ function override(run: Run): Checkout | null {
   };
 }
 
-const work = {
-  deevy,
-  session: buildSession(config, harness),
-  // The key and the tool list stay here; the session gets a loopback URL.
-  proxy: (options: { onDenied: (name: string) => Promise<void> }) =>
-    openProxy({ url: config.url, key: config.key, tools: deevyToolNames, ...options }),
-  runTimeoutMs: config.runTimeoutSeconds * 1000,
-  checkout: async (run: Run) => (await deevy.checkout(run.id)) ?? override(run),
-  workspace: (options: { runId: string; repo: RepoConfig | null; originUrl?: string }) =>
-    openWorkspace({ ...options, ...(config.workdir ? { root: config.workdir } : {}) }),
-};
-
 /**
  * Who this key is, before anything else. A runtime that cannot say which Member
  * it is has nothing to poll for, and failing here with deevy's own word for the
@@ -122,6 +110,24 @@ const who = await deevy.me().catch((error: unknown) => {
   process.exit(1);
 });
 console.log(`deevy runtime is Member ${who.memberId} at ${config.url}`);
+
+const work = {
+  deevy,
+  // Every commit is the Agent's, by the name and address deevy has for it.
+  author: { name: who.name, email: who.email },
+  session: buildSession(config, harness),
+  // The key and the tool list stay here; the session gets a loopback URL.
+  proxy: (options: { onDenied: (name: string) => Promise<void> }) =>
+    openProxy({ url: config.url, key: config.key, tools: deevyToolNames, ...options }),
+  runTimeoutMs: config.runTimeoutSeconds * 1000,
+  checkout: async (run: Run) => (await deevy.checkout(run.id)) ?? override(run),
+  workspace: (options: {
+    runId: string;
+    repo: RepoConfig | null;
+    originUrl?: string;
+    author?: { name: string; email: string };
+  }) => openWorkspace({ ...options, ...(config.workdir ? { root: config.workdir } : {}) }),
+};
 
 if (process.argv.includes("--once")) {
   const pass = await runOnce(work);

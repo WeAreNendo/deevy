@@ -38,6 +38,15 @@
       ],
       "port": 3020,
       "autoPort": true
+    },
+    {
+      "name": "walk",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/server && env -i PATH=\"$PATH\" HOME=\"$HOME\" node --env-file=./data/walk.env dist/index.mjs"
+      ],
+      "port": 3030
     }
   ]
 }

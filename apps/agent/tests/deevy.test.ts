@@ -12,7 +12,13 @@ describe("the client", () => {
     const it = await instance();
     closers.push(it.close);
 
-    expect(await it.deevy.me()).toEqual({ memberId: it.planner.id, kind: "agent" });
+    // With the name and address a commit is signed with (src/workspace.ts).
+    expect(await it.deevy.me()).toEqual({
+      memberId: it.planner.id,
+      kind: "agent",
+      name: "Planner",
+      email: "planner@deevy.test",
+    });
   });
 
   it("carries deevy's own word for a refusal, not the status code", async () => {

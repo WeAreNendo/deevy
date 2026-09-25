@@ -65,6 +65,12 @@ export interface DeevyMcpOptions {
    * the MCP surface needs the same registry the operation surfaces get.
    */
   sockets?: SocketModules;
+  /**
+   * What a Socket's credentials are sealed under (`DEEVY_SECRET`, secrets.ts).
+   * The registry alone reaches a tracker only for a Socket that holds nothing;
+   * every real one holds a credential, and a tool opens it to act.
+   */
+  socketSecret?: string;
   /** Called with anything a tool call raised that the caller is not told about. */
   onError?: (error: unknown) => void;
 }
@@ -90,6 +96,7 @@ export function createDeevyMcp({
   baseURL,
   webURL,
   sockets,
+  socketSecret,
   secret,
   stateTtlSeconds,
   jobs,
@@ -115,6 +122,7 @@ export function createDeevyMcp({
         ...(webURL ? { webURL } : {}),
         ...(jobs ? { jobs } : {}),
         ...(sockets ? { sockets } : {}),
+        ...(socketSecret ? { socketSecret } : {}),
       };
       // No credential at all is an authentication answer, not a tool error:
       // the challenge is what starts the OAuth dance.

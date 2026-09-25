@@ -81,7 +81,7 @@ export function permissions(context: HarnessContext): Record<string, unknown> {
   return {
     "*": "deny",
     ...Object.fromEntries(deevyTools.map((tool) => [tool, "allow"])),
-    ...(context.config.repo
+    ...(context.input.repository
       ? Object.fromEntries(
           repositoryPermissions.map((name) => [
             name,

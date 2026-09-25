@@ -483,10 +483,12 @@ export async function handleSetup(request: Request, options: SetupOptions): Prom
     },
   });
 
-  // Back to where an operator can see what they just connected.
+  // Back to where an operator can see what they just connected, or on to the
+  // tool, where the flow's next step is its own page.
   const origin = (options.webURL ?? options.baseURL ?? "").replace(/\/+$/, "");
   const back = result.redirectTo ?? `/settings/sockets/${socket.id}`;
-  return new Response(null, { status: 302, headers: { location: `${origin}${back}` } });
+  const location = back.startsWith("https://") ? back : `${origin}${back}`;
+  return new Response(null, { status: 302, headers: { location } });
 }
 
 /** The credentials a Socket already holds, so a second flow adds to them. */

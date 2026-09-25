@@ -56,8 +56,16 @@ vi.mock("../src/lib/orpc.ts", async () => {
       }),
       containers: async () => ({
         containers: [
-          { scope: { scopeKey: "acme/deevy" }, scopeKey: "acme/deevy", name: "acme/deevy" },
-          { scope: { scopeKey: "acme/ops" }, scopeKey: "acme/ops", name: "acme/ops" },
+          {
+            scope: { scopeKey: "acme/deevy", baseBranch: "main" },
+            scopeKey: "acme/deevy",
+            name: "acme/deevy",
+          },
+          {
+            scope: { scopeKey: "acme/ops", baseBranch: "trunk" },
+            scopeKey: "acme/ops",
+            name: "acme/ops",
+          },
         ],
       }),
     },
@@ -168,6 +176,29 @@ describe("what a Project is bound to", () => {
   });
 });
 
+describe("where a Project's code lives", () => {
+  it("is a repository a tool that holds code offers, or nowhere", async () => {
+    state.checkpoints = [];
+    calls.update.mockClear();
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const binding = await screen.findByRole("region", { name: "Binding" });
+    // Until the first real GitHub walk this said "Nowhere yet" and offered no
+    // way to say anywhere else: no Agent could ever push from the screens.
+    const repository = within(binding).getByRole("combobox", { name: "Repository" });
+    expect(selectedLabel(repository)).toBe("Nowhere");
+    await pickOption(repository, "acme/ops");
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    // The repository's own scope, base branch and all, from the tool that
+    // offered it. The Notion Socket holds no code and offers none.
+    expect(calls.update.mock.calls[0]?.[0]).toEqual({
+      slug: "acme-deevy",
+      forge: { socketId: "sock_stub00000", scope: { scopeKey: "acme/ops", baseBranch: "trunk" } },
+    });
+  });
+});
+
 describe("where a Project's documents live", () => {
   it("is a tool that can read them, or nowhere", async () => {
     state.checkpoints = [];
@@ -247,9 +278,22 @@ describe("binding a new Project", () => {
     const dialog = await screen.findByRole("dialog", { name: /Bind a Project/ });
 
     // The tool first, because the containers it offers depend on it.
-    await pickOption(within(dialog).getByRole("combobox", { name: "Tool" }), /acme on GitHub/);
+    const tool = within(dialog).getByRole("combobox", { name: "Tool" });
+    await pickOption(tool, /acme on GitHub/);
     // And the containers are the tool's own answer, never typed by hand.
-    await pickOption(within(dialog).getByRole("combobox", { name: "Container" }), "acme/ops");
+    const container = within(dialog).getByRole("combobox", { name: "Container" });
+    await pickOption(container, "acme/ops");
+    // Each says what was chosen, never the id behind it: the first real GitHub
+    // walk read `sock_…` here.
+    expect(selectedLabel(tool)).toBe("acme on GitHub (GitHub)");
+    expect(selectedLabel(container)).toBe("acme/ops");
+    // A tool that holds code binds the same container as the Project's code,
+    // unless told otherwise.
+    expect(
+      (
+        within(dialog).getByRole("checkbox", { name: /Its code is here too/ }) as HTMLElement
+      ).getAttribute("aria-checked"),
+    ).toBe("true");
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Operations" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Bind it" }));
 
@@ -258,7 +302,24 @@ describe("binding a new Project", () => {
       name: "Operations",
       // From the container, so a Project's handle is the thing it is bound to.
       slug: "acme-ops",
-      tracker: { socketId: "sock_stub00000", scope: { scopeKey: "acme/ops" } },
+      tracker: { socketId: "sock_stub00000", scope: { scopeKey: "acme/ops", baseBranch: "trunk" } },
+      forge: { socketId: "sock_stub00000", scope: { scopeKey: "acme/ops", baseBranch: "trunk" } },
     });
+  });
+
+  it("binds only the records when told the code is elsewhere", async () => {
+    state.checkpoints = [];
+    calls.create.mockClear();
+    await mountAt("/settings/projects");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Bind a Project" }));
+    const dialog = await screen.findByRole("dialog", { name: /Bind a Project/ });
+    await pickOption(within(dialog).getByRole("combobox", { name: "Tool" }), /acme on GitHub/);
+    await pickOption(within(dialog).getByRole("combobox", { name: "Container" }), "acme/ops");
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Its code is here too/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Bind it" }));
+
+    await waitFor(() => expect(calls.create).toHaveBeenCalledTimes(1));
+    expect(calls.create.mock.calls[0]?.[0]).not.toHaveProperty("forge");
   });
 });

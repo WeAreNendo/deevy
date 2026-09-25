@@ -243,6 +243,7 @@ export function createGithubSocket({
           webhook_secret: string;
           client_id: string;
           client_secret: string;
+          html_url?: string;
         }>(`/app-manifests/${encodeURIComponent(params.code)}/conversions`, {
           method: "POST",
           // The conversion is the one GitHub call that authenticates nothing:
@@ -250,7 +251,11 @@ export function createGithubSocket({
           token: "",
         });
         return {
-          config: { appId: String(converted.id), slug: converted.slug },
+          config: {
+            appId: String(converted.id),
+            slug: converted.slug,
+            ...(converted.html_url ? { htmlUrl: converted.html_url } : {}),
+          },
           credentials: {
             privateKey: converted.pem,
             clientId: converted.client_id,
@@ -263,6 +268,13 @@ export function createGithubSocket({
             mentionHandle: `@${converted.slug}`,
           },
           summary: `Connected the GitHub App ${converted.name}`,
+          // Straight on to installing it: an App installed nowhere has nothing
+          // to work, and the install's own redirect brings the operator back
+          // here (`setup_url`). GitHub's own address for the App, so a GitHub
+          // Enterprise Server's is right too.
+          ...(converted.html_url
+            ? { redirectTo: `${converted.html_url.replace(/\/+$/, "")}/installations/new` }
+            : {}),
         };
       }
 
@@ -450,13 +462,17 @@ export function createGithubSocket({
         const containers: Container[] = [];
         for (const installation of settings.installations ?? []) {
           const token = await tokenForInstallation(installation.id);
-          const page = await call<{ repositories: { full_name: string; name: string }[] }>(
-            `/installation/repositories?per_page=100`,
-            { token },
-          );
+          const page = await call<{
+            repositories: { full_name: string; name: string; default_branch?: string | null }[];
+          }>(`/installation/repositories?per_page=100`, { token });
           for (const repository of page.repositories) {
+            // With the branch it defaults to, which is what a Run starts from
+            // once the repository is bound as a Project's code (forgeBindingOf).
             containers.push({
-              scope: { scopeKey: repository.full_name },
+              scope: {
+                scopeKey: repository.full_name,
+                ...(repository.default_branch ? { baseBranch: repository.default_branch } : {}),
+              },
               scopeKey: repository.full_name,
               name: repository.full_name,
             });

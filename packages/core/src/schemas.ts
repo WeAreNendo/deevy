@@ -119,6 +119,13 @@ export const IssueDetailSchema = IssueSummarySchema.extend({
    * is a request to somebody else's API and never a column.
    */
   comments: z.array(ExternalCommentSchema).nullable(),
+  /**
+   * Why the conversation is unread, where it was asked for and the tracker did
+   * not answer; absent otherwise. `comments` is null then, never an empty
+   * list: "nobody said anything" and "deevy could not ask" are different
+   * briefs for an Agent about to plan.
+   */
+  commentsUnavailable: z.string().optional(),
 });
 
 export const IssueLinkSchema = createSelectSchema(issueLink);

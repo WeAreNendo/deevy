@@ -92,6 +92,25 @@ describe("a Gate on a Project that mirrors", () => {
     // The tracker shows the App as the author, so the line says who spoke.
     expect(comment?.body).toContain("— Planner");
     expect(comment?.body).toContain(run.id);
+    // Whole, because a paragraph is its blank lines: without the one after the
+    // links, the first real GitHub walk showed the footer folded into the
+    // last bullet.
+    expect(comment?.body).toBe(
+      [
+        "**Waiting on a ruling at the `ship` Checkpoint.**",
+        "",
+        "## What I will do",
+        "",
+        "Cap the coupon at the basket total.",
+        "",
+        "- [Pull request 7](https://github.test/acme/deevy/pull/7)",
+        "",
+        "Reply `/approve` or `/reject <why>` to rule from here.",
+        `Or open it in deevy: https://deevy.test/gates/${asked.id}`,
+        "",
+        `— Planner · ${run.id} · via deevy`,
+      ].join("\n"),
+    );
     expect(fake.labels[0]).toMatchObject({
       externalId: "42",
       add: ["deevy:awaiting-approval"],
@@ -119,6 +138,17 @@ describe("a Gate on a Project that mirrors", () => {
     expect(said).toContain("Approved");
     expect(said).toContain("Reads right");
     expect(said).toContain("1 of 1");
+    // The note is a quote and the signature is not: with no blank line
+    // between them, markdown reads the signature as more of the quote.
+    expect(fake.comments.at(-1)?.body).toBe(
+      [
+        "**Approved** at the `ship` Checkpoint — 1 of 1.",
+        "",
+        "> Reads right",
+        "",
+        `— Planner · ${run.id} · via deevy`,
+      ].join("\n"),
+    );
     // The record stops saying it is waiting, because it is not.
     expect(fake.labels.at(-1)).toMatchObject({ remove: ["deevy:awaiting-approval"] });
   });

@@ -2,6 +2,7 @@ import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
 import { routeIssueTo } from "../src/issues.ts";
+import type { SocketModules } from "../src/sockets/port.ts";
 import {
   agentContext,
   fakeSockets,
@@ -397,5 +398,40 @@ describe("reading the conversation", () => {
 
     const loud = await asAda.issues.get({ issue: issue.url, comments: true });
     expect(loud.comments).toEqual([]);
+    expect(loud.commentsUnavailable).toBeUndefined();
+  });
+
+  it("says it could not be read, rather than that nobody said anything", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    // A tracker that is down: reading the record still works, because the
+    // record is deevy's own, but an Agent told "no comments" would plan
+    // without a conversation it was never shown.
+    const failing: SocketModules = {
+      stub: (options) => {
+        const module = sockets.stub?.(options);
+        if (!module?.tracker) throw new Error("the fake is a tracker");
+        return {
+          ...module,
+          tracker: {
+            ...module.tracker,
+            listComments: () => Promise.reject(new Error("GitHub answered 502")),
+          },
+        };
+      },
+    };
+    const asAda = createRouterClient(router, { context: { ...ada, sockets: failing } });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
+
+    const read = await asAda.issues.get({ issue: issue.url, comments: true });
+
+    expect(read.title).toBe("Checkout rewrite");
+    expect(read.comments).toBeNull();
+    expect(read.commentsUnavailable).toBe(
+      "The tracker did not answer, so the conversation is unread: GitHub answered 502",
+    );
   });
 });

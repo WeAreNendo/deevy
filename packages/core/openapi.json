@@ -65,7 +65,139 @@
                         "mention",
                         "schedule",
                         "manual",
-                        "children_done"
+                        "children_done",
+                        "retry"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "active",
+                        "awaiting_input",
+                        "completed",
+                        "failed",
+                        "stale"
+                      ]
+                    },
+                    "summary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "startedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastActivityAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    },
+                    "finishedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "x-native-type": "date"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "issueKey",
+                    "agentMemberId",
+                    "triggeredByMemberId",
+                    "trigger",
+                    "status",
+                    "summary",
+                    "startedAt",
+                    "lastActivityAt",
+                    "finishedAt",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{runId}/retry": {
+      "post": {
+        "operationId": "runs.retry",
+        "summary": "Try a failed or stale Run again: a fresh Run for the same Agent on the same record",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "runId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "issueKey": {
+                      "type": "string"
+                    },
+                    "agentMemberId": {
+                      "type": "string"
+                    },
+                    "triggeredByMemberId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "trigger": {
+                      "type": "string",
+                      "enum": [
+                        "assignment",
+                        "mention",
+                        "schedule",
+                        "manual",
+                        "children_done",
+                        "retry"
                       ]
                     },
                     "status": {
@@ -233,7 +365,8 @@
                             "mention",
                             "schedule",
                             "manual",
-                            "children_done"
+                            "children_done",
+                            "retry"
                           ]
                         },
                         "status": {
@@ -436,7 +569,8 @@
                             "mention",
                             "schedule",
                             "manual",
-                            "children_done"
+                            "children_done",
+                            "retry"
                           ]
                         },
                         "status": {
@@ -727,7 +861,8 @@
                         "mention",
                         "schedule",
                         "manual",
-                        "children_done"
+                        "children_done",
+                        "retry"
                       ]
                     },
                     "status": {
@@ -915,7 +1050,8 @@
                               "mention",
                               "schedule",
                               "manual",
-                              "children_done"
+                              "children_done",
+                              "retry"
                             ]
                           },
                           "status": {
@@ -1119,7 +1255,8 @@
                         "mention",
                         "schedule",
                         "manual",
-                        "children_done"
+                        "children_done",
+                        "retry"
                       ]
                     },
                     "status": {
@@ -12986,6 +13123,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "commentsUnavailable": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -14646,6 +14786,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "commentsUnavailable": {
+                      "type": "string"
                     }
                   },
                   "required": [

@@ -169,6 +169,57 @@ export const gates = {
         });
       }
 
+      // The same question, already answered on this record: this exact
+      // Proposal approved at this Checkpoint — by this Run or an earlier one
+      // on the same record — with as many approvals as the Checkpoint wants
+      // now. The answer is that Gate, the one the Humans ruled on, and the
+      // Run goes on rather than asking them again; a changed Proposal, or a
+      // Checkpoint that wants more than it had, is asked afresh below. deevy
+      // decides this rather than the Agent reading the history and judging.
+      const answered = await context.db.query.gateRequest.findFirst({
+        where: {
+          issueId: issue.id,
+          checkpoint: input.checkpoint,
+          status: "approved",
+          proposal: input.proposal,
+        },
+        orderBy: { decidedAt: "desc" },
+        with: { decisions: true },
+      });
+      const stood = answered?.decisions.filter((one) => one.decision === "approved").length ?? 0;
+      if (answered && stood >= policy.approvalsRequired) {
+        const url = `${linkOrigin(context)}/gates/${answered.id}`;
+        const activityId = newId("activity");
+        await context.db.insert(activityTable).values({
+          id: activityId,
+          runId: run.id,
+          kind: "action",
+          body: `Passed the \`${answered.checkpoint}\` Checkpoint: this Proposal was already approved on this record (${url}).`,
+          payload: {
+            gateRequestId: answered.id,
+            checkpoint: answered.checkpoint,
+            url,
+            carried: true,
+          },
+        });
+        await setRunStatus(context.db, run, statusAfterActivity(run.status, "action"), {
+          touchActivity: true,
+        });
+        await appendEvent(context, {
+          kind: "run.activity",
+          subjectType: "run",
+          subjectId: run.id,
+          projectId: project.id,
+          payload: { issueId: issue.id, activityId, activityKind: "action" },
+        });
+        return viewOf(context, {
+          request: answered,
+          policy,
+          decisions: answered.decisions,
+          issueKey: key,
+        });
+      }
+
       const previous = await context.db.query.gateRequest.findFirst({
         where: { runId: run.id, checkpoint: input.checkpoint },
         orderBy: { visit: "desc" },

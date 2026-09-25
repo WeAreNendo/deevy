@@ -88,7 +88,9 @@ _Avoid_: stage, step, state, phase
 
 **Gate**:
 A Run's request to pass a Checkpoint: the Agent's Proposal, its links, and the Rulings on it. A Run at a
-Gate waits and never goes stale. A rejection ends the Gate; asking again is a new Gate, one visit later.
+Gate waits and never goes stale. A rejection ends the Gate; asking again is a new Gate, one visit later. An
+approved Gate stands for its record: a later Run asking the same Proposal at the same Checkpoint is answered
+with it, while its approvals still meet the Checkpoint.
 _Avoid_: approval step, review stage, hold
 
 **Proposal**:

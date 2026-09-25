@@ -21,6 +21,21 @@ describe("describeEvent", () => {
     ).toBe("unassigned it (was Ada)");
   });
 
+  it("never calls a routing it cannot name an unassignment", () => {
+    // Routing writes ids alone (sockets/apply.ts). A page that cannot put a
+    // name to one still knows somebody was named: the first real GitHub walk
+    // read "unassigned it" at the moment deevy handed the record to Builder.
+    expect(
+      describeEvent({
+        kind: "issue.assigned",
+        payload: { from: null, to: "m-unknown", byRouting: true },
+      })?.text,
+    ).toBe("routed it to an Agent");
+    expect(
+      describeEvent({ kind: "issue.assigned", payload: { from: null, to: "m-unknown" } })?.text,
+    ).toBe("assigned it");
+  });
+
   it("gives Runs their words and folds their routine steps", () => {
     expect(
       describeEvent({

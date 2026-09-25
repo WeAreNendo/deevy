@@ -55,6 +55,23 @@ function inboundUrl(context: Pick<AppContext, "baseURL">, socketId: string): str
   return `${(context.baseURL ?? "").replace(/\/+$/, "")}/hooks/${socketId}`;
 }
 
+/**
+ * What a provider can do, asked of a module built with nothing in it: a module
+ * says its own capabilities, and no Socket row is touched.
+ */
+function capabilitiesOf(
+  context: Pick<AppContext, "sockets">,
+  provider: (typeof socketProviders)[number],
+): ("tracker" | "forge" | "docs" | "chat")[] {
+  const module = context.sockets?.[provider]?.({
+    config: {},
+    credentials: {},
+    fetch: globalThis.fetch,
+    now: () => new Date(),
+  });
+  return [...(module?.capabilities ?? [])];
+}
+
 /** What a provider signs with, when deevy is the one that decides it. */
 function mintWebhookSecret(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
@@ -125,21 +142,11 @@ export const sockets = {
     handler: ({ context }) => {
       const built = Object.keys(context.sockets ?? {}) as (typeof socketProviders)[number][];
       return Promise.resolve({
-        providers: built.sort().map((id) => {
-          // Built with nothing in it, only to be asked what it can do: a
-          // module says its own capabilities, and no Socket row is touched.
-          const module = context.sockets?.[id]?.({
-            config: {},
-            credentials: {},
-            fetch: globalThis.fetch,
-            now: () => new Date(),
-          });
-          return {
-            id,
-            label: providerLabels[id] ?? id,
-            capabilities: [...(module?.capabilities ?? [])],
-          };
-        }),
+        providers: built.sort().map((id) => ({
+          id,
+          label: providerLabels[id] ?? id,
+          capabilities: capabilitiesOf(context, id),
+        })),
       });
     },
   }),
@@ -199,14 +206,16 @@ export const sockets = {
     }),
     handler: async ({ input, context }) => {
       // A Socket with nothing in it yet: connecting a GitHub App means sending
-      // an operator to GitHub and back, and this row is where they land.
+      // an operator to GitHub and back, and this row is where they land. What
+      // it can do is the provider's, and known already: the redirect that
+      // makes it live writes a credential, never what the Socket is for.
       const [row] = await context.db
         .insert(socketTable)
         .values({
           id: newId("socket"),
           workspaceId: context.workspace.id,
           provider: input.provider,
-          capabilities: [],
+          capabilities: capabilitiesOf(context, input.provider),
           name: input.name,
           identity: { login: "", id: "", mentionHandle: "" },
           config: input.config,

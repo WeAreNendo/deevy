@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +38,10 @@ export function slugFor(scopeKey: string): string {
  * A Project is not a place work is put any more, so there is nothing to fill
  * in: a tool, a container inside it, and a name. The containers are the tool's
  * own answer rather than a field somebody types, because a typo there is a
- * Project bound to a repository that does not exist.
+ * Project bound to a repository that does not exist. A tool that holds code
+ * too — GitHub, GitLab — binds the same container as the Project's code unless
+ * told otherwise, because that is nearly always where it is, and a Project
+ * with no code bound is one no Agent can push from.
  */
 export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
   const client = useQueryClient();
@@ -45,6 +49,7 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
   const [socketId, setSocketId] = useState<string | null>(null);
   const [scopeKey, setScopeKey] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [codeHereToo, setCodeHereToo] = useState(true);
 
   const sockets = useQuery(orpc.sockets.list.queryOptions({ input: {} }));
   const containers = useQuery({
@@ -58,6 +63,7 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
         setSocketId(null);
         setScopeKey(null);
         setName("");
+        setCodeHereToo(true);
         await client.invalidateQueries({ queryKey: orpc.projects.key() });
         onBound(project.slug);
       },
@@ -68,6 +74,8 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
     (socket) => socket.capabilities.includes("tracker") && socket.status === "active",
   );
   const chosen = (containers.data?.containers ?? []).find((one) => one.scopeKey === scopeKey);
+  const tool = trackers.find((socket) => socket.id === socketId);
+  const holdsCode = tool?.capabilities.includes("forge") ?? false;
 
   return (
     <>
@@ -94,7 +102,15 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
                 }}
               >
                 <SelectTrigger id="bind-socket" aria-label="Tool">
-                  <SelectValue placeholder="Which tool" />
+                  {/* Base UI shows the raw value unless told what it is called. */}
+                  <SelectValue placeholder="Which tool">
+                    {(selected: string) => {
+                      const socket = trackers.find((one) => one.id === selected);
+                      return socket
+                        ? `${socket.name} (${providerLabel(socket.provider)})`
+                        : "Which tool";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -129,7 +145,12 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
                 <SelectTrigger id="bind-container" aria-label="Container">
                   <SelectValue
                     placeholder={containers.isPending ? "Asking the tool…" : "Which container"}
-                  />
+                  >
+                    {(selected: string) =>
+                      (containers.data?.containers ?? []).find((one) => one.scopeKey === selected)
+                        ?.name ?? "Which container"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -145,6 +166,16 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
                 What the tool itself offers. One container is one Project.
               </span>
             </div>
+
+            {holdsCode ? (
+              <Label className="flex items-center gap-2 font-normal">
+                <Checkbox
+                  checked={codeHereToo}
+                  onCheckedChange={(checked) => setCodeHereToo(checked === true)}
+                />
+                Its code is here too, so its Agents push to it
+              </Label>
+            ) : null}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="bind-name">Name</Label>
@@ -173,6 +204,9 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
                   slug: slugFor(chosen.scopeKey),
                   name: name.trim(),
                   tracker: { socketId, scope: chosen.scope },
+                  // The container's own scope, which carries the branch the
+                  // tool says it defaults to (forgeBindingOf).
+                  ...(holdsCode && codeHereToo ? { forge: { socketId, scope: chosen.scope } } : {}),
                 });
               }}
             >

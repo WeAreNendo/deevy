@@ -41,7 +41,7 @@ function initials(name: string): string {
 
 /**
  * A Member, drawn so nobody has to read to know which kind it is: a Human is a
- * round avatar ringed in copper, an Agent a square one ringed in teal with a
+ * round avatar ringed in sky blue, an Agent a square one ringed in rose with a
  * bot glyph when it has no picture (ADR-0001, .claude/skills/deevy-ui). Its
  * text is the name, so a test that looks for "Ada Lovelace" still finds it.
  */

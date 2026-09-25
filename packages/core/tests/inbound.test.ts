@@ -172,6 +172,23 @@ describe("a record arriving from a tracker", () => {
     expect(await db.query.issue.findFirst({})).toBeUndefined();
   });
 
+  it("takes nothing more for a Project an admin archived, and says so", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { apply, asAda, asPlanner, seeded } = await workspace(db);
+    await asAda.projects.archive({ slug: seeded.project.slug });
+
+    // Polling already passes an archived Project by; a delivery went on
+    // projecting and routing its records, so an archived Project kept
+    // starting Runs.
+    const result = await apply([record({ externalId: "42", labels: ["agent:planner"] })]);
+
+    expect(result.applied).toBe(0);
+    expect(result.skipped[0]).toMatch(/archived/);
+    expect(await db.query.issue.findFirst({})).toBeUndefined();
+    expect((await asPlanner.runs.list({})).runs).toEqual([]);
+  });
+
   it("appends what changed, and says when the tracker closed it", async () => {
     const { db, close } = testDb();
     closers.push(close);

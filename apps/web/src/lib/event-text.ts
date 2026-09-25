@@ -6,6 +6,8 @@
  * names beside ids (the core writes them); older ones are resolved through the
  * maps the caller has, and fall back to a plain sentence rather than an id.
  */
+import { startedBy } from "@/lib/run-trigger";
+
 export type EventTone = "human" | "agent" | "gate" | "muted" | "destructive";
 
 /**
@@ -117,8 +119,14 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       // Routed, not assigned: a label or a Project's default named the Agent,
       // and saying "assigned" would credit a Human who did nothing (ADR-0024).
       const verb = p.byRouting ? "routed" : "assigned";
-      if (!to) return say(`unassigned it${from ? ` (was ${from})` : ""}`);
-      return say(`${verb} it to ${to}${from ? ` (was ${from})` : ""}`);
+      const was = from ? ` (was ${from})` : "";
+      // Somebody was named even where this page cannot say who: an id with no
+      // name is an assignment, never the absence of one.
+      if (!to && typeof p.to === "string") {
+        return say(p.byRouting ? `routed it to an Agent${was}` : `assigned it${was}`);
+      }
+      if (!to) return say(`unassigned it${was}`);
+      return say(`${verb} it to ${to}${was}`);
     }
     case "delegation.refused": {
       const allowed = typeof p.allowed === "number" ? p.allowed : null;
@@ -162,17 +170,9 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     case "issue.link_removed":
       return say("removed a link", str(p.url));
     case "run.started": {
+      // An Agent starting its own says nothing more: the actor is the Agent.
       const trigger = str(p.trigger);
-      const by =
-        trigger === "assignment"
-          ? ", by assignment"
-          : trigger === "state_rule"
-            ? ", by the State's rule"
-            : trigger === "manual"
-              ? ""
-              : trigger
-                ? `, by ${trigger}`
-                : "";
+      const by = trigger && trigger !== "manual" ? `, ${startedBy(trigger)}` : "";
       return say(`started a Run${by}`, null, "agent", true);
     }
     case "run.activity":

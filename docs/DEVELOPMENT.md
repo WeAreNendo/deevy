@@ -161,6 +161,30 @@ only way to say what the tracker contains from outside it; that is also how the 
 (`docs/sockets-acceptance.md`). `readEnv` refuses the flag under `NODE_ENV=production`, and `health.ping`
 reports it as `devSockets` the way it reports `devSignIn`.
 
+### Walking a tool for real
+
+What the stub cannot show is whether a tool's real deliveries, API and setup pages say what deevy assumed they
+say, and each provider's section of OPERATIONS.md is walked once against the real thing for that
+(docs/plans/sockets.md, "The GitHub walk"). A walk needs deevy on a public HTTPS address the tool can reach,
+a sign-in the tool's account is known by, and an Agent with a real model:
+
+- **A named tunnel**, not a quick one: every webhook and callback is registered against the hostname, and a
+  quick tunnel's dies with the laptop's sleep. `cloudflared tunnel create deevy-walk`, a proxied CNAME to
+  `<tunnel id>.cfargotunnel.com` in the zone you own, then `cloudflared tunnel run --url
+http://localhost:3030 deevy-walk`. `cloudflared tunnel route dns` writes the record into the zone its login
+  certificate is for, whatever the hostname says, so check where it landed.
+- **The `walk` launch configuration** runs the built server on 3030 from `apps/server/data/walk.env`, a
+  gitignored file with `BETTER_AUTH_URL` set to the tunnel's hostname, fresh `BETTER_AUTH_SECRET` and
+  `DEEVY_SECRET`, `DEEVY_ADMIN_EMAIL`, and the client pair of an OAuth App made for that hostname — the one in
+  `.env` has its callback on localhost. Its own database, `data/walk.sqlite`, so nothing of your dev loop is
+  in it. Build first (`vp run -r build`).
+- **The runtime in its image**, so the Agent's shell is the container's and not your laptop's:
+  `docker run -d --env-file apps/agent/data/walk.env -e DEEVY_URL=https://<hostname> deevy-agent:claude-code`,
+  with the Agent's key from Settings › Agents and a model credential (`claude setup-token` gives one for a
+  Claude subscription, passed with `DEEVY_AGENT_PASS_ENV=CLAUDE_CODE_OAUTH_TOKEN`).
+
+A browser that loaded the app before a rebuild may keep the old page; one reload fetches the new one.
+
 ## Everyday commands
 
 | Command                          | What it does                                                                                                  |

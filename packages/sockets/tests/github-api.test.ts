@@ -222,15 +222,25 @@ describe("reading a repository", () => {
       },
       "GET /installation/repositories": {
         repositories: [
-          { full_name: "acme/deevy", name: "deevy" },
-          { full_name: "acme/ops", name: "ops" },
+          { full_name: "acme/deevy", name: "deevy", default_branch: "main" },
+          { full_name: "acme/ops", name: "ops", default_branch: "trunk" },
         ],
       },
     });
 
+    // Each with the branch it defaults to, so binding one as a Project's code
+    // gives its Runs the right base without anybody typing it.
     expect(await tracker.listContainers()).toEqual([
-      { scope: { scopeKey: "acme/deevy" }, scopeKey: "acme/deevy", name: "acme/deevy" },
-      { scope: { scopeKey: "acme/ops" }, scopeKey: "acme/ops", name: "acme/ops" },
+      {
+        scope: { scopeKey: "acme/deevy", baseBranch: "main" },
+        scopeKey: "acme/deevy",
+        name: "acme/deevy",
+      },
+      {
+        scope: { scopeKey: "acme/ops", baseBranch: "trunk" },
+        scopeKey: "acme/ops",
+        name: "acme/ops",
+      },
     ]);
   });
 });

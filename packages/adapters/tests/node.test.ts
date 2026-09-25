@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { workspace } from "@deevy/db";
@@ -63,5 +63,25 @@ describe("node adapters", () => {
     mountSpa(app, dir);
     expect(await (await app.request("/app.js")).text()).toBe("console.log(1)");
     expect(await (await app.request("/issues/DEV-42")).text()).toBe("<h1>spa</h1>");
+  });
+
+  it("has the page asked for again each time, and a hashed asset kept for good", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "deevy-spa-"));
+    await writeFile(join(dir, "index.html"), "<h1>spa</h1>");
+    await mkdir(join(dir, "assets"));
+    await writeFile(join(dir, "assets", "index-3SdJuIbB.js"), "console.log(1)");
+    const app = new Hono();
+    mountSpa(app, dir);
+
+    // With no header at all a browser guesses from Last-Modified, and the first
+    // real GitHub walk kept running the page from before an upgrade: a new
+    // build is only a new build once the page that names it is asked for.
+    for (const path of ["/", "/index.html", "/settings/sockets/sock_1"]) {
+      expect((await app.request(path)).headers.get("cache-control")).toBe("no-cache");
+    }
+    // What the page names is content-hashed, so a name never changes meaning.
+    expect((await app.request("/assets/index-3SdJuIbB.js")).headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
   });
 });

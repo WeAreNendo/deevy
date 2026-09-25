@@ -149,6 +149,41 @@ function signature(subject: MirrorSubject): string {
   return `— ${who}${subject.runId ? ` · ${subject.runId}` : ""} · via deevy`;
 }
 
+/**
+ * A comment as its paragraphs, with a blank line between each. Markdown reads
+ * a line that follows a list or a quote with none as more of it, which is how
+ * the first real GitHub walk found the footer folded into the last link.
+ */
+function paragraphs(...blocks: string[]): string {
+  return blocks.filter((block) => block.trim() !== "").join("\n\n");
+}
+
+/** What started a Run, in words for a tracker: a stored value is not a sentence. */
+function startedBy(trigger: string): string {
+  switch (trigger) {
+    case "mention":
+      return ", by a mention";
+    case "schedule":
+      return ", on its schedule";
+    case "children_done":
+      return ", when its sub-issues finished";
+    case "retry":
+      return ", to try again";
+    case "manual":
+      return "";
+    default:
+      return ", by assignment";
+  }
+}
+
+/** A Human's note as a quote, every line of it. */
+function quoted(note: string): string {
+  return note
+    .split("\n")
+    .map((line) => `> ${line}`.trimEnd())
+    .join("\n");
+}
+
 /** What the tracker is told about this Event, or null when it is told nothing. */
 export function mirrorFor(
   event: Pick<Event, "kind" | "payload">,
@@ -166,21 +201,20 @@ export function mirrorFor(
     if (!gate) return null;
     const links = gate.links.map((link) => `- [${link.title}](${link.url})`).join("\n");
     return {
-      comment: [
+      comment: paragraphs(
         `**Waiting on a ruling at the \`${gate.checkpoint}\` Checkpoint.**`,
-        "",
         gate.proposal,
-        links ? `\n${links}` : "",
-        "",
+        links,
         // The two ways to answer: here, in a comment, or in deevy. Both end up
         // in the same place (ADR-0025).
-        "Reply `/approve` or `/reject <why>` to rule from here.",
-        url ? `Or open it in deevy: ${url}` : "",
-        "",
+        [
+          "Reply `/approve` or `/reject <why>` to rule from here.",
+          url ? `Or open it in deevy: ${url}` : "",
+        ]
+          .filter((line) => line !== "")
+          .join("\n"),
         signature(subject),
-      ]
-        .filter((line) => line !== "")
-        .join("\n"),
+      ),
       labels: { add: [AWAITING_LABEL], remove: [] },
     };
   }
@@ -190,16 +224,13 @@ export function mirrorFor(
     const required = number("required") ?? 0;
     const note = text("note");
     return {
-      comment: [
+      comment: paragraphs(
         `Approved: **${String(approvals)} of ${String(required)}**${
           approvals < required ? ", still waiting" : ""
         }.`,
-        note ? `\n> ${note}` : "",
-        "",
+        note ? quoted(note) : "",
         signature(subject),
-      ]
-        .filter((line) => line !== "")
-        .join("\n"),
+      ),
       // Still waiting, so the label stays.
       labels: { add: [], remove: [] },
     };
@@ -211,7 +242,7 @@ export function mirrorFor(
     const approvals = number("approvals");
     const required = number("required");
     return {
-      comment: [
+      comment: paragraphs(
         approved
           ? `**Approved** at the \`${text("checkpoint")}\` Checkpoint${
               approvals !== null && required !== null
@@ -219,12 +250,9 @@ export function mirrorFor(
                 : ""
             }.`
           : `**Rejected** at the \`${text("checkpoint")}\` Checkpoint.`,
-        note ? `\n> ${note}` : "",
-        "",
+        note ? quoted(note) : "",
         signature(subject),
-      ]
-        .filter((line) => line !== "")
-        .join("\n"),
+      ),
       // Whatever was decided, nothing is waiting on this record any more.
       labels: { add: [], remove: [AWAITING_LABEL] },
     };
@@ -240,9 +268,7 @@ export function mirrorFor(
           ? "Nothing on this record is waiting on a ruling."
           : text("message") || "deevy would not take it.";
     return {
-      comment: [`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "", "— deevy"].join(
-        "\n",
-      ),
+      comment: paragraphs(`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "— deevy"),
       // Nothing changed, so nothing about the record's labels does either.
       labels: { add: [], remove: [] },
     };
@@ -253,22 +279,20 @@ export function mirrorFor(
     if (!url) return null;
     const title = text("title");
     return {
-      comment: [
+      comment: paragraphs(
         `Opened a pull request: ${title ? `[${title}](${url})` : url}`,
-        "",
         signature(subject),
-      ].join("\n"),
+      ),
       labels: { add: [], remove: [] },
     };
   }
 
   if (event.kind === "run.started") {
     return {
-      comment: [
-        `A deevy Agent started work here, by ${text("trigger") || "assignment"}.`,
-        "",
+      comment: paragraphs(
+        `A deevy Agent started work here${startedBy(text("trigger"))}.`,
         signature(subject),
-      ].join("\n"),
+      ),
       labels: { add: [], remove: [] },
     };
   }
@@ -276,14 +300,11 @@ export function mirrorFor(
   if (event.kind === "run.completed" || event.kind === "run.failed") {
     const summary = text("summary");
     return {
-      comment: [
+      comment: paragraphs(
         event.kind === "run.completed" ? "**Finished.**" : "**Failed.**",
-        summary ? `\n${summary}` : "",
-        "",
+        summary,
         signature(subject),
-      ]
-        .filter((line) => line !== "")
-        .join("\n"),
+      ),
       labels: { add: [], remove: [] },
     };
   }

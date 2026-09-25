@@ -49,8 +49,35 @@ vi.mock("../src/lib/orpc.ts", async () => {
             payload: { changed: ["title"] },
             createdAt: new Date("2026-09-20T09:00:00Z"),
           },
+          {
+            seq: 3,
+            workspaceId: "w1",
+            kind: "issue.assigned",
+            subjectType: "issue",
+            subjectId: "iss_one0000000",
+            projectId: "proj_acme-deevy",
+            actorMemberId: null,
+            actor: null,
+            // As routing writes it: an id and no name (sockets/apply.ts).
+            payload: { from: null, to: "m-builder", byRouting: true },
+            createdAt: new Date("2026-09-20T08:59:00Z"),
+          },
         ],
         nextCursor: null,
+      }),
+    },
+    members: {
+      list: async () => ({
+        members: [
+          {
+            id: "m-builder",
+            role: "member",
+            kind: "agent",
+            handle: "builder",
+            suspendedAt: null,
+            user: { id: "u-b", name: "Builder", email: "builder@agents.invalid", image: null },
+          },
+        ],
       }),
     },
   });
@@ -104,6 +131,9 @@ describe("one Work item", () => {
     expect(
       within(screen.getByRole("list", { name: "Gates" })).getAllByRole("listitem"),
     ).toHaveLength(1);
-    expect(await screen.findByRole("list", { name: "Events" })).toBeTruthy();
+    const history = await screen.findByRole("list", { name: "Events" });
+    // Named from the Workspace's Members, as the Event log names them: the
+    // first real GitHub walk read "unassigned it" here instead.
+    expect(await within(history).findByText(/routed it to Builder/)).toBeTruthy();
   });
 });

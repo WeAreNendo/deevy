@@ -193,8 +193,14 @@ icon, title, description, action? }}`. **The words say what emptied the list**: 
   choices. Every item sits in a group, which carries the padding. Base UI wants a real value for "none", so a
   page keeps a sentinel constant (`"__nobody"`, `"__nowhere"`), never `""`. **A `SelectValue` is given a render
   function naming what its value is** — `{(selected) => nameOf(selected)}` — because Base UI's trigger
-  otherwise shows the raw value: a Member id and `gates` were on the Project settings until 2026-09-24. A
-  Member in a select is `user.name` as text; the kind comes from the group's label, never from a chip.
+  otherwise shows the raw value: a Member id and `gates` were on the Project settings until 2026-09-24, and
+  a Socket's id in **Bind a Project** until the GitHub walk. A Member in a select is `user.name` as text; the
+  kind comes from the group's label, never from a chip. `ui/select`'s popup is at least as wide as its
+  trigger and grows to fit its items (`w-max min-w-(--anchor-width) max-w-(--available-width)`), because a
+  short trigger clipped a Socket's name; re-apply it after a `shadcn add --overwrite` of the file.
+- **A stored value is never a sentence.** A Run's trigger reads through `lib/run-trigger.ts` ("started when
+  its sub-issues finished"), a breadcrumb names a Socket by its name and a record by its tracker's key, and a
+  routed assignment a page cannot name still says "routed it to an Agent", never "unassigned it".
 - **Destructive is for what does not undo.** Disconnect, Remove, Revoke, Archive are `variant="destructive"`.
   Suspend, Reinstate, Pause and Unlink are `outline`: they reverse. Reject is a ruling, not a deletion, and
   keeps the ruling's own styling.
@@ -298,13 +304,19 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   talking to deevy or is deevy asking it (`How it is doing`), where it delivers (`region "Where it delivers"`,
   with **Point GitHub at this address** for an App), what it signs with, and what it has said lately
   (`table "Deliveries"`). A section that only one tool has — Notion's `region "Verifying the webhook"` and
-  "Who commented", Linear's "Assigning issues to deevy" — keys off `socket.provider`; what a tool _can_ do is
-  the server's to say wherever it decides anything.
+  "Who commented", Linear's "Assigning issues to deevy", GitHub's "Where it is installed" with a link to
+  install the App on more repositories — keys off `socket.provider`; what a tool _can_ do is the server's to
+  say wherever it decides anything.
 - **A Project is a binding** (`routes/settings/projects.tsx`): **Bind a Project** picks a tool, a container
   the tool itself offers, and a name — never a field somebody types, because a typo there is a Project bound
-  to nothing. Its `region "Binding"` states the tracker and will not move it, and sets the Default Agent,
-  the routing label, the Mirror, where its code lives, and **Documents** — where its plans live, for an
-  Agent's `docs_get`. `region "Checkpoints"` is the policy (`checkpoint-policy.tsx`).
+  to nothing — and, for a tool that holds code, binds the same container as its code unless **Its code is
+  here too** is unticked. Its `region "Binding"` states the tracker and will not move it, and sets the Default
+  Agent (which grants that Agent the Project), the routing label, the Mirror, the **Repository** and **Base
+  branch** its code is in, and **Documents** — where its plans live, for an Agent's `docs_get`. `region
+"Checkpoints"` is the policy (`checkpoint-policy.tsx`).
+- **A Run that did not finish can be tried again.** A failed or stale Run's page offers **Try again**
+  (`runs.retry`) in its header and goes to the fresh Run; the server decides who may, and a refusal shows in
+  its own words under the button.
 - **Identities** (`routes/settings/identities.tsx`) lists the accounts that rule as this Human, how deevy
   knows each, and lets them unlink one and link it again; a Slack code is checked before it links
   (**Check the code**, then **Link @x to me**), and a tool with a consent page of its own (Linear) is **Link
@@ -330,7 +342,7 @@ email`; `Sign out and try another account` for somebody who is not a Member.
 - **Needs me.** `region "Needs me"`, `region "Gates awaiting you"` with a link per Gate, `region "Runs
 awaiting your answer"`, `region "Your Agents' Runs"`.
 - **Runs.** `table "Runs"` with a row per Run, `group "Filters"`; on a Run `ol "Activity of <run id>"` and
-  `list "Gates"`, `heading` named by the record.
+  `list "Gates"`, `heading` named by the record, and `Try again` on a failed or stale one.
 - **A Gate.** `region "Proposal"` with the Proposal's own headings; `group "<Checkpoint> Gate"` with
   `data-focused`; `Note`, `Approve`, `Reject`; `list "Gate decisions"`; a link to the record by its key.
 - **Work.** `table "Work"`, the filters by label; on a record `region "What the record says"`, `list "Runs"`,
@@ -343,11 +355,13 @@ manifest` and `App manifest`; Linear's `Show the addresses`, `Callback URLs`, `C
   `Webhook signing secret`, `Install deevy as an agent`; GitLab's `GitLab URL`, `Access token`, `Signing
 token`, `Use the signing token`; Notion's `Internal integration secret` and link `Open the Socket's page`;
   `Connect`, `Done`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
-at this address`, `Pause`, `Mint a webhook secret`, `region "Verifying the webhook"` with `Show the token`,
+at this address`, `region "Where it is installed"` with link `Install it` or `Install it on more
+repositories`, `Pause`, `Mint a webhook secret`, `region "Verifying the webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox
-"Container"`, `Name`, `Bind it`; `region "Binding"` with `combobox "Default Agent"`, `Routing label`,
-  `combobox "Mirror"`, `combobox "Documents"`; `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
+"Container"`, `checkbox "Its code is here too…"`, `Name`, `Bind it`; `region "Binding"` with `combobox
+"Default Agent"`, `Routing label`, `combobox "Mirror"`, `combobox "Repository"`, `Base branch`, `combobox
+"Documents"`; `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
   `Approvals`, `checkbox "Not the Human the work is for"`, who may rule, `Save policy`.
 - **Identities.** `heading "Identities"`, `table "Identities"`, `Unlink @<login>`, `Link @<login> again`;
   `Code from Slack`, `Check the code`, `Link @<login> to me`; `region "Link an account"` with `Link

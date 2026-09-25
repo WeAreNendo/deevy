@@ -119,12 +119,21 @@ describe("the tracker", () => {
   it("offers each project the token can work in as a container, by path", async () => {
     const { tracker, asked } = gitlabReturning({
       "GET /projects": [
-        { id: 4211, path_with_namespace: "acme/deevy", name_with_namespace: "Acme / deevy" },
+        {
+          id: 4211,
+          path_with_namespace: "acme/deevy",
+          name_with_namespace: "Acme / deevy",
+          default_branch: "trunk",
+        },
       ],
     });
 
     expect(await tracker.listContainers()).toEqual([
-      { scope: { scopeKey: "4211", path: "acme/deevy" }, scopeKey: "4211", name: "acme/deevy" },
+      {
+        scope: { scopeKey: "4211", path: "acme/deevy", baseBranch: "trunk" },
+        scopeKey: "4211",
+        name: "acme/deevy",
+      },
     ]);
     // Only projects its user is a member of with Developer or more: the ones
     // it could push a branch to and comment on.

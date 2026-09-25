@@ -122,9 +122,37 @@ describe("the redirect that finishes it", () => {
     expect(await openSecret(testSealingSecret, row?.webhookSecret ?? "")).toBe(
       "whsec_github_made_this_one",
     );
+    // What it can do is the provider's, as it is for a pasted one: a Socket
+    // that says it can do nothing is offered to no Project's binding, which is
+    // how the first GitHub App connected for real could not be bound.
+    const [listed] = (await asAda.sockets.list({})).sockets;
+    expect(listed?.capabilities).toEqual(["tracker"]);
 
     const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
     expect(kinds).toContain("socket.connected");
+  });
+
+  it("sends the operator on to the tool, where the provider says to go there next", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, app } = await workspace(
+      db,
+      setupSockets({
+        ...converted,
+        redirectTo: "https://github.test/apps/deevy-acme/installations/new",
+      }),
+    );
+    const begun = await asAda.sockets.begin({ provider: "stub", name: "acme on GitHub" });
+
+    const landed = await app.request(
+      `/hooks/${begun.id}/setup?code=abc123&state=${encodeURIComponent(begun.state)}`,
+    );
+
+    // Absolute and https, so it is the tool's page and not a path in deevy.
+    expect(landed.status).toBe(302);
+    expect(landed.headers.get("location")).toBe(
+      "https://github.test/apps/deevy-acme/installations/new",
+    );
   });
 
   it("refuses a redirect this deevy did not start", async () => {

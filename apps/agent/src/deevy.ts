@@ -110,8 +110,11 @@ export class DeevyError extends Error {
 }
 
 export interface Deevy {
-  /** Who this key is, which is how the runtime learns its own Member id. */
-  me(): Promise<{ memberId: string; kind: string }>;
+  /**
+   * Who this key is: the runtime's own Member id, and the name and address
+   * the Agent's commits are signed with.
+   */
+  me(): Promise<{ memberId: string; kind: string; name: string; email: string }>;
   runs(status: Run["status"]): Promise<Run[]>;
   /**
    * This Agent's Runs on one Issue. deevy defaults the Agent to the caller and
@@ -199,9 +202,17 @@ export function createDeevy({ config, fetch = globalThis.fetch }: DeevyOptions):
 
   return {
     async me() {
-      const who = await call<{ member: { id: string; kind: string } | null }>("/me");
+      const who = await call<{
+        member: { id: string; kind: string } | null;
+        user?: { name?: string | null; email?: string | null } | null;
+      }>("/me");
       if (!who.member) throw new DeevyError("FORBIDDEN", 403, "This key is not a Member");
-      return { memberId: who.member.id, kind: who.member.kind };
+      return {
+        memberId: who.member.id,
+        kind: who.member.kind,
+        name: who.user?.name || "deevy Agent",
+        email: who.user?.email || "agent@deevy.invalid",
+      };
     },
     async runs(status) {
       // No `agentMemberId`: for an Agent, asking for nothing in particular means

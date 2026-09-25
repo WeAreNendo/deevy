@@ -167,6 +167,84 @@ describe("asking twice", () => {
   });
 });
 
+describe("an approval already given on the record", () => {
+  /**
+   * The first real GitHub walk: a Run's plan was approved, the Run failed on
+   * the environment, and the next Run built without asking — the Agent's own
+   * judgement. deevy decides now: the Agent always asks, and the answer is
+   * the approval that stands.
+   */
+  async function approvedThenFailed(db: Db) {
+    const parts = await workspace(db);
+    const { asBob, asPlanner, run } = parts;
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "## Plan\n\nAdd greet.sh.",
+    });
+    await asBob.gates.approve({ requestId: asked.id, note: "Go" });
+    await asPlanner.runs.finish({ runId: run.id, status: "failed", summary: "Could not write" });
+    const next = await asPlanner.runs.start({ issue: parts.issue.url });
+    return { ...parts, asked, next };
+  }
+
+  it("answers the same Proposal with the approval that stands, and lets the Run go on", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asPlanner, asked, next } = await approvedThenFailed(db);
+
+    const answer = await asPlanner.gates.request({
+      runId: next.id,
+      checkpoint: "plan",
+      proposal: "## Plan\n\nAdd greet.sh.",
+    });
+
+    // The Gate the Humans ruled on, not a copy of their Rulings on a new one.
+    expect(answer).toMatchObject({ id: asked.id, status: "approved" });
+    expect((await asPlanner.runs.get({ runId: next.id })).status).not.toBe("awaiting_input");
+    // Nobody is asked again, and the Run says what it went past on.
+    const asks = (await db.query.event.findMany({})).filter(
+      (event) => event.kind === "gate.requested",
+    );
+    expect(asks).toHaveLength(1);
+    const said = (await asPlanner.runs.get({ runId: next.id })).activities.map((one) => one.body);
+    expect(said.join("\n")).toContain(`/gates/${asked.id}`);
+  });
+
+  it("asks again when the Proposal changed", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asPlanner, asked, next } = await approvedThenFailed(db);
+
+    const answer = await asPlanner.gates.request({
+      runId: next.id,
+      checkpoint: "plan",
+      proposal: "## Plan\n\nAdd greet.sh, and a test.",
+    });
+
+    expect(answer.id).not.toBe(asked.id);
+    expect(answer.status).toBe("open");
+  });
+
+  it("asks again when the Checkpoint now wants more than that approval had", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asPlanner, seeded, next } = await approvedThenFailed(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "plan", approvalsRequired: 2, excludeRequester: false }],
+    });
+
+    const answer = await asPlanner.gates.request({
+      runId: next.id,
+      checkpoint: "plan",
+      proposal: "## Plan\n\nAdd greet.sh.",
+    });
+
+    expect(answer.status).toBe("open");
+  });
+});
+
 describe("a rejection", () => {
   it("ends the request, lets the Run carry on, and the next ask is a second visit", async () => {
     const { db, close } = testDb();
