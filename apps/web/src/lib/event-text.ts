@@ -240,6 +240,26 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       const number = typeof p.number === "number" ? `#${String(p.number)}` : "";
       return say(`opened pull request ${number}`.trim(), str(p.url), agentTone);
     }
+    case "run.usage_reported": {
+      // The Run's totals after the report, in its client's words: a cost is
+      // what the harness estimated, and absent where it priced nothing.
+      const count = (value: unknown) => (typeof value === "number" ? value : 0);
+      const tokens =
+        count(p.inputTokens) +
+        count(p.outputTokens) +
+        count(p.cacheReadTokens) +
+        count(p.cacheWriteTokens);
+      const cost =
+        typeof p.costUsd === "number"
+          ? `≈ ${new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(p.costUsd)}`
+          : "cost not reported";
+      return say(
+        `reported usage: ${new Intl.NumberFormat("en", { notation: "compact" }).format(tokens)} tokens, ${cost}`,
+        null,
+        agentTone,
+        true,
+      );
+    }
     case "gate.requested": {
       const checkpoint = str(p.checkpoint) ?? "a Checkpoint";
       const visit = typeof p.visit === "number" ? p.visit : 1;

@@ -5,6 +5,7 @@ import {
   agentActivityKinds,
   run as runTable,
   runStatuses,
+  runUsage as runUsageTable,
 } from "@deevy/db";
 import { issue as issueTable, member as memberTable, project as projectTable } from "@deevy/db";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -21,6 +22,17 @@ import {
   statusAfterAnswer,
 } from "../runs.ts";
 import { defineOperation } from "./registry.ts";
+import {
+  MAX_REPORTS_PER_RUN,
+  REPORT_GRACE_MS,
+  ReportUsageInput,
+  UsageDetailSchema,
+  UsageSchema,
+  noUsage,
+  toMicroUsd,
+  usageDetailOf,
+  usageOf,
+} from "../usage.ts";
 import type { Activity, Run } from "@deevy/db";
 import {
   assertOwnRun,
@@ -380,6 +392,77 @@ export const runs = {
     },
   }),
 
+  reportUsage: defineOperation({
+    name: "runs.reportUsage",
+    summary:
+      "Report what one session of your Run spent: tokens by model, and the cost where your harness priced them",
+    method: "POST",
+    path: "/runs/{runId}/usage",
+    auth: "member",
+    agents: true,
+    agentsOnly: true,
+    mcp: true,
+    input: ReportUsageInput,
+    output: UsageSchema,
+    handler: async ({ input, context }) => {
+      const { run, issue, project } = await requireRun(context, input.runId);
+      assertOwnRun(context, run);
+      // The session that finishes a Run reports after it did, so a finished
+      // Run still takes reports for a while; after that its usage is closed,
+      // and a report is a mistake or somebody else's (docs/plans/run-usage.md).
+      if (run.finishedAt && Date.now() - run.finishedAt.getTime() > REPORT_GRACE_MS) {
+        throw new ORPCError("CONFLICT", {
+          message: "This Run finished more than a day ago; its usage is closed",
+        });
+      }
+      const [others] = await context.db
+        .select({ count: sql<number>`count(distinct ${runUsageTable.report})` })
+        .from(runUsageTable)
+        .where(
+          and(eq(runUsageTable.runId, run.id), sql`${runUsageTable.report} <> ${input.report}`),
+        );
+      if ((others?.count ?? 0) >= MAX_REPORTS_PER_RUN) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: `A Run takes at most ${String(MAX_REPORTS_PER_RUN)} usage reports`,
+        });
+      }
+
+      // A report replaces what it said before: a harness's totals run on, and
+      // a retried call is the same session, so the latest is the truth.
+      await context.db
+        .delete(runUsageTable)
+        .where(and(eq(runUsageTable.runId, run.id), eq(runUsageTable.report, input.report)));
+      await context.db.insert(runUsageTable).values(
+        input.models.map((entry) => ({
+          id: newId("runUsage"),
+          runId: run.id,
+          report: input.report,
+          harness: input.harness,
+          model: entry.model ?? null,
+          inputTokens: entry.inputTokens,
+          outputTokens: entry.outputTokens,
+          cacheReadTokens: entry.cacheReadTokens,
+          cacheWriteTokens: entry.cacheWriteTokens,
+          costMicroUsd:
+            entry.costUsd === undefined || entry.costUsd === null
+              ? null
+              : toMicroUsd(entry.costUsd),
+          costBasis: entry.costBasis ?? null,
+        })),
+      );
+
+      const totals = (await usageOf(context.db, [run.id])).get(run.id) ?? noUsage;
+      await appendEvent(context, {
+        kind: "run.usage_reported",
+        subjectType: "run",
+        subjectId: run.id,
+        projectId: project.id,
+        payload: { issueId: issue.id, report: input.report, harness: input.harness, ...totals },
+      });
+      return totals;
+    },
+  }),
+
   list: defineOperation({
     name: "runs.list",
     summary: "Runs on an Issue or by an Agent, newest first, from a cursor",
@@ -418,6 +501,8 @@ export const runs = {
            * on a ruling" and links to it without a query per row.
            */
           openGateRequestId: z.string().nullable(),
+          /** What the Run spent, as reported: one statement for the page. */
+          usage: UsageSchema,
         }),
       ),
       /** The position of the last Run returned, or null when the page is empty. */
@@ -488,12 +573,17 @@ export const runs = {
               columns: { id: true, runId: true },
             });
       const gateOf = new Map(waiting.map((row) => [row.runId, row.id]));
+      const spent = await usageOf(
+        context.db,
+        rows.map((row) => row.run.id),
+      );
       return {
         runs: rows.map((row) => ({
           ...runView(row.run, row.externalKey),
           lastActivities: trailing.get(row.run.id)?.rows ?? [],
           activityCount: trailing.get(row.run.id)?.total ?? 0,
           openGateRequestId: gateOf.get(row.run.id) ?? null,
+          usage: spent.get(row.run.id) ?? noUsage,
         })),
         nextCursor: last ? `${last.run.createdAt.getTime()}:${last.run.id}` : null,
       };
@@ -509,14 +599,17 @@ export const runs = {
     agents: true,
     mcp: true,
     input: z.object({ runId: z.string() }),
-    output: RunDetailSchema,
+    output: RunDetailSchema.extend({
+      /** What the Run spent, as reported, and each model's share. */
+      usage: UsageDetailSchema,
+    }),
     handler: async ({ input, context }) => {
       const { run, key } = await requireRun(context, input.runId);
       const activities = await context.db.query.activity.findMany({
         where: { runId: run.id },
         orderBy: { createdAt: "asc" },
       });
-      return { ...runView(run, key), activities };
+      return { ...runView(run, key), activities, usage: await usageDetailOf(context.db, run.id) };
     },
   }),
 };

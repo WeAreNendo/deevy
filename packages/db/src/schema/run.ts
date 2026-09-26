@@ -125,3 +125,43 @@ export const activity = sqliteTable(
   },
   (table) => [index("activity_runId_idx").on(table.runId, table.createdAt)],
 );
+
+/** The price table a harness says it priced a model at (Claude Code's `costBasis`). */
+export const usageCostBases = ["list", "managed", "unknown"] as const;
+
+/**
+ * What one session of a Run's Agent spent on one model, as the client that ran
+ * it reported (docs/plans/run-usage.md). deevy never runs an Agent, so this is
+ * the client's word, and deevy never prices tokens itself: a null cost is a
+ * cost nobody reported, not a zero.
+ *
+ * A report is the client's key for one session. It replaces the rows it wrote
+ * before, because a harness's totals are running totals and a retried call is
+ * the same report, so `(run_id, report, model)` is unique. Money is whole
+ * micro-dollars: a sum of floats drifts.
+ */
+export const runUsage = sqliteTable(
+  "run_usage",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => run.id, { onDelete: "cascade" }),
+    report: text("report").notNull(),
+    /** `claude-code`, `opencode`, `cursor`, `copilot`, or a client's own word. */
+    harness: text("harness").notNull(),
+    /** Null where the harness did not say which model. */
+    model: text("model"),
+    inputTokens: integer("input_tokens").notNull(),
+    outputTokens: integer("output_tokens").notNull(),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costMicroUsd: integer("cost_micro_usd"),
+    costBasis: text("cost_basis", { enum: usageCostBases }),
+    reportedAt: integer("reported_at", { mode: "timestamp_ms" }).default(now).notNull(),
+  },
+  (table) => [
+    index("run_usage_runId_idx").on(table.runId),
+    uniqueIndex("run_usage_report_model_uidx").on(table.runId, table.report, table.model),
+  ],
+);

@@ -32,6 +32,7 @@ export type RoutingRule = typeof import("./schema/channel.ts").routingRule.$infe
 export type NotificationPreference =
   typeof import("./schema/channel.ts").notificationPreference.$inferSelect;
 export type Activity = typeof import("./schema/run.ts").activity.$inferSelect;
+export type RunUsage = typeof import("./schema/run.ts").runUsage.$inferSelect;
 export type ProjectGrant = typeof import("./schema/agent.ts").projectGrant.$inferSelect;
 export type Issue = typeof import("./schema/issue.ts").issue.$inferSelect;
 export type Checkpoint = typeof import("./schema/gate.ts").checkpoint.$inferSelect;
