@@ -144,7 +144,12 @@ export function createAuth({ db, env }: CreateAuthOptions) {
       user: {
         create: {
           after: async (user) => {
-            await admit(db, env, { userId: user.id, email: user.email, name: user.name });
+            await admit(db, env, {
+              userId: user.id,
+              email: user.email,
+              name: user.name,
+              emailVerified: user.emailVerified,
+            });
           },
         },
       },
@@ -155,7 +160,12 @@ export function createAuth({ db, env }: CreateAuthOptions) {
           after: async (session) => {
             const user = await db.query.user.findFirst({ where: { id: session.userId } });
             if (user) {
-              await admit(db, env, { userId: user.id, email: user.email, name: user.name });
+              await admit(db, env, {
+                userId: user.id,
+                email: user.email,
+                name: user.name,
+                emailVerified: user.emailVerified,
+              });
             }
           },
         },
@@ -631,6 +641,8 @@ export async function bootstrapWorkspace(
   env: Pick<AuthEnv, "adminEmail" | "workspaceName">,
 ): Promise<void> {
   if (!env.adminEmail || user.email.toLowerCase() !== env.adminEmail.toLowerCase()) return;
+  // The admin is an address, so only an address the provider verified is it.
+  if (!user.emailVerified) return;
   if (await db.query.member.findFirst({ where: { userId: user.userId } })) return;
   let workspaceId = (await db.query.workspace.findFirst())?.id;
   const source = { db, workspace: { id: "" }, member: null };
@@ -669,6 +681,14 @@ export interface JoiningUser {
   userId: string;
   email: string;
   name?: string | null;
+  /**
+   * Whether the provider vouched for the address. Only a verified address
+   * makes the admin or matches an `email_domain` rule: a provider that does
+   * not vouch — Linear, Atlassian, an Entra tenant without verified-email
+   * claims — would otherwise let anybody claim an address and be let in by it
+   * ("nOAuth"). An invitation still admits, because its link is the proof.
+   */
+  emailVerified: boolean;
 }
 
 export interface JoinOptions {
@@ -758,7 +778,15 @@ async function matchesAllowlist(
     .select()
     .from(allowlistRule)
     .where(eq(allowlistRule.workspaceId, workspaceId));
-  if (rules.some((rule) => rule.kind === "email_domain" && rule.value === domain)) return true;
+  // A domain rule is about the address, so it takes only one the provider
+  // verified; an organisation or a group is the provider's own word and does
+  // not rest on the address at all.
+  if (
+    user.emailVerified &&
+    rules.some((rule) => rule.kind === "email_domain" && rule.value === domain)
+  ) {
+    return true;
+  }
 
   // Each of these costs a round trip to a provider, so each is asked only when
   // a rule of its kind exists and no email domain matched.

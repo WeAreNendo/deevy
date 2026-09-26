@@ -272,7 +272,7 @@ describe("the Event log after bootstrap", () => {
     await db.insert(user).values({ id: "u1", name: "Ada", email: "ada@example.com" });
     await bootstrapWorkspace(
       db,
-      { userId: "u1", email: "ada@example.com" },
+      { userId: "u1", email: "ada@example.com", emailVerified: true },
       {
         adminEmail: "ada@example.com",
         workspaceName: "Acme Team",
@@ -298,7 +298,7 @@ describe("the Event log after bootstrap", () => {
     await db.insert(workspace).values({ id: "w1", name: "deevy", slug: "deevy" });
     await bootstrapWorkspace(
       db,
-      { userId: "u1", email: "ada@example.com" },
+      { userId: "u1", email: "ada@example.com", emailVerified: true },
       {
         adminEmail: "ada@example.com",
       },

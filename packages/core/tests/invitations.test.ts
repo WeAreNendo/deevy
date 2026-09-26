@@ -422,6 +422,7 @@ describe("an invitation somebody else's route already spent", () => {
       userId: "usr_grace000001",
       email: "grace@example.com",
       name: "Grace",
+      emailVerified: true,
     });
 
     const [row] = (await client.invitations.list({})).invitations;
