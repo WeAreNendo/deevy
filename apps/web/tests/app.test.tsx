@@ -8,6 +8,17 @@ interface StubProvider {
 }
 
 const github: StubProvider = { id: "github", label: "GitHub", kind: "social" };
+/** Every provider deevy knows, in its default order (packages/core/src/auth.ts). */
+const everyProvider: StubProvider[] = [
+  github,
+  { id: "google", label: "Google", kind: "social" },
+  { id: "microsoft", label: "Microsoft", kind: "social" },
+  { id: "gitlab", label: "GitLab", kind: "social" },
+  { id: "linear", label: "Linear", kind: "social" },
+  { id: "slack", label: "Slack", kind: "social" },
+  { id: "atlassian", label: "Atlassian", kind: "social" },
+  { id: "oidc", label: "Acme SSO", kind: "social" },
+];
 const stub = vi.hoisted(() => ({
   devSignIn: false,
   providers: [{ id: "github", label: "GitHub", kind: "social" }] as StubProvider[],
@@ -15,11 +26,14 @@ const stub = vi.hoisted(() => ({
   unreachable: false,
   /** What `authClient.signIn.social` answers — an error is a button that did not start. */
   signInError: null as { message: string } | null,
+  /** The provider the `lastLoginMethod` cookie names, as the client plugin reads it. */
+  lastUsed: null as string | null,
 }));
 
 vi.mock("../src/lib/auth.ts", () => ({
   authClient: {
     signIn: { social: async () => ({ data: null, error: stub.signInError }) },
+    getLastUsedLoginMethod: () => stub.lastUsed,
   },
 }));
 
@@ -42,6 +56,23 @@ vi.mock("../src/lib/orpc.ts", async () => {
   return { client, orpc: createTanstackQueryUtils(client) };
 });
 
+/**
+ * The sign-in buttons' accessible names, in the order they appear. The name
+ * matcher is called once per button, in document order, which is the order a
+ * keyboard or a screen reader meets them.
+ */
+function signInButtons(): string[] {
+  const names: string[] = [];
+  screen.queryAllByRole("button", {
+    name: (name) => {
+      if (!name.startsWith("Continue with ")) return false;
+      names.push(name);
+      return true;
+    },
+  });
+  return names;
+}
+
 const { DevSignIn, SignedOut } = await import("../src/App.tsx");
 const { mount } = await import("./mount.tsx");
 const { orpc } = await import("../src/lib/orpc.ts");
@@ -51,13 +82,14 @@ afterEach(() => {
   stub.providers = [github];
   stub.unreachable = false;
   stub.signInError = null;
+  stub.lastUsed = null;
   vi.unstubAllGlobals();
 });
 
 describe("SignedOut", () => {
   it("offers the providers this deployment configured, and nothing else", async () => {
     const { queryClient } = mount(<SignedOut />);
-    expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeTruthy();
     // The form's absence means something only once health.ping has answered.
     await waitFor(() =>
       expect(queryClient.getQueryState(orpc.health.ping.queryKey())?.status).toBe("success"),
@@ -69,44 +101,150 @@ describe("SignedOut", () => {
   it("renders one button per provider, in the order the server sent", async () => {
     stub.providers = [github, { id: "google", label: "Google", kind: "social" }];
     mount(<SignedOut />);
-    await screen.findByRole("button", { name: "Sign in with Google" });
+    await screen.findByRole("button", { name: "Continue with Google" });
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "Sign in with GitHub",
-      "Sign in with Google",
+      "Continue with GitHub",
+      "Continue with Google",
     ]);
   });
 
   it("dresses each provider's button in its own brand, and a generic one in deevy's", async () => {
-    stub.providers = [
-      github,
-      { id: "google", label: "Google", kind: "social" },
-      { id: "gitlab", label: "GitLab", kind: "social" },
-      { id: "oidc", label: "Acme SSO", kind: "social" },
-    ];
+    stub.providers = everyProvider;
     mount(<SignedOut />);
-    await screen.findByRole("button", { name: "Sign in with Acme SSO" });
+    fireEvent.click(await screen.findByRole("button", { name: "More ways to sign in" }));
+    await screen.findByRole("button", { name: "Continue with Acme SSO" });
 
     for (const [name, provider] of [
       ["GitHub", "github"],
       ["Google", "google"],
+      ["Microsoft", "microsoft"],
       ["GitLab", "gitlab"],
+      ["Linear", "linear"],
+      ["Slack", "slack"],
+      ["Atlassian", "atlassian"],
     ] as const) {
-      const button = screen.getByRole("button", { name: `Sign in with ${name}` });
+      const button = screen.getByRole("button", { name: `Continue with ${name}` });
       expect(button.dataset.brand).toBe(provider);
-      // The mark is decoration: the name stays "Sign in with …", which is
+      // The mark is decoration: the name stays "Continue with …", which is
       // what every test and every screen reader reads.
       const mark = button.querySelector(`svg[data-mark="${provider}"]`);
       expect(mark?.getAttribute("aria-hidden")).toBe("true");
     }
-    // Google's own guidelines want its G in its four colours, never one.
-    const g = screen
-      .getByRole("button", { name: "Sign in with Google" })
-      .querySelectorAll("svg[data-mark] path");
-    expect(new Set([...g].map((path) => path.getAttribute("fill"))).size).toBe(4);
+    // Google's G, Microsoft's four squares and Slack's hash are each drawn in
+    // four colours, as their owners' guidelines want them, never in one.
+    for (const name of ["Google", "Microsoft", "Slack"]) {
+      const shapes = screen
+        .getByRole("button", { name: `Continue with ${name}` })
+        .querySelectorAll("svg[data-mark] [fill]");
+      expect(new Set([...shapes].map((shape) => shape.getAttribute("fill"))).size).toBe(4);
+    }
     // An OpenID Connect IdP could be anybody's, so it has no brand to borrow.
-    const generic = screen.getByRole("button", { name: "Sign in with Acme SSO" });
+    const generic = screen.getByRole("button", { name: "Continue with Acme SSO" });
     expect(generic.dataset.brand).toBeUndefined();
     expect(generic.querySelector("svg[data-mark]")).toBeNull();
+  });
+
+  /**
+   * Eight buttons is a wall. Three are what most people sign in with, in the
+   * order the server sent (the operator's, else deevy's), and the rest wait
+   * behind one disclosure — the single sign-on last, a row of its own, since
+   * its name is whatever the operator called it.
+   */
+  it("shows three, and the rest behind More ways to sign in, the single sign-on last", async () => {
+    stub.providers = everyProvider;
+    mount(<SignedOut />);
+    const more = await screen.findByRole("button", { name: "More ways to sign in" });
+    expect(signInButtons()).toEqual([
+      "Continue with GitHub",
+      "Continue with Google",
+      "Continue with Microsoft",
+    ]);
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(more);
+    await screen.findByRole("button", { name: "Continue with Acme SSO" });
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(signInButtons()).toEqual([
+      "Continue with GitHub",
+      "Continue with Google",
+      "Continue with Microsoft",
+      "Continue with GitLab",
+      "Continue with Linear",
+      "Continue with Slack",
+      "Continue with Atlassian",
+      "Continue with Acme SSO",
+    ]);
+  });
+
+  it("files the single sign-on last behind More even when the server lists it earlier", async () => {
+    stub.providers = [
+      github,
+      { id: "google", label: "Google", kind: "social" },
+      { id: "microsoft", label: "Microsoft", kind: "social" },
+      { id: "oidc", label: "Acme SSO", kind: "social" },
+      { id: "gitlab", label: "GitLab", kind: "social" },
+    ];
+    mount(<SignedOut />);
+    fireEvent.click(await screen.findByRole("button", { name: "More ways to sign in" }));
+    await screen.findByRole("button", { name: "Continue with Acme SSO" });
+    expect(signInButtons().slice(3)).toEqual(["Continue with GitLab", "Continue with Acme SSO"]);
+  });
+
+  it("keeps the single sign-on in view when the operator put it in the first three", async () => {
+    stub.providers = [
+      { id: "oidc", label: "Acme SSO", kind: "social" },
+      ...everyProvider.slice(0, 7),
+    ];
+    mount(<SignedOut />);
+    await screen.findByRole("button", { name: "More ways to sign in" });
+    expect(signInButtons()).toEqual([
+      "Continue with Acme SSO",
+      "Continue with GitHub",
+      "Continue with Google",
+    ]);
+  });
+
+  it("shows every provider when there are four or fewer, with nothing to expand", async () => {
+    stub.providers = everyProvider.slice(0, 4);
+    mount(<SignedOut />);
+    await screen.findByRole("button", { name: "Continue with GitLab" });
+    expect(signInButtons()).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: "More ways to sign in" })).toBeNull();
+  });
+
+  /**
+   * The `lastLoginMethod` cookie says which button this browser used last, so
+   * that one comes first and says so — even when it would otherwise wait
+   * behind More. The badge is its description, not part of its name.
+   */
+  it("puts the provider this browser used last first, and says so", async () => {
+    stub.providers = everyProvider;
+    stub.lastUsed = "slack";
+    mount(<SignedOut />);
+    const slack = await screen.findByRole("button", { name: "Continue with Slack" });
+    expect(signInButtons()).toEqual([
+      "Continue with Slack",
+      "Continue with GitHub",
+      "Continue with Google",
+    ]);
+    expect(screen.getByRole("button", { description: "Last used" })).toBe(slack);
+    expect(screen.getByText("Last used").closest("button")).toBe(slack);
+  });
+
+  it("ignores a last-used provider this deployment no longer offers", async () => {
+    stub.providers = everyProvider.slice(0, 2);
+    stub.lastUsed = "atlassian";
+    mount(<SignedOut />);
+    await screen.findByRole("button", { name: "Continue with Google" });
+    expect(signInButtons()).toEqual(["Continue with GitHub", "Continue with Google"]);
+    expect(screen.queryByText("Last used")).toBeNull();
+  });
+
+  it("does not badge the only way in", async () => {
+    stub.lastUsed = "github";
+    mount(<SignedOut />);
+    await screen.findByRole("button", { name: "Continue with GitHub" });
+    expect(screen.queryByText("Last used")).toBeNull();
   });
 
   it("says so when the deployment configured no provider at all", async () => {
@@ -120,7 +258,7 @@ describe("SignedOut", () => {
     stub.devSignIn = true;
     mount(<SignedOut />);
     expect(await screen.findByRole("form", { name: "Development sign-in" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeTruthy();
   });
 
   /**
@@ -132,7 +270,7 @@ describe("SignedOut", () => {
     stub.unreachable = true;
     mount(<SignedOut />);
     expect(await screen.findByText(/couldn’t reach deevy|couldn't reach deevy/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Sign in with/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Continue with/ })).toBeNull();
     expect(screen.queryByText(/no sign-in provider has been set up/i)).toBeNull();
   });
 
@@ -167,7 +305,7 @@ describe("SignedOut", () => {
   it("says so when a button does not start a sign-in", async () => {
     stub.signInError = { message: "PROVIDER_NOT_FOUND" };
     mount(<SignedOut />);
-    fireEvent.click(await screen.findByRole("button", { name: "Sign in with GitHub" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue with GitHub" }));
     expect(await screen.findByText(/couldn’t start sign-in|couldn't start sign-in/)).toBeTruthy();
   });
 });

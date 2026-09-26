@@ -19,7 +19,7 @@ const stub = vi.hoisted(() => ({
   accepted: [] as string[],
   /** What `invitations.accept` refuses with, when it refuses. */
   refusal: null as string | null,
-  session: null as { user: { email: string } } | null,
+  session: null as { user: { email: string; emailVerified?: boolean } } | null,
   member: null as { id: string; role: string } | null,
 }));
 
@@ -28,6 +28,7 @@ vi.mock("../src/lib/auth.ts", () => ({
     useSession: () => ({ data: stub.session, isPending: false }),
     signOut: vi.fn(),
     signIn: { social: vi.fn() },
+    getLastUsedLoginMethod: () => null,
   },
 }));
 
@@ -192,7 +193,7 @@ describe("an invitation link", () => {
     mount(<App />);
 
     expect(await screen.findByText(/You have an invitation waiting/)).toBeTruthy();
-    expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeTruthy();
     // Held, because signing in leaves the SPA and comes back to "/".
     expect(window.sessionStorage.getItem("deevy.invitation")).toBe("tok-1");
   });
@@ -219,6 +220,31 @@ describe("an invitation link", () => {
     // The link is still held, so signing in as the invited address still works.
     expect(window.sessionStorage.getItem("deevy.invitation")).toBe("tok-1");
     expect(screen.getByRole("button", { name: "Sign out and try another account" })).toBeTruthy();
+  });
+});
+
+/**
+ * An email-domain rule admits an address only when the provider confirmed it
+ * (packages/core/src/auth.ts), and Linear and Atlassian never do. Somebody
+ * who signed in through one of those is told the one way in that is left.
+ */
+describe("signed in, not yet a Member", () => {
+  it("names the ways an admin can let a confirmed address in", async () => {
+    stub.session = { user: { email: "grace@example.com", emailVerified: true } };
+    mount(<App />);
+    expect(await screen.findByText(/approve your email domain/)).toBeTruthy();
+    expect(screen.queryByText(/didn.t confirm/)).toBeNull();
+  });
+
+  it("asks for an invitation when the provider did not confirm the address", async () => {
+    stub.session = { user: { email: "ken@example.com", emailVerified: false } };
+    mount(<App />);
+    expect(
+      await screen.findByText(/The account you signed in with didn.t confirm that ken@example.com/),
+    ).toBeTruthy();
+    expect(screen.getByText(/Ask an admin to invite you/)).toBeTruthy();
+    expect(screen.queryByText(/approve your email domain/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 });
 

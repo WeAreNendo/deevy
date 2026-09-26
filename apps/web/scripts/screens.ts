@@ -258,7 +258,7 @@ try {
     1500,
   );
   const who = await evaluate<string>(page, "document.body.innerText.slice(0, 200)");
-  if (/Sign in with /.test(who)) throw new Error(`sign-in as ${email} did not take`);
+  if (/Continue with /.test(who)) throw new Error(`sign-in as ${email} did not take`);
 
   // DEEVY_SCREENS_ONLY=gate,inbox-phone takes those shots alone (the sign-in one always).
   const only = process.env.DEEVY_SCREENS_ONLY?.split(",").map((name) => name.trim());

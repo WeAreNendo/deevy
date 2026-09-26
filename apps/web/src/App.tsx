@@ -1,9 +1,11 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { MemberChip } from "@/components/member-chip";
 import { SignInButton } from "@/components/sign-in-button";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth.ts";
@@ -14,6 +16,8 @@ import {
   invitationInPath,
 } from "@/lib/invitation.ts";
 import { orpc } from "@/lib/orpc.ts";
+import { arrangeSignIn } from "@/lib/sign-in.ts";
+import { cn } from "@/lib/utils";
 import { createAppRouter } from "@/router.tsx";
 import type { ShellProps } from "@/routes/shell.tsx";
 
@@ -24,7 +28,13 @@ export default function App() {
   const { data: session, isPending } = authClient.useSession();
   if (isPending) return <Centered>Loading…</Centered>;
   if (!session) return <SignedOut invitation={invitation} />;
-  return <SignedIn invitation={invitation} onInvitationDropped={() => setInvitation(null)} />;
+  return (
+    <SignedIn
+      invitation={invitation}
+      addressConfirmed={session.user.emailVerified !== false}
+      onInvitationDropped={() => setInvitation(null)}
+    />
+  );
 }
 
 /**
@@ -60,6 +70,22 @@ export function SignedOut({ invitation = null }: { invitation?: string | null })
   // discovery document that could not be fetched at startup leaves behind — and
   // without this the click is a silent no-op (docs/plans/sign-in.md).
   const [failed, setFailed] = useState<string | null>(null);
+  // Read once: the cookie Better Auth's `lastLoginMethod` left on this browser.
+  const [lastUsed] = useState(() => authClient.getLastUsedLoginMethod());
+  const arranged = arrangeSignIn(providers ?? [], lastUsed);
+  async function start(provider: { id: string; label: string }) {
+    setFailed(null);
+    const started = await authClient.signIn.social({
+      provider: provider.id as Parameters<typeof authClient.signIn.social>[0]["provider"],
+      callbackURL: home(),
+      errorCallbackURL: home(),
+    });
+    if (started.error) {
+      setFailed(
+        `We couldn't start sign-in with ${provider.label}. Ask your administrator to check this deployment's configuration.`,
+      );
+    }
+  }
   return (
     <SignInFrame>
       <div className="flex flex-col gap-1">
@@ -72,26 +98,48 @@ export function SignedOut({ invitation = null }: { invitation?: string | null })
             : "Use an account your Workspace admin has approved."}
         </p>
       </div>
-      {providers?.map((provider) => (
-        <SignInButton
-          key={provider.id}
-          provider={provider.id}
-          label={provider.label}
-          onClick={async () => {
-            setFailed(null);
-            const started = await authClient.signIn.social({
-              provider: provider.id as Parameters<typeof authClient.signIn.social>[0]["provider"],
-              callbackURL: home(),
-              errorCallbackURL: home(),
-            });
-            if (started.error) {
-              setFailed(
-                `We couldn't start sign-in with ${provider.label}. Ask your administrator to check this deployment's configuration.`,
-              );
-            }
-          }}
-        />
-      ))}
+      {providers && providers.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          {arranged.shown.map((provider) => (
+            <SignInButton
+              key={provider.id}
+              provider={provider.id}
+              label={provider.label}
+              lastUsed={provider.id === arranged.lastUsed}
+              onClick={() => start(provider)}
+            />
+          ))}
+          {arranged.more.length > 0 ? (
+            <Collapsible className="flex flex-col gap-3">
+              <CollapsibleTrigger
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  "self-center text-muted-foreground",
+                )}
+              >
+                More ways to sign in
+                <ChevronDown
+                  aria-hidden
+                  className="transition-transform group-data-[panel-open]/button:rotate-180"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="grid grid-cols-2 gap-3">
+                {arranged.more.map((provider) => (
+                  <SignInButton
+                    key={provider.id}
+                    provider={provider.id}
+                    label={provider.label}
+                    // A single sign-on's name is the operator's, of any length.
+                    compact={provider.id !== "oidc"}
+                    className={provider.id === "oidc" ? "col-span-2" : undefined}
+                    onClick={() => start(provider)}
+                  />
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          ) : null}
+        </div>
+      ) : null}
       {providers?.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No sign-in provider has been set up yet. Your administrator can add one and restart deevy.
@@ -197,9 +245,11 @@ export function DevSignIn({
 
 function SignedIn({
   invitation = null,
+  addressConfirmed = true,
   onInvitationDropped,
 }: {
   invitation?: string | null;
+  addressConfirmed?: boolean;
   onInvitationDropped?: () => void;
 }) {
   const me = useQuery(orpc.me.get.queryOptions());
@@ -238,6 +288,7 @@ function SignedIn({
       <NotAMember
         email={user.email}
         invitation={invitation}
+        addressConfirmed={addressConfirmed}
         {...(onInvitationDropped ? { onInvitationDropped } : {})}
       />
     );
@@ -250,14 +301,22 @@ function SignedIn({
  * Signed in and nobody yet — which is where an invited Human lands, so this
  * screen picks up a held token and accepts it rather than telling everybody
  * who reaches it to go and ask for an allowlist rule.
+ *
+ * An email-domain rule admits an address only when the provider confirmed it
+ * (packages/core/src/auth.ts), which Linear and Atlassian never do, so
+ * somebody who signed in through one of those is told that an invitation is
+ * their way in rather than sent to ask for a rule that cannot admit them.
  */
 export function NotAMember({
   email,
   invitation = null,
+  addressConfirmed = true,
   onInvitationDropped,
 }: {
   email: string;
   invitation?: string | null;
+  /** Better Auth's `emailVerified`: whether the provider vouched for the address. */
+  addressConfirmed?: boolean;
   /** So the tab stops holding what this screen just gave up on. */
   onInvitationDropped?: () => void;
 }) {
@@ -279,10 +338,18 @@ export function NotAMember({
     <SignInFrame>
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight">Signed in, not yet a Member</h1>
-        <p className="text-sm text-muted-foreground">
-          {email} isn&apos;t a Member of this Workspace yet. Ask an admin to invite you, or to
-          approve your email domain, GitHub organization or GitLab group — then sign in again.
-        </p>
+        {addressConfirmed ? (
+          <p className="text-sm text-muted-foreground">
+            {email} isn&apos;t a Member of this Workspace yet. Ask an admin to invite you, or to
+            approve your email domain, GitHub organization or GitLab group — then sign in again.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            The account you signed in with didn&apos;t confirm that {email} is yours, so an approved
+            email domain can&apos;t let you in. Ask an admin to invite you, then open the link they
+            send.
+          </p>
+        )}
       </div>
       <Button variant="outline" onClick={() => authClient.signOut()}>
         Sign out

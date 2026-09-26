@@ -260,12 +260,22 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
   payload as JSON when clicked, reads at 12px and names its actors rather than drawing them.
 - **The sign-in buttons wear their providers' brands**, the one place a screen shows colours that are not
   deevy's (`components/sign-in-button.tsx`, Matt, 2026-09-26): GitHub's dark button with the Octocat, light
-  on a dark page; Google's own light and dark themes with the four-colour G its guidelines require; GitLab's
-  charcoal with the orange tanuki. The colours are `--brand-*` tokens in `index.css`; the marks are Simple
-  Icons (CC0) and Google's published G, `aria-hidden`, so a button's name stays `Sign in with <provider>`. An
-  OpenID Connect IdP has no brand to borrow and stays deevy's outline button with a key.
+  on a dark page; Google's and Microsoft's own light and dark themes, with the four-colour G and the four
+  squares their guidelines require; GitLab's charcoal with the orange tanuki; Slack's white button and its
+  aubergine one. Linear and Atlassian publish no button, so theirs is deevy's outline with the mark in the
+  brand's colour. The colours are `--brand-*` tokens in `index.css`; the marks are Simple Icons (CC0) and the
+  owners' published logos, `aria-hidden`, so a button's name stays `Continue with <provider>`. An OpenID
+  Connect IdP has no brand to borrow and stays deevy's outline button with a key.
+- **The sign-in card shows three, then "More ways to sign in"** (`lib/sign-in.ts`, Matt, 2026-09-26): the
+  most-used first, one disclosure for the long tail, and a last-used badge. Four or fewer all show. Past that the first
+  three of the server's order are full-width and the rest open in place under a Base UI `Collapsible` as a
+  two-column grid of compact buttons — the provider's name visible, `Continue with <provider>` as their
+  `aria-label` — with the single sign-on last on a row of its own. The button this browser used last
+  (Better Auth's `lastLoginMethod` cookie, read by `lastLoginMethodClient`) comes first with a "Last used"
+  pill on its corner; the pill is the button's description (`aria-describedby`), never part of its name,
+  and there is none when only one provider is offered.
 - **Everything outside the shell** (`SignedOut`, `NotAMember`, `Suspended`) renders in `SignInFrame`. **The
-  sign-in buttons are `health.ping`'s `providers`**, one per entry in the order the server sent (`Sign in
+  sign-in buttons are `health.ping`'s `providers`**, one per entry in the order the server sent (`Continue
 with <label>`); a provider is added by configuring one, never by editing `App.tsx`. The dev form stays
   under them only when `health.ping` reports `devSignIn`. **An invitation link is answered outside the
   router**: `/invite/<token>` is held in `sessionStorage` (`lib/invitation.ts`) and spent by `NotAMember`.
@@ -359,8 +369,9 @@ The names a screen keeps unless a change says otherwise:
   `Settings`; `menuitemradio "Dark"` and `menuitem "Sign out"` in the Member menu; `heading "Keyboard"` on the
   shortcuts sheet and `option "Keyboard shortcuts"` in the palette; `heading "There is nothing here"` with
   `Go back`.
-- **Signed out.** `Sign in with <provider>` per provider; `form "Development sign-in"`, `Sign in as this
-email`; `Sign out and try another account` for somebody who is not a Member.
+- **Signed out.** `Continue with <provider>` per provider, the one used last described `Last used`; `More
+ways to sign in` (with `aria-expanded`) past four; `form "Development sign-in"`, `Sign in as this email`;
+  `Sign out and try another account` for somebody who is not a Member.
 - **Needs me.** `region "Needs me"`, `region "Gates awaiting you"` with a link per Gate, `region "Runs
 awaiting your answer"`, `region "Your Agents' Runs"`.
 - **Runs.** `table "Runs"` with a row per Run, `group "Filters"`, and the columns `Cost` and `Time`; on a Run

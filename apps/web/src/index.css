@@ -73,7 +73,10 @@
    * (components/sign-in-button.tsx). Each is the colour its owner publishes
    * for a sign-in button, so these are hex, as their guidelines give them:
    * GitHub's dark button, Google's light theme (Sign in with Google branding
-   * guidelines), GitLab's charcoal with its orange tanuki.
+   * guidelines), Microsoft's light theme (its identity platform's branding
+   * guidelines), GitLab's charcoal with its orange tanuki, Slack's white
+   * button. Linear and Atlassian publish no button, so only their marks are
+   * coloured, in each brand's own blue.
    */
   --brand-github: #24292f;
   --brand-github-foreground: #ffffff;
@@ -84,6 +87,14 @@
   --brand-gitlab-foreground: #ffffff;
   --brand-gitlab-border: #171321;
   --brand-gitlab-mark: #fc6d26;
+  --brand-microsoft: #ffffff;
+  --brand-microsoft-foreground: #5e5e5e;
+  --brand-microsoft-border: #8c8c8c;
+  --brand-slack: #ffffff;
+  --brand-slack-foreground: #000000;
+  --brand-slack-border: #dddddd;
+  --brand-linear-mark: #5e6ad2;
+  --brand-atlassian-mark: #0052cc;
 }
 
 .dark {
@@ -130,6 +141,16 @@
   --brand-gitlab-foreground: #ffffff;
   --brand-gitlab-border: #434248;
   --brand-gitlab-mark: #fc6d26;
+  /* Microsoft's dark theme; Slack's aubergine button; Atlassian's blue for a
+     dark surface, since #0052cc is lost on one. */
+  --brand-microsoft: #2f2f2f;
+  --brand-microsoft-foreground: #ffffff;
+  --brand-microsoft-border: #5e5e5e;
+  --brand-slack: #4a154b;
+  --brand-slack-foreground: #ffffff;
+  --brand-slack-border: #4a154b;
+  --brand-linear-mark: #5e6ad2;
+  --brand-atlassian-mark: #579dff;
 }
 
 @theme inline {
