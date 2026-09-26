@@ -1391,8 +1391,9 @@ repository — step 3 of [Deploying to a free account](#deploying-to-a-free-acco
 
 ## Upgrading
 
-Within a major version, pull the new image and start it on the same volume; the Node migrator applies what is
-new at startup. On Workers, run `wrangler d1 migrations apply deevy --remote` **before** deploying the new
+Pull the new image and start it on the same volume; the Node migrator applies what is new at startup. deevy
+is not at 1.0, so a minor release may break what came before: its release notes say when it cannot be
+upgraded in place, as 0.9 cannot ([below](#coming-from-08-or-before-start-again)). On Workers, run `wrangler d1 migrations apply deevy --remote` **before** deploying the new
 Worker, so the code never runs ahead of its schema.
 
 ```bash
@@ -1408,9 +1409,9 @@ A browser picks the new version up on its next page load: the image serves `inde
 every time and the content-hashed files it names to be kept for good, so nobody runs the old app against the
 new server for longer than a tab stays open.
 
-### Coming from 0.x: start again
+### Coming from 0.8 or before: start again
 
-The release that made deevy glue between your tools rather than a tracker of its own is a clean break
+0.9, the release that made deevy glue between your tools rather than a tracker of its own, is a clean break
 ([ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)). Its migration history starts
 afresh, so it runs on an **empty** database — a new volume, or a new D1 database on Workers — and there is no
 upgrade path from 0.8 or anything before it. Nothing is exported: the Issues, Documents and comments a 0.x
