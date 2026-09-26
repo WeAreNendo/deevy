@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { orpc } from "@/lib/orpc";
 import { useMembersById } from "@/lib/members";
 import { ago } from "@/lib/time";
+import { dollars, duration, tokens, type UsageTotals } from "@/lib/usage";
 
 /** What `/runs` carries in its URL: every filter is the server's. */
 export interface RunsSearch {
@@ -45,6 +46,8 @@ interface RunRow {
   summary: string | null;
   lastActivityAt: Date;
   openGateRequestId: string | null;
+  usage: UsageTotals;
+  timing: { queuedMs: number; workingMs: number; waitingMs: number };
 }
 
 /**
@@ -111,7 +114,57 @@ export function RunsPage({ search }: { search: RunsSearch }) {
       id: "summary",
       header: "Last",
       cell: (row) => <span className="truncate text-muted-foreground">{row.summary ?? ""}</span>,
-      className: "max-w-0 min-w-0 overflow-hidden",
+      // The one column that gives: it takes what the others leave and clips,
+      // rather than being left the minimum while Status stretches.
+      className: "w-full max-w-0 min-w-0 overflow-hidden",
+    },
+    {
+      id: "cost",
+      header: "Cost",
+      // The harness's estimate, or a dash: a Run nobody priced is never a $0.
+      cell: (row) =>
+        row.usage.costUsd === null ? (
+          <span
+            className="text-muted-foreground"
+            title={
+              row.usage.reports === 0
+                ? "No usage reported"
+                : `${tokens(row.usage.unpricedTokens)} tokens, cost not reported`
+            }
+          >
+            —
+          </span>
+        ) : (
+          <span
+            className="tabular-nums"
+            title={
+              row.usage.unpricedTokens > 0
+                ? `An estimate; ${tokens(row.usage.unpricedTokens)} tokens were not priced`
+                : "An estimate, by whatever ran the Agent"
+            }
+          >
+            {dollars(row.usage.costUsd)}
+          </span>
+        ),
+      sortValue: (row) => row.usage.costUsd ?? -1,
+      className: "text-right whitespace-nowrap",
+      headerClassName: "text-right",
+    },
+    {
+      id: "time",
+      header: "Time",
+      // Working time; the wait on a Human and the queue are the tooltip's.
+      cell: (row) => (
+        <span
+          className="text-xs tabular-nums text-muted-foreground"
+          title={`Waiting on a Human ${duration(row.timing.waitingMs)} · Queued ${duration(row.timing.queuedMs)}`}
+        >
+          {duration(row.timing.workingMs)}
+        </span>
+      ),
+      sortValue: (row) => row.timing.workingMs,
+      className: "text-right whitespace-nowrap",
+      headerClassName: "text-right",
     },
     {
       id: "when",
