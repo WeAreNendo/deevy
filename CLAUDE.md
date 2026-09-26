@@ -17,8 +17,10 @@ application, a GitLab user, a Notion connection, a Slack app), a Project is a bi
 a Run with a Proposal, a Ruling may come from deevy, the tracker or Slack, and Documents, the Workflow,
 Labels, Teams, stored comments and the board are gone. What each slice found is at the end of that plan. The
 acceptance walk is a script (`vp run agent#acceptance`, `docs/sockets-acceptance.md`) that runs a record
-through both deployments on every commit with no account, App or network. What comes next is PLAN.md's
-"After Sockets" list, cost and time per Run first.
+through both deployments on every commit with no account, App or network. Then **usage and time per Run**
+(`docs/plans/run-usage.md`): a Run's client reports each session's tokens and cost (`runs.reportUsage`), deevy
+derives how long it worked and waited, and the Run page, the feed and an Agent's page show both. What comes
+next is PLAN.md's "After Sockets" list, budgets first.
 
 ## Commands
 

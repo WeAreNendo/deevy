@@ -59,6 +59,11 @@ Whatever the session does, the Run does not rot. One that crashes, hangs or simp
 Activity and a failed Run, because a Run left `active` and silent tells a Human nothing until deevy's sweep
 calls it `stale` half an hour later.
 
+Each session's spend goes to deevy as it ends (`runs.reportUsage`): tokens by model with the prompt cache, and
+a cost where the harness priced them, read the way each harness can (`src/harness/`, and
+`docs/OPERATIONS.md`, "What it spent"). The runner holds a session's end until its process exits, because
+Copilot writes its counts to a file on the way out.
+
 ## The rule that shapes this package
 
 **No `packages/core` import, and no dependency at all.** The harness is a CLI the image installs and the

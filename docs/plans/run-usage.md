@@ -9,6 +9,9 @@ the numbers this one produces.
 
 Six slices, in dependency order. Each is one PR on `main` and carries its own tests.
 
+**Status: done, 2026-09-26**, in six stacked pull requests (#106, #107, #110, #111, #112 and #113). What each
+slice found is under "What it found", at the end.
+
 Why this and why now. deevy's promise is that a Human can hand work to an Agent and still be in charge of it.
 "In charge" includes the bill. Today an operator running the reference runtime finds out what an Agent spent
 from the model provider's invoice, a month later and for every Agent at once, and finds out how long a Run
@@ -185,3 +188,37 @@ harness does not price; usage for a Human's own sessions (ADR-0016); converting 
   "no usage reported", which is the truth.
 - **A Run that never reports** — worked by a client that does not know the operation — shows time and "No
   usage reported". The feed's totals say how many Runs are unreported, so an average is never quietly low.
+
+## What it found
+
+**Slice 0, the table and the report.** The feed already read its page in three statements — the Runs, their
+last Activities, their open Gates — and usage made it four, one grouped statement for the whole page, which
+`budget.test.ts` now pins for a page of one and a page of three. Money is whole micro-dollars from the first
+row: a hundred reports of ten cents are exactly ten dollars, which a sum of floats is not.
+
+**Slice 1, time.** Nothing in the way: `setRunStatus` was already the one place a Run's status changes, so the
+two columns ride on the update it issues. A stale Run's silence counts as working time. A Run already waiting
+when a deployment upgrades has no `waiting_since`, so that one wait is not counted; the release notes say so.
+
+**Slice 2, the runtime.** The recorded Claude Code session shows the undercount the plan predicted: the
+result's `usage.input_tokens` is 18 where `modelUsage` has 936, with 42,106 cache tokens `usage` does not
+carry at all. Copilot does not publish the format of `--usage-output-file`; its published SDK
+(`@github/copilot-sdk` 1.0.14) types the per-model entries as `ShutdownModelMetric`, and CLI 1.0.88, run with
+no credentials, still writes the file with the same `modelMetrics` key and an empty map — so Copilot reports
+tokens by model, and never a cost, since it counts AI units. Reading a file written at exit meant the runner
+holds a session's `done` until the process has gone. Micro-dollars drop Claude Code's seventh decimal
+($0.0211441 is kept as $0.021144). The acceptance walk now ends with three sessions' usage added up on both
+deployments, and its Event story gains `run.usage_reported` at the end of each session.
+
+**Slice 3, the Run's page and the feed.** The feed's "Last" column had been 75px wide beside a 247px Status at
+1280px, because a `max-w-0` column is left its minimum and every other column takes the spare width; it is
+`w-full max-w-0` now and gets 380px, and the UI skill records the rule. A cost below a dollar keeps four
+decimals, since "$0.02" says less than the harness did.
+
+**Slice 4, the Agent's page.** Six columns overflowed the Settings card by 70px even at 1280px; the tokens
+moved under the cost and five fit. The average cost per finished Run is over the finished Runs that reported
+a cost, so a Run nobody priced cannot halve it, and the Runs that reported nothing are said beside the total.
+
+**Slice 5, the record.** OPERATIONS says what is counted, whose estimate a cost is, how any client reports and
+how far a report is trusted, and what the reference runtime reads from each harness. PLAN.md puts budgets
+next.
