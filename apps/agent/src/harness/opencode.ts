@@ -227,7 +227,12 @@ interface Part {
   text?: string;
   reason?: string;
   cost?: number;
-  tokens?: { input?: number; output?: number; reasoning?: number };
+  tokens?: {
+    input?: number;
+    output?: number;
+    reasoning?: number;
+    cache?: { read?: number; write?: number };
+  };
 }
 
 /**
@@ -246,7 +251,16 @@ const denialSentences = [
  * when the session ends. The id is on every line, so two sessions never share
  * an entry, and a supervisor that runs one session at a time never has two.
  */
-const sessions = new Map<string, { usage: Usage; text: string }>();
+const sessions = new Map<string, { spent: Spent; text: string }>();
+
+/** A session's running totals; `cost` stays null until a step says one. */
+interface Spent {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number | null;
+}
 
 /**
  * What the runtime reads out of one line of the stream.
@@ -269,7 +283,10 @@ export function toSessionEvents(line: string): SessionEvent[] {
   const events: SessionEvent[] = [];
   let session = sessions.get(event.sessionID);
   if (!session) {
-    session = { usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }, text: "" };
+    session = {
+      spent: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: null },
+      text: "",
+    };
     sessions.set(event.sessionID, session);
     // The stream lists neither tools nor servers; whether deevy is reachable
     // was the supervisor's probe, before the session started.
@@ -294,9 +311,12 @@ export function toSessionEvents(line: string): SessionEvent[] {
     session.text = part.text;
     events.push({ type: "text", text: part.text });
   } else if (event.type === "step_finish" && part.type === "step-finish") {
-    session.usage.inputTokens += part.tokens?.input ?? 0;
-    session.usage.outputTokens += (part.tokens?.output ?? 0) + (part.tokens?.reasoning ?? 0);
-    session.usage.costUsd = (session.usage.costUsd ?? 0) + (part.cost ?? 0);
+    const spent = session.spent;
+    spent.input += part.tokens?.input ?? 0;
+    spent.output += (part.tokens?.output ?? 0) + (part.tokens?.reasoning ?? 0);
+    spent.cacheRead += part.tokens?.cache?.read ?? 0;
+    spent.cacheWrite += part.tokens?.cache?.write ?? 0;
+    if (typeof part.cost === "number") spent.cost = (spent.cost ?? 0) + part.cost;
     // Another round of tool calls is the same session going on; anything
     // else is how it ended, and `stop` is the only way it ended on purpose.
     if (part.reason !== "tool-calls") {
@@ -305,7 +325,7 @@ export function toSessionEvents(line: string): SessionEvent[] {
         type: "done",
         ok: reason === "stop",
         detail: reason === "stop" ? session.text : `The session ended: ${reason}`,
-        ...spent(session.usage),
+        ...usageOf(session.spent),
       });
       sessions.delete(event.sessionID);
     }
@@ -316,15 +336,33 @@ export function toSessionEvents(line: string): SessionEvent[] {
       type: "done",
       ok: false,
       detail: message ? `${name}: ${message}` : name,
-      ...spent(session.usage),
+      ...usageOf(session.spent),
     });
     sessions.delete(event.sessionID);
   }
   return events;
 }
 
-/** The usage to put on `done`: what was counted, or nothing when no step finished. */
-function spent(usage: Usage): { usage?: Usage } {
-  const nothing = usage.inputTokens === 0 && usage.outputTokens === 0 && !usage.costUsd;
-  return nothing ? {} : { usage };
+/**
+ * The usage to put on `done`: what was counted, or nothing when no step
+ * finished. OpenCode names no model on a step, so the runner names the one it
+ * asked for.
+ */
+function usageOf(spent: Spent): { usage?: Usage } {
+  const counted = spent.input + spent.output + spent.cacheRead + spent.cacheWrite;
+  if (counted === 0 && !spent.cost) return {};
+  return {
+    usage: {
+      models: [
+        {
+          model: null,
+          inputTokens: spent.input,
+          outputTokens: spent.output,
+          cacheReadTokens: spent.cacheRead,
+          cacheWriteTokens: spent.cacheWrite,
+          ...(spent.cost === null ? {} : { costUsd: spent.cost }),
+        },
+      ],
+    },
+  };
 }

@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SessionEvent } from "../session.ts";
+import type { SessionEvent, Usage } from "../session.ts";
 import { deevyToolNames } from "../tools.ts";
 import type { Harness, HarnessContext } from "./contract.ts";
 
@@ -143,7 +143,8 @@ export const copilot: Harness = {
     const instructions = await readFile(context.instructions, "utf8");
     await writeFile(join(home, "agents", `${agentName}.agent.md`), agentFile(instructions));
   },
-  argv({ config, input }: HarnessContext): string[] {
+  argv(context: HarnessContext): string[] {
+    const { config, input } = context;
     return [
       // `-p` takes one value, so the prompt is safe before the variadic tool
       // flags; the machine-readable stream is JSONL, one object per line.
@@ -166,6 +167,10 @@ export const copilot: Harness = {
       // the session's own bash cannot read the token it runs under.
       "--secret-env-vars",
       "COPILOT_GITHUB_TOKEN",
+      // What the session spent, written when Copilot exits: its stream carries
+      // premium requests and no tokens (docs/plans/run-usage.md).
+      "--usage-output-file",
+      usageFile(context),
       // The instructions travel as this custom agent (prepare writes the file).
       "--agent",
       agentName,
@@ -182,6 +187,7 @@ export const copilot: Harness = {
     ];
   },
   parse: toSessionEvents,
+  usage: { file: usageFile, read: readUsage },
   bounds: [
     "**GitHub Copilot CLI** is granted its tools by name (`--allow-tool`) and, in `-p` without",
     "`--allow-all-tools`, refuses anything else automatically rather than asking (`--no-ask-user`);",
@@ -193,8 +199,10 @@ export const copilot: Harness = {
     "list is needed; `.github/copilot-instructions.md` and `AGENTS.md` are read as input. A refused",
     "tool is a `tool.execution_complete` with `error.code` `denied` in the JSON stream, which the",
     "runtime writes into the Run's feed. Not bounded: what `shell` runs in the repository, the",
-    "network, and tokens; and Copilot's JSON stream reports premium-request counts and durations,",
-    "not token or dollar totals, so a Run worked by Copilot carries no usage into its summary.",
+    "network, and tokens. Copilot's JSON stream reports premium requests and durations and no tokens;",
+    "the runtime reads each model's tokens from the file `--usage-output-file` writes at exit, and",
+    "Copilot prices them in AI units rather than dollars, so a Run worked by Copilot reports tokens",
+    "and no cost.",
   ].join(" "),
 };
 
@@ -282,4 +290,45 @@ export function toSessionEvents(line: string): SessionEvent[] {
     ];
   }
   return [];
+}
+
+/** Where the session's usage is written: its own home, which the runner removes after it. */
+function usageFile(context: HarnessContext): string {
+  return join(context.home, "usage.json");
+}
+
+/**
+ * The tokens each model took, out of the file `--usage-output-file` writes.
+ * Its entries are the SDK's `ShutdownModelMetric` (@github/copilot-sdk,
+ * session-events.d.ts). Copilot counts cost in AI units and premium requests,
+ * which are not dollars, so no cost is reported. A file that counted nothing
+ * reports nothing.
+ */
+export function readUsage(text: string): Usage | null {
+  let written: {
+    modelMetrics?: Record<
+      string,
+      {
+        usage?: {
+          inputTokens?: number;
+          outputTokens?: number;
+          cacheReadTokens?: number;
+          cacheWriteTokens?: number;
+        };
+      }
+    >;
+  };
+  try {
+    written = JSON.parse(text) as typeof written;
+  } catch {
+    return null;
+  }
+  const models = Object.entries(written.modelMetrics ?? {}).map(([model, metric]) => ({
+    model,
+    inputTokens: metric.usage?.inputTokens ?? 0,
+    outputTokens: metric.usage?.outputTokens ?? 0,
+    cacheReadTokens: metric.usage?.cacheReadTokens ?? 0,
+    cacheWriteTokens: metric.usage?.cacheWriteTokens ?? 0,
+  }));
+  return models.length > 0 ? { models } : null;
 }

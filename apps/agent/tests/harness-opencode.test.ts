@@ -364,9 +364,17 @@ describe("reading the stream", () => {
     const done = events[4] as Extract<SessionEvent, { type: "done" }>;
     expect(done).toMatchObject({ type: "done", ok: true });
     expect(done.detail).toContain("issues_get returned DEV-1");
-    // Summed over both steps: OpenCode reports usage per step.
-    expect(done.usage).toMatchObject({ inputTokens: 2000, outputTokens: 210 });
-    expect(done.usage?.costUsd).toBeCloseTo(0.0045, 6);
+    // Summed over both steps: OpenCode reports usage per step, reasoning with
+    // the output and the cache apart.
+    expect(done.usage?.models).toHaveLength(1);
+    expect(done.usage?.models[0]).toMatchObject({
+      model: null,
+      inputTokens: 2000,
+      outputTokens: 210,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+    expect(done.usage?.models[0]?.costUsd).toBeCloseTo(0.0045, 6);
   });
 
   it("replays the run a session with no provider key gets", async () => {
@@ -426,7 +434,12 @@ describe("reading the stream", () => {
     const length = JSON.stringify({
       type: "step_finish",
       sessionID: "ses_c",
-      part: { type: "step-finish", reason: "length", cost: 0.01, tokens: { input: 5, output: 7 } },
+      part: {
+        type: "step-finish",
+        reason: "length",
+        cost: 0.01,
+        tokens: { input: 5, output: 7, cache: { read: 40, write: 3 } },
+      },
     });
 
     expect(toSessionEvents(length).filter((event) => event.type !== "ready")).toEqual([
@@ -434,7 +447,18 @@ describe("reading the stream", () => {
         type: "done",
         ok: false,
         detail: "The session ended: length",
-        usage: { inputTokens: 5, outputTokens: 7, costUsd: 0.01 },
+        usage: {
+          models: [
+            {
+              model: null,
+              inputTokens: 5,
+              outputTokens: 7,
+              cacheReadTokens: 40,
+              cacheWriteTokens: 3,
+              costUsd: 0.01,
+            },
+          ],
+        },
       },
     ]);
   });

@@ -1,5 +1,5 @@
 import type { Config } from "../config.ts";
-import type { SessionEvent, SessionInput } from "../session.ts";
+import type { SessionEvent, SessionInput, Usage } from "../session.ts";
 
 /**
  * What one session is given, beyond the Run's own input.
@@ -65,6 +65,16 @@ export interface Harness {
   argv(context: HarnessContext): string[];
   /** One line of stdout to zero or more events. */
   parse(line: string): SessionEvent[];
+  /**
+   * Where the CLI writes what the session spent, when its stream does not say
+   * (Copilot's `--usage-output-file`), and how to read it. The runner reads it
+   * once the process has exited, and it stands in for the stream's usage only
+   * where the stream gave none.
+   */
+  usage?: {
+    file(context: HarnessContext): string;
+    read(text: string): Usage | null;
+  };
   /**
    * What `docs/OPERATIONS.md` says about this harness: what stops the session
    * reaching further than intended, what a Human sees in the Run's feed when

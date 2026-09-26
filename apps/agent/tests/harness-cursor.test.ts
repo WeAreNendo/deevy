@@ -316,14 +316,26 @@ describe("reading the stream", () => {
       reason: "Command is not allowed: git push origin main",
     });
     expect(events[5]).toEqual({ type: "tool", name: "mcp__deevy__runs_post_activity" });
+    // Tokens and the cache, and no cost: Cursor does not price them. The model
+    // is the one the runtime asked for, which the runner fills in.
     expect(events[7]).toMatchObject({
       type: "done",
       ok: true,
-      usage: { inputTokens: 21, outputTokens: 287 },
+      usage: {
+        models: [
+          {
+            model: null,
+            inputTokens: 21,
+            outputTokens: 287,
+            cacheReadTokens: 18_422,
+            cacheWriteTokens: 6_103,
+          },
+        ],
+      },
     });
-    expect((events[7] as Extract<SessionEvent, { type: "done" }>).usage).not.toHaveProperty(
-      "costUsd",
-    );
+    expect(
+      (events[7] as Extract<SessionEvent, { type: "done" }>).usage?.models[0],
+    ).not.toHaveProperty("costUsd");
   });
 
   it("says which lines were authored, and reads them the same without the mark", async () => {

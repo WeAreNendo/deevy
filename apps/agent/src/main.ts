@@ -4,6 +4,7 @@ import { readConfig } from "./config.ts";
 import { DeevyError, createDeevy, type Checkout, type Run } from "./deevy.ts";
 import { branchFor } from "./deliver.ts";
 import { harnessFor, missingFor } from "./harness/index.ts";
+import type { Usage } from "./session.ts";
 import { sessionUserFor } from "./session-user.ts";
 import { buildSession } from "./harness/run.ts";
 import { createReceiver, startListener } from "./receiver.ts";
@@ -116,6 +117,8 @@ const work = {
   // Every commit is the Agent's, by the name and address deevy has for it.
   author: { name: who.name, email: who.email },
   session: buildSession(config, harness),
+  // What a Run's usage says counted it.
+  harness: harness.name,
   // The key and the tool list stay here; the session gets a loopback URL.
   proxy: (options: { onDenied: (name: string) => Promise<void> }) =>
     openProxy({ url: config.url, key: config.key, tools: deevyToolNames, ...options }),
@@ -140,9 +143,7 @@ const loop = startLoop({
   pollSeconds: config.pollSeconds,
   onPass: (pass) => {
     for (const result of [...pass.resumed, ...pass.worked]) {
-      const spent = result.usage
-        ? ` (${String(result.usage.inputTokens)} in, ${String(result.usage.outputTokens)} out${result.usage.costUsd === undefined ? "" : `, $${result.usage.costUsd.toFixed(4)}`})`
-        : "";
+      const spent = result.usage ? ` (${spentLine(result.usage)})` : "";
       console.log(
         `${result.issueKey} ${result.status}${result.failedBy ? `: ${result.failedBy}` : ""}${spent}`,
       );
@@ -176,3 +177,12 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 await loop.done;
+
+/** A session's usage in one line of the log: tokens across its models, and a cost where priced. */
+function spentLine(usage: Usage): string {
+  const sum = (pick: (model: Usage["models"][number]) => number) =>
+    usage.models.reduce((total, model) => total + pick(model), 0);
+  const priced = usage.models.filter((model) => model.costUsd !== undefined);
+  const cost = priced.length > 0 ? `, $${sum((model) => model.costUsd ?? 0).toFixed(4)}` : "";
+  return `${String(sum((model) => model.inputTokens))} in, ${String(sum((model) => model.cacheReadTokens))} cached, ${String(sum((model) => model.outputTokens))} out${cost}`;
+}

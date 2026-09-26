@@ -207,7 +207,12 @@ interface StreamMessage {
   result?: string;
   message?: { content?: Array<{ type?: string; text?: string }> };
   tool_call?: Record<string, ToolCall | undefined>;
-  usage?: { inputTokens?: number; outputTokens?: number };
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  };
 }
 
 /** One member of the `tool_call` union: `shellToolCall`, `mcpToolCall`, `readToolCall`, … */
@@ -282,10 +287,19 @@ export function toSessionEvents(line: string): SessionEvent[] {
   }
   if (message.type === "result") {
     const ok = message.subtype === "success" && !message.is_error;
+    // Tokens and the cache, and no cost: Cursor prices nothing. It names no
+    // model here either, so the runner names the one it asked for.
     const usage = message.usage
       ? {
-          inputTokens: message.usage.inputTokens ?? 0,
-          outputTokens: message.usage.outputTokens ?? 0,
+          models: [
+            {
+              model: null,
+              inputTokens: message.usage.inputTokens ?? 0,
+              outputTokens: message.usage.outputTokens ?? 0,
+              cacheReadTokens: message.usage.cacheReadTokens ?? 0,
+              cacheWriteTokens: message.usage.cacheWriteTokens ?? 0,
+            },
+          ],
         }
       : undefined;
     return [
