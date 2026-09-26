@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { pickOption, selectedLabel } from "./select.ts";
 
@@ -48,21 +48,31 @@ describe("the app shell", () => {
     expect(within(sidebar()).queryByRole("link", { name: /Issues/ })).toBeNull();
   });
 
+  // Arriving is the page rendering, not only the address changing: a page that
+  // throws still leaves the router at the new path, and the error boundary
+  // swallows it. So each redirect waits for what it lands on, one app at a time.
   it("sends a Project's old URLs to the binding that replaced them", async () => {
     const list = await mountAt("/projects");
     expect(list.state.location.pathname).toBe("/settings/projects");
+    await screen.findByRole("heading", { name: "Projects" });
+    cleanup();
 
     const one = await mountAt("/projects/acme-deevy");
     expect(one.state.location.pathname).toBe("/settings/projects");
     expect(one.state.location.search).toEqual({ project: "acme-deevy" });
+    const project = await screen.findByRole("article", { name: "deevy" });
+    expect(await within(project).findByRole("region", { name: "Binding" })).toBeTruthy();
   });
 
   it("sends the Teams and Labels pages to what stands in their place", async () => {
     const teams = await mountAt("/settings/teams");
     expect(teams.state.location.pathname).toBe("/settings/members");
+    await screen.findByRole("heading", { name: "Members" });
+    cleanup();
 
     const labels = await mountAt("/settings/labels");
     expect(labels.state.location.pathname).toBe("/settings/projects");
+    await screen.findByRole("heading", { name: "Projects" });
   });
 
   it("gives Settings its own navigation, grouped, and sends /settings to the first page", async () => {
