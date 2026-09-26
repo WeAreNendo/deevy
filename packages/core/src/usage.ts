@@ -1,6 +1,6 @@
-import { asc, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { runUsage as runUsageTable, usageCostBases, type Db } from "@deevy/db";
+import { run as runTable, runUsage as runUsageTable, usageCostBases, type Db } from "@deevy/db";
 
 /**
  * What a Run spent, as the client that ran its Agent reported it
@@ -170,4 +170,140 @@ export async function usageDetailOf(db: Db, runId: string) {
       costUsd: fromMicroUsd(costMicroUsd),
     })),
   };
+}
+
+/** One calendar month (UTC) of an Agent's Runs, by the month each Run was created. */
+export const AgentMonthSchema = z.object({
+  /** `2026-09`. */
+  month: z.string(),
+  runs: z.number().int(),
+  finishedRuns: z.number().int(),
+  /** Runs no client said anything about: they count in `runs` and in no total. */
+  unreportedRuns: z.number().int(),
+  inputTokens: z.number().int(),
+  outputTokens: z.number().int(),
+  cacheReadTokens: z.number().int(),
+  cacheWriteTokens: z.number().int(),
+  costUsd: z.number().nullable(),
+  unpricedTokens: z.number().int(),
+  workingMs: z.number().int(),
+  waitingMs: z.number().int(),
+  /**
+   * Per finished Run that reported a cost, so a Run nobody priced does not
+   * quietly lower it; null when there was none.
+   */
+  averageCostUsd: z.number().nullable(),
+  /** Per finished Run; null when none finished. */
+  averageWorkingMs: z.number().int().nullable(),
+});
+
+export type AgentMonth = z.infer<typeof AgentMonthSchema>;
+
+/** `2026-09` for a date, in UTC, which is what the months are cut on. */
+const monthOf = (date: Date) => date.toISOString().slice(0, 7);
+
+/**
+ * The last `months` calendar months of an Agent's Runs, newest first, a month
+ * with none included: one statement, grouping the Agent's Runs by the month
+ * they were created and joining each to its reports' sums.
+ */
+export async function agentMonths(
+  db: Db,
+  agentMemberId: string,
+  months: number,
+  at = new Date(),
+): Promise<AgentMonth[]> {
+  const wanted: string[] = [];
+  const cursor = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1));
+  for (let index = 0; index < months; index += 1) {
+    wanted.push(monthOf(cursor));
+    cursor.setUTCMonth(cursor.getUTCMonth() - 1);
+  }
+  const since = new Date(`${wanted.at(-1) ?? monthOf(at)}-01T00:00:00Z`);
+  const now = at.getTime();
+
+  const spent = db
+    .select({
+      runId: runUsageTable.runId,
+      inputTokens: sql<number>`sum(${runUsageTable.inputTokens})`.as("input_tokens"),
+      outputTokens: sql<number>`sum(${runUsageTable.outputTokens})`.as("output_tokens"),
+      cacheReadTokens: sql<number>`sum(${runUsageTable.cacheReadTokens})`.as("cache_read_tokens"),
+      cacheWriteTokens: sql<number>`sum(${runUsageTable.cacheWriteTokens})`.as(
+        "cache_write_tokens",
+      ),
+      costMicroUsd: sql<number | null>`sum(${runUsageTable.costMicroUsd})`.as("cost_micro_usd"),
+      unpricedTokens:
+        sql<number>`sum(case when ${runUsageTable.costMicroUsd} is null then ${runUsageTable.inputTokens} + ${runUsageTable.outputTokens} + ${runUsageTable.cacheReadTokens} + ${runUsageTable.cacheWriteTokens} else 0 end)`.as(
+          "unpriced_tokens",
+        ),
+    })
+    .from(runUsageTable)
+    .groupBy(runUsageTable.runId)
+    .as("spent");
+
+  const end = sql`coalesce(${runTable.finishedAt}, ${now})`;
+  const waited = sql`(${runTable.waitingMs} + case when ${runTable.waitingSince} is null then 0 else ${end} - ${runTable.waitingSince} end)`;
+  const finished = sql`${runTable.finishedAt} is not null`;
+  const rows = await db
+    .select({
+      month: sql<string>`strftime('%Y-%m', ${runTable.createdAt} / 1000, 'unixepoch')`,
+      runs: sql<number>`count(*)`,
+      finishedRuns: sql<number>`sum(case when ${finished} then 1 else 0 end)`,
+      unreportedRuns: sql<number>`sum(case when ${spent.runId} is null then 1 else 0 end)`,
+      inputTokens: sql<number>`coalesce(sum(${spent.inputTokens}), 0)`,
+      outputTokens: sql<number>`coalesce(sum(${spent.outputTokens}), 0)`,
+      cacheReadTokens: sql<number>`coalesce(sum(${spent.cacheReadTokens}), 0)`,
+      cacheWriteTokens: sql<number>`coalesce(sum(${spent.cacheWriteTokens}), 0)`,
+      costMicroUsd: sql<number | null>`sum(${spent.costMicroUsd})`,
+      unpricedTokens: sql<number>`coalesce(sum(${spent.unpricedTokens}), 0)`,
+      waitingMs: sql<number>`coalesce(sum(case when ${runTable.startedAt} is null then 0 else ${waited} end), 0)`,
+      workingMs: sql<number>`coalesce(sum(case when ${runTable.startedAt} is null then 0 else ${end} - ${runTable.startedAt} - ${waited} end), 0)`,
+      finishedPriced: sql<number>`sum(case when ${finished} and ${spent.costMicroUsd} is not null then 1 else 0 end)`,
+      finishedCostMicroUsd: sql<
+        number | null
+      >`sum(case when ${finished} then ${spent.costMicroUsd} end)`,
+      finishedWorkingMs: sql<number>`coalesce(sum(case when ${finished} and ${runTable.startedAt} is not null then ${runTable.finishedAt} - ${runTable.startedAt} - ${runTable.waitingMs} else 0 end), 0)`,
+    })
+    .from(runTable)
+    .leftJoin(spent, eq(spent.runId, runTable.id))
+    .where(and(eq(runTable.agentMemberId, agentMemberId), gte(runTable.createdAt, since)))
+    .groupBy(sql`1`);
+
+  const byMonth = new Map(rows.map((row) => [row.month, row]));
+  return wanted.map((month) => {
+    const row = byMonth.get(month);
+    if (!row) {
+      return {
+        month,
+        runs: 0,
+        finishedRuns: 0,
+        unreportedRuns: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        costUsd: null,
+        unpricedTokens: 0,
+        workingMs: 0,
+        waitingMs: 0,
+        averageCostUsd: null,
+        averageWorkingMs: null,
+      };
+    }
+    const { finishedPriced, finishedCostMicroUsd, finishedWorkingMs, costMicroUsd, ...counted } =
+      row;
+    return {
+      ...counted,
+      month,
+      costUsd: fromMicroUsd(costMicroUsd),
+      waitingMs: Math.max(0, Math.round(counted.waitingMs)),
+      workingMs: Math.max(0, Math.round(counted.workingMs)),
+      averageCostUsd:
+        finishedPriced > 0 && finishedCostMicroUsd !== null
+          ? Math.round(finishedCostMicroUsd / finishedPriced) / 1_000_000
+          : null,
+      averageWorkingMs:
+        counted.finishedRuns > 0 ? Math.round(finishedWorkingMs / counted.finishedRuns) : null,
+    };
+  });
 }

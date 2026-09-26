@@ -38,6 +38,28 @@ const stub = vi.hoisted(() => ({
   ],
 }));
 
+/** Who is looking: the stub's admin by default, or a Member who is neither admin nor Sponsor. */
+const viewer = vi.hoisted(() => ({ member: { id: "m-ada", role: "admin" } }));
+
+/** Two months of the Agent's Runs, as `agents.usage` answers them. */
+const month = (month: string, extra: Record<string, unknown> = {}) => ({
+  month,
+  runs: 0,
+  finishedRuns: 0,
+  unreportedRuns: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+  costUsd: null,
+  unpricedTokens: 0,
+  workingMs: 0,
+  waitingMs: 0,
+  averageCostUsd: null,
+  averageWorkingMs: null,
+  ...extra,
+});
+
 const calls = vi.hoisted(() => ({
   issue: vi.fn(async (_input: { memberId: string; name: string }) => ({
     id: "k-2",
@@ -62,7 +84,30 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
   const { stubClient } = await import("./stub-client.ts");
   const client = stubClient({
+    me: {
+      get: async () => ({ user: {}, member: viewer.member, workspace: {}, principal: "cookie" }),
+    },
     agents: {
+      usage: async () => ({
+        months: [
+          month("2026-09", {
+            runs: 3,
+            finishedRuns: 2,
+            unreportedRuns: 1,
+            inputTokens: 3_100,
+            outputTokens: 4_200,
+            cacheReadTokens: 250_000,
+            cacheWriteTokens: 18_000,
+            costUsd: 1.3,
+            unpricedTokens: 1_500,
+            workingMs: 40 * 60_000,
+            waitingMs: 12 * 60_000,
+            averageCostUsd: 1.3,
+            averageWorkingMs: 18 * 60_000,
+          }),
+          month("2026-08"),
+        ],
+      }),
       list: async () => ({ agents: [stub.agent] }),
       keys: { list: async () => ({ keys: stub.keys }), issue: calls.issue, revoke: calls.revoke },
       grants: {
@@ -189,5 +234,35 @@ describe("connecting an Agent over MCP", () => {
     // Beside it, the command with that key in it rather than a variable.
     const command = within(keys).getByText(/claude mcp add/i);
     expect(command.textContent).toContain("Bearer deevy_sk_THE_ONLY_TIME_YOU_SEE_THIS");
+  });
+});
+
+describe("what an Agent costs", () => {
+  it("tells its Sponsor and admins what it spent a month, as its clients reported", async () => {
+    viewer.member = { id: "m-ada", role: "admin" };
+    await mountAt("/settings/agents/m-planner");
+
+    const section = await screen.findByRole("region", { name: "Usage" });
+    const table = await within(section).findByRole("table", { name: "Usage by month" });
+    const [, september, august] = within(table).getAllByRole("row") as HTMLElement[];
+    expect(within(september as HTMLElement).getByText("September 2026")).toBeTruthy();
+    expect(within(september as HTMLElement).getByText("≈ $1.30")).toBeTruthy();
+    // What no cost covers, and the Runs nobody reported, are said rather than
+    // folded in: an average over them would be quietly low.
+    expect(within(september as HTMLElement).getByText("275K tokens")).toBeTruthy();
+    expect(within(september as HTMLElement).getByText("1.5K not priced")).toBeTruthy();
+    expect(within(september as HTMLElement).getByText("1 reported nothing")).toBeTruthy();
+    expect(within(september as HTMLElement).getByText("40 min")).toBeTruthy();
+    expect(within(september as HTMLElement).getByText("≈ $1.30 · 18 min")).toBeTruthy();
+    expect(within(august as HTMLElement).getByText("August 2026")).toBeTruthy();
+  });
+
+  it("is not shown to somebody who is neither its Sponsor nor an admin", async () => {
+    viewer.member = { id: "m-omar", role: "member" };
+    await mountAt("/settings/agents/m-planner");
+
+    await screen.findByRole("heading", { name: /planner/i });
+    expect(screen.queryByRole("region", { name: "Usage" })).toBeNull();
+    viewer.member = { id: "m-ada", role: "admin" };
   });
 });

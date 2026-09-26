@@ -223,6 +223,8 @@ export function stubClient(overrides: StubOverrides = {}): never {
     },
     agents: {
       list: async () => ({ agents: [] }),
+      // No months at all: a page that shows them has nothing to say yet.
+      usage: async () => ({ months: [] }),
       create: async () => ({}),
       update: async () => ({}),
       setSponsor: async () => ({}),
