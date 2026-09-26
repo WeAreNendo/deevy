@@ -240,6 +240,10 @@ export function stubClient(overrides: StubOverrides = {}): never {
     },
     sockets: {
       list: async () => ({ sockets: [] }),
+      // What a tool offers to bind. Bind a Project asks on every render of the
+      // Projects page, so a test that lands there needs an answer even when it
+      // never opens the dialog.
+      containers: async () => ({ containers: [] }),
       connect: async () => stubSocket,
       remove: async () => ({ ...stubSocket, status: "removed" }),
     },
