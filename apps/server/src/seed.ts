@@ -310,6 +310,23 @@ await builder.api.runs.postActivity({
   kind: "elicitation",
   body: "Should two routing labels mean two Runs, or should the second be refused?",
 });
+// What the session spent before it stopped to ask, as OpenCode counts it:
+// one model, priced (docs/plans/run-usage.md).
+await builder.api.runs.reportUsage({
+  runId: askingRun.id,
+  report: "seed-opencode-1",
+  harness: "opencode",
+  models: [
+    {
+      model: "anthropic/claude-haiku-4-5",
+      inputTokens: 18_400,
+      outputTokens: 2_100,
+      cacheReadTokens: 96_000,
+      cacheWriteTokens: 8_200,
+      costUsd: 0.0412,
+    },
+  ],
+});
 
 // Finished, with the evidence linked back to the Run that produced it.
 const shipped = await record({
@@ -336,6 +353,33 @@ await builder.api.runs.finish({
   status: "completed",
   summary: "Opened #12: the webhook signature now covers the delivery id.",
 });
+// Claude Code's count: every model the session used, a subagent's included,
+// each priced at list price.
+await builder.api.runs.reportUsage({
+  runId: shippedRun.id,
+  report: "seed-claude-code-1",
+  harness: "claude-code",
+  models: [
+    {
+      model: "claude-opus-5-5",
+      inputTokens: 4_800,
+      outputTokens: 11_200,
+      cacheReadTokens: 612_000,
+      cacheWriteTokens: 41_000,
+      costUsd: 2.87,
+      costBasis: "list",
+    },
+    {
+      model: "claude-haiku-4-5",
+      inputTokens: 2_300,
+      outputTokens: 900,
+      cacheReadTokens: 12_000,
+      cacheWriteTokens: 0,
+      costUsd: 0.02,
+      costBasis: "list",
+    },
+  ],
+});
 
 // Failed, with the error on record.
 const broken = await record({
@@ -354,6 +398,21 @@ await builder.api.runs.finish({
   runId: brokenRun.id,
   status: "failed",
   summary: "Could not create a second D1 database: the free plan's limit is reached.",
+});
+// Cursor counts tokens and prices nothing, so this Run has no cost to show.
+await builder.api.runs.reportUsage({
+  runId: brokenRun.id,
+  report: "seed-cursor-1",
+  harness: "cursor",
+  models: [
+    {
+      model: "claude-4.5-sonnet",
+      inputTokens: 9_100,
+      outputTokens: 1_400,
+      cacheReadTokens: 31_000,
+      cacheWriteTokens: 4_000,
+    },
+  ],
 });
 
 // One the Planner is thinking about, and one nobody has picked up.
@@ -472,6 +531,22 @@ const decidedGate = await planner.api.gates.request({
   ].join("\n"),
 });
 await admin.api.gates.approve({ requestId: decidedGate.id, note: "Yes, and keep it to one line." });
+// Copilot's usage file: tokens by model, and AI units rather than dollars, so
+// no cost.
+await planner.api.runs.reportUsage({
+  runId: decidedRun.id,
+  report: "seed-copilot-1",
+  harness: "copilot",
+  models: [
+    {
+      model: "claude-sonnet-5",
+      inputTokens: 6_600,
+      outputTokens: 1_900,
+      cacheReadTokens: 44_000,
+      cacheWriteTokens: 5_300,
+    },
+  ],
+});
 
 // And one a Human ruled on where they read it, which is the other half of
 // ADR-0025: a comment on the record, from the GitHub account Grace signs in

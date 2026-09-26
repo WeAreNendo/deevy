@@ -232,6 +232,9 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
 - **`components/data-table.tsx`** is hand-rolled on `ui/table`: client sort per column, skeleton, `Empty`,
   `aria-selected` on the keyboard row; a row's accessible name is its text and it opens on click (`onOpen`).
   Clip any cell that mixes text with chips (`min-w-0 overflow-hidden`; a `max-w-0` cell does not clip alone).
+  The one column that gives way is `w-full max-w-0`: without `w-full` the table leaves it its minimum and
+  hands the spare width to the others — the Runs feed's "Last" was 75px wide beside a 247px Status until
+  2026-09-26 — and a narrow column of numbers is `whitespace-nowrap`.
 - **Mobile is read-and-rule, and it falls out of the containers.** The sidebar is a Sheet below 768px, the
   Inbox folds to one pane below 1024px, a page with a rail stacks under `@3xl`. A new screen gets the same by
   using the same containers; check it at 390px with `scrollWidth === innerWidth`.
@@ -321,6 +324,12 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   Agent (which grants that Agent the Project), the routing label, the Mirror, the **Repository** and **Base
   branch** its code is in, and **Documents** — where its plans live, for an Agent's `docs_get`. `region
 "Checkpoints"` is the policy (`checkpoint-policy.tsx`).
+- **What a Run spent is always somebody else's word** (docs/plans/run-usage.md). A Run's rail has
+  `region "Usage"` — the harness's estimate said as one ("≈ $2.89, estimated by Claude Code"), "Cost not
+  reported by Cursor" where nothing priced it, "No usage reported" where nobody reported, tokens with the
+  prompt cache apart, and the models behind a disclosure — and `region "Time"` with Working, Waiting on a
+  Human and Queued. The feed has **Cost** (a dash, never $0, for what nobody priced) and **Time** (working
+  time; the rest in its tooltip). The words are `lib/usage.ts`'s; deevy never prices a token.
 - **A Run that did not finish can be tried again.** A failed or stale Run's page offers **Try again**
   (`runs.retry`) in its header and goes to the fresh Run; the server decides who may, and a refusal shows in
   its own words under the button.
@@ -348,8 +357,9 @@ The names a screen keeps unless a change says otherwise:
 email`; `Sign out and try another account` for somebody who is not a Member.
 - **Needs me.** `region "Needs me"`, `region "Gates awaiting you"` with a link per Gate, `region "Runs
 awaiting your answer"`, `region "Your Agents' Runs"`.
-- **Runs.** `table "Runs"` with a row per Run, `group "Filters"`; on a Run `ol "Activity of <run id>"` and
-  `list "Gates"`, `heading` named by the record, and `Try again` on a failed or stale one.
+- **Runs.** `table "Runs"` with a row per Run, `group "Filters"`, and the columns `Cost` and `Time`; on a Run
+  `ol "Activity of <run id>"` and `list "Gates"`, `region "Usage"` with `list "Models"`, `region "Time"`,
+  `heading` named by the record, and `Try again` on a failed or stale one.
 - **A Gate.** `region "Proposal"` with the Proposal's own headings; `group "<Checkpoint> Gate"` with
   `data-focused`; `Note`, `Approve`, `Reject`; `list "Gate decisions"`; a link to the record by its key.
 - **Work.** `table "Work"`, the filters by label; on a record `region "What the record says"`, `list "Runs"`,
