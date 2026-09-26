@@ -82,7 +82,9 @@ distinction between a Human present and a program holding their token. Refused.
 **Make Slack, Linear and Notion sign-in providers so `account` could be reused.** A button on the sign-in
 page for each, `accountLinking` semantics deevy does not want, a user row a Slack login could create, and a
 table keyed per provider where two GitLab hosts or two Slack workspaces would collide. Refused; the
-identity table is small and says what it means.
+identity table is small and says what it means. (Linear and Slack became sign-in providers later for their own
+sake; [ADR-0027](./0027-a-sign-in-vouches-inside-the-workspace-it-was-to.md) records what those sign-ins
+vouch for.)
 
 **Accept email matching everywhere.** GitHub commenters have no reliable email in a webhook, and an
 attacker with an address is cheap. Refused everywhere but Notion, with the conditions above.

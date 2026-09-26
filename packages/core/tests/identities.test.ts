@@ -3,7 +3,9 @@ import { eq } from "drizzle-orm";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { finishAccountLink } from "../src/account-links.ts";
+import { memberForExternalIdentity } from "../src/identities.ts";
 import { newId } from "../src/ids.ts";
+import type { IdentityScope } from "../src/sockets/port.ts";
 import { router } from "../src/operations/index.ts";
 import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
 
@@ -101,6 +103,24 @@ describe("a Human's Identities", () => {
     }).identities.list({});
 
     expect(listed.linkable).toEqual(["github"]);
+  });
+
+  it("does not offer a sign-in as the way to link where a tool's accounts are a workspace's", async () => {
+    const { db, bob } = await withIdentities();
+    const seeded = await seedProject(db, bob.workspace.id);
+    await db
+      .update(socketTable)
+      .set({ config: { signInProvider: "linear" } })
+      .where(eq(socketTable.id, seeded.socketId));
+    const { sockets } = fakeSockets();
+
+    const listed = await createRouterClient(router, {
+      context: { ...bob, sockets },
+    }).identities.list({});
+
+    // Linear links on its own page, as the account in that Socket's workspace.
+    expect(listed.linkable).toEqual([]);
+    expect(listed.tools.map((tool) => tool.socketId)).toEqual([seeded.socketId]);
   });
 
   it("can be taken back, and stay taken back", async () => {
@@ -292,5 +312,110 @@ describe("linking an account through the tool's own consent", () => {
         context: { ...planner, sockets: bob.sockets },
       }).identities.begin({ socketId: seeded.socketId }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+/**
+ * A sign-in whose accounts are one workspace's (ADR-0025).
+ *
+ * A Linear user's id is its workspace's, and Sign in with Linear keeps that
+ * id, so the match is the proof, as it is on github.com. A Slack user's id is
+ * its team's, and Sign in with Slack keeps it with an id token naming the
+ * team: the sign-in counts only where that team is the Socket's.
+ */
+describe("a sign-in to a tool whose accounts are a workspace's", () => {
+  async function signedIn(providerId: string, accountId: string, idToken?: string) {
+    const { db, close } = testDb();
+    closers.push(close);
+    const grace = await memberContext(db, { name: "Grace", email: "grace@example.com" });
+    await db.insert(account).values({
+      id: newId("account"),
+      accountId,
+      providerId,
+      userId: grace.member.userId,
+      ...(idToken ? { idToken } : {}),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    return { grace, source: { db, workspace: { id: grace.workspace.id }, member: null } };
+  }
+
+  /** An id token as Slack's token endpoint hands one over; nothing here checks its signature. */
+  function idToken(claims: Record<string, string>): string {
+    const part = (value: unknown) =>
+      btoa(JSON.stringify(value)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+    return `${part({ alg: "RS256" })}.${part(claims)}.not-a-signature`;
+  }
+
+  const linear: IdentityScope = {
+    instance: "org-acme",
+    signInProvider: "linear",
+    linkBySignIn: false,
+  };
+  const slack: IdentityScope = {
+    instance: "T07ACME001",
+    signInProvider: "slack",
+    signInClaim: { name: "https://slack.com/team_id", value: "T07ACME001" },
+    linkBySignIn: false,
+  };
+
+  it("takes a Linear comment by the account a Human signs in with as theirs", async () => {
+    const { grace, source } = await signedIn("linear", "4f1c9a1e-grace");
+
+    const resolved = await memberForExternalIdentity({
+      source,
+      socket: { id: "sock_linear", provider: "linear", config: {} },
+      scope: linear,
+      actor: { login: "grace", id: "4f1c9a1e-grace", isBot: false },
+    });
+
+    expect(resolved?.member.id).toBe(grace.member.id);
+    expect(resolved?.identity).toMatchObject({
+      provider: "linear",
+      instance: "org-acme",
+      externalUserId: "4f1c9a1e-grace",
+      verifiedBy: "sign_in",
+    });
+  });
+
+  it("takes a Slack click as theirs when they signed in to that team", async () => {
+    const { grace, source } = await signedIn(
+      "slack",
+      "U07GRACE01",
+      idToken({
+        "https://slack.com/user_id": "U07GRACE01",
+        "https://slack.com/team_id": "T07ACME001",
+      }),
+    );
+
+    const resolved = await memberForExternalIdentity({
+      source,
+      socket: { id: "sock_slack", provider: "slack", config: {} },
+      scope: slack,
+      actor: { login: "grace", id: "U07GRACE01", isBot: false },
+    });
+
+    expect(resolved?.member.id).toBe(grace.member.id);
+    expect(resolved?.identity).toMatchObject({ instance: "T07ACME001", verifiedBy: "sign_in" });
+  });
+
+  it("does not, when they signed in to another team or its team cannot be read", async () => {
+    for (const token of [
+      idToken({
+        "https://slack.com/user_id": "U07GRACE01",
+        "https://slack.com/team_id": "T09OTHER01",
+      }),
+      undefined,
+      "not-a-token",
+    ]) {
+      const { source } = await signedIn("slack", "U07GRACE01", token);
+      const resolved = await memberForExternalIdentity({
+        source,
+        socket: { id: "sock_slack", provider: "slack", config: {} },
+        scope: slack,
+        actor: { login: "grace", id: "U07GRACE01", isBot: false },
+      });
+      expect(resolved).toBeNull();
+    }
   });
 });

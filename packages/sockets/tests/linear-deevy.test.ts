@@ -1,6 +1,7 @@
 import { openDatabase } from "@deevy/adapters/node";
 import { createApp, finishAccountLink, newId, router, runDueWork, sealSecret } from "@deevy/core";
 import {
+  account as accountTable,
   agent as agentTable,
   member as memberTable,
   project as projectTable,
@@ -327,6 +328,41 @@ describe("somebody labels an issue in Linear", () => {
         .filter((call) => call.operation === "DeevyLabelsChange")
         .map((call) => call.variables.input),
     ).toContainEqual({ addedLabelIds: [], removedLabelIds: ["label-1"] });
+  });
+
+  /**
+   * Sign in with Linear keeps the viewer's id, which is the same id a comment
+   * in that workspace carries: somebody who signed in to deevy with it rules
+   * by commenting, with no linking step, as on github.com.
+   */
+  it("and somebody who signed in to deevy with Linear rules from it with no linking step", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { app, socketId, planner, grace, asPlanner } = await workspaceOnLinear(db);
+    await db.insert(accountTable).values({
+      id: newId("account"),
+      accountId: GRACE,
+      providerId: "linear",
+      userId: grace.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await app.request(`/hooks/${socketId}`, await delivery("Issue", created, "d-1"));
+    const run = await db.query.run.findFirst({ where: { agentMemberId: planner.id } });
+    const gate = await asPlanner.gates.request({
+      runId: run?.id ?? "",
+      checkpoint: "plan",
+      proposal: "Cap the coupon.",
+    });
+
+    await app.request(`/hooks/${socketId}`, await delivery("Comment", comment("/approve"), "d-2"));
+
+    expect(
+      await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } }),
+    ).toMatchObject([{ memberId: grace.id, decision: "approved", via: "socket" }]);
+    expect(await db.query.memberIdentity.findMany({ where: { memberId: grace.id } })).toMatchObject(
+      [{ provider: "linear", externalUserId: GRACE, verifiedBy: "sign_in" }],
+    );
   });
 
   it("but a comment from an account nobody linked rules nothing, and is told where to link it", async () => {

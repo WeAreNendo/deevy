@@ -239,8 +239,27 @@ describe("what deevy asks of Slack", () => {
       url: "https://slack.com/api/auth.test",
       authorization: "Bearer xoxb-not-a-real-token",
     });
-    // Its accounts are its team's, and nobody signs in to deevy with them.
-    expect(module.identityScope).toEqual({ instance: "T07ACME001" });
+    // Its accounts are its team's. A Sign in with Slack keeps the same user
+    // id, and its id token names the team, which has to be this one before
+    // that sign-in counts here; linking is still the code Slack delivers.
+    expect(module.identityScope).toEqual({
+      instance: "T07ACME001",
+      signInProvider: "slack",
+      signInClaim: { name: "https://slack.com/team_id", value: "T07ACME001" },
+      linkBySignIn: false,
+    });
+  });
+
+  it("vouches for no sign-in before it knows its team", () => {
+    // A Socket saved before connect learned its team has nothing to hold a
+    // sign-in's team against, so only a code links there.
+    const module = createSlackSocket({
+      config: {},
+      credentials: { botToken: "xoxb-not-a-real-token" },
+      fetch: () => Promise.resolve(Response.json({ ok: true })),
+      now: () => now,
+    });
+    expect(module.identityScope).toEqual({ instance: "slack" });
   });
 
   it("refuses a user's token, which would post as them", async () => {

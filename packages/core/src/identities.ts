@@ -78,7 +78,7 @@ export async function memberForExternalIdentity({
   if (known.length > 0) return null;
 
   const signedIn = scope.signInProvider
-    ? await memberBySignIn(db, workspaceId, scope.signInProvider, actor.id)
+    ? await memberBySignIn(db, workspaceId, scope.signInProvider, actor.id, scope.signInClaim)
     : null;
   if (signedIn) return link(source, socket, scope, actor, signedIn, "sign_in");
 
@@ -89,22 +89,50 @@ export async function memberForExternalIdentity({
   return null;
 }
 
-/** The Member whose Better Auth account this is, on this Workspace. */
+/**
+ * The Member whose Better Auth account this is, on this Workspace — and, where
+ * the provider's ids are a workspace's, only when the id token Better Auth
+ * kept from that sign-in names this one (`IdentityScope.signInClaim`). The
+ * token came straight from the provider's token endpoint in exchange for the
+ * code, so its claims are the provider's word; nothing here needs it unexpired.
+ */
 async function memberBySignIn(
   db: Db,
   workspaceId: string,
   providerId: string,
   accountId: string,
+  claim?: { name: string; value: string },
 ): Promise<Member | null> {
   const [found] = await db
-    .select({ userId: accountTable.userId })
+    .select({ userId: accountTable.userId, idToken: accountTable.idToken })
     .from(accountTable)
     .where(and(eq(accountTable.providerId, providerId), eq(accountTable.accountId, accountId)))
     .limit(1);
   if (!found) return null;
+  if (claim && claimOf(found.idToken, claim.name) !== claim.value) return null;
   return (
     (await db.query.member.findFirst({ where: { workspaceId, userId: found.userId } })) ?? null
   );
+}
+
+/** One claim of a JWT's payload, read without checking its signature; null if it has none. */
+function claimOf(token: string | null, name: string): string | null {
+  const payload = token?.split(".")[1];
+  if (!payload) return null;
+  try {
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const claims: unknown = JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)), (char) =>
+          char.charCodeAt(0),
+        ),
+      ),
+    );
+    const value = (claims as Record<string, unknown> | null)?.[name];
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The Member who verified this address, on this Workspace. */

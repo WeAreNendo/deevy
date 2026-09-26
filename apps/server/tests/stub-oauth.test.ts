@@ -378,6 +378,27 @@ describe("a sign-in through a provider that may not vouch for the address", () =
   });
 });
 
+describe("a Slack sign-in", () => {
+  /**
+   * Slack's user ids are its team's, so the id token its token endpoint hands
+   * back is what says which team a sign-in was to — the proof a Slack Socket
+   * holds a sign-in's account against before it counts a click (ADR-0025).
+   */
+  it("keeps the id token that names the team", async () => {
+    const { app, db, close } = stubbedServer();
+
+    await signIn(app, "slack", "ken@example.com");
+
+    const kept = await db.query.account.findFirst({ where: { providerId: "slack" } });
+    const claims = JSON.parse(
+      Buffer.from(kept?.idToken?.split(".")[1] ?? "", "base64url").toString(),
+    ) as Record<string, string>;
+    expect(claims["https://slack.com/team_id"]).toBe("T0STUB");
+    expect(claims["https://slack.com/user_id"]).toBe(kept?.accountId);
+    close();
+  });
+});
+
 describe("a GitLab sign-in", () => {
   it("proves the address, so a second provider links onto it", async () => {
     const email = "grace@example.com";

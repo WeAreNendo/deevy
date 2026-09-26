@@ -1,6 +1,7 @@
 import { openDatabase } from "@deevy/adapters/node";
 import { createApp, newId, router, runDueWork, sealSecret, upsertProjection } from "@deevy/core";
 import {
+  account as accountTable,
   agent as agentTable,
   member as memberTable,
   memberIdentity,
@@ -109,6 +110,27 @@ async function human(db: Db, workspaceId: string, name: string, role: Member["ro
     kind: "human",
   });
   return (await db.query.member.findFirst({ where: { id } })) as Member;
+}
+
+/**
+ * A Human who signed in to deevy with Slack: Better Auth's account row, keyed
+ * by Slack's user id, with the id token it kept, which names the team.
+ */
+async function signedInWithSlack(db: Db, member: Member, user: string, team: string) {
+  const part = (value: unknown) =>
+    btoa(JSON.stringify(value)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  await db.insert(accountTable).values({
+    id: newId("account"),
+    accountId: user,
+    providerId: "slack",
+    userId: member.userId,
+    idToken: `${part({ alg: "RS256" })}.${part({
+      "https://slack.com/user_id": user,
+      "https://slack.com/team_id": team,
+    })}.not-a-signature`,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 }
 
 /**
@@ -243,10 +265,12 @@ async function clicked(
   user = "U07GRACE01",
   at = Math.floor(Date.now() / 1000),
   secret = signingSecret,
+  /** The clicker's own team: another one is a Slack Connect guest in this team's channel. */
+  team = TEAM,
 ) {
   const payload = {
     ...approve,
-    user: { ...approve.user, id: user },
+    user: { ...approve.user, id: user, team_id: team },
     actions: [{ ...approve.actions[0], value: gateId }],
   };
   const body = new URLSearchParams({ payload: JSON.stringify(payload) }).toString();
@@ -325,6 +349,52 @@ describe("a Gate in Slack", () => {
     expect(await db.query.gateDecision.findMany({})).toMatchObject([
       { memberId: omar.id, via: "slack" },
     ]);
+  });
+
+  /**
+   * Sign in with Slack keeps the user's id with an id token naming the team,
+   * so somebody who signed in to deevy that way rules from this team's
+   * buttons with no code — and a guest from another team, whose id means
+   * nothing here, is not taken for them.
+   */
+  it("counts a click by somebody who signed in to deevy with Slack, in this team, with no code", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { app, gate, slackId, workspace } = await waitingInSlack(db);
+    const omar = await human(db, workspace.id, "Omar");
+    await signedInWithSlack(db, omar, "U07OMAR001", TEAM);
+
+    await app.request(`/hooks/${slackId}`, await clicked(gate.id, "U07OMAR001"));
+
+    expect(await db.query.gateDecision.findMany({})).toMatchObject([
+      { memberId: omar.id, via: "slack" },
+    ]);
+    expect(await db.query.memberIdentity.findMany({ where: { memberId: omar.id } })).toMatchObject([
+      { provider: "slack", instance: TEAM, externalUserId: "U07OMAR001", verifiedBy: "sign_in" },
+    ]);
+  });
+
+  it("takes neither a sign-in to another team nor a guest from one for that Human", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { app, api, gate, slackId, workspace } = await waitingInSlack(db);
+    const omar = await human(db, workspace.id, "Omar");
+    const ken = await human(db, workspace.id, "Ken");
+    await signedInWithSlack(db, omar, "U07OMAR001", "T09OTHER01");
+    await signedInWithSlack(db, ken, "U07KEN0001", TEAM);
+
+    await app.request(`/hooks/${slackId}`, await clicked(gate.id, "U07OMAR001"));
+    await app.request(
+      `/hooks/${slackId}`,
+      await clicked(gate.id, "U07KEN0001", undefined, undefined, "T09OTHER01"),
+    );
+
+    expect(await db.query.gateDecision.findMany({})).toEqual([]);
+    expect(await db.query.memberIdentity.findMany({ where: { verifiedBy: "sign_in" } })).toEqual(
+      [],
+    );
+    // Each was told, to them alone, how to link the account they clicked with.
+    expect(api.calls.filter((call) => call.method === "response_url")).toHaveLength(2);
   });
 
   it("refuses a stale request and a forged one, and writes neither down as a Ruling", async () => {
