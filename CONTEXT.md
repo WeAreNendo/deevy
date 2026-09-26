@@ -78,6 +78,17 @@ _Avoid_: session, job, execution, attempt
 One entry an Agent posts to its Run while working: a thought, an action, an elicitation, a response, or an error.
 _Avoid_: log line, step, message
 
+**Usage**:
+What a Run consumed, as the client that ran its Agent reported it: tokens by model — input, output, and
+prompt cache read and written — and a cost where that client priced them. An estimate, never a bill; deevy
+never prices tokens itself.
+_Avoid_: billing, charges, invoice, spend
+
+**Working time** and **waiting time**:
+How long a Run was active, and how long it waited on a Human at a Gate or a question. With the time before it
+started, they are the whole of a Run's life, and deevy derives them rather than being told.
+_Avoid_: duration (alone), idle time
+
 ### Rulings
 
 **Checkpoint**:
