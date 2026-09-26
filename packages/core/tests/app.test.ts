@@ -215,6 +215,48 @@ describe("createApp", () => {
   });
 });
 
+describe("the sign-in providers a deployment offers", () => {
+  const pair = { clientId: "id", clientSecret: "secret" };
+  const everything: AuthProviders = {
+    oidc: { ...pair, issuer: "https://idp.example", name: "Acme SSO" },
+    atlassian: pair,
+    slack: pair,
+    linear: pair,
+    gitlab: pair,
+    microsoft: pair,
+    google: pair,
+    github: pair,
+  };
+
+  it("come in the order an engineering team reaches for them, single sign-on last", () => {
+    expect(signInProviders({ providers: everything })).toEqual([
+      { id: "github", label: "GitHub", kind: "social" },
+      { id: "google", label: "Google", kind: "social" },
+      { id: "microsoft", label: "Microsoft", kind: "social" },
+      { id: "gitlab", label: "GitLab", kind: "social" },
+      { id: "linear", label: "Linear", kind: "social" },
+      { id: "slack", label: "Slack", kind: "social" },
+      { id: "atlassian", label: "Atlassian", kind: "social" },
+      { id: "oidc", label: "Acme SSO", kind: "social" },
+    ]);
+  });
+
+  it("put the operator's own order first, and ignore what they did not configure", () => {
+    // A company that mandates its IdP pins single sign-on first.
+    expect(
+      signInProviders({
+        providers: everything,
+        signInOrder: ["oidc", "nowhere", "slack"],
+      }).map((provider) => provider.id),
+    ).toEqual(["oidc", "slack", "github", "google", "microsoft", "gitlab", "linear", "atlassian"]);
+    expect(
+      signInProviders({ providers: { github: pair }, signInOrder: ["slack"] }).map(
+        (provider) => provider.id,
+      ),
+    ).toEqual(["github"]);
+  });
+});
+
 describe("bootstrapWorkspace", () => {
   it("creates the Workspace and the admin Member for the configured email only", async () => {
     const { db, close } = testDb();

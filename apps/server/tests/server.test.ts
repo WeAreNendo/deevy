@@ -145,11 +145,45 @@ describe("the development OAuth stub", () => {
     expect(signInProviders(readEnv({ DEEVY_DEV_STUB_OAUTH: "1" })).map(({ id }) => id)).toEqual([
       "github",
       "google",
+      "microsoft",
       "gitlab",
+      "linear",
+      "slack",
+      "atlassian",
       "oidc",
     ]);
     // Without the flag the same environment is what it always was: nothing.
     expect(signInProviders(readEnv({}))).toEqual([]);
+  });
+
+  it("reads the new providers' pairs, Microsoft's tenant, and the operator's order", () => {
+    const env = readEnv({
+      MICROSOFT_CLIENT_ID: "ms",
+      MICROSOFT_CLIENT_SECRET: "ms-secret",
+      MICROSOFT_TENANT_ID: "organizations",
+      LINEAR_CLIENT_ID: "lin",
+      LINEAR_CLIENT_SECRET: "lin-secret",
+      SLACK_CLIENT_ID: "sl",
+      SLACK_CLIENT_SECRET: "sl-secret",
+      ATLASSIAN_CLIENT_ID: "atl",
+      ATLASSIAN_CLIENT_SECRET: "atl-secret",
+      GITHUB_CLIENT_ID: "gh",
+      GITHUB_CLIENT_SECRET: "gh-secret",
+      DEEVY_SIGN_IN_ORDER: "slack, microsoft",
+    });
+
+    expect(env.providers.microsoft).toEqual({
+      clientId: "ms",
+      clientSecret: "ms-secret",
+      tenantId: "organizations",
+    });
+    expect(signInProviders(env).map(({ id }) => id)).toEqual([
+      "slack",
+      "microsoft",
+      "github",
+      "linear",
+      "atlassian",
+    ]);
   });
 
   it("leaves a pair the environment did set alone", () => {

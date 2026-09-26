@@ -79,6 +79,16 @@ export interface WorkerBindings {
   DEEVY_OIDC_CLIENT_ID?: string;
   DEEVY_OIDC_CLIENT_SECRET?: string;
   DEEVY_OIDC_NAME?: string;
+  MICROSOFT_CLIENT_ID?: string;
+  MICROSOFT_CLIENT_SECRET?: string;
+  MICROSOFT_TENANT_ID?: string;
+  LINEAR_CLIENT_ID?: string;
+  LINEAR_CLIENT_SECRET?: string;
+  SLACK_CLIENT_ID?: string;
+  SLACK_CLIENT_SECRET?: string;
+  ATLASSIAN_CLIENT_ID?: string;
+  ATLASSIAN_CLIENT_SECRET?: string;
+  DEEVY_SIGN_IN_ORDER?: string;
   DEEVY_ADMIN_EMAIL?: string;
   DEEVY_WORKSPACE_NAME?: string;
   DEEVY_RUN_STALE_MINUTES?: string;
@@ -116,6 +126,8 @@ export interface WorkerEnv {
    * from the same names `apps/server/src/env.ts` reads (docs/plans/sign-in.md).
    */
   providers: AuthProviders;
+  /** `DEEVY_SIGN_IN_ORDER`: the provider ids offered first, in this order. */
+  signInOrder?: string[];
   adminEmail?: string;
   workspaceName?: string;
   /** Silence after which a Run is presumed stale (docs/plans/m2.md). */
@@ -167,6 +179,23 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
         clientSecret: env.GITLAB_CLIENT_SECRET ?? "",
         issuer: env.GITLAB_ISSUER,
       },
+      microsoft: {
+        clientId: env.MICROSOFT_CLIENT_ID ?? "",
+        clientSecret: env.MICROSOFT_CLIENT_SECRET ?? "",
+        tenantId: env.MICROSOFT_TENANT_ID,
+      },
+      linear: {
+        clientId: env.LINEAR_CLIENT_ID ?? "",
+        clientSecret: env.LINEAR_CLIENT_SECRET ?? "",
+      },
+      slack: {
+        clientId: env.SLACK_CLIENT_ID ?? "",
+        clientSecret: env.SLACK_CLIENT_SECRET ?? "",
+      },
+      atlassian: {
+        clientId: env.ATLASSIAN_CLIENT_ID ?? "",
+        clientSecret: env.ATLASSIAN_CLIENT_SECRET ?? "",
+      },
       // The generic OpenID Connect entry: the pair, the issuer everything else
       // is discovered from, and what the button says (docs/plans/sign-in.md).
       oidc: {
@@ -176,6 +205,7 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
         name: env.DEEVY_OIDC_NAME,
       },
     },
+    ...(listOf(env.DEEVY_SIGN_IN_ORDER) ? { signInOrder: listOf(env.DEEVY_SIGN_IN_ORDER) } : {}),
     adminEmail: env.DEEVY_ADMIN_EMAIL,
     workspaceName: env.DEEVY_WORKSPACE_NAME,
     runStaleMinutes: positive(env.DEEVY_RUN_STALE_MINUTES, 30),
@@ -202,8 +232,18 @@ export function workerAuthEnv(env: WorkerEnv): AuthEnv {
     secret: env.secret,
     trustedOrigins: [env.webOrigin, env.baseURL].filter((o): o is string => Boolean(o)),
     providers: env.providers,
+    ...(env.signInOrder ? { signInOrder: env.signInOrder } : {}),
     adminEmail: env.adminEmail,
     workspaceName: env.workspaceName,
     fetchClientMetadataResource,
   };
+}
+
+/** A comma-separated list, trimmed, empties dropped; undefined when there is nothing in it. */
+function listOf(value: string | undefined): string[] | undefined {
+  const items = (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
 }

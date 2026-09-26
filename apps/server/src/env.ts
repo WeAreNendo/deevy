@@ -28,6 +28,8 @@ export interface ServerEnv {
    * and what the sign-in page draws a button for (docs/plans/sign-in.md).
    */
   providers: AuthProviders;
+  /** `DEEVY_SIGN_IN_ORDER`: the provider ids offered first, in this order. */
+  signInOrder?: string[];
   adminEmail?: string;
   workspaceName?: string;
   webDist?: string;
@@ -106,6 +108,12 @@ export function stubbedProviders(providers: AuthProviders): AuthProviders {
   return {
     github: hasPair(providers.github) ? providers.github : { ...STUB_CLIENT },
     google: hasPair(providers.google) ? providers.google : { ...STUB_CLIENT },
+    microsoft: hasPair(providers.microsoft)
+      ? providers.microsoft
+      : { ...STUB_CLIENT, tenantId: providers.microsoft?.tenantId },
+    linear: hasPair(providers.linear) ? providers.linear : { ...STUB_CLIENT },
+    slack: hasPair(providers.slack) ? providers.slack : { ...STUB_CLIENT },
+    atlassian: hasPair(providers.atlassian) ? providers.atlassian : { ...STUB_CLIENT },
     gitlab: hasPair(providers.gitlab)
       ? providers.gitlab
       : { ...STUB_CLIENT, issuer: providers.gitlab?.issuer },
@@ -120,6 +128,15 @@ export function stubbedProviders(providers: AuthProviders): AuthProviders {
             name: oidc?.name,
           },
   };
+}
+
+/** A comma-separated list, trimmed, empties dropped; undefined when there is nothing in it. */
+function listOf(value: string | undefined): string[] | undefined {
+  const items = (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
 }
 
 export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
@@ -151,6 +168,25 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
       // GitLab endpoint deevy calls is built from it (docs/OPERATIONS.md).
       issuer: env.GITLAB_ISSUER,
     },
+    microsoft: {
+      clientId: env.MICROSOFT_CLIENT_ID ?? "",
+      clientSecret: env.MICROSOFT_CLIENT_SECRET ?? "",
+      // `common` unless the operator narrows it: `organizations`, or one
+      // tenant's id (docs/OPERATIONS.md).
+      tenantId: env.MICROSOFT_TENANT_ID,
+    },
+    linear: {
+      clientId: env.LINEAR_CLIENT_ID ?? "",
+      clientSecret: env.LINEAR_CLIENT_SECRET ?? "",
+    },
+    slack: {
+      clientId: env.SLACK_CLIENT_ID ?? "",
+      clientSecret: env.SLACK_CLIENT_SECRET ?? "",
+    },
+    atlassian: {
+      clientId: env.ATLASSIAN_CLIENT_ID ?? "",
+      clientSecret: env.ATLASSIAN_CLIENT_SECRET ?? "",
+    },
     // One generic OpenID Connect provider, discovered from its issuer. The
     // name is what the button says, so an operator calls their own IdP what
     // their teammates call it (docs/plans/sign-in.md).
@@ -176,6 +212,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     // environment configured no pair for: a developer with no OAuth App has
     // none of them, and that is who the flag is for.
     providers: devStubOAuth ? stubbedProviders(providers) : providers,
+    signInOrder: listOf(env.DEEVY_SIGN_IN_ORDER),
     adminEmail: env.DEEVY_ADMIN_EMAIL,
     workspaceName: env.DEEVY_WORKSPACE_NAME,
     webDist: env.DEEVY_WEB_DIST,

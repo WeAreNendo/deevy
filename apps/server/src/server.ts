@@ -27,6 +27,7 @@ function authEnv(env: ServerEnv): AuthEnv {
     secret: env.secret,
     trustedOrigins: [env.webOrigin, env.baseURL].filter((o): o is string => Boolean(o)),
     providers: env.providers,
+    ...(env.signInOrder ? { signInOrder: env.signInOrder } : {}),
     adminEmail: env.adminEmail,
     workspaceName: env.workspaceName,
     fetchClientMetadataResource,
