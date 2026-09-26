@@ -255,6 +255,12 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
 - **The Event log** (`routes/settings/events.tsx`) reads `events.list` with `order: "desc"`, pages back with
   `before`, filters by Project and subject on the server and by kind prefix on the page, shows a row's
   payload as JSON when clicked, reads at 12px and names its actors rather than drawing them.
+- **The sign-in buttons wear their providers' brands**, the one place a screen shows colours that are not
+  deevy's (`components/sign-in-button.tsx`, Matt, 2026-09-26): GitHub's dark button with the Octocat, light
+  on a dark page; Google's own light and dark themes with the four-colour G its guidelines require; GitLab's
+  charcoal with the orange tanuki. The colours are `--brand-*` tokens in `index.css`; the marks are Simple
+  Icons (CC0) and Google's published G, `aria-hidden`, so a button's name stays `Sign in with <provider>`. An
+  OpenID Connect IdP has no brand to borrow and stays deevy's outline button with a key.
 - **Everything outside the shell** (`SignedOut`, `NotAMember`, `Suspended`) renders in `SignInFrame`. **The
   sign-in buttons are `health.ping`'s `providers`**, one per entry in the order the server sent (`Sign in
 with <label>`); a provider is added by configuring one, never by editing `App.tsx`. The dev form stays

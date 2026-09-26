@@ -67,6 +67,23 @@
   --state-done: oklch(0.62 0.13 160);
   --destructive: oklch(0.58 0.2 20);
   --destructive-foreground: var(--background);
+
+  /*
+   * The sign-in buttons' brands, and nowhere else on a screen
+   * (components/sign-in-button.tsx). Each is the colour its owner publishes
+   * for a sign-in button, so these are hex, as their guidelines give them:
+   * GitHub's dark button, Google's light theme (Sign in with Google branding
+   * guidelines), GitLab's charcoal with its orange tanuki.
+   */
+  --brand-github: #24292f;
+  --brand-github-foreground: #ffffff;
+  --brand-google: #ffffff;
+  --brand-google-foreground: #1f1f1f;
+  --brand-google-border: #747775;
+  --brand-gitlab: #171321;
+  --brand-gitlab-foreground: #ffffff;
+  --brand-gitlab-border: #171321;
+  --brand-gitlab-mark: #fc6d26;
 }
 
 .dark {
@@ -102,6 +119,17 @@
   --state-done: oklch(0.72 0.13 160);
   --destructive: oklch(0.68 0.17 20);
   --destructive-foreground: var(--background);
+
+  /* On a dark page GitHub's button turns light, and Google's takes its dark theme. */
+  --brand-github: #ffffff;
+  --brand-github-foreground: #24292f;
+  --brand-google: #131314;
+  --brand-google-foreground: #e3e3e3;
+  --brand-google-border: #8e918f;
+  --brand-gitlab: #171321;
+  --brand-gitlab-foreground: #ffffff;
+  --brand-gitlab-border: #434248;
+  --brand-gitlab-mark: #fc6d26;
 }
 
 @theme inline {
