@@ -301,3 +301,100 @@ describe("what a report may say", () => {
     });
   });
 });
+
+describe("an Agent's months", () => {
+  /** A Sponsor who is not an admin, their Agent, and three records for it. */
+  async function sponsoredAgent() {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await memberContext(db, { role: "admin", name: "Ada" });
+    const grace = await memberContext(db, { name: "Grace", email: "grace@example.com" });
+    const omar = await memberContext(db, { name: "Omar", email: "omar@example.com" });
+    const { sockets } = fakeSockets();
+    const seeded = await seedProject(db, admin.workspace.id);
+    const agent = await agentContext(db, { sponsor: grace.member, grants: [seeded.project.id] });
+    const asAgent = createRouterClient(router, { context: { ...agent, sockets } });
+    const runs = [];
+    for (const externalId of ["1", "2", "3"]) {
+      const issue = await seeded.record({ externalId, title: `Record ${externalId}` });
+      runs.push(await asAgent.runs.start({ issue: issue.url }));
+    }
+    return {
+      db,
+      agent,
+      asAgent,
+      runs,
+      asAdmin: createRouterClient(router, { context: { ...admin, sockets } }),
+      asGrace: createRouterClient(router, { context: { ...grace, sockets } }),
+      asOmar: createRouterClient(router, { context: { ...omar, sockets } }),
+    };
+  }
+
+  it("adds a month's Runs up, and says how many reported nothing", async () => {
+    const { agent, asAgent, asGrace, runs } = await sponsoredAgent();
+    const [priced, unpriced, silent] = runs as [
+      (typeof runs)[0],
+      (typeof runs)[0],
+      (typeof runs)[0],
+    ];
+    await asAgent.runs.reportUsage({ runId: priced.id, report: "s1", ...claudeSession });
+    await asAgent.runs.reportUsage({
+      runId: unpriced.id,
+      report: "s1",
+      harness: "cursor",
+      models: [{ model: "gpt-5", inputTokens: 1_000, outputTokens: 500 }],
+    });
+    await asAgent.runs.finish({ runId: priced.id, status: "completed", summary: "Done" });
+    await asAgent.runs.finish({ runId: unpriced.id, status: "failed", summary: "Stuck" });
+    void silent;
+
+    const { months } = await asGrace.agents.usage({ memberId: agent.member.id });
+
+    expect(months).toHaveLength(2);
+    const [now] = months;
+    expect(now?.month).toBe(new Date().toISOString().slice(0, 7));
+    expect(now).toMatchObject({
+      runs: 3,
+      finishedRuns: 2,
+      unreportedRuns: 1,
+      inputTokens: 3_100,
+      outputTokens: 4_200,
+      cacheReadTokens: 250_000,
+      cacheWriteTokens: 18_000,
+      costUsd: 1.3,
+      unpricedTokens: 1_500,
+      // Over the finished Runs that reported a cost: one, not two, so the
+      // average is never quietly halved by a Run nobody priced.
+      averageCostUsd: 1.3,
+    });
+    expect(now?.averageWorkingMs).toBeGreaterThanOrEqual(0);
+    // Last month, which had nothing, is still said.
+    expect(months[1]).toMatchObject({ runs: 0, costUsd: null, averageCostUsd: null });
+  });
+
+  it("counts a Run in the month it was created", async () => {
+    const { db, agent, asAgent, asAdmin, runs } = await sponsoredAgent();
+    const [older] = runs as [(typeof runs)[0]];
+    await asAgent.runs.reportUsage({ runId: older.id, report: "s1", ...claudeSession });
+    const lastMonth = new Date();
+    lastMonth.setUTCDate(1);
+    lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+    await db.update(runTable).set({ createdAt: lastMonth }).where(eq(runTable.id, older.id));
+
+    const { months } = await asAdmin.agents.usage({ memberId: agent.member.id, months: 3 });
+
+    expect(months.map((month) => month.runs)).toEqual([2, 1, 0]);
+    expect(months[1]).toMatchObject({ month: lastMonth.toISOString().slice(0, 7), costUsd: 1.3 });
+  });
+
+  it("is for the Agent's Sponsor and admins, and nobody else", async () => {
+    const { agent, asOmar, asAgent } = await sponsoredAgent();
+
+    await expect(asOmar.agents.usage({ memberId: agent.member.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(asAgent.agents.usage({ memberId: agent.member.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
