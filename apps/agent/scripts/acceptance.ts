@@ -54,6 +54,23 @@ const secondEmail = "grace@example.com";
 
 let failures = 0;
 
+/** What one scripted session spent, as Claude Code would count it: a thousand in, and a cost. */
+function spent(costUsd: number) {
+  return {
+    models: [
+      {
+        model: "claude-haiku-4-5",
+        inputTokens: 1_000,
+        outputTokens: 200,
+        cacheReadTokens: 20_000,
+        cacheWriteTokens: 1_500,
+        costUsd,
+        costBasis: "list" as const,
+      },
+    ],
+  };
+}
+
 function check(name: string, ok: boolean, detail = ""): void {
   if (ok) console.log(`  ok  ${name}`);
   else {
@@ -431,6 +448,8 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   const proxies: Array<() => Promise<void>> = [];
   const work = {
     deevy,
+    // What each session's usage says counted it (docs/plans/run-usage.md).
+    harness: "claude-code",
     // Every push in this walk goes through the supervisor's git proxy, which is
     // how the session reaches a remote at all (docs/plans/agent-owns-git.md).
     gitProxy: async (checkout: { cloneUrl: string; token: string }) => {
@@ -493,7 +512,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
         checkpoint: "plan",
         proposal: "## What I will do\n\nAdd a health endpoint, and a smoke that proves it answers.",
       });
-      yield { type: "done", ok: true, detail: "asked" };
+      yield { type: "done", ok: true, detail: "asked", usage: spent(0.5) };
     },
   });
 
@@ -644,7 +663,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
         proposal: "## What I built\n\nA health endpoint, and a smoke that proves it answers.",
         links: [{ url: String(opened.url), title: "The pull request" }],
       });
-      yield { type: "done", ok: true, detail: "built" };
+      yield { type: "done", ok: true, detail: "built", usage: spent(1.25) };
     },
   });
 
@@ -704,7 +723,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
         status: "completed",
         summary: "Added a health endpoint and a smoke for it",
       });
-      yield { type: "done", ok: true, detail: "finished" };
+      yield { type: "done", ok: true, detail: "finished", usage: spent(0.25) };
     },
   });
   check(
@@ -748,6 +767,27 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     ruled.body,
   );
 
+  // What the Run spent: three sessions, each reported by the supervisor as it
+  // ended, and added up by deevy (docs/plans/run-usage.md).
+  const spentRun = (await human(origin, "runs/get", { runId }, ada)).usage as {
+    inputTokens: number;
+    cacheReadTokens: number;
+    costUsd: number | null;
+    reports: number;
+    models: Array<{ harness: string; model: string | null }>;
+  };
+  check(
+    "each session's usage reached the Run, added up and named by its harness",
+    spentRun.reports === 3 &&
+      spentRun.inputTokens === 3_000 &&
+      spentRun.cacheReadTokens === 60_000 &&
+      spentRun.costUsd === 2 &&
+      spentRun.models.length === 1 &&
+      spentRun.models[0]?.harness === "claude-code" &&
+      spentRun.models[0]?.model === "claude-haiku-4-5",
+    JSON.stringify(spentRun),
+  );
+
   // Part 7: what the record has to say.
   const all = (await human(origin, "events/list", { limit: 100 }, ada)).events as Array<{
     kind: string;
@@ -759,12 +799,15 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   console.log(`  —   ${story}`);
   check(
     "the Event log tells the story of the Run from the label to the finish",
+    // Each session ends by reporting what it spent: `run.usage_reported` after
+    // the plan, after the build, and after the finish.
     story ===
       "run.started run.checkout_issued run.activity run.activity gate.requested " +
-        "run.awaiting_input gate.ruling_refused identity.linked gate.approved run.answered " +
-        "run.checkout_issued issue.link_added run.pull_request_opened gate.requested " +
-        "run.awaiting_input run.activity comment.created gate.ruling_refused gate.approved " +
-        "run.answered run.checkout_issued run.completed",
+        "run.awaiting_input run.usage_reported gate.ruling_refused identity.linked " +
+        "gate.approved run.answered run.checkout_issued issue.link_added " +
+        "run.pull_request_opened gate.requested run.awaiting_input run.usage_reported " +
+        "run.activity comment.created gate.ruling_refused gate.approved run.answered " +
+        "run.checkout_issued run.completed run.usage_reported",
     story,
   );
   // These are a Human's or the tracker's, each for the right reason:

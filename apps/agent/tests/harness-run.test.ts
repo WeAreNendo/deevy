@@ -73,6 +73,63 @@ describe("running a harness", () => {
     ]);
   });
 
+  it("reads what the session spent from the file the CLI wrote, once it has exited", async () => {
+    // A CLI that says in a file, at exit, what its stream did not (Copilot).
+    const harness = fake(
+      `
+      const { writeFileSync } = require("node:fs");
+      console.log(JSON.stringify({ type: "done", ok: true, detail: "finished" }));
+      writeFileSync(process.env.HOME + "/usage.json", JSON.stringify({ inputTokens: 7 }));
+    `,
+      {
+        usage: {
+          file: (context) => join(context.home, "usage.json"),
+          read: (text) => {
+            const said = JSON.parse(text) as { inputTokens: number };
+            return {
+              models: [
+                {
+                  model: "m",
+                  inputTokens: said.inputTokens,
+                  outputTokens: 0,
+                  cacheReadTokens: 0,
+                  cacheWriteTokens: 0,
+                },
+              ],
+            };
+          },
+        },
+      },
+    );
+    const cwd = await directory();
+
+    const events = await collect(buildSession(testConfig, harness)(await inputFor(cwd)));
+
+    expect(events.at(-1)).toMatchObject({
+      type: "done",
+      ok: true,
+      usage: { models: [{ model: "m", inputTokens: 7 }] },
+    });
+  });
+
+  it("names the model the runtime asked for, where the harness did not say", async () => {
+    const harness = fake(`
+      console.log(JSON.stringify({
+        type: "done",
+        ok: true,
+        detail: "finished",
+        usage: { models: [{ model: null, inputTokens: 1, outputTokens: 2, cacheReadTokens: 0, cacheWriteTokens: 0 }] },
+      }));
+    `);
+    const cwd = await directory();
+
+    const events = await collect(buildSession(testConfig, harness)(await inputFor(cwd)));
+
+    expect(events.at(-1)).toMatchObject({
+      usage: { models: [{ model: testConfig.model, inputTokens: 1, outputTokens: 2 }] },
+    });
+  });
+
   it("describes an exit the stream did not explain, with the tail of stderr", async () => {
     const harness = fake(`
       console.log(JSON.stringify({ type: "text", text: "half way" }));

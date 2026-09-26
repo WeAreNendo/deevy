@@ -1,4 +1,5 @@
 import type { Config } from "./config.ts";
+import type { ModelUsage } from "./session.ts";
 
 /**
  * deevy over HTTP, with the Agent's key as a bearer token.
@@ -129,6 +130,15 @@ export interface Deevy {
   postActivity(runId: string, kind: ActivityKind, body: string): Promise<void>;
   finishRun(runId: string, status: "completed" | "failed", summary: string): Promise<void>;
   /**
+   * What one session of the Run spent, as its harness counted it
+   * (`runs.reportUsage`). The same `report` again replaces what it said, so a
+   * retried call counts once (docs/plans/run-usage.md).
+   */
+  reportUsage(
+    runId: string,
+    report: { report: string; harness: string; models: ModelUsage[] },
+  ): Promise<void>;
+  /**
    * What was decided about the Gate this Run stopped at, or null when it has
    * asked for none. Reading rather than asking: the Agent asks for its own
    * Gate over MCP, and this is the supervisor finding out how it went.
@@ -235,6 +245,9 @@ export function createDeevy({ config, fetch = globalThis.fetch }: DeevyOptions):
     },
     async finishRun(runId, status, summary) {
       await post(`/runs/${encodeURIComponent(runId)}/finish`, { status, summary });
+    },
+    async reportUsage(runId, report) {
+      await post(`/runs/${encodeURIComponent(runId)}/usage`, report);
     },
     async gate(runId) {
       // Newest first, and no `limit`: a page is one query whatever it carries,

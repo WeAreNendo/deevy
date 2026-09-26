@@ -263,6 +263,123 @@ describe("the envelope", () => {
     expect((await it.asAda.runs.get({ runId: pass.worked[0].runId })).summary).toBe("Planned it");
   });
 
+  it("reports what the session spent as the Run's usage, under the harness's name", async () => {
+    const it = await deevyWithAnAssignedIssue();
+    const session = scripted([
+      async () => {
+        const [run] = await it.deevy.runs("pending");
+        await it.deevy.finishRun(run.id, "completed", "Planned it");
+      },
+      {
+        type: "done",
+        ok: true,
+        detail: "done",
+        usage: {
+          models: [
+            {
+              model: "claude-haiku-4-5",
+              inputTokens: 936,
+              outputTokens: 321,
+              cacheReadTokens: 34_531,
+              cacheWriteTokens: 7_575,
+              costUsd: 0.0211441,
+              costBasis: "list",
+            },
+          ],
+        },
+      } satisfies SessionEvent,
+    ]);
+
+    const pass = await runOnce({
+      ...options,
+      harness: "claude-code",
+      deevy: it.deevy,
+      proxy: it.proxy,
+      session,
+    });
+
+    // The session finished its Run first; its report still lands, which is
+    // why deevy takes one for a day after a Run finishes.
+    const read = await it.asAda.runs.get({ runId: pass.worked[0].runId });
+    expect(read.usage).toMatchObject({ inputTokens: 936, cacheReadTokens: 34_531, reports: 1 });
+    // Kept in whole micro-dollars, so the harness's seventh decimal goes.
+    expect(read.usage.costUsd).toBe(0.021144);
+    expect(read.usage.models).toEqual([
+      expect.objectContaining({ harness: "claude-code", model: "claude-haiku-4-5" }),
+    ]);
+  });
+
+  it("reports what a failed session got to, and nothing for one that counted nothing", async () => {
+    const it = await deevyWithAnAssignedIssue();
+    const failed = scripted([
+      {
+        type: "done",
+        ok: false,
+        detail: "The session ended: length",
+        usage: {
+          models: [
+            {
+              model: "m",
+              inputTokens: 5,
+              outputTokens: 7,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
+            },
+          ],
+        },
+      } satisfies SessionEvent,
+    ]);
+
+    const pass = await runOnce({ ...options, deevy: it.deevy, proxy: it.proxy, session: failed });
+
+    expect(pass.worked[0]).toMatchObject({ status: "failed" });
+    const read = await it.asAda.runs.get({ runId: pass.worked[0].runId });
+    expect(read.usage).toMatchObject({ inputTokens: 5, costUsd: null, reports: 1 });
+
+    await it.assign("Another");
+    const silent = await runOnce({
+      ...options,
+      deevy: it.deevy,
+      proxy: it.proxy,
+      session: scripted([finished]),
+    });
+    const quiet = await it.asAda.runs.get({ runId: silent.worked[0].runId });
+    expect(quiet.usage.reports).toBe(0);
+  });
+
+  it("lets the Run's outcome stand when deevy will not take the report", async () => {
+    const it = await deevyWithAnAssignedIssue();
+    const session = scripted([
+      async () => {
+        const [run] = await it.deevy.runs("pending");
+        await it.deevy.finishRun(run.id, "completed", "Planned it");
+      },
+      {
+        type: "done",
+        ok: true,
+        detail: "done",
+        // A count deevy refuses: the record of the work matters more than the
+        // record of what it cost.
+        usage: {
+          models: [
+            {
+              model: "m",
+              inputTokens: -1,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
+            },
+          ],
+        },
+      } satisfies SessionEvent,
+    ]);
+
+    const pass = await runOnce({ ...options, deevy: it.deevy, proxy: it.proxy, session });
+
+    expect(pass.worked[0]).toMatchObject({ status: "completed" });
+    expect(pass.worked[0].failedBy).toBeUndefined();
+  });
+
   it("stops before spending anything when the session cannot reach deevy", async () => {
     const it = await deevyWithAnAssignedIssue();
     let called = false;

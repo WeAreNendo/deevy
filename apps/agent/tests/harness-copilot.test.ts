@@ -80,6 +80,10 @@ describe("the command line a session runs under", () => {
       "--disable-builtin-mcps",
       "--secret-env-vars",
       "COPILOT_GITHUB_TOKEN",
+      // Where Copilot writes what the session spent when it exits: its stream
+      // carries no tokens (docs/plans/run-usage.md).
+      "--usage-output-file",
+      "/tmp/home/usage.json",
       "--agent",
       "deevy",
       "--allow-tool",
@@ -331,8 +335,65 @@ describe("reading the stream", () => {
       "shell(git push:*)",
     );
     expect(events[5]).toMatchObject({ type: "done", ok: true });
-    // Copilot's stream carries no token or cost totals, so `done` reports none.
+    // Copilot's stream carries no token or cost totals, so `done` reports none;
+    // the runner reads them from the usage file once Copilot has exited.
     expect(events[5]).not.toHaveProperty("usage");
+  });
+
+  it("reads the usage file's tokens per model, and never its AI units as a cost", () => {
+    // The file's shape is the SDK's `ShutdownModelMetric` (@github/copilot-sdk
+    // 1.0.14, session-events.d.ts); this entry is authored to it, since the
+    // file a real session writes needs a Copilot account.
+    const written = JSON.stringify({
+      totalPremiumRequestCost: 1,
+      totalNanoAiu: 1_381_090_000,
+      modelMetrics: {
+        "claude-sonnet-5": {
+          requests: { count: 3, cost: 1 },
+          totalNanoAiu: 1_381_090_000,
+          usage: {
+            inputTokens: 1_500,
+            outputTokens: 420,
+            cacheReadTokens: 22_000,
+            cacheWriteTokens: 3_100,
+            reasoningTokens: 90,
+          },
+        },
+      },
+    });
+
+    expect(copilot.usage?.read(written)).toEqual({
+      models: [
+        {
+          model: "claude-sonnet-5",
+          inputTokens: 1_500,
+          outputTokens: 420,
+          cacheReadTokens: 22_000,
+          cacheWriteTokens: 3_100,
+        },
+      ],
+    });
+    expect(copilot.usage?.file(context())).toBe("/tmp/home/usage.json");
+  });
+
+  it("reports nothing from a usage file that counted nothing", () => {
+    // What Copilot CLI 1.0.88 writes when a session never reached a model: the
+    // file exists and its model metrics are empty.
+    const empty = JSON.stringify({
+      totalPremiumRequestCost: 0,
+      totalUserRequests: 0,
+      totalNanoAiu: 0,
+      totalApiDurationMs: 0,
+      sessionStartTime: "2026-09-26T10:35:39.581Z",
+      codeChanges: { linesAdded: 0, linesRemoved: 0, filesModifiedCount: 0, filesModified: [] },
+      modelMetrics: {},
+      agentMetrics: {},
+      lastCallInputTokens: 0,
+      lastCallOutputTokens: 0,
+    });
+
+    expect(copilot.usage?.read(empty)).toBeNull();
+    expect(copilot.usage?.read("not json")).toBeNull();
   });
 
   it("ends well on exit code zero and badly otherwise, carrying the last thing said", () => {
