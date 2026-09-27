@@ -16,7 +16,7 @@ import {
   verification,
 } from "./schema/auth.ts";
 import { agent, projectGrant } from "./schema/agent.ts";
-import { activity, run } from "./schema/run.ts";
+import { activity, run, runUsage } from "./schema/run.ts";
 import { channel, notificationPreference, routingRule } from "./schema/channel.ts";
 import { delivery } from "./schema/delivery.ts";
 import { webhookSubscription } from "./schema/webhook.ts";
@@ -74,6 +74,7 @@ export const tables = {
   projectGrant,
   run,
   activity,
+  runUsage,
   channel,
   routingRule,
   notificationPreference,
@@ -215,10 +216,14 @@ const appRelations = defineRelationsPart(tables, (r) => ({
     agent: r.one.member({ from: r.run.agentMemberId, to: r.member.id, optional: false }),
     triggeredBy: r.one.member({ from: r.run.triggeredByMemberId, to: r.member.id }),
     activities: r.many.activity({ from: r.run.id, to: r.activity.runId }),
+    usage: r.many.runUsage({ from: r.run.id, to: r.runUsage.runId }),
     links: r.many.issueLink({ from: r.run.id, to: r.issueLink.runId }),
   },
   activity: {
     run: r.one.run({ from: r.activity.runId, to: r.run.id, optional: false }),
+  },
+  runUsage: {
+    run: r.one.run({ from: r.runUsage.runId, to: r.run.id, optional: false }),
   },
   channel: {
     workspace: r.one.workspace({

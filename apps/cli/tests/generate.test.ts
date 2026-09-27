@@ -77,6 +77,9 @@ describe("what the registry turns into", () => {
       "projects.update.routing",
       "routing.set.rules",
       "runs.postActivity.payload",
+      // A session's counts per model, as a harness writes them out: a program
+      // reports them, and nobody types them (docs/plans/run-usage.md).
+      "runs.reportUsage.models",
       // The configuration a provider's own flow needs before there is a
       // credential to go with it: a shape that provider decides (ADR-0024).
       "sockets.begin.config",

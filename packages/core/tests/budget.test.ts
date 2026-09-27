@@ -528,3 +528,52 @@ describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${Str
     expect(ruling).toBeLessThan(d1StatementsPerInvocation);
   });
 });
+
+/**
+ * The Runs feed reads a page and what the page needs in a fixed number of
+ * statements, however many Runs the page has: the last Activities, the Gates
+ * waited at, and what each Run spent are one statement each for the whole
+ * page (docs/plans/run-usage.md). A statement per Run would show here as a
+ * page of three costing more than a page of one.
+ */
+// The page, its last Activities, its open Gates, and — since
+// docs/plans/run-usage.md — what each Run spent.
+const listingRuns = 4;
+
+describe(`the Runs feed: ${String(listingRuns)} statements a page`, () => {
+  it("costs the same for one Run as for three, what they spent included", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+    const asAda = createRouterClient(router, { context: ada });
+    for (const externalId of ["1", "2", "3"]) {
+      const issue = await seeded.record({ externalId, title: `Record ${externalId}` });
+      const run = await asPlanner.runs.start({ issue: issue.url });
+      await asPlanner.runs.reportUsage({
+        runId: run.id,
+        report: "session-1",
+        harness: "claude-code",
+        models: [{ model: "m", inputTokens: 10, outputTokens: 10, costUsd: 0.01 }],
+      });
+    }
+
+    statements.length = 0;
+    await asAda.runs.list({ limit: 1 });
+    const one = statements.length;
+    statements.length = 0;
+    const page = await asAda.runs.list({});
+
+    expect(page.runs).toHaveLength(3);
+    expect(statements.length).toBe(one);
+    expect(one).toBe(listingRuns);
+  });
+});

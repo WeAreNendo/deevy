@@ -39,7 +39,9 @@ describe("the committed tool manifest", () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
     /*
-     * Nineteen, with `docs_get`: a Project's documents live in the team's own
+     * Twenty, with `runs_report_usage`: what a session spent, reported by
+     * whatever ran it, since deevy runs no Agent and so cannot count it
+     * (docs/plans/run-usage.md). Nineteen, with `docs_get`: a Project's documents live in the team's own
      * tool, and this is how an Agent reads one (ADR-0024). Eighteen, now that deevy opens the pull request: `pulls_open` is a tool
      * and `runs_checkout` deliberately is not, because it answers with a
      * credential (ADR-0014). Seventeen when a Gate became a request on a Run: `runs_request_approval`
@@ -91,6 +93,10 @@ describe("the committed tool manifest", () => {
       // slice 9).
       "runs_list",
       "runs_post_activity",
+      // What one session of the Run spent, by model. A tool so any client can
+      // report, though the reference runtime's supervisor calls it over HTTP:
+      // a model does not know what it cost, and is not asked.
+      "runs_report_usage",
       "runs_start",
     ]);
   });

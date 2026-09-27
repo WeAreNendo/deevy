@@ -623,6 +623,113 @@
     }
   },
   {
+    "name": "runs_report_usage",
+    "operation": "runs.reportUsage",
+    "summary": "Report what one session of your Run spent: tokens by model, and the cost where your harness priced them",
+    "readOnly": false,
+    "agents": true,
+    "agentsOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "harness": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "models": {
+          "minItems": 1,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "inputTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "cacheReadTokens": {
+                "default": 0,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "cacheWriteTokens": {
+                "default": 0,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "costUsd": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "costBasis": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "list",
+                      "managed",
+                      "unknown"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens"
+            ]
+          }
+        }
+      },
+      "required": [
+        "runId",
+        "report",
+        "harness",
+        "models"
+      ]
+    }
+  },
+  {
     "name": "runs_start",
     "operation": "runs.start",
     "summary": "Begin a Run on an Issue, pending until the Agent posts its first Activity",

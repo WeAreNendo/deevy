@@ -23,6 +23,7 @@ export const idPrefixes = {
   memberIdentity: "mid",
   linkCode: "lkc",
   activity: "act",
+  runUsage: "use",
   notification: "ntf",
   webhook: "whk",
   delivery: "dlv",

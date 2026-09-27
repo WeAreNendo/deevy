@@ -60,6 +60,28 @@ describe("describeEvent", () => {
     expect(describeEvent({ kind: "run.activity", payload: {} })).toBeNull();
   });
 
+  it("says what a Run spent as an estimate, and never prices what nobody priced", () => {
+    // The payload is the Run's totals after the report (docs/plans/run-usage.md).
+    expect(
+      describeEvent({
+        kind: "run.usage_reported",
+        payload: {
+          inputTokens: 2_100,
+          outputTokens: 3_700,
+          cacheReadTokens: 250_000,
+          cacheWriteTokens: 18_000,
+          costUsd: 1.3,
+        },
+      }),
+    ).toMatchObject({ text: "reported usage: 274K tokens, ≈ $1.30", routine: true });
+    expect(
+      describeEvent({
+        kind: "run.usage_reported",
+        payload: { inputTokens: 1_000, outputTokens: 500, costUsd: null },
+      })?.text,
+    ).toBe("reported usage: 1.5K tokens, cost not reported");
+  });
+
   it("says what a Run is waiting on, and quotes the question", () => {
     expect(
       describeEvent({

@@ -104,6 +104,9 @@ describe("the Agent capability rule", () => {
       "runs.get",
       "runs.list",
       "runs.postActivity",
+      // What a session of its own Run spent, as its client counted it: deevy
+      // runs no Agent, so it is told (docs/plans/run-usage.md).
+      "runs.reportUsage",
       "runs.start",
     ]);
   });
