@@ -90,11 +90,15 @@ function payloadOf(rawBody: string): Record<string, unknown> | null {
   }
 }
 
+/**
+ * Who clicked. Their team is their own, `user.team_id`, before the payload's
+ * `team`, which in a Slack Connect channel is the host's and not theirs.
+ */
 function actorOf(payload: Record<string, unknown>): ChatActor {
   const user = (payload.user ?? {}) as Record<string, unknown>;
   const team = (payload.team ?? {}) as Record<string, unknown>;
   return {
-    team: text(team.id) || text(user.team_id),
+    team: text(user.team_id) || text(team.id),
     user: text(user.id),
     login: text(user.username) || text(user.name),
   };
@@ -211,9 +215,18 @@ export function createSlackSocket({
   return {
     provider: "slack",
     capabilities: new Set(["chat"] as const),
-    // A team's accounts, which nobody signs in to deevy with: a Slack user is
-    // linked by a code Slack delivered to them alone (ADR-0025).
-    identityScope: { instance: settings.teamId ?? "slack" },
+    // A team's accounts (ADR-0025). Sign in with Slack keeps the same user id,
+    // and the id token it keeps names the team, which has to be this one
+    // before that sign-in counts here. Anybody else is linked by a code Slack
+    // delivered to them alone; until connect learns the team, only that.
+    identityScope: settings.teamId
+      ? {
+          instance: settings.teamId,
+          signInProvider: "slack",
+          signInClaim: { name: "https://slack.com/team_id", value: settings.teamId },
+          linkBySignIn: false,
+        }
+      : { instance: "slack" },
 
     /**
      * The app's bot, proved by its token. A user's token proves too, as that

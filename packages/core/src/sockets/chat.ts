@@ -75,10 +75,17 @@ export async function applyChat({
     id: interaction.actor.user,
     isBot: false,
   };
+  // A sign-in vouches for its own team's accounts only (IdentityScope), and a
+  // guest from another team in a shared channel is not one of them, whatever
+  // their id: they link with a code like anybody deevy does not know.
+  const lookup: IdentityScope =
+    interaction.actor.team && interaction.actor.team !== scope.instance
+      ? { instance: scope.instance }
+      : scope;
   const identities = `${origin}/settings/identities`;
 
   if (interaction.kind === "link") {
-    const known = await memberForExternalIdentity({ source, socket, scope, actor });
+    const known = await memberForExternalIdentity({ source, socket, scope: lookup, actor });
     if (known) {
       return skipped(
         {
@@ -125,7 +132,7 @@ export async function applyChat({
     });
   };
 
-  const resolved = await memberForExternalIdentity({ source, socket, scope, actor });
+  const resolved = await memberForExternalIdentity({ source, socket, scope: lookup, actor });
   if (!resolved) {
     await refuse("unknown_identity", null);
     const code = await mintLinkCode(source, socket, scope, actor, now);

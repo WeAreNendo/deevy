@@ -397,12 +397,25 @@
     // Sign in with Slack: OpenID Connect on Slack's own paths.
     if (host === "slack.com") {
       if (path === "/api/openid.connect.token") {
-        const { email } = await tokenRequest(request);
+        const token = await tokenRequest(request);
+        // Slack's id token carries its own user and team ids, and the team is
+        // what a Slack Socket reads back before a sign-in counts for a click.
+        const { sub, email, email_verified, name, ...slackIds } = slackProfile(token.email);
         return Response.json({
           ok: true,
-          access_token: tokenFor(email),
+          access_token: tokenFor(token.email),
           token_type: "Bearer",
           expires_in: 3600,
+          id_token: await idToken({
+            iss: "https://slack.com",
+            aud: token.clientId,
+            sub,
+            email,
+            email_verified,
+            name,
+            "https://slack.com/user_id": slackIds["https://slack.com/user_id"],
+            "https://slack.com/team_id": slackIds["https://slack.com/team_id"],
+          }),
         });
       }
       if (path === "/api/openid.connect.userInfo") {

@@ -210,8 +210,8 @@ async function linkableTools(context: ContextFor<"member">): Promise<{
   const tools: { socketId: string; provider: string; name: string }[] = [];
   for (const row of rows) {
     const module = await socketModuleFor(context, row).catch(() => null);
-    const provider = module?.identityScope?.signInProvider;
-    if (provider) found.add(provider);
+    const scope = module?.identityScope;
+    if (scope?.signInProvider && scope.linkBySignIn !== false) found.add(scope.signInProvider);
     if (module?.accountLink)
       tools.push({ socketId: row.id, provider: row.provider, name: row.name });
   }

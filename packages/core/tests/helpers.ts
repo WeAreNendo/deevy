@@ -253,10 +253,15 @@ export function fakeSockets(
     capabilities: new Set(["tracker", "forge", "docs"] as const),
     // Its accounts are GitHub's sign-in accounts where the Socket's
     // configuration says so, which is how a test plays a Human who signed in
-    // to deevy with GitHub and rules from the tracker (ADR-0025).
+    // to deevy with GitHub and rules from the tracker (ADR-0025) — or
+    // Linear's, whose accounts are one workspace's, so a sign-in vouches but
+    // is not offered as the way to link.
     identityScope: {
       instance: "stub:test",
       ...(config.signInProvider === "github" ? { signInProvider: "github" as const } : {}),
+      ...(config.signInProvider === "linear"
+        ? { signInProvider: "linear" as const, linkBySignIn: false }
+        : {}),
     },
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
     // A tool whose accounts a Human links through its own consent, as Linear's

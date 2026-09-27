@@ -219,8 +219,17 @@ describe("who deevy is on Linear", () => {
       mentionHandle: "@deevy",
       learned: { organizationId: ORG, organizationName: "Acme", urlKey: "acme" },
     });
-    // An account id means nothing without the workspace that issued it (ADR-0025).
-    expect(module.identityScope).toEqual({ instance: ORG });
+    // An account id means nothing without the workspace that issued it
+    // (ADR-0025). A Linear user's id is one workspace's, and it is the id a
+    // Sign in with Linear keeps: a Human who signed in to deevy with this
+    // workspace's account rules here with no linking step. Settings ›
+    // Identities still links on Linear's own page, since a sign-in could be
+    // to another workspace.
+    expect(module.identityScope).toEqual({
+      instance: ORG,
+      signInProvider: "linear",
+      linkBySignIn: false,
+    });
   });
 });
 

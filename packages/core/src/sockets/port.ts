@@ -413,7 +413,21 @@ export interface AccountLink {
  */
 export interface IdentityScope {
   instance: string;
-  signInProvider?: "github" | "gitlab";
+  signInProvider?: "github" | "gitlab" | "linear" | "slack";
+  /**
+   * What the sign-in's id token must also say before its account counts here,
+   * where the provider's user ids are only unique within a workspace the id
+   * token names: Slack's, whose team is `https://slack.com/team_id`. A
+   * sign-in with no id token, or one naming another value, vouches for nobody.
+   */
+  signInClaim?: { name: string; value: string };
+  /**
+   * Whether Settings › Identities offers signing in with that provider as the
+   * way to link an account. Not where the provider's accounts are one
+   * workspace's and a sign-in could be to another (Linear, Slack): those link
+   * on the tool's own page or with a code, which are this Socket's.
+   */
+  linkBySignIn?: boolean;
 }
 
 export interface SocketModule {

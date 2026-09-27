@@ -1025,10 +1025,11 @@ Human who assigned it stays its assignee — and the Project's default Agent tak
 default Agent routes nothing that way; a label still works.
 
 **Ruling from Linear** is the same `/approve` and `/reject <why>` as on GitHub
-([Ruling from the tracker](#ruling-from-the-tracker)). Linear's accounts are nobody's sign-in, so each Human
-links theirs once, under **Settings › Identities › Link Linear**: Linear asks them to consent on its own page,
-deevy reads which account and which workspace said yes, and gives the token back at once. An account in
-another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
+([Ruling from the tracker](#ruling-from-the-tracker)). A Human who signs in to deevy with Linear, with an
+account in the Socket's workspace, rules with no linking step: a Linear account is one workspace's, and it is
+the same id on both sides (ADR-0027). Anybody else links theirs once, under **Settings › Identities › Link
+Linear**: Linear asks them to consent on its own page, deevy reads which account and which workspace said
+yes, and gives the token back at once. An account in another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
 deevy minted with the old one; connect the Socket again with the new one.
 
 This section has been checked against everything Linear publishes — its GraphQL schema, its SDK's webhook
@@ -1149,9 +1150,11 @@ account is linked is also told by direct message, unless they turned that off un
 Notifications**. The incoming-webhook Channel is still there for a room with no app: it posts a link and
 takes no click.
 
-A click counts only for a Slack account linked to a Member, and Slack's accounts are not a sign-in's, so
-linking is its own step: an unlinked click, or `/deevy link`, gets a code only that person sees, which they
-enter under **Settings › Identities** within ten minutes. deevy names the account before linking it,
+A click counts only for a Slack account deevy can place. A Human who signs in to deevy with Slack, to the
+Socket's team, is placed already: Sign in with Slack hands over an id token naming the team, and deevy holds
+the click against it (ADR-0027). For anybody else — another sign-in, another team, a guest from another team
+in a shared channel — linking is its own step: an unlinked click, or `/deevy link`, gets a code only that
+person sees, which they enter under **Settings › Identities** within ten minutes. deevy names the account before linking it,
 because a code handed over by somebody else would link _their_ account. Codes are kept only as a hash.
 
 Slack signs every request with a timestamp, and one more than five minutes from deevy's clock, either way, is
@@ -1179,6 +1182,7 @@ renamed and reused. What it matches is the tool's own account id, against one of
 
 - **The account the Human signs in to deevy with.** A Human who signs in with GitHub rules from github.com with
   no further step. A GitHub Enterprise Server's accounts are not github.com's and are not matched this way.
+  Linear and Slack sign-ins count too, in the workspace or team they were to (ADR-0027).
 - **An account they linked** under **Settings › Identities**, from a signed-in session — how a Human who signs
   in with Google rules from GitHub. The linked account may carry a different address from theirs; that link is
   the only place deevy accepts one.

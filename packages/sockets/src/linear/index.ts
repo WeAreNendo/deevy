@@ -292,9 +292,14 @@ export function createLinearSocket({
   return {
     provider: "linear",
     capabilities: new Set(["tracker"] as const),
-    // Linear's accounts are nobody's sign-in, so nothing is shared with one:
-    // a Human links theirs through Linear's own consent (`accountLink`).
-    identityScope: { instance: settings.organizationId ?? "linear" },
+    // A Linear user's id is its workspace's, and it is the id Sign in with
+    // Linear keeps, so a Human who signed in to deevy with this workspace's
+    // account rules here with no linking step. Anybody else links through
+    // Linear's own consent (`accountLink`), which is this workspace's; a
+    // sign-in is not offered for it, since it could be to another workspace.
+    identityScope: settings.organizationId
+      ? { instance: settings.organizationId, signInProvider: "linear", linkBySignIn: false }
+      : { instance: "linear" },
 
     /** The app's own user in this workspace, which is who every comment is by. */
     async identity(): Promise<SocketIdentity> {
