@@ -311,6 +311,16 @@ bindings arrive with the request.
 | `DEEVY_OIDC_CLIENT_ID`         | env         | secret             | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                                    |
 | `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
 | `DEEVY_OIDC_NAME`              | env         | var                | `Single sign-on`         | The button says "Sign in with Single sign-on". Set it to what your teammates call the IdP.                                                                                                                                                                                                                                |
+| `MICROSOFT_CLIENT_ID`          | env         | secret             | —                        | Microsoft is neither registered nor offered. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/microsoft`.                                                                                                                                                                                       |
+| `MICROSOFT_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `MICROSOFT_TENANT_ID`          | env         | var                | `common`                 | Work, school and personal Microsoft accounts all sign in. Set `organizations` for work and school only, or a tenant's id for that tenant only.                                                                                                                                                                            |
+| `LINEAR_CLIENT_ID`             | env         | secret             | —                        | Linear is neither registered nor offered. Both halves or neither. A Linear sign-in comes in by invitation only.                                                                                                                                                                                                           |
+| `LINEAR_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `SLACK_CLIENT_ID`              | env         | secret             | —                        | Sign in with Slack is neither registered nor offered. Both halves or neither.                                                                                                                                                                                                                                             |
+| `SLACK_CLIENT_SECRET`          | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `ATLASSIAN_CLIENT_ID`          | env         | secret             | —                        | Atlassian is neither registered nor offered. Both halves or neither. An Atlassian sign-in comes in by invitation only.                                                                                                                                                                                                    |
+| `ATLASSIAN_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `DEEVY_SIGN_IN_ORDER`          | env         | var                | —                        | Providers are offered GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian, then your IdP. Name ids, comma-separated, to offer those first (`oidc,github`).                                                                                                                                                        |
 | `DEEVY_ADMIN_EMAIL`            | env         | var                | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                                      |
 | `DEEVY_WORKSPACE_NAME`         | env         | var                | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                                      |
 | `DEEVY_WEB_ORIGIN`             | env         | var                | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                                       |
@@ -401,10 +411,36 @@ value much over 90 spends the whole cap on polling and leaves none for signing t
 Which providers an instance offers is what its environment sets: `createAuth` registers the entries whose
 client id and secret are both present, `health.ping` reports the same list publicly, and the sign-in page
 draws one button per entry in that order. An instance with none configured says so on the page instead of
-offering a button that goes nowhere. GitHub, Google, GitLab and one generic OpenID Connect provider are the
-entries, `GITHUB_CLIENT_ID` with `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` with `GOOGLE_CLIENT_SECRET`,
-`GITLAB_CLIENT_ID` with `GITLAB_CLIENT_SECRET` and `DEEVY_OIDC_CLIENT_ID` with `DEEVY_OIDC_CLIENT_SECRET` and
-`DEEVY_OIDC_ISSUER`; any of them, all of them or none (docs/plans/sign-in.md).
+offering a button that goes nowhere. GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian and one
+generic OpenID Connect provider are the entries — `GITHUB_CLIENT_ID` with `GITHUB_CLIENT_SECRET`, and so on
+for `GOOGLE_`, `MICROSOFT_`, `GITLAB_`, `LINEAR_`, `SLACK_` and `ATLASSIAN_`, and `DEEVY_OIDC_CLIENT_ID` with
+`DEEVY_OIDC_CLIENT_SECRET` and `DEEVY_OIDC_ISSUER`; any of them, all of them or none (docs/plans/sign-in.md).
+Each one's redirect URI is `${BETTER_AUTH_URL}/api/auth/callback/<id>`, with the ids `github`, `google`,
+`microsoft`, `gitlab`, `linear`, `slack`, `atlassian` and `oidc`.
+
+They are offered in the order an engineering team reaches for them — GitHub, Google, Microsoft, GitLab,
+Linear, Slack, Atlassian — and your own IdP last. `DEEVY_SIGN_IN_ORDER` puts the ids you name first, in the
+order you name them (`oidc,github` for a company that signs in through its IdP first), and the rest follow in
+the default order. deevy also remembers, in a cookie of its own that holds nothing but the provider's id,
+which provider this browser signed in with last, so the page can offer it first.
+
+**Microsoft** is Microsoft Entra ID: register an application under Entra ID › App registrations, add a web
+redirect URI, and give it a client secret. `MICROSOFT_TENANT_ID` says whose accounts it takes: `common` (the
+default) for work, school and personal accounts, `organizations` for work and school only, or your tenant's
+id for your own tenant only. Microsoft's `email` claim is whatever the tenant says, so it counts as verified
+only when the tenant sends a verified-email claim: in the registration's Token configuration, add the optional
+ID token claims `verified_primary_email` and `verified_secondary_email`. Without them a Microsoft sign-in
+still works, but an address it carries neither makes the admin nor matches an `email_domain` rule — it comes
+in by invitation.
+
+**Linear** and **Atlassian** never say whether an address is verified, so a sign-in through either comes in
+by invitation only, whatever the allowlist says. Linear's application (Linear › Settings › API › OAuth
+applications) is registered with `read`, the narrowest scope Linear has. Atlassian's (developer.atlassian.com
+› Developer console) needs the User identity API's `read:me` and nothing else. **Slack** is Sign in with Slack,
+which is OpenID Connect: a Slack app with the redirect URL under OAuth & Permissions and the `openid`, `email`
+and `profile` user scopes. Slack does say an address is verified, so a domain rule admits it. These are
+separate from the Linear application and the Slack app a Socket uses, which act as deevy; these act as the
+Human signing in.
 
 Google is registered with its default scopes and no `hd`, so it does not decide who may join. Who may join is
 the allowlist: a Google Workspace is an email domain, and an `email_domain` rule under Settings, Allowlist
@@ -433,7 +469,7 @@ load-bearing as the client pair and an entry missing any of the three is not off
 `jwks_uri`: an OIDC sign-in's identity is its `id_token`'s claims, and a token nobody can verify is not an
 identity. `DEEVY_OIDC_NAME` is what the button says — "Acme SSO" rather than "Single sign-on" — so an operator
 names their own IdP without a deployment of the SPA. Who may join is still the allowlist: an `email_domain`
-rule admits the addresses the IdP hands out.
+rule admits the addresses the IdP hands out and says it verified.
 
 Two things to know about pointing it at an IdP. The discovery document is fetched **once, when the instance
 starts**: an IdP that cannot be reached at that moment is skipped with a line in the log and no error, and

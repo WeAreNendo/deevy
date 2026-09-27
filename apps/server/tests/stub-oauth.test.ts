@@ -43,6 +43,14 @@ const stubbedEnv = {
   // (docs/plans/sign-in.md slice 6).
   DEEVY_OIDC_ISSUER: "https://idp.example.test/realms/deevy",
   DEEVY_OIDC_NAME: "Acme SSO",
+  MICROSOFT_CLIENT_ID: "stub-client",
+  MICROSOFT_CLIENT_SECRET: "stub-secret",
+  LINEAR_CLIENT_ID: "stub-client",
+  LINEAR_CLIENT_SECRET: "stub-secret",
+  SLACK_CLIENT_ID: "stub-client",
+  SLACK_CLIENT_SECRET: "stub-secret",
+  ATLASSIAN_CLIENT_ID: "stub-client",
+  ATLASSIAN_CLIENT_SECRET: "stub-secret",
 };
 
 function stubbedServer(overrides: { adminEmail?: string } = {}) {
@@ -133,7 +141,16 @@ describe("a stubbed instance with nothing configured", () => {
   it("offers every provider, and signs a Human in with each", async () => {
     const env = readEnv({ DEEVY_DEV_STUB_OAUTH: "1" });
     const offered = signInProviders(env);
-    expect(offered.map((provider) => provider.id)).toEqual(["github", "google", "gitlab", "oidc"]);
+    expect(offered.map((provider) => provider.id)).toEqual([
+      "github",
+      "google",
+      "microsoft",
+      "gitlab",
+      "linear",
+      "slack",
+      "atlassian",
+      "oidc",
+    ]);
 
     for (const provider of offered) {
       const { app, close } = buildServer({
@@ -313,6 +330,54 @@ describe("a Google sign-in", () => {
  * then refuses that Human every later link, which is exactly the promise of
  * slice 3 failing for slice 5's provider.
  */
+/**
+ * The providers that do not always vouch for an address (docs/plans/sign-in.md,
+ * "More ways to sign in"). A domain rule is about the address, so it admits
+ * only one the provider verified: Microsoft does when the tenant sends a
+ * verified-email claim, and Linear and Atlassian never say, so they come in by
+ * invitation.
+ */
+describe("a sign-in through a provider that may not vouch for the address", () => {
+  it("is admitted by a domain rule only where Microsoft said the address is verified", async () => {
+    const { app, db, close } = stubbedServer({ adminEmail: "ada@example.com" });
+    await signIn(app, "github", "ada@example.com");
+    const workspaceId = (await db.query.workspace.findFirst())?.id ?? "";
+    const ada = await db.query.member.findFirst();
+    await db.insert(allowlistRule).values({
+      id: newId("allowlistRule"),
+      workspaceId,
+      kind: "email_domain",
+      value: "example.com",
+      createdBy: ada?.id ?? "",
+    });
+
+    await signIn(app, "microsoft", "grace@example.com");
+    await signIn(app, "microsoft", "mallory+unverified@example.com");
+    await signIn(app, "linear", "omar@example.com");
+    await signIn(app, "atlassian", "joan@example.com");
+    await signIn(app, "slack", "ken@example.com");
+
+    const members = await db.query.member.findMany({ with: { user: true } });
+    expect(members.map((row) => row.user.email).sort()).toEqual([
+      "ada@example.com",
+      "grace@example.com",
+      "ken@example.com",
+    ]);
+    close();
+  });
+
+  it("remembers which provider this browser used last", async () => {
+    const { app, close } = stubbedServer();
+
+    const answered = await callbackFor(app, "slack", "ken@example.com");
+
+    expect(answered.headers.getSetCookie().join("\n")).toMatch(
+      /better-auth\.last_used_login_method=slack/,
+    );
+    close();
+  });
+});
+
 describe("a GitLab sign-in", () => {
   it("proves the address, so a second provider links onto it", async () => {
     const email = "grace@example.com";

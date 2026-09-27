@@ -6,7 +6,7 @@ import { allowlistRule, invitation, member, workspace, type Db } from "@deevy/db
 import { and, eq, isNull } from "drizzle-orm";
 import { allocateHandle, slugify } from "./handles.ts";
 import { betterAuth } from "better-auth";
-import { genericOAuth, jwt } from "better-auth/plugins";
+import { genericOAuth, jwt, lastLoginMethod } from "better-auth/plugins";
 import { fetchClientMetadataResource, type MetadataResourceFetch } from "./cimd.ts";
 import { appendEvent } from "./events.ts";
 import { authId, newId } from "./ids.ts";
@@ -49,6 +49,17 @@ export interface OidcClient extends OAuthClient {
 }
 
 /**
+ * A Microsoft Entra ID client, and which accounts it takes: `common` (the
+ * default) is work, school and personal accounts; `organizations` leaves out
+ * personal ones; a tenant's own id takes only that tenant. Microsoft vouches
+ * for an address only when the tenant sends a verified-email claim, so a
+ * sign-in without one comes in by invitation (docs/OPERATIONS.md).
+ */
+export interface MicrosoftClient extends OAuthClient {
+  tenantId?: string;
+}
+
+/**
  * What a deployment configures: one optional entry per provider deevy offers.
  * A provider is configuration, not a constant, so offering another one is an
  * entry here and in `signInProviders` rather than an edit to the sign-in page
@@ -57,9 +68,32 @@ export interface OidcClient extends OAuthClient {
 export interface AuthProviders {
   github?: OAuthClient;
   google?: OAuthClient;
+  microsoft?: MicrosoftClient;
   gitlab?: GitLabClient;
+  /** Linear and Atlassian never say an address is verified: they come in by invitation. */
+  linear?: OAuthClient;
+  slack?: OAuthClient;
+  atlassian?: OAuthClient;
   oidc?: OidcClient;
 }
+
+/**
+ * The order the sign-in page offers providers in when the operator names none
+ * (docs/plans/sign-in.md, "More ways to sign in"): the ones an engineering team
+ * reaches for first — GitHub, Google, Microsoft — then the tools deevy works
+ * in, and the operator's own IdP last, since it sits behind "More" unless they
+ * pin it with `DEEVY_SIGN_IN_ORDER`.
+ */
+const DEFAULT_SIGN_IN_ORDER = [
+  "github",
+  "google",
+  "microsoft",
+  "gitlab",
+  "linear",
+  "slack",
+  "atlassian",
+  "oidc",
+] as const;
 
 /** Where a GitLab client lives when the deployment names no instance of its own. */
 const DEFAULT_GITLAB_ISSUER = "https://gitlab.com";
@@ -97,6 +131,12 @@ export interface AuthEnv {
   trustedOrigins?: string[];
   /** Which sign-in providers this deployment offers. Absent offers none. */
   providers?: AuthProviders;
+  /**
+   * The providers to offer first, by id, in this order (`DEEVY_SIGN_IN_ORDER`);
+   * the rest follow in the default order. What is named and not configured is
+   * ignored.
+   */
+  signInOrder?: string[];
   /** The first sign-in with this email creates the Workspace and becomes admin. */
   adminEmail?: string;
   workspaceName?: string;
@@ -127,7 +167,15 @@ export function createAuth({ db, env }: CreateAuthOptions) {
     // Its rows get deevy's prefixed ids too (ids.ts, ADR-0015): usr_, ses_, acct_, key_…
     advanced: { database: { generateId: ({ model }) => authId(model) } },
     emailAndPassword: { enabled: false },
-    plugins: [...apiKeyPlugins(), ...oauthServerPlugins(env), ...oidcPlugins(env.providers ?? {})],
+    plugins: [
+      ...apiKeyPlugins(),
+      ...oauthServerPlugins(env),
+      ...oidcPlugins(env.providers ?? {}),
+      // Which provider this browser signed in with last, in a cookie of its
+      // own (no account, no address), so the sign-in page can offer it first
+      // with "Last used" (docs/plans/sign-in.md, "More ways to sign in").
+      lastLoginMethod(),
+    ],
     socialProviders: socialProvidersOf(env.providers ?? {}),
     account: { accountLinking: accountLinkingOf(env) },
     user: {
@@ -187,18 +235,28 @@ export function createAuth({ db, env }: CreateAuthOptions) {
  * them. Public through `health.ping`: an instance that cannot say what it
  * offers cannot render its own sign-in page (docs/plans/sign-in.md).
  */
-export function signInProviders(env: Pick<AuthEnv, "providers">): SignInProvider[] {
+export function signInProviders(env: Pick<AuthEnv, "providers" | "signInOrder">): SignInProvider[] {
   const providers = env.providers ?? {};
-  const offered: SignInProvider[] = [];
-  if (configuredClient(providers.github))
-    offered.push({ id: "github", label: "GitHub", kind: "social" });
-  if (configuredClient(providers.google))
-    offered.push({ id: "google", label: "Google", kind: "social" });
-  if (configuredClient(providers.gitlab))
-    offered.push({ id: "gitlab", label: "GitLab", kind: "social" });
   const oidc = configuredOidc(providers.oidc);
-  if (oidc) offered.push({ id: OIDC_PROVIDER_ID, label: oidc.label, kind: "social" });
-  return offered;
+  const labels: Record<(typeof DEFAULT_SIGN_IN_ORDER)[number], string | null> = {
+    github: configuredClient(providers.github) ? "GitHub" : null,
+    google: configuredClient(providers.google) ? "Google" : null,
+    microsoft: configuredClient(providers.microsoft) ? "Microsoft" : null,
+    gitlab: configuredClient(providers.gitlab) ? "GitLab" : null,
+    linear: configuredClient(providers.linear) ? "Linear" : null,
+    slack: configuredClient(providers.slack) ? "Slack" : null,
+    atlassian: configuredClient(providers.atlassian) ? "Atlassian" : null,
+    oidc: oidc?.label ?? null,
+  };
+  const known = new Set<string>(DEFAULT_SIGN_IN_ORDER);
+  const first = (env.signInOrder ?? []).filter((id) => known.has(id));
+  const order = [...new Set([...first, ...DEFAULT_SIGN_IN_ORDER])] as Array<
+    (typeof DEFAULT_SIGN_IN_ORDER)[number]
+  >;
+  return order.flatMap((id) => {
+    const label = labels[id];
+    return label ? [{ id, label, kind: "social" as const }] : [];
+  });
 }
 
 /**
@@ -257,7 +315,11 @@ export function accountLinkingOf(_env: Pick<AuthEnv, "providers">) {
 function socialProvidersOf(providers: AuthProviders) {
   const github = configuredClient(providers.github);
   const google = configuredClient(providers.google);
+  const microsoft = configuredClient(providers.microsoft);
   const gitlab = configuredClient(providers.gitlab);
+  const linear = configuredClient(providers.linear);
+  const slack = configuredClient(providers.slack);
+  const atlassian = configuredClient(providers.atlassian);
   return {
     ...(github
       ? {
@@ -275,6 +337,31 @@ function socialProvidersOf(providers: AuthProviders) {
     // `email_domain` rule in deevy's own UI, so there is one place to look
     // rather than two that can disagree (docs/plans/sign-in.md).
     ...(google ? { google } : {}),
+    // Microsoft's `email` claim is whatever the tenant says, which is why an
+    // address counts only with a verified-email claim beside it (Better Auth
+    // reads `email_verified`, `verified_primary_email` and
+    // `verified_secondary_email`). The profile photo is left alone: deevy
+    // draws initials, and a Graph call per sign-in buys nothing.
+    ...(microsoft
+      ? {
+          microsoft: {
+            ...microsoft,
+            tenantId: providers.microsoft?.tenantId?.trim() || "common",
+            disableProfilePhoto: true,
+          },
+        }
+      : {}),
+    // Linear's narrowest scope is `read`; its sign-in says who the user is
+    // and never whether the address is verified, so it comes in by invitation.
+    ...(linear ? { linear } : {}),
+    // Sign in with Slack is OpenID Connect: `openid`, `email` and `profile`,
+    // with `email_verified` in the claims. The account is the Slack user id.
+    ...(slack ? { slack } : {}),
+    // Only who the user is: `read:me`, not Better Auth's default Jira scope.
+    // Atlassian's `/me` carries no verification, so it comes in by invitation.
+    ...(atlassian
+      ? { atlassian: { ...atlassian, disableDefaultScope: true, scope: ["read:me"] } }
+      : {}),
     // GitLab hands `read_user` out by default, which is the profile; the
     // groups a gitlab_group allowlist rule matches are only listable with
     // `read_api`, the same bargain `read:org` strikes above. GitLab has no

@@ -59,6 +59,20 @@ describe("the Worker's sign-in providers", () => {
       }),
     ).toEqual(["github", "gitlab"]);
     expect(offered({ GITLAB_ISSUER: "https://gitlab.example.com" })).toEqual([]);
+    // The providers added for "More ways to sign in", and the operator's order.
+    expect(
+      offered({
+        MICROSOFT_CLIENT_ID: "id",
+        MICROSOFT_CLIENT_SECRET: "secret",
+        LINEAR_CLIENT_ID: "id",
+        LINEAR_CLIENT_SECRET: "secret",
+        SLACK_CLIENT_ID: "id",
+        SLACK_CLIENT_SECRET: "secret",
+        ATLASSIAN_CLIENT_ID: "id",
+        ATLASSIAN_CLIENT_SECRET: "secret",
+        DEEVY_SIGN_IN_ORDER: "atlassian",
+      }),
+    ).toEqual(["atlassian", "microsoft", "linear", "slack"]);
     // The generic OIDC entry needs its issuer as much as its pair: without a
     // discovery document there is nothing to register (docs/plans/sign-in.md
     // slice 6).

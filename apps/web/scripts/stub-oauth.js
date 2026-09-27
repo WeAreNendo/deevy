@@ -2,9 +2,10 @@
  * Every sign-in provider deevy offers, as far as a deevy under test can tell
  * (docs/plans/sign-in.md slice 2).
  *
- * Better Auth hardcodes GitHub's and Google's endpoints and builds GitLab's
- * and a generic OIDC provider's from a configured issuer, so the only seam
- * that covers all four is the global `fetch` they are called through.
+ * Better Auth hardcodes GitHub's, Google's, Microsoft's, Linear's, Slack's and
+ * Atlassian's endpoints and builds GitLab's and a generic OIDC provider's from
+ * a configured issuer, so the only seam that covers all eight is the global
+ * `fetch` they are called through.
  * `apps/server/src/index.ts` imports this file when `DEEVY_DEV_STUB_OAUTH=1`;
  * `apps/web/scripts/smoke-workers.ts` and `apps/agent/scripts/boot.ts` prepend
  * its source to a built bundle instead. Either way deevy itself — its routing,
@@ -256,6 +257,55 @@
     };
   }
 
+  /**
+   * A stable id for whoever the code named, in the shape each provider hands
+   * out: an account id is the provider's own, never the address, and the
+   * identity resolver matches on it (packages/core/src/identities.ts).
+   */
+  function idFor(prefix, email) {
+    return `${prefix}${nameFor(email)
+      .login.replace(/[^a-z0-9]/gi, "")
+      .toUpperCase()}`;
+  }
+
+  /** The tenant a stubbed Microsoft sign-in belongs to: a work tenant, not the consumer one. */
+  const MICROSOFT_TENANT = "11111111-2222-4333-8444-555555555555";
+
+  /**
+   * Microsoft's id_token, as Entra issues it: no `email_verified` claim, and
+   * the address counted as verified only through `verified_primary_email`,
+   * which a tenant sends when its admin asks for it (docs/OPERATIONS.md).
+   */
+  function microsoftClaims({ email, clientId, nonce }) {
+    const { name, login } = nameFor(email);
+    return {
+      iss: `https://login.microsoftonline.com/${MICROSOFT_TENANT}/v2.0`,
+      aud: clientId,
+      tid: MICROSOFT_TENANT,
+      oid: idFor("oid-", email),
+      sub: idFor("sub-", email),
+      ...(nonce ? { nonce } : {}),
+      email,
+      name,
+      preferred_username: login,
+      ...(isVerified(email) ? { verified_primary_email: [email] } : {}),
+    };
+  }
+
+  /** Sign in with Slack's userInfo: OpenID claims, plus Slack's own user and team ids. */
+  function slackProfile(email) {
+    const { name } = nameFor(email);
+    return {
+      ok: true,
+      sub: idFor("U", email),
+      "https://slack.com/user_id": idFor("U", email),
+      "https://slack.com/team_id": "T0STUB",
+      email,
+      email_verified: isVerified(email),
+      name,
+    };
+  }
+
   const OIDC_DISCOVERY = "/.well-known/openid-configuration";
 
   /** The paths this stub answers on whatever host the operator's issuer is. */
@@ -306,6 +356,84 @@
       });
     }
     if (host === "www.googleapis.com" && path === "/oauth2/v3/certs") return jwksResponse();
+
+    // Microsoft Entra ID: a token endpoint and a key set per tenant path, and a
+    // profile photo deevy never asks for.
+    if (host === "login.microsoftonline.com") {
+      if (path.endsWith("/oauth2/v2.0/token")) {
+        const token = await tokenRequest(request);
+        return Response.json({
+          access_token: tokenFor(token.email),
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "openid profile email User.Read",
+          id_token: await idToken(microsoftClaims(token)),
+        });
+      }
+      if (path.endsWith("/discovery/v2.0/keys")) return jwksResponse();
+    }
+
+    // Linear: an OAuth token, then the GraphQL viewer. Linear says nothing
+    // about whether the address is verified, and Better Auth marks it not.
+    if (host === "api.linear.app") {
+      if (path === "/oauth/token") {
+        const { email } = await tokenRequest(request);
+        return Response.json({
+          access_token: tokenFor(email),
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "read",
+        });
+      }
+      if (path === "/graphql") {
+        const email = bearerEmail(request);
+        const { name } = nameFor(email);
+        return Response.json({
+          data: { viewer: { id: idFor("lin-", email), name, email, avatarUrl: null } },
+        });
+      }
+    }
+
+    // Sign in with Slack: OpenID Connect on Slack's own paths.
+    if (host === "slack.com") {
+      if (path === "/api/openid.connect.token") {
+        const { email } = await tokenRequest(request);
+        return Response.json({
+          ok: true,
+          access_token: tokenFor(email),
+          token_type: "Bearer",
+          expires_in: 3600,
+        });
+      }
+      if (path === "/api/openid.connect.userInfo") {
+        return Response.json(slackProfile(bearerEmail(request)));
+      }
+    }
+
+    // Atlassian: an OAuth token, then `/me`, which says nothing about whether
+    // the address is verified.
+    if (host === "auth.atlassian.com" && path === "/oauth/token") {
+      const { email } = await tokenRequest(request);
+      return Response.json({
+        access_token: tokenFor(email),
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: "read:me",
+      });
+    }
+    if (host === "api.atlassian.com" && path === "/me") {
+      const email = bearerEmail(request);
+      const { name, login } = nameFor(email);
+      return Response.json({
+        account_type: "atlassian",
+        account_id: idFor("atl-", email),
+        email,
+        name,
+        nickname: login,
+        picture: null,
+        account_status: "active",
+      });
+    }
 
     // GitLab and the generic OIDC provider live wherever the operator's issuer
     // is, so they are matched by path. Never on loopback: that is deevy.
