@@ -119,6 +119,32 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "queuedMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "workingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "waitingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "queuedMs",
+                        "workingMs",
+                        "waitingMs"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -132,7 +158,8 @@
                     "startedAt",
                     "lastActivityAt",
                     "finishedAt",
-                    "createdAt"
+                    "createdAt",
+                    "timing"
                   ],
                   "additionalProperties": false
                 }
@@ -250,6 +277,32 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "queuedMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "workingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "waitingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "queuedMs",
+                        "workingMs",
+                        "waitingMs"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -263,7 +316,8 @@
                     "startedAt",
                     "lastActivityAt",
                     "finishedAt",
-                    "createdAt"
+                    "createdAt",
+                    "timing"
                   ],
                   "additionalProperties": false
                 }
@@ -419,6 +473,32 @@
                           "type": "string",
                           "format": "date-time",
                           "x-native-type": "date"
+                        },
+                        "timing": {
+                          "type": "object",
+                          "properties": {
+                            "queuedMs": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "workingMs": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "waitingMs": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "queuedMs",
+                            "workingMs",
+                            "waitingMs"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -432,7 +512,8 @@
                         "startedAt",
                         "lastActivityAt",
                         "finishedAt",
-                        "createdAt"
+                        "createdAt",
+                        "timing"
                       ],
                       "additionalProperties": false
                     },
@@ -623,6 +704,32 @@
                           "type": "string",
                           "format": "date-time",
                           "x-native-type": "date"
+                        },
+                        "timing": {
+                          "type": "object",
+                          "properties": {
+                            "queuedMs": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "workingMs": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "waitingMs": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "queuedMs",
+                            "workingMs",
+                            "waitingMs"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -636,7 +743,8 @@
                         "startedAt",
                         "lastActivityAt",
                         "finishedAt",
-                        "createdAt"
+                        "createdAt",
+                        "timing"
                       ],
                       "additionalProperties": false
                     },
@@ -915,6 +1023,32 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "queuedMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "workingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "waitingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "queuedMs",
+                        "workingMs",
+                        "waitingMs"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -928,7 +1062,8 @@
                     "startedAt",
                     "lastActivityAt",
                     "finishedAt",
-                    "createdAt"
+                    "createdAt",
+                    "timing"
                   ],
                   "additionalProperties": false
                 }
@@ -1283,6 +1418,32 @@
                             "format": "date-time",
                             "x-native-type": "date"
                           },
+                          "timing": {
+                            "type": "object",
+                            "properties": {
+                              "queuedMs": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "workingMs": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "waitingMs": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "queuedMs",
+                              "workingMs",
+                              "waitingMs"
+                            ],
+                            "additionalProperties": false
+                          },
                           "lastActivities": {
                             "type": "array",
                             "items": {
@@ -1414,6 +1575,7 @@
                           "lastActivityAt",
                           "finishedAt",
                           "createdAt",
+                          "timing",
                           "lastActivities",
                           "activityCount",
                           "openGateRequestId",
@@ -1539,6 +1701,32 @@
                       "type": "string",
                       "format": "date-time",
                       "x-native-type": "date"
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "queuedMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "workingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "waitingMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "queuedMs",
+                        "workingMs",
+                        "waitingMs"
+                      ],
+                      "additionalProperties": false
                     },
                     "activities": {
                       "type": "array",
@@ -1730,6 +1918,7 @@
                     "lastActivityAt",
                     "finishedAt",
                     "createdAt",
+                    "timing",
                     "activities",
                     "usage"
                   ],

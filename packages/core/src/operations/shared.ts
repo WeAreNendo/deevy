@@ -17,6 +17,7 @@ import { appendEvent } from "../events.ts";
 import { newId } from "../ids.ts";
 import { parseIssueRef } from "../issues.ts";
 import { parseLink } from "../links.ts";
+import { timingOf } from "../runs.ts";
 import { ProjectSlugPattern } from "../projects.ts";
 import { ORPCError } from "@orpc/server";
 import type { Issue, Project, Run } from "@deevy/db";
@@ -365,6 +366,7 @@ export function runView(row: Run, issueKey: string) {
     lastActivityAt: row.lastActivityAt,
     finishedAt: row.finishedAt,
     createdAt: row.createdAt,
+    timing: timingOf(row),
   };
 }
 

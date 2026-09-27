@@ -60,6 +60,14 @@ export const run = sqliteTable(
     lastActivityAt: integer("last_activity_at", { mode: "timestamp_ms" }).default(now).notNull(),
     finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
+    /**
+     * How long the Run has waited on a Human in waits that are over, and when
+     * the one it is in began (docs/plans/run-usage.md). `setRunStatus` keeps
+     * both, in the update it already issues, so the feed reads a Run's time
+     * off its row rather than out of the Event log.
+     */
+    waitingMs: integer("waiting_ms").notNull().default(0),
+    waitingSince: integer("waiting_since", { mode: "timestamp_ms" }),
   },
   (table) => [
     index("run_issueId_idx").on(table.issueId, table.createdAt),
