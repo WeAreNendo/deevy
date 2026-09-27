@@ -149,6 +149,18 @@ export function stubRun(extra: Record<string, unknown> = {}) {
     lastActivities: [] as Array<Record<string, unknown>>,
     activityCount: 0,
     openGateRequestId: null,
+    timing: { queuedMs: 0, workingMs: 0, waitingMs: 0 },
+    // Nothing reported: what a Run worked by anything but a reporting client says.
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: null,
+      unpricedTokens: 0,
+      reports: 0,
+      models: [] as Array<Record<string, unknown>>,
+    },
     ...extra,
   };
 }

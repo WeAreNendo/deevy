@@ -6,6 +6,7 @@
  * names beside ids (the core writes them); older ones are resolved through the
  * maps the caller has, and fall back to a plain sentence rather than an id.
  */
+import { dollars, tokens, totalTokens } from "@/lib/usage";
 import { startedBy } from "@/lib/run-trigger";
 
 export type EventTone = "human" | "agent" | "gate" | "muted" | "destructive";
@@ -244,21 +245,14 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       // The Run's totals after the report, in its client's words: a cost is
       // what the harness estimated, and absent where it priced nothing.
       const count = (value: unknown) => (typeof value === "number" ? value : 0);
-      const tokens =
-        count(p.inputTokens) +
-        count(p.outputTokens) +
-        count(p.cacheReadTokens) +
-        count(p.cacheWriteTokens);
-      const cost =
-        typeof p.costUsd === "number"
-          ? `≈ ${new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(p.costUsd)}`
-          : "cost not reported";
-      return say(
-        `reported usage: ${new Intl.NumberFormat("en", { notation: "compact" }).format(tokens)} tokens, ${cost}`,
-        null,
-        agentTone,
-        true,
-      );
+      const spent = totalTokens({
+        inputTokens: count(p.inputTokens),
+        outputTokens: count(p.outputTokens),
+        cacheReadTokens: count(p.cacheReadTokens),
+        cacheWriteTokens: count(p.cacheWriteTokens),
+      });
+      const cost = typeof p.costUsd === "number" ? `≈ ${dollars(p.costUsd)}` : "cost not reported";
+      return say(`reported usage: ${tokens(spent)} tokens, ${cost}`, null, agentTone, true);
     }
     case "gate.requested": {
       const checkpoint = str(p.checkpoint) ?? "a Checkpoint";

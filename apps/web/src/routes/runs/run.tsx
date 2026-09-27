@@ -13,6 +13,15 @@ import { orpc } from "@/lib/orpc";
 import { useMembersById } from "@/lib/members";
 import { startedBy } from "@/lib/run-trigger";
 import { ago } from "@/lib/time";
+import {
+  dollars,
+  duration,
+  harnessName,
+  harnessesOf,
+  tokens,
+  totalTokens,
+  type UsageTotals,
+} from "@/lib/usage";
 
 /** How an Activity reads, by kind: the Agent's voice, a Human's, an error. */
 const tones: Record<string, string> = {
@@ -140,8 +149,99 @@ export function RunPage({ runId }: { runId: string }) {
               </ul>
             )}
           </section>
+
+          <UsageSection usage={found.usage} />
+
+          <section aria-label="Time" className="flex flex-col gap-2">
+            <RailHeading>Time</RailHeading>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">Working</dt>
+              <dd className="tabular-nums">{duration(found.timing.workingMs)}</dd>
+              <dt className="text-muted-foreground">Waiting on a Human</dt>
+              <dd className="tabular-nums">{duration(found.timing.waitingMs)}</dd>
+              <dt className="text-muted-foreground">Queued</dt>
+              <dd className="tabular-nums">{duration(found.timing.queuedMs)}</dd>
+            </dl>
+          </section>
         </div>
       </div>
     </div>
+  );
+}
+
+/** What the rail reads of a Run's usage (`runs.get`). */
+interface RunUsage extends UsageTotals {
+  models: Array<{
+    harness: string;
+    model: string | null;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    costUsd: number | null;
+  }>;
+}
+
+/**
+ * What the Run spent, as the client running its Agent reported it
+ * (docs/plans/run-usage.md). The cost is always the harness's estimate and
+ * says whose; where nothing priced the tokens it says that, and deevy never
+ * puts a price on them itself.
+ */
+function UsageSection({ usage }: { usage: RunUsage }) {
+  if (usage.reports === 0) {
+    return (
+      <section aria-label="Usage" className="flex flex-col gap-2">
+        <RailHeading>Usage</RailHeading>
+        <p className="text-sm">No usage reported</p>
+        <p className="text-xs text-muted-foreground">
+          Whatever runs this Agent has not said what the Run spent.
+        </p>
+      </section>
+    );
+  }
+  const by = harnessesOf(usage.models);
+  return (
+    <section aria-label="Usage" className="flex flex-col gap-2">
+      <RailHeading>Usage</RailHeading>
+      <p className="text-sm">
+        {usage.costUsd === null
+          ? `Cost not reported by ${by}`
+          : `≈ ${dollars(usage.costUsd)}, estimated by ${by}`}
+      </p>
+      {usage.costUsd !== null && usage.unpricedTokens > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {tokens(usage.unpricedTokens)} tokens were reported with no cost, and are not in it.
+        </p>
+      ) : null}
+      <p className="text-sm tabular-nums">{tokens(totalTokens(usage))} tokens</p>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+        <dt className="text-muted-foreground">Input</dt>
+        <dd className="tabular-nums">{tokens(usage.inputTokens)}</dd>
+        <dt className="text-muted-foreground">Output</dt>
+        <dd className="tabular-nums">{tokens(usage.outputTokens)}</dd>
+        <dt className="text-muted-foreground">Cache read</dt>
+        <dd className="tabular-nums">{tokens(usage.cacheReadTokens)}</dd>
+        <dt className="text-muted-foreground">Cache written</dt>
+        <dd className="tabular-nums">{tokens(usage.cacheWriteTokens)}</dd>
+      </dl>
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground">
+          By model ({usage.models.length})
+        </summary>
+        <ul aria-label="Models" className="mt-1 flex flex-col gap-1">
+          {usage.models.map((model) => (
+            <li key={`${model.harness}:${model.model ?? ""}`} className="flex flex-col">
+              <span className="font-mono">{model.model ?? "a model it did not name"}</span>
+              <span className="text-muted-foreground tabular-nums">
+                {tokens(totalTokens(model))} tokens ·{" "}
+                {model.costUsd === null ? "not priced" : `≈ ${dollars(model.costUsd)}`} ·{" "}
+                {harnessName(model.harness)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
   );
 }
