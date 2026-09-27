@@ -582,6 +582,19 @@ manage Members, or rule on a Gate, and neither can anything holding a delegated 
 by a Human, in deevy's browser or from a tool that vouches for them (ADR-0004, ADR-0010, ADR-0025). Which
 operations an Agent may call at all is default-deny, per operation (ADR-0011).
 
+**What a Run spent is the running client's to say**, because deevy runs nothing and so counts nothing
+([run-usage.md](./plans/run-usage.md)). Whatever runs an Agent reports each session with `runs.reportUsage`
+(`POST /runs/{runId}/usage`, or the MCP tool `runs_report_usage`): the harness it ran on, and per model the
+input and output tokens, the prompt cache read and written, and a cost in dollars where the harness priced
+them. A session reports under a key of its own; the same key again replaces what it said, so a retry counts
+once and a session may report its running totals as it goes. Only the Run's own Agent may report, a Run takes
+a hundred reports, and it takes them until a day after it finishes. deevy adds the reports up, stores money in
+whole micro-dollars, and never prices a token itself: a cost is null where nobody reported one, and the
+tokens behind it are counted apart. A report is trusted exactly as far as the Agent's key is — an Agent's own
+client can say anything about its own Runs, which is why every screen says whose estimate a cost is. How long
+a Run took needs no report: deevy works out its working time, its time waiting on a Human and its time queued
+from the Run itself.
+
 [agent-loop.md](./agent-loop.md) is a worked example of the runtime on the other side: the MCP configuration a
 Claude Code loop needs, the instructions that tell it how to work an Issue, and what the Human does at the
 Gate.
@@ -1227,6 +1240,17 @@ commit is the Agent's: the clone is given its name and the address deevy has for
 becomes a Link on the record carrying the Run's id, which is what makes "this pull request came from that
 attempt" a fact rather than a coincidence. Nothing is ever pushed to the base branch. A Run that changed
 nothing attaches nothing.
+
+### What it spent
+
+When a session ends, however it ended, the runtime reports what it spent before it settles the Run, under the
+harness's name: Claude Code's `modelUsage` — every model the session used, its subagents' included, with the
+prompt cache and each model's cost and price table; OpenCode's steps summed, cache included, with their cost;
+Cursor's tokens and cache, with no cost, since Cursor prices nothing; and Copilot's tokens by model from the
+file `--usage-output-file` writes as it exits, with no cost, since Copilot counts AI units rather than
+dollars. Where a harness does not name the model, the report names `DEEVY_AGENT_MODEL`. A Run resumed after a
+Gate is a new session and reports again; deevy adds them up. A report deevy refuses is logged and changes
+nothing about the Run, and the log line after each Run totals the tokens across models.
 
 ### Its configuration
 
