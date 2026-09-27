@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import type { Config } from "../config.ts";
 import { instructionsPath } from "../instructions.ts";
-import type { Session, SessionEvent, SessionInput } from "../session.ts";
+import type { Session, SessionEvent, SessionInput, Usage } from "../session.ts";
 import { handOver, sessionUserFor } from "../session-user.ts";
 import type { Harness, HarnessContext } from "./contract.ts";
 import { sessionEnv } from "./env.ts";
@@ -140,34 +140,37 @@ export async function* runHarness(
     child.once("exit", (code) => resolveExit({ code, error: null }));
   });
 
-  let finished = false;
+  // The session's own `done` is held until the process has exited: a CLI may
+  // write what it spent to a file on the way out (`harness.usage`), and the
+  // `done` is what carries it to the supervisor.
+  let said: Extract<SessionEvent, { type: "done" }> | null = null;
   try {
     if (child.stdout) {
       for await (const line of createInterface({ input: child.stdout })) {
         if (line.trim() === "") continue;
         for (const event of harness.parse(line)) {
-          if (event.type === "done") finished = true;
-          yield event;
+          if (event.type === "done") said = event;
+          else yield event;
         }
       }
     }
     const { code, error } = await exited;
-    if (finished) return;
-    if (error) {
-      yield { type: "done", ok: false, detail: `The session could not start: ${error.message}` };
-    } else if (input.signal.aborted) {
-      // The supervisor stopped it and will say why; nothing here knows better.
-      yield { type: "done", ok: false, detail: "The session was stopped" };
-    } else if (code === 0) {
-      yield { type: "done", ok: true, detail: "The session ended" };
-    } else {
-      const tail = stderr.trim();
-      yield {
-        type: "done",
-        ok: false,
-        detail: `The session exited with code ${String(code)}${tail ? `: ${tail}` : ""}`,
-      };
-    }
+    const done: Extract<SessionEvent, { type: "done" }> =
+      said ??
+      (error
+        ? { type: "done", ok: false, detail: `The session could not start: ${error.message}` }
+        : input.signal.aborted
+          ? // The supervisor stopped it and will say why; nothing here knows better.
+            { type: "done", ok: false, detail: "The session was stopped" }
+          : code === 0
+            ? { type: "done", ok: true, detail: "The session ended" }
+            : {
+                type: "done",
+                ok: false,
+                detail: `The session exited with code ${String(code)}${stderr.trim() ? `: ${stderr.trim()}` : ""}`,
+              });
+    const usage = done.usage ?? (await usageFromFile(harness, context));
+    yield usage ? { ...done, usage: named(usage, context.config.model) } : done;
   } finally {
     input.signal.removeEventListener("abort", stop);
     if (killer) clearTimeout(killer);
@@ -175,4 +178,20 @@ export async function* runHarness(
     // process does not outlive the Run.
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   }
+}
+
+/** What the CLI wrote about the session's spend, if it writes one and did. */
+async function usageFromFile(harness: Harness, context: HarnessContext): Promise<Usage | null> {
+  if (!harness.usage) return null;
+  try {
+    return harness.usage.read(await readFile(harness.usage.file(context), "utf8"));
+  } catch {
+    // No file is no usage: a session that never started writes none.
+    return null;
+  }
+}
+
+/** Every model named: where the harness did not say, it is the one the runtime asked for. */
+function named(usage: Usage, model: string): Usage {
+  return { models: usage.models.map((entry) => ({ ...entry, model: entry.model ?? model })) };
 }

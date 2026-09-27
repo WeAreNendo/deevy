@@ -1,4 +1,4 @@
-import type { SessionEvent } from "../session.ts";
+import type { ModelUsage, SessionEvent, Usage } from "../session.ts";
 import { deevyToolNames } from "../tools.ts";
 import type { Harness, HarnessContext } from "./contract.ts";
 
@@ -130,8 +130,64 @@ interface StreamMessage {
   message?: { content?: Array<{ type: string; name?: string; text?: string }> } | string;
   is_error?: boolean;
   result?: string;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
   total_cost_usd?: number;
+  /**
+   * Every model the session used — its subagents' too — with the prompt cache
+   * and each one's cost. The Agent SDK's `usage` is the main loop's alone, and
+   * it says so: "Prefer modelUsage for token/cost accounting".
+   */
+  modelUsage?: Record<
+    string,
+    {
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadInputTokens?: number;
+      cacheCreationInputTokens?: number;
+      costUSD?: number;
+      costBasis?: string;
+    }
+  >;
+}
+
+const costBases = new Set(["list", "managed", "unknown"]);
+
+/** What a result says the session spent: per model where it can, the main loop where it cannot. */
+function usageOf(message: StreamMessage): Usage | undefined {
+  const perModel = Object.entries(message.modelUsage ?? {});
+  if (perModel.length > 0) {
+    return {
+      models: perModel.map(([model, spent]) => ({
+        model,
+        inputTokens: spent.inputTokens ?? 0,
+        outputTokens: spent.outputTokens ?? 0,
+        cacheReadTokens: spent.cacheReadInputTokens ?? 0,
+        cacheWriteTokens: spent.cacheCreationInputTokens ?? 0,
+        ...(spent.costUSD === undefined ? {} : { costUsd: spent.costUSD }),
+        ...(spent.costBasis && costBases.has(spent.costBasis)
+          ? { costBasis: spent.costBasis as ModelUsage["costBasis"] }
+          : {}),
+      })),
+    };
+  }
+  if (!message.usage) return undefined;
+  return {
+    models: [
+      {
+        model: null,
+        inputTokens: message.usage.input_tokens ?? 0,
+        outputTokens: message.usage.output_tokens ?? 0,
+        cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
+        ...(message.total_cost_usd === undefined ? {} : { costUsd: message.total_cost_usd }),
+      },
+    ],
+  };
 }
 
 /**
@@ -175,13 +231,7 @@ export function toSessionEvents(line: string): SessionEvent[] {
   }
   if (message.type === "result") {
     const ok = message.subtype === "success" && !message.is_error;
-    const usage = message.usage
-      ? {
-          inputTokens: message.usage.input_tokens ?? 0,
-          outputTokens: message.usage.output_tokens ?? 0,
-          ...(message.total_cost_usd === undefined ? {} : { costUsd: message.total_cost_usd }),
-        }
-      : undefined;
+    const usage = usageOf(message);
     return [
       {
         type: "done",

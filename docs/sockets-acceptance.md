@@ -100,12 +100,15 @@ either deployment this script starts is the remaining manual step, and the only 
    finishes.
 9. **The evidence.** The branch the session pushed is on the remote and `main` is untouched; there is exactly
    one pull request, opened in the tracker rather than by the runtime, attached to the record and attributed
-   to the Run that produced it; and the ruling is said back in the tracker too.
+   to the Run that produced it; and the ruling is said back in the tracker too. What the Run spent is on it:
+   each of the three sessions reported its usage as it ended, and `runs.get` adds them up under the harness
+   that counted them ([run-usage.md](./plans/run-usage.md)).
 10. **The record.** The Event log reads
     `run.started run.checkout_issued run.activity run.activity gate.requested run.awaiting_input
-gate.ruling_refused identity.linked gate.approved run.answered run.checkout_issued issue.link_added
-run.pull_request_opened gate.requested run.awaiting_input run.activity comment.created gate.ruling_refused
-gate.approved run.answered run.checkout_issued run.completed`, with the Agent as actor throughout and the
+run.usage_reported gate.ruling_refused identity.linked gate.approved run.answered run.checkout_issued
+issue.link_added run.pull_request_opened gate.requested run.awaiting_input run.usage_reported run.activity
+comment.created gate.ruling_refused gate.approved run.answered run.checkout_issued run.completed
+run.usage_reported`, with the Agent as actor throughout and the
     Human exactly one hop away at the Events that are theirs — the label that routed the work, the two
     rulings, and each ruling reaching the Run — and the tracker's own at the two refusals and the account it
     came to know.

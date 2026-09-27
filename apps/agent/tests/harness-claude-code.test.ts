@@ -231,11 +231,62 @@ describe("reading the stream", () => {
     expect((events[2] as Extract<SessionEvent, { type: "denied" }>).reason).toContain(
       "git push origin main",
     );
+    // `modelUsage`, not `usage`: the SDK's `usage` is the main loop alone, and
+    // its `input_tokens` (18 here) leaves out the prompt cache that is most of
+    // what the session read (docs/plans/run-usage.md).
     expect(events[4]).toMatchObject({
       type: "done",
       ok: true,
-      usage: { inputTokens: 18, outputTokens: 309, costUsd: 0.0211441 },
+      usage: {
+        models: [
+          {
+            model: "claude-haiku-4-5-20251001",
+            inputTokens: 936,
+            outputTokens: 321,
+            cacheReadTokens: 34_531,
+            cacheWriteTokens: 7_575,
+            costUsd: 0.0211441,
+            costBasis: "list",
+          },
+        ],
+      },
     });
+  });
+
+  it("counts the cache from the main loop's usage when a build reports no modelUsage", () => {
+    const older = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      result: "Done",
+      total_cost_usd: 0.5,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 20,
+        cache_read_input_tokens: 3_000,
+        cache_creation_input_tokens: 400,
+      },
+    });
+
+    expect(claudeCode.parse(older)).toEqual([
+      {
+        type: "done",
+        ok: true,
+        detail: "Done",
+        usage: {
+          models: [
+            {
+              model: null,
+              inputTokens: 10,
+              outputTokens: 20,
+              cacheReadTokens: 3_000,
+              cacheWriteTokens: 400,
+              costUsd: 0.5,
+            },
+          ],
+        },
+      },
+    ]);
   });
 
   it("ends well on a success and badly on anything else", () => {

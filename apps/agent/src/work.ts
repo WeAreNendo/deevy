@@ -70,6 +70,11 @@ export interface WorkOptions {
   deliver?: (options: DeliverOptions) => Promise<Delivery | null>;
   /** Who a commit is by. Defaults to the Agent, since everything it does is its own. */
   author?: { name: string; email: string };
+  /**
+   * The harness the sessions run on (`DEEVY_AGENT_HARNESS`), which is what a
+   * Run's usage says counted it.
+   */
+  harness?: string;
 }
 
 /**
@@ -329,6 +334,20 @@ export async function workRun(
     failure = describe(error, stopped(timeout, options.signal));
   } finally {
     await proxy.close();
+    // What the session spent, reported before the Run is settled and whatever
+    // became of it: a session that failed still spent. Once per session, under
+    // a key of its own, so a Run resumed after a Gate adds its next session
+    // rather than replacing this one. A report deevy will not take is the
+    // record of cost failing, never the record of the work.
+    if (usage) {
+      await deevy
+        .reportUsage(run.id, {
+          report: `session-${crypto.randomUUID()}`,
+          harness: options.harness ?? "unknown",
+          models: usage.models,
+        })
+        .catch(() => undefined);
+    }
     // The git proxy stays up past the session, because the supervisor's own
     // push goes through it too — closing it here rather than after the
     // delivery is a branch that never reaches the remote, which is what the

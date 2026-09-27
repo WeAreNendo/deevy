@@ -56,10 +56,26 @@ export type SessionEvent =
    */
   | { type: "done"; ok: boolean; detail: string; usage?: Usage };
 
-export interface Usage {
+/**
+ * What a session spent, per model, as its harness counted it; the supervisor
+ * reports it to deevy as the Run's usage (docs/plans/run-usage.md). A model
+ * is null where the harness did not name it, and the runner then names the
+ * one it asked for. A cost is absent where the harness did not price it —
+ * never a zero, and never a price the runtime worked out.
+ */
+export interface ModelUsage {
+  model: string | null;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   costUsd?: number;
+  /** Which price table the harness used, where it says (Claude Code's `costBasis`). */
+  costBasis?: "list" | "managed" | "unknown";
+}
+
+export interface Usage {
+  models: ModelUsage[];
 }
 
 export type Session = (input: SessionInput) => AsyncIterable<SessionEvent>;
