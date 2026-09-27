@@ -2,6 +2,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MemberChip } from "@/components/member-chip";
+import { SignInButton } from "@/components/sign-in-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,10 +73,10 @@ export function SignedOut({ invitation = null }: { invitation?: string | null })
         </p>
       </div>
       {providers?.map((provider) => (
-        <Button
+        <SignInButton
           key={provider.id}
-          size="lg"
-          className="w-full"
+          provider={provider.id}
+          label={provider.label}
           onClick={async () => {
             setFailed(null);
             const started = await authClient.signIn.social({
@@ -89,9 +90,7 @@ export function SignedOut({ invitation = null }: { invitation?: string | null })
               );
             }
           }}
-        >
-          Sign in with {provider.label}
-        </Button>
+        />
       ))}
       {providers?.length === 0 ? (
         <p className="text-sm text-muted-foreground">

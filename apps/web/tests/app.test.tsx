@@ -76,6 +76,39 @@ describe("SignedOut", () => {
     ]);
   });
 
+  it("dresses each provider's button in its own brand, and a generic one in deevy's", async () => {
+    stub.providers = [
+      github,
+      { id: "google", label: "Google", kind: "social" },
+      { id: "gitlab", label: "GitLab", kind: "social" },
+      { id: "oidc", label: "Acme SSO", kind: "social" },
+    ];
+    mount(<SignedOut />);
+    await screen.findByRole("button", { name: "Sign in with Acme SSO" });
+
+    for (const [name, provider] of [
+      ["GitHub", "github"],
+      ["Google", "google"],
+      ["GitLab", "gitlab"],
+    ] as const) {
+      const button = screen.getByRole("button", { name: `Sign in with ${name}` });
+      expect(button.dataset.brand).toBe(provider);
+      // The mark is decoration: the name stays "Sign in with …", which is
+      // what every test and every screen reader reads.
+      const mark = button.querySelector(`svg[data-mark="${provider}"]`);
+      expect(mark?.getAttribute("aria-hidden")).toBe("true");
+    }
+    // Google's own guidelines want its G in its four colours, never one.
+    const g = screen
+      .getByRole("button", { name: "Sign in with Google" })
+      .querySelectorAll("svg[data-mark] path");
+    expect(new Set([...g].map((path) => path.getAttribute("fill"))).size).toBe(4);
+    // An OpenID Connect IdP could be anybody's, so it has no brand to borrow.
+    const generic = screen.getByRole("button", { name: "Sign in with Acme SSO" });
+    expect(generic.dataset.brand).toBeUndefined();
+    expect(generic.querySelector("svg[data-mark]")).toBeNull();
+  });
+
   it("says so when the deployment configured no provider at all", async () => {
     stub.providers = [];
     mount(<SignedOut />);
