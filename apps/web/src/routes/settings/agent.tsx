@@ -25,7 +25,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { orpc } from "@/lib/orpc";
+import { dollars, duration, tokens, totalTokens } from "@/lib/usage";
 
 /**
  * The intervals a schedule offers. Anything finer than a quarter of an hour is
@@ -65,6 +74,9 @@ export function AgentPage({ memberId }: { memberId: string }) {
   const agent = agents.data.agents.find((row) => row.id === memberId);
   if (!agent) return <p className="text-muted-foreground">No such Agent.</p>;
   const admin = me.data?.member?.role === "admin";
+  // What an Agent costs is its Sponsor's business and an admin's; the server
+  // refuses anybody else, so the page does not offer it to them.
+  const answersForIt = admin || (!!agent.sponsor && agent.sponsor.id === me.data?.member?.id);
 
   return (
     <SettingsPage
@@ -134,6 +146,8 @@ export function AgentPage({ memberId }: { memberId: string }) {
         </div>
         {update.error ? <p className="text-sm text-destructive">{update.error.message}</p> : null}
       </SettingsSection>
+
+      {answersForIt ? <Usage memberId={memberId} /> : null}
 
       <RecentRuns memberId={memberId} />
 
@@ -410,6 +424,90 @@ function Connect() {
       description="Point a coding agent at this deevy and hand it the key. Every tool speaks MCP; only where the configuration lives differs."
     >
       <ConnectAgent />
+    </SettingsSection>
+  );
+}
+
+/** `2026-09` as a person reads it: "September 2026". */
+function monthName(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * What the Agent's Runs spent, this month and last, as the clients running it
+ * reported (docs/plans/run-usage.md). A cost is their estimate; tokens nobody
+ * priced and Runs nobody reported are said beside it, never folded in, so
+ * neither a total nor an average is quietly low.
+ */
+function Usage({ memberId }: { memberId: string }) {
+  const usage = useQuery(orpc.agents.usage.queryOptions({ input: { memberId } }));
+  return (
+    <SettingsSection
+      aria-label="Usage"
+      title="Usage"
+      description="What this Agent's Runs spent, month by month, as the clients running it reported. A cost is their estimate."
+    >
+      {usage.isPending ? <Skeleton className="h-16 w-full" /> : null}
+      {usage.error ? <p className="text-sm text-destructive">{usage.error.message}</p> : null}
+      {usage.data ? (
+        <Table aria-label="Usage by month">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Month</TableHead>
+              <TableHead className="text-right">Runs</TableHead>
+              <TableHead className="text-right">Cost</TableHead>
+              <TableHead className="text-right">Working</TableHead>
+              <TableHead className="text-right">Per finished Run</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {usage.data.months.map((month) => (
+              <TableRow key={month.month}>
+                <TableCell>{monthName(month.month)}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  <span className="flex flex-col items-end">
+                    <span>{month.runs}</span>
+                    {month.unreportedRuns > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {month.unreportedRuns} reported nothing
+                      </span>
+                    ) : null}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {/* The tokens under the cost they came to, and what no cost covers. */}
+                  <span className="flex flex-col items-end">
+                    <span>{month.costUsd === null ? "—" : `≈ ${dollars(month.costUsd)}`}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {tokens(totalTokens(month))} tokens
+                    </span>
+                    {month.unpricedTokens > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {tokens(month.unpricedTokens)} not priced
+                      </span>
+                    ) : null}
+                  </span>
+                </TableCell>
+                <TableCell
+                  className="text-right tabular-nums"
+                  title={`Waiting on a Human ${duration(month.waitingMs)}`}
+                >
+                  {duration(month.workingMs)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {month.averageWorkingMs === null
+                    ? "—"
+                    : `${month.averageCostUsd === null ? "cost not reported" : `≈ ${dollars(month.averageCostUsd)}`} · ${duration(month.averageWorkingMs)}`}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
     </SettingsSection>
   );
 }

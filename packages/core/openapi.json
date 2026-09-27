@@ -3362,6 +3362,154 @@
         }
       }
     },
+    "/agents/{memberId}/usage": {
+      "get": {
+        "operationId": "agents.usage",
+        "summary": "What an Agent's Runs spent and how long they took, month by month, as their clients reported it",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "memberId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "months",
+            "schema": {
+              "default": 2,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "months": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "month": {
+                            "type": "string"
+                          },
+                          "runs": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "finishedRuns": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "unreportedRuns": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "inputTokens": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "outputTokens": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "cacheReadTokens": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "cacheWriteTokens": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "costUsd": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "unpricedTokens": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "workingMs": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "waitingMs": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "averageCostUsd": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "averageWorkingMs": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "month",
+                          "runs",
+                          "finishedRuns",
+                          "unreportedRuns",
+                          "inputTokens",
+                          "outputTokens",
+                          "cacheReadTokens",
+                          "cacheWriteTokens",
+                          "costUsd",
+                          "unpricedTokens",
+                          "workingMs",
+                          "waitingMs",
+                          "averageCostUsd",
+                          "averageWorkingMs"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "months"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agents": {
       "get": {
         "operationId": "agents.list",

@@ -577,3 +577,30 @@ describe(`the Runs feed: ${String(listingRuns)} statements a page`, () => {
     expect(one).toBe(listingRuns);
   });
 });
+
+describe("an Agent's months: 2 statements, however many Runs", () => {
+  it("reads the Agent and then every month's totals in one grouped statement", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+    const asAda = createRouterClient(router, { context: ada });
+    for (const externalId of ["1", "2", "3"]) {
+      const issue = await seeded.record({ externalId, title: `Record ${externalId}` });
+      await asPlanner.runs.start({ issue: issue.url });
+    }
+
+    statements.length = 0;
+    await asAda.agents.usage({ memberId: planner.member.id, months: 12 });
+
+    expect(statements.length).toBe(2);
+  });
+});

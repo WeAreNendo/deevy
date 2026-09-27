@@ -13,6 +13,7 @@ import {
 } from "../agents.ts";
 import { ApiKeySummarySchema, IssuedKeySchema, apiKeysOf } from "../keys.ts";
 import { ProjectSchema } from "../schemas.ts";
+import { AgentMonthSchema, agentMonths } from "../usage.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import { NoInput, defineOperation } from "./registry.ts";
@@ -40,6 +41,26 @@ const FIRST_KEY_NAME = "first key";
 const CreatedAgentSchema = AgentSchema.extend({ key: IssuedKeySchema.nullable() });
 
 export const agents = {
+  usage: defineOperation({
+    name: "agents.usage",
+    summary:
+      "What an Agent's Runs spent and how long they took, month by month, as their clients reported it",
+    method: "GET",
+    path: "/agents/{memberId}/usage",
+    auth: "member",
+    input: z.object({
+      memberId: z.string(),
+      /** How many calendar months (UTC), this one first. */
+      months: z.coerce.number().int().min(1).max(12).default(2),
+    }),
+    output: z.object({ months: z.array(AgentMonthSchema) }),
+    handler: async ({ input, context }) => {
+      // What an Agent costs is its Sponsor's business, and an admin's.
+      const found = await requireSponsoredAgent(context, input.memberId);
+      return { months: await agentMonths(context.db, found.id, input.months) };
+    },
+  }),
+
   list: defineOperation({
     name: "agents.list",
     summary: "Every Agent in this Workspace, with its Sponsor and its Project grants",
