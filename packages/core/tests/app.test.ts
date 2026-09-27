@@ -224,14 +224,14 @@ describe("bootstrapWorkspace", () => {
 
     await bootstrapWorkspace(
       db,
-      { userId: "u2", email: "bob@example.com" },
+      { userId: "u2", email: "bob@example.com", emailVerified: true },
       { adminEmail: "ada@example.com" },
     );
     expect(await db.query.workspace.findFirst()).toBeUndefined();
 
     await bootstrapWorkspace(
       db,
-      { userId: "u1", email: "Ada@Example.com" },
+      { userId: "u1", email: "Ada@Example.com", emailVerified: true },
       { adminEmail: "ada@example.com", workspaceName: "Acme Team" },
     );
     const ws = await db.query.workspace.findFirst({ with: { members: true } });
@@ -242,11 +242,29 @@ describe("bootstrapWorkspace", () => {
     // A second admin sign-in must not create a second Workspace or Member.
     await bootstrapWorkspace(
       db,
-      { userId: "u1", email: "ada@example.com" },
+      { userId: "u1", email: "ada@example.com", emailVerified: true },
       { adminEmail: "ada@example.com" },
     );
     expect(await db.select().from(workspace)).toHaveLength(1);
     expect(await db.select().from(member)).toHaveLength(1);
+  });
+
+  it("never makes an address the provider did not verify the admin", async () => {
+    // DEEVY_ADMIN_EMAIL is the one address that makes an admin, so a sign-in
+    // that only claims it — through a provider that does not vouch for
+    // addresses — must make nothing at all.
+    const { db, close } = testDb();
+    closers.push(close);
+    await db.insert(user).values({ id: "u1", name: "Mallory", email: "ada@example.com" });
+
+    await bootstrapWorkspace(
+      db,
+      { userId: "u1", email: "ada@example.com", emailVerified: false },
+      { adminEmail: "ada@example.com" },
+    );
+
+    expect(await db.query.workspace.findFirst()).toBeUndefined();
+    expect(await db.query.member.findFirst()).toBeUndefined();
   });
 
   it("adds the admin Member when the Workspace already exists without one", async () => {
@@ -257,7 +275,7 @@ describe("bootstrapWorkspace", () => {
 
     await bootstrapWorkspace(
       db,
-      { userId: "u1", email: "ada@example.com" },
+      { userId: "u1", email: "ada@example.com", emailVerified: true },
       { adminEmail: "ada@example.com" },
     );
     expect(await db.select().from(workspace)).toHaveLength(1);

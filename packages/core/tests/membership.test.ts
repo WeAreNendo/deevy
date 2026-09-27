@@ -50,13 +50,37 @@ describe("joinWorkspace", () => {
     });
     await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.com" });
 
-    await joinWorkspace(db, { userId: "u-bob", email: "bob@example.com", name: "Bob" });
+    await joinWorkspace(db, {
+      userId: "u-bob",
+      email: "bob@example.com",
+      name: "Bob",
+      emailVerified: true,
+    });
 
     expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toMatchObject({
       workspaceId: admin.workspace.id,
       role: "member",
       kind: "human",
     });
+  });
+
+  it("never admits an address the provider did not verify, whatever its domain", async () => {
+    // A provider that does not vouch for an address — Linear, Atlassian, an
+    // Entra tenant without verified-email claims — could otherwise hand a
+    // stranger a Member by naming an address at an allowed domain ("nOAuth").
+    const { db, close } = testDb();
+    closers.push(close);
+    await allow(db, "example.com");
+    await db.insert(user).values({ id: "u-mallory", name: "Mallory", email: "cto@example.com" });
+
+    await joinWorkspace(db, {
+      userId: "u-mallory",
+      email: "cto@example.com",
+      name: "Mallory",
+      emailVerified: false,
+    });
+
+    expect(await db.query.member.findFirst({ where: { userId: "u-mallory" } })).toBeUndefined();
   });
 
   it("leaves a sign-in no Member when no rule matches", async () => {
@@ -72,7 +96,12 @@ describe("joinWorkspace", () => {
     });
     await db.insert(user).values({ id: "u-carol", name: "Carol", email: "carol@example.org" });
 
-    await joinWorkspace(db, { userId: "u-carol", email: "carol@example.org", name: "Carol" });
+    await joinWorkspace(db, {
+      userId: "u-carol",
+      email: "carol@example.org",
+      name: "Carol",
+      emailVerified: true,
+    });
 
     expect(await db.query.member.findFirst({ where: { userId: "u-carol" } })).toBeUndefined();
   });
@@ -87,7 +116,7 @@ describe("the handle a Member joins with", () => {
 
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.com", name: "Bob Vance" },
+      { userId: "u-bob", email: "bob@example.com", name: "Bob Vance", emailVerified: true },
       { login: async () => "bvance" },
     );
 
@@ -102,7 +131,12 @@ describe("the handle a Member joins with", () => {
     await allow(db, "example.com");
     await db.insert(user).values({ id: "u-bob", name: "Bob Vance", email: "bob@example.com" });
 
-    await joinWorkspace(db, { userId: "u-bob", email: "bob@example.com", name: "Bob Vance" });
+    await joinWorkspace(db, {
+      userId: "u-bob",
+      email: "bob@example.com",
+      name: "Bob Vance",
+      emailVerified: true,
+    });
 
     expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toMatchObject({
       handle: "bob-vance",
@@ -116,7 +150,12 @@ describe("the handle a Member joins with", () => {
     await db.update(member).set({ handle: "bob-vance" }).where(eq(member.id, admin.member.id));
     await db.insert(user).values({ id: "u-bob", name: "Bob Vance", email: "bob@example.com" });
 
-    await joinWorkspace(db, { userId: "u-bob", email: "bob@example.com", name: "Bob Vance" });
+    await joinWorkspace(db, {
+      userId: "u-bob",
+      email: "bob@example.com",
+      name: "Bob Vance",
+      emailVerified: true,
+    });
 
     expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toMatchObject({
       handle: "bob-vance-2",
@@ -131,7 +170,12 @@ describe("the Event a join appends", () => {
     const admin = await allow(db, "example.com");
     await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.com" });
 
-    await joinWorkspace(db, { userId: "u-bob", email: "bob@example.com", name: "Bob" });
+    await joinWorkspace(db, {
+      userId: "u-bob",
+      email: "bob@example.com",
+      name: "Bob",
+      emailVerified: true,
+    });
 
     const bob = await db.query.member.findFirst({ where: { userId: "u-bob" } });
     const client = createRouterClient(router, { context: admin });
@@ -139,6 +183,23 @@ describe("the Event a join appends", () => {
     expect(page.events).toMatchObject([
       { kind: "member.joined", actorMemberId: null, payload: { role: "member", kind: "human" } },
     ]);
+  });
+});
+
+describe("a rule a provider proves", () => {
+  it("admits by organisation even where the address is unverified, since the address decides nothing", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    await allow(db, "acme", "github_org");
+    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@unverified.example" });
+
+    await joinWorkspace(
+      db,
+      { userId: "u-bob", email: "bob@unverified.example", name: "Bob", emailVerified: false },
+      { listOrgs: async () => ["Acme"] },
+    );
+
+    expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toBeDefined();
   });
 });
 
@@ -151,7 +212,7 @@ describe("a github_org rule", () => {
 
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob" },
+      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
       { listOrgs: async () => ["Acme", "Acme"] },
     );
 
@@ -168,7 +229,7 @@ describe("a github_org rule", () => {
 
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob" },
+      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
       { listOrgs: async () => ["Globex"] },
     );
 
@@ -184,7 +245,7 @@ describe("a github_org rule", () => {
 
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.com", name: "Bob" },
+      { userId: "u-bob", email: "bob@example.com", name: "Bob", emailVerified: true },
       {
         listOrgs: async () => {
           asked = true;
@@ -211,7 +272,7 @@ describe("a gitlab_group rule", () => {
 
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob" },
+      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
       { listGroups: async () => ["Acme/Platform", "acme"] },
     );
 
@@ -228,7 +289,7 @@ describe("a gitlab_group rule", () => {
 
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob" },
+      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
       // A parent group is not the group the rule names: a rule is a path, and
       // `acme` is not `acme/platform`.
       { listGroups: async () => ["acme", "globex/platform"] },
@@ -246,7 +307,7 @@ describe("a gitlab_group rule", () => {
 
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.com", name: "Bob" },
+      { userId: "u-bob", email: "bob@example.com", name: "Bob", emailVerified: true },
       {
         listGroups: async () => {
           asked = true;
@@ -268,7 +329,7 @@ describe("a gitlab_group rule", () => {
     // would be a sign-in that failed. The Human signs in and asks the admin.
     await joinWorkspace(
       db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob" },
+      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
       {
         listGroups: async () => {
           throw new Error("gitlab is down");
@@ -306,7 +367,7 @@ describe("the admin the bootstrap creates", () => {
 
     await bootstrapWorkspace(
       db,
-      { userId: "u1", email: "ada@example.com", name: "Ada Lovelace" },
+      { userId: "u1", email: "ada@example.com", name: "Ada Lovelace", emailVerified: true },
       { adminEmail: "ada@example.com" },
     );
 
@@ -367,7 +428,12 @@ describe("one Human, one Member", () => {
     closers.push(close);
     const admin = await allow(db, "example.com");
     await db.insert(user).values({ id: "u-bob", name: "Bob Vance", email: "bob@example.com" });
-    const bob = { userId: "u-bob", email: "bob@example.com", name: "Bob Vance" };
+    const bob = {
+      userId: "u-bob",
+      email: "bob@example.com",
+      name: "Bob Vance",
+      emailVerified: true,
+    };
     await joinWorkspace(db, bob, { login: async () => "bvance" });
 
     // What a linked account looks like on the way back in: the same user, a

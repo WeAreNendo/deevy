@@ -455,6 +455,13 @@ a second seat. An invitation is good for seven days, one address holds one live 
 Neither is a Gate: nothing waits on a Human's ruling, and neither reaches an inbox — the admin is holding
 the link.
 
+**An address counts only when the provider verified it.** `DEEVY_ADMIN_EMAIL` makes the admin, and an
+`email_domain` rule admits, only a sign-in whose provider vouched for the address. A provider that does not —
+an OpenID Connect IdP that omits `email_verified`, or any provider that lets somebody put an address on an
+account they do not own — would otherwise let anybody claim `you@example.com` and be let in by it (the
+"nOAuth" hole). Such a sign-in still works by invitation, since the link is the proof, and a GitHub
+organization or a GitLab group rule does not rest on the address at all.
+
 The link points where a browser finds deevy, which is `BETTER_AUTH_URL` in the image and on the Worker,
 since both serve the SPA themselves. Where the SPA has an origin of its own, that is `DEEVY_WEB_ORIGIN`, and
 setting it is what keeps an invitation link, a Gate link and a Slack message pointing at the page rather than
