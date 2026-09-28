@@ -191,18 +191,24 @@ describe("the release", () => {
     // Started as a run of its own, never called. npm's trusted publisher names
     // npm.yml and npm reads a run's identity from its top-level workflow, so a
     // call from changesets.yml gets a 404 for its token: v0.9.0 published its
-    // images and its tag and no CLI that way.
+    // images and its tag and no CLI that way. npm-release.yml starts it.
+    const handoff = await read(".github/workflows/npm-release.yml");
     expect(release).not.toContain("uses: ./.github/workflows/npm.yml");
+    expect(release).toContain("uses: ./.github/workflows/npm-release.yml");
     expect(release).toContain("actions: write");
+    expect(handoff).toContain("actions: write");
     expect(
-      shellLines(release).some((line) =>
-        /gh workflow run npm\.yml [^\n]*-f version="\$VERSION" -f dry-run=false/.test(line),
+      shellLines(handoff).some((line) =>
+        /gh workflow run npm\.yml --ref main -f version="\$VERSION" -f dry-run="\$DRY_RUN"/.test(
+          line,
+        ),
       ),
     ).toBe(true);
-    expect(release).toContain("VERSION: ${{ needs.version.outputs.version }}");
+    // Publishing unless told otherwise: a release passes no dry-run.
+    expect(handoff).toMatch(/dry-run:[\s\S]*?default: false/);
     // And waited on, so a publish that fails still fails the release run.
     expect(
-      shellLines(release).some((line) => /gh run watch "\$run" --exit-status/.test(line)),
+      shellLines(handoff).some((line) => /gh run watch "\$run" --exit-status/.test(line)),
     ).toBe(true);
     // A re-run of a finished release must complete rather than fail.
     expect(workflow).toContain("is already on npm");
