@@ -7,7 +7,7 @@ name: Changesets
 #    and the changeset files consumed.
 #  - None are. Either that pull request just merged — in which case the version
 #    in package.json has moved and this tags it, writes the GitHub Release, and
-#    calls the publish workflow — or this is an ordinary commit and the tag
+#    calls the image workflow, then starts the npm one — or this is an ordinary commit and the tag
 #    already exists, which is what `guard` checks and why an ordinary push to
 #    main does not release anything.
 on:
@@ -174,13 +174,44 @@ jobs:
     # back goes last rather than in parallel.
     needs: [version, publish]
     if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/npm.yml
-    with:
-      version: ${{ needs.version.outputs.version }}
-    secrets: inherit
+      # To start npm.yml, and to read its run back.
+      actions: write
+    # Started as a run of its own, never called: npm's trusted publisher is
+    # registered against npm.yml, and npm reads which workflow a run is from
+    # its top-level workflow, so a call from here asks npm to trust
+    # changesets.yml and gets a 404 for its token (v0.9.0 did exactly that).
+    # A `workflow_dispatch` is the one event GITHUB_TOKEN may start, and a
+    # dispatched npm.yml is the same identity its rehearsals exchange, so a
+    # rehearsal still proves what a release does. This job waits on it, so a
+    # failed publish still fails the release run.
+    steps:
+      - name: Publish the CLI, and wait for it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -o pipefail
+          since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          started=$(gh workflow run npm.yml --ref main -f version="$VERSION" -f dry-run=false 2>&1 | tee /dev/stderr)
+          # A recent gh names the run it started; an older one does not, and
+          # then it is the newest dispatch of npm.yml since this step began.
+          run=$(printf '%s\n' "$started" | grep -oE 'actions/runs/[0-9]+' | head -1 | cut -d/ -f3 || true)
+          for _ in 1 2 3 4 5 6; do
+            [ -n "$run" ] && break
+            sleep 5
+            run=$(gh run list --workflow npm.yml --event workflow_dispatch --limit 1 \
+              --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"$since\") | .databaseId")
+          done
+          if [ -z "$run" ]; then
+            echo "::error::npm.yml was started but its run could not be found. Watch it under Actions."
+            exit 1
+          fi
+          echo "Publishing @deevy/cli@$VERSION in $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$run"
+          gh run watch "$run" --exit-status --interval 15
 
   # Called rather than left to the tag push above, which GITHUB_TOKEN cannot
   # trigger. This re-runs the whole of CI before either image is pushed.

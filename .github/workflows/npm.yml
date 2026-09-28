@@ -4,14 +4,17 @@ name: npm
 # an instance; this is the part somebody installs, so it goes where somebody
 # would install it from.
 #
-# Two ways in, the same two release.yml has and for the same reason:
+# One way in, `workflow_dispatch`, which defaults to a **rehearsal**: every step
+# of a real publish except the upload. changesets.yml starts it with a version
+# and the rehearsal off once a Version PR has merged and the images are out, and
+# so can anybody repairing a release whose npm job alone failed — which v0.8.0
+# spent an hour in, its images having failed and taken the publish with them.
 #
-#  - `workflow_call`, from changesets.yml, once a Version PR has merged and the
-#    images are out.
-#  - `workflow_dispatch`, which defaults to a **rehearsal**: every step of a
-#    real publish except the upload. Unticking that repairs a release whose npm
-#    job alone failed — which v0.8.0 spent an hour in, its images having failed
-#    and taken the publish with them.
+# Never `workflow_call`. npm's trusted publisher is registered against this
+# file, and npm reads the identity of a run from its top-level workflow: called
+# from changesets.yml, this job asked npm to trust changesets.yml, got a 404 for
+# its token and published nothing (v0.9.0). Started on its own, it is the same
+# identity a rehearsal exchanges, which is what makes a rehearsal worth running.
 #
 # There is no `verify` job here, and release.yml has one. The difference is what
 # each route can reach: this one publishes a version or refuses, and a version
@@ -43,17 +46,6 @@ name: npm
 #    published nothing, so the fix is a re-run.
 
 on:
-  workflow_call:
-    inputs:
-      version:
-        description: The version being released, without a leading v. Its tag must exist.
-        required: true
-        type: string
-      dry-run:
-        description: Rehearse rather than publish.
-        required: false
-        default: false
-        type: boolean
   workflow_dispatch:
     inputs:
       version:
@@ -61,7 +53,7 @@ on:
         required: false
         type: string
       dry-run:
-        description: Rehearse rather than publish. Untick only to repair a release whose npm job failed.
+        description: Rehearse rather than publish. A release unticks it, and so does repairing one whose npm job failed.
         required: false
         default: true
         type: boolean
