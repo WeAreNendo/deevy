@@ -187,11 +187,33 @@ describe("the release", () => {
     // for an OIDC publish, and passing the flag is how you discover whether
     // pnpm agrees. `publishConfig.provenance` above is the standing claim.
     expect(shellLines(workflow).filter((line) => line.includes("--provenance"))).toEqual([]);
-    // Both ends: a reusable workflow's token is capped by the CALLING job, so
-    // dropping this from changesets.yml costs the credential itself now, not
-    // just provenance.
     expect(workflow).toContain("id-token: write");
-    expect(release).toContain("id-token: write");
+    // Started as a run of its own, never called. npm's trusted publisher names
+    // npm.yml and npm reads a run's identity from its top-level workflow, so a
+    // call from changesets.yml gets a 404 for its token: v0.9.0 published its
+    // images and its tag and no CLI that way. npm-release.yml starts it.
+    const handoff = await read(".github/workflows/npm-release.yml");
+    expect(release).not.toContain("uses: ./.github/workflows/npm.yml");
+    expect(release).toContain("uses: ./.github/workflows/npm-release.yml");
+    // Both, in the calling job: a called workflow may ask for no more than it
+    // grants, and the handoff's `contents: read` alone failed a rehearsal at
+    // startup.
+    expect(release).toMatch(/uses: \.\/\.github\/workflows\/npm-release\.yml/);
+    expect(release).toMatch(/contents: read\n(?:\s+#.*\n)*\s+actions: write/);
+    expect(handoff).toContain("actions: write");
+    expect(
+      shellLines(handoff).some((line) =>
+        /gh workflow run npm\.yml --ref main -f version="\$VERSION" -f dry-run="\$DRY_RUN"/.test(
+          line,
+        ),
+      ),
+    ).toBe(true);
+    // Publishing unless told otherwise: a release passes no dry-run.
+    expect(handoff).toMatch(/dry-run:[\s\S]*?default: false/);
+    // And waited on, so a publish that fails still fails the release run.
+    expect(
+      shellLines(handoff).some((line) => /gh run watch "\$run" --exit-status/.test(line)),
+    ).toBe(true);
     // A re-run of a finished release must complete rather than fail.
     expect(workflow).toContain("is already on npm");
   });
@@ -269,6 +291,9 @@ describe("the release", () => {
     // still matched — and that swap is both the loaded gun below and a release
     // that rehearses instead of publishing while reporting success.
     expect(workflow).toMatch(/workflow_dispatch:[\s\S]*?dry-run:[\s\S]*?default: true/);
-    expect(workflow).toMatch(/workflow_call:[\s\S]*?dry-run:[\s\S]*?default: false/);
+    // Its one way in: a release starts it too, saying `dry-run=false` out loud
+    // (above), and a second trigger would be a way to run it that npm does not
+    // recognise.
+    expect(configLines(workflow).filter((line) => line.includes("workflow_call"))).toEqual([]);
   });
 });

@@ -1,0 +1,67 @@
+name: npm release
+
+# How a release publishes the CLI: start npm.yml as a run of its own, and wait
+# for it.
+#
+# Not a call. npm's trusted publisher for @deevy/cli is registered against
+# npm.yml, and npm reads which workflow a run is from its top-level workflow:
+# called from changesets.yml, npm.yml asked npm to trust changesets.yml, got a
+# 404 for its token and published nothing (v0.9.0). A `workflow_dispatch` is
+# the one event GITHUB_TOKEN may start, and a dispatched npm.yml is the same
+# identity a rehearsal or a hand-run repair has, which is the identity npm
+# knows.
+#
+# Its own file, called by changesets.yml, so that the handoff itself can be
+# rehearsed: call it with `dry-run: true` and it starts npm.yml's rehearsal the
+# way a release starts the publish, with the same token and the same wait.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version being released, without a leading v. Its tag must exist.
+        required: true
+        type: string
+      dry-run:
+        description: Start npm.yml's rehearsal rather than its publish.
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    name: ${{ inputs.dry-run && 'Rehearse the npm handoff' || 'Publish to npm, and wait for it' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # To start npm.yml, and to read its run back.
+      actions: write
+    steps:
+      - name: Start npm.yml, and wait for it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -o pipefail
+          since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          started=$(gh workflow run npm.yml --ref main -f version="$VERSION" -f dry-run="$DRY_RUN" 2>&1 | tee /dev/stderr)
+          # A recent gh names the run it started; an older one does not, and
+          # then it is the newest dispatch of npm.yml since this step began.
+          run=$(printf '%s\n' "$started" | grep -oE 'actions/runs/[0-9]+' | head -1 | cut -d/ -f3 || true)
+          for _ in 1 2 3 4 5 6; do
+            [ -n "$run" ] && break
+            sleep 5
+            run=$(gh run list --workflow npm.yml --event workflow_dispatch --limit 1 \
+              --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"$since\") | .databaseId")
+          done
+          if [ -z "$run" ]; then
+            echo "::error::npm.yml was started but its run could not be found. Watch it under Actions."
+            exit 1
+          fi
+          echo "npm.yml for @deevy/cli@$VERSION (dry run: $DRY_RUN): $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$run"
+          gh run watch "$run" --exit-status --interval 15

@@ -7,7 +7,7 @@ name: Changesets
 #    and the changeset files consumed.
 #  - None are. Either that pull request just merged — in which case the version
 #    in package.json has moved and this tags it, writes the GitHub Release, and
-#    calls the publish workflow — or this is an ordinary commit and the tag
+#    calls the image workflow, then starts the npm one — or this is an ordinary commit and the tag
 #    already exists, which is what `guard` checks and why an ordinary push to
 #    main does not release anything.
 on:
@@ -175,12 +175,20 @@ jobs:
     needs: [version, publish]
     if: needs.version.outputs.release == 'true'
     permissions:
+      # A called workflow may ask for no more than this job grants, and
+      # npm-release.yml reads the repository like every workflow here.
       contents: read
-      id-token: write
-    uses: ./.github/workflows/npm.yml
+      # To start npm.yml, and to read its run back.
+      actions: write
+    # Started as a run of its own, never called: npm's trusted publisher is
+    # registered against npm.yml, and npm reads which workflow a run is from
+    # its top-level workflow, so a call from here asks npm to trust
+    # changesets.yml and gets a 404 for its token (v0.9.0 did exactly that).
+    # npm-release.yml starts it and waits, so a failed publish still fails
+    # this run; it is its own file so that it can be rehearsed too.
+    uses: ./.github/workflows/npm-release.yml
     with:
       version: ${{ needs.version.outputs.version }}
-    secrets: inherit
 
   # Called rather than left to the tag push above, which GITHUB_TOKEN cannot
   # trigger. This re-runs the whole of CI before either image is pushed.

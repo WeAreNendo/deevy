@@ -99,7 +99,9 @@ To release outside this flow, push a `v*` tag by hand; `release.yml` still publi
 changelog and the GitHub Release, so it is for recovering a botched release rather than for making one.
 
 **The CLI goes to npm last**, after the images and so after CI has re-run, because an image can be pushed
-again and an npm version cannot — seventy-two hours and the number is burned. **If that job is the one that
+again and an npm version cannot — seventy-two hours and the number is burned. The release starts the npm
+workflow as a run of its own and waits for it, because npm's trusted publisher names `npm.yml`, and a run
+that `npm.yml` is merely part of is, to npm, some other workflow. **If that job is the one that
 failed**, run the npm workflow from the Actions tab with the version (without a leading `v`) and _dry run_
 unticked. A publish that failed published nothing, so the same number is still free; the job also skips a
 version already on npm, so running it twice is safe.
