@@ -195,7 +195,11 @@ describe("the release", () => {
     const handoff = await read(".github/workflows/npm-release.yml");
     expect(release).not.toContain("uses: ./.github/workflows/npm.yml");
     expect(release).toContain("uses: ./.github/workflows/npm-release.yml");
-    expect(release).toContain("actions: write");
+    // Both, in the calling job: a called workflow may ask for no more than it
+    // grants, and the handoff's `contents: read` alone failed a rehearsal at
+    // startup.
+    expect(release).toMatch(/uses: \.\/\.github\/workflows\/npm-release\.yml/);
+    expect(release).toMatch(/contents: read\n(?:\s+#.*\n)*\s+actions: write/);
     expect(handoff).toContain("actions: write");
     expect(
       shellLines(handoff).some((line) =>

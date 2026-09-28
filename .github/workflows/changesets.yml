@@ -175,6 +175,9 @@ jobs:
     needs: [version, publish]
     if: needs.version.outputs.release == 'true'
     permissions:
+      # A called workflow may ask for no more than this job grants, and
+      # npm-release.yml reads the repository like every workflow here.
+      contents: read
       # To start npm.yml, and to read its run back.
       actions: write
     # Started as a run of its own, never called: npm's trusted publisher is
