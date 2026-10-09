@@ -6,6 +6,7 @@
   "exports": {
     "./node": "./src/node/index.ts",
     "./workers": "./src/workers/index.ts",
+    "./durable": "./src/durable/index.ts",
     "./spa": "./src/spa.ts",
     "./testing": "./src/testing/index.ts",
     "./package.json": "./package.json"

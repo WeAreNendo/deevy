@@ -115,6 +115,14 @@ jobs:
       - name: Test
         run: vp run ${{ github.event_name == 'push' && '--no-cache' || '' }} ${{ matrix.shard.filters }} test
 
+      # The core's suites again, on the driver a hosted Workspace's Durable
+      # Object runs (ADR-0028), with node:sqlite playing the object's storage.
+      # In the core shard because it reads what that shard's suites read, so
+      # the two replay or run together.
+      - name: Test the core on the durable driver
+        if: matrix.shard.name == 'core'
+        run: vp run ${{ github.event_name == 'push' && '--no-cache' || '' }} core#test:durable
+
       - name: Save the task cache
         uses: actions/cache/save@v6
         with:
