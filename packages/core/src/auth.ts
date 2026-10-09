@@ -5,7 +5,8 @@ import { mcp } from "@better-auth/mcp";
 import { allowlistRule, invitation, member, workspace, type Db } from "@deevy/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { allocateHandle, slugify } from "./handles.ts";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { genericOAuth, jwt, lastLoginMethod } from "better-auth/plugins";
 import { fetchClientMetadataResource, type MetadataResourceFetch } from "./cimd.ts";
 import { appendEvent } from "./events.ts";
@@ -563,6 +564,7 @@ export function oauthServerPlugins(env: AuthEnv) {
       allowDynamicClientRegistration: true,
       allowUnauthenticatedClientRegistration: true,
     }),
+    nativeRegistrations(),
     cimd({
       fetchClientMetadataResource: env.fetchClientMetadataResource ?? fetchClientMetadataResource,
       // The revision pins CIMD draft-00, which the profile enforces on top of
@@ -570,6 +572,50 @@ export function oauthServerPlugins(env: AuthEnv) {
       metadataProfile: "mcp-2026-07-28",
     }),
   ];
+}
+
+/** A redirect only an app on the Human's own machine can receive (RFC 8252 §7). */
+function isNativeRedirect(uri: unknown): boolean {
+  if (typeof uri !== "string" || !URL.canParse(uri)) return false;
+  const { protocol, hostname } = new URL(uri);
+  if (protocol === "https:") return false;
+  if (protocol !== "http:") return true;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+/**
+ * A client that registers without an `application_type` is a web client to
+ * Better Auth, as OpenID Connect registration defaults it, and a web client may
+ * only be called back over https on a host that is not this machine. That
+ * refuses every MCP client that registers itself the way MCP describes, which
+ * never mentions the field: VS Code's `http://127.0.0.1:33418`, the MCP
+ * Inspector's and the SDK's `http://localhost`, an app's own scheme. Each is a
+ * native app by RFC 8252's definition, and saying so is all this does: a native
+ * client is still refused http on any other host, https on a loopback one, and
+ * a scheme that is not a reverse-domain name without an authority (§7.1), so
+ * nothing is accepted that names somebody else's server. A client that does
+ * state its type keeps it.
+ *
+ * It shapes no table, so packages/db/auth.generate.config.ts leaves it out.
+ */
+function nativeRegistrations(): BetterAuthPlugin {
+  return {
+    id: "deevy-native-registrations",
+    hooks: {
+      before: [
+        {
+          matcher: (ctx) => ctx.path === "/oauth2/register",
+          handler: createAuthMiddleware(async (ctx) => {
+            const body = ctx.body as Record<string, unknown> | undefined;
+            const uris = body?.redirect_uris;
+            if (!body || body.application_type !== undefined || !Array.isArray(uris)) return;
+            if (!uris.some(isNativeRedirect)) return;
+            return { context: { body: { ...body, application_type: "native" } } };
+          }),
+        },
+      ],
+    },
+  };
 }
 
 /** The Authorization bearer of a request, whatever kind of credential it is. */
