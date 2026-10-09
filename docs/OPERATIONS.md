@@ -68,6 +68,9 @@ version bump and the folded `CHANGELOG.md`. Merging that pull request is the rel
    does not exist yet.
 2. It pushes `vX.Y.Z` and writes the GitHub Release from that version's `CHANGELOG.md` section.
 3. It calls `release.yml`, which re-runs the whole of CI and then pushes both images.
+4. Once the images are out it starts the npm workflow (below) and calls `hosted-release.yml`, which builds the
+   many-Workspaces Worker at the tag and attaches `deevy-hosted-X.Y.Z.tar.gz`, its `.sha256` and a build
+   provenance attestation to the Release ("The many-Workspaces Worker").
 
 The tag is pushed for the record and for the image tags; it does **not** drive step 3, because a tag pushed
 with `GITHUB_TOKEN` triggers no workflow. Nothing about an ordinary commit on `main` releases anything — the
@@ -97,6 +100,10 @@ the GitHub Release already exist — which is what the `workflow_dispatch` input
 
 To release outside this flow, push a `v*` tag by hand; `release.yml` still publishes on one. That skips the
 changelog and the GitHub Release, so it is for recovering a botched release rather than for making one.
+
+**If the hosted Worker is missing from a Release**, attach it again from the tag, so the attestation names
+the commit the archive was built from: `gh workflow run hosted-release.yml --ref vX.Y.Z -f version=X.Y.Z`. A
+run started anywhere else stops before it attests anything.
 
 **The CLI goes to npm last**, after the images and so after CI has re-run, because an image can be pushed
 again and an npm version cannot — seventy-two hours and the number is burned. The release starts the npm
@@ -337,12 +344,36 @@ Sign-in providers, email senders and the timings are the variables every deevy r
 registered once, with `${DEEVY_HOSTED_ORIGIN}/auth/callback/<provider>`. The development stubs run only when
 the origin is a loopback address.
 
-Build it after the SPA: `vp run web#build:workers`, then `vp run hosted#build:hosted`, which bundles
-`dist/hosted/worker.js`. A deployment renders its own `wrangler.json` over `apps/hosted/wrangler.jsonc` —
-its route or Custom Domain, the `DIRECTORY` namespace's id, the `CONSOLE` binding and the secrets — and runs
-`wrangler deploy`. `vp run hosted#test:hosted` runs two Workspaces on `wrangler dev --local` with a stand-in
+**Every release carries it**, built at the tag: `deevy-hosted-X.Y.Z.tar.gz` on the GitHub Release, with its
+`.sha256` and a build provenance attestation, so a deployment runs what this repository released and builds
+nothing itself. Check where it came from before deploying it:
+
+```bash
+gh release download vX.Y.Z --repo WeAreNendo/deevy --pattern 'deevy-hosted-*'
+sha256sum -c deevy-hosted-X.Y.Z.tar.gz.sha256
+gh attestation verify deevy-hosted-X.Y.Z.tar.gz --repo WeAreNendo/deevy \
+  --signer-workflow WeAreNendo/deevy/.github/workflows/hosted-release.yml
+```
+
+Inside, flat: `worker.js` and its source map, `client/` (the SPA), `wrangler.json` and `manifest.json`.
+`wrangler.json` is `apps/hosted/wrangler.jsonc` for that bundle (`no_bundle`, the SPA beside it) with what
+only the deployer knows left as blanks — `<<HOST>>` (the Custom Domain, and the origin in
+`DEEVY_HOSTED_ORIGIN`), `<<DIRECTORY_KV_ID>>` and `<<CONSOLE_SERVICE>>` (remove that entry for no console).
+`manifest.json` names the version and commit, the compatibility date and flags, the Durable Object class and
+its migration tags, each blank and where it is, every secret and variable with a line on what it is for, and
+the SHA-256 of every file. Fill the blanks, set the secrets (`wrangler versions secret put`, never in
+`wrangler.json`), and `wrangler deploy` (or `versions upload` and a gradual `versions deploy`) from the
+extracted directory; a Workspace migrates when it next wakes, and `Platform.status` says which version it
+runs.
+
+To build it from a checkout: `vp run web#build:workers`, then `vp run hosted#build:hosted`, which bundles
+`dist/hosted/worker.js` with package.json's version in it, then `vp run hosted#package`, which writes the
+archive into `apps/hosted/dist`; the same commit gives the same files, so a rebuild can be held against a
+release through the manifest's hashes. `vp run hosted#check:hosted` takes it
+apart with `tar`, checks every file against the manifest and dry-runs its `wrangler.json`, as CI does on every
+pull request. `vp run hosted#test:hosted` runs two Workspaces on `wrangler dev --local` with a stand-in
 console and checks provisioning, sign-in through the relay, isolation, the alarm, the counts, a limit of a
-Workspace's own, a dump, suspension and removal.
+Workspace's own, a dump, suspension and removal, and the acceptance walk runs a record through a hosted Workspace beside the other deployments.
 
 ## Environment
 
