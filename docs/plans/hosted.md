@@ -47,12 +47,10 @@ built after the beta has proved provisioning, upgrades and support.
 - **A Worker build, an acceptance walk and a smoke.** `web#build:workers`, `web#check:workers`, the seven
   phases of `web#test:workers` on `wrangler dev --local`, and `vp run agent#acceptance`, which takes a record
   through both deployments on every commit. A third shape joins them rather than replacing them.
-- **Better Auth's `oAuthProxy`.** In 1.7.3 it is stateless on the relaying side: the relay exchanges the code
-  with its own client secret, encrypts the profile and tokens, and hands them to the Workspace's
-  `/callback/:id/oauth-proxy`, which signs the Human in against its own database. `admit()` runs (the user
-  and session hooks fire through `handleOAuthUserInfo`), the `read:org` token arrives for `github_org` rules,
-  Slack's id token arrives for [ADR-0027](../adr/0027-a-sign-in-vouches-inside-the-workspace-it-was-to.md),
-  and `lastLoginMethod` still sets its cookie.
+- **Better Auth's `oAuthProxy`**, studied and refused for the relay (ADR-0030): its relay exchanges the
+  code and passes the profile and tokens to the deevy, and its callback follows each deevy's base path. What
+  it showed is that `admit()` runs on whatever path creates the user, which the relay deevy built instead
+  keeps by letting each Workspace finish its own sign-in.
 - **Email.** Cloudflare Email Service behind the `send_email` binding is one of the seven senders
   ([email-channel.md](./email-channel.md)), so hosted Workspaces have a platform sender from day one, and an
   admin can still set their own in Settings › Email.
@@ -77,7 +75,7 @@ built after the beta has proved provisioning, upgrades and support.
   `app.deevy.dev` overwrite each other: signing in to one signs you out of the other.
 - **Sign-in providers are per deployment.** Every provider's OAuth App holds one callback (GitHub accepts a
   subdirectory of it; Google, Microsoft and Atlassian want an exact list). A platform cannot register a
-  callback per Workspace, and must not ask a team to register OAuth Apps to sign in. The stock `oAuthProxy`
+  callback per Workspace, and must not ask a team to register OAuth Apps to sign in. Better Auth's `oAuthProxy`
   does not relay `/link-social` (Settings › Identities' "Link GitHub"), would proxy per-Workspace OIDC by
   mistake (`genericOAuth` starts through `/sign-in/social` in 1.7.3), and drops a provider configured with a
   client id alone (`configuredClient`).
@@ -238,13 +236,14 @@ a provider's access token in the clear.
 
 ### Signing in, and switching
 
-`https://app.deevy.dev/auth/callback/<provider>` is the one callback every platform OAuth App knows. A
-Workspace's Better Auth runs the client half of `oAuthProxy` for the platform's providers only and needs
-only their client ids; the relay holds the client secrets, exchanges the code, and redirects to the
-Workspace with the encrypted profile — but only to a Workspace path the directory knows. A Workspace's own
-OIDC provider, and GitLab on a team's own instance, are never relayed: they use the Workspace's URL
-directly, as a self-hosted deployment does. "Link GitHub" in Settings › Identities goes through the relay
-too, linking to the signed-in Human.
+`https://app.deevy.dev/auth/callback/<provider>` is the one callback every platform OAuth App knows. The
+relay only redirects ([ADR-0030](../adr/0030-a-sign-in-may-be-relayed.md)): a Workspace names it as its
+`redirect_uri` on both legs of a sign-in or a link and wraps its own `state` with where it lives, signed with
+a secret it shares with the relay; the relay sends the browser back there — only to a Workspace the directory
+knows — and the Workspace exchanges the code itself, with the platform's client secret every object of the
+hosted Worker holds. The relay never sees a code it keeps or a token, and Better Auth's own state and cookie
+checks decide whose sign-in it is. A Workspace's own OIDC provider, and GitLab on a team's own instance, are
+never relayed. "Link GitHub" in Settings › Identities goes through the relay too.
 
 Each Workspace is its own sign-in. The console lists the Workspaces you own; a switcher in a Workspace lists
 the ones this browser holds a session for. Opening one you are not signed in to lands on its sign-in page
@@ -295,10 +294,10 @@ slice it gates starts.
 - **S2 — a Workspace under a path, and the relay** (gates slices 4, 5 and 8). The app and Better Auth under
   `/acme`: Better Auth's base path and a path issuer through the `jwt` and `mcp` plugins, deevy's own
   issuer and audience checks (`principal.ts`), path-scoped cookies, and real clients finding the Workspace —
-  Claude Code, Cursor and VS Code over MCP, and a patched CLI. Then stock `oAuthProxy` on a test host with
-  real GitHub and Google apps: the Member is created through `admit()`, a `github_org` rule matches, Slack's
-  id token is kept, OIDC is not proxied, `linkSocial` fails as predicted, the relay runs without a database.
-  An MCP client that cannot find a path issuer is the finding that matters most.
+  Claude Code, Cursor and VS Code over MCP, and a patched CLI. Then the relay on a test host with real GitHub
+  and Google apps: the Member is created through `admit()`, a `github_org` rule matches, Slack's id token is
+  kept, OIDC is not relayed, linking works. An MCP client that cannot find a path issuer is the finding that
+  matters most.
 - **S3 — live updates and deploys** (gates slices 10 and 11). What an open stream really bills, a
   hibernatable WebSocket through oRPC 2's websocket adapter, and a gradual deploy that carries a migration:
   resets, the stream resuming, a rollback, the `status()` sweep.
@@ -340,13 +339,13 @@ In this repository, each one pull request with its tests and, where an upgrader 
    `jobs.ts` (`enqueue` sets the alarm) and `dump.ts` (a logical SQL dump from `sqlite_master`, skipping
    Cloudflare's `_cf_*` tables). The core's suites run again on the durable driver through a node-backed
    `SqlStorage` shim. Acceptance: the suites pass on it; raw `db.get` is banned in the core by a lint rule.
-8. **Relayed sign-in** (M, after S2). `createAuth` gains a relay option with both halves: the client relays
-   only the platform's providers, needs only their client ids, sends absolute callback and error URLs, and
-   relays `/link-social` for the signed-in Human; the relay holds the secrets and redirects only to
-   Workspace URLs it is told exist. `socialProvidersOf` is shared by both halves. ADR-0030, "A sign-in may be
-   relayed". Acceptance: with the stub OAuth server, a sign-in and a link go Workspace → relay → provider →
-   relay → Workspace for two Workspaces on one host, each keeping its own session; OIDC goes straight to the
-   Workspace; a forged callback URL is refused.
+8. **Relayed sign-in** (M, after S2). `createAuth` gains a relay option: for the platform's providers only, a
+   Workspace names the relay's callback on both legs and wraps its state with where it lives, signed; any
+   deevy can be the relay (`/relay/callback/<provider>`), which checks the signature and an allowed list and
+   redirects. ADR-0030, "A sign-in may be relayed". Acceptance: two Workspaces on one host share a GitHub App;
+   a sign-in and a link go Workspace → provider → relay → Workspace, each keeping its own session; a code
+   delivered to the other Workspace signs nobody in; OIDC is not relayed; a forged or disallowed state is
+   refused.
 9. **`apps/hosted`** (L, after S1, 4 and 8). The router, `WorkspaceObject`, `Platform`, derived secrets, an
    environment reader that refuses `DEEVY_DEV_STUB_*`, `wrangler.jsonc` with a SQLite class, the SPA from the
    `apps/web` build as its assets, an optional `CONSOLE` service binding; `hosted#build`,
@@ -455,4 +454,55 @@ credential in any output, no inline script in any page, and the core never learn
 
 ## What it found
 
-Nothing yet.
+The slices were built on 2026-10-09, in parallel where they did not depend on each other: 0, 1, 2, 3 and 11
+as pull requests of their own on `main`, and 6, 4, 5, 7, 8 and 9 as one stack.
+
+**The spikes, as far as a machine with no account can take them.** S1's functional half is slice 9's smoke:
+the app runs in a SQLite Durable Object on workerd, two Workspaces side by side, with every core suite
+passing again on the durable driver; its memory and wake cost on Cloudflare's own isolates are still to be
+measured on a real account. S2's server half held without a change to Better Auth: its OAuth provider
+already answers a path issuer at `/.well-known/oauth-authorization-server/<path>` and at the appended form,
+and the full authorization-code flow, the MCP challenge and token audiences work under `/acme` (slice 4's
+tests); real MCP clients against a path issuer, and real provider Apps through the relay, are still owed. S3
+waits for an account: what an open stream bills, and a gradual deploy with a migration.
+
+0. **The queue path sends only webhooks** (#135). The claim now names its target, so a stray id can never
+   retire another arm's row, and `appendEvent` queues only webhooks. Email and Slack-room deliveries were
+   never affected; they were never queued.
+1. **Socket caches keyed by their credential** (#134). Linear's and GitHub's token caches are keyed by the
+   API base, the client or App id, and a digest of the secret or private key. No other cache in the Sockets or
+   the senders had the shape.
+2. **A page runs only deevy's script** (#142). The audit found one real hole: `links.add` took `javascript:`
+   URLs, drawn as links on a Gate and a record; it takes http and https only now, and every link the SPA
+   builds from a tool's or an Agent's data skips anything else. `/mcp` accepted a browser's session cookie;
+   it takes bearer tokens only. Inline styles stay allowed, because three of the UI's libraries write
+   `<style>` as they run; scripts are locked to deevy's own. Better Auth's decrypt throws on an unencrypted
+   token, so deevy's own reads accept both until a row is written again. `/api/docs` still loads its reference
+   UI from a CDN, unpinned — owed.
+3. **The source of the running version** (#136). `health.ping` and `/healthz` say the version; Settings
+   links to `v<version>` on GitHub.
+4. **deevy under a path** (#138). Better Auth routes on the path of its own URL and keeps a URL that has one
+   as given, so it is handed `…/acme/api/auth` outright; Hono's `basePath` shares its router, so the app
+   mounts under the path with discovery at the root of the host beside it. The SPA is built once, relative to
+   a `<base href>` the server writes; `lib/base.ts` is the one place it is read. The acceptance walk runs a
+   third time under `/deevy` and leaves the same Event log.
+5. **The CLI keeps the path** (#140). Login checks the discovered document's issuer, which it used to skip:
+   a deevy reached by another name than its own now says which URL to log in to.
+6. **The durable migration projection** (#137). Both migrators journal by folder name and decide what is
+   pending by name alone, so a database migrated in a Durable Object opens under the Node migrator with
+   nothing to apply.
+7. **`@deevy/adapters/durable`** (#143). Every core suite passed on the durable driver with no change to the
+   core. drizzle's durable migrator answers any failure with a bare "Rollback", so the adapter watches each
+   statement to name the migration and SQLite's message. The dump writes values with SQLite's `quote()`,
+   because a Durable Object reads an integer past 2^53 back rounded, and restores `sqlite_sequence`, or a
+   restored Workspace could hand out an Event's `seq` twice.
+8. **Relayed sign-in** (#144). Built as a redirector rather than on `oAuthProxy`, whose callback follows each
+   Workspace's base path (which Google's exact match refuses) and whose relay holds the tokens; ADR-0030.
+   Better Auth normalises `options.baseURL`, so the Workspace's own URL is handed to the plugin rather than
+   read back. The development sign-in now follows the authorization URL's `redirect_uri`, as a provider would.
+9. **`apps/hosted`** (#145). workerd does not implement jurisdictions, so the smoke runs without `eu`. RPC
+   types an empty tuple as `never[]`. The assets binding needs the single-page fallback even though the router
+   serves the SPA, because a deep route is asked of the binding by the inner path.
+10. **Every release upgrades in place** (#141). The Node migrator already tolerates migrations it does not
+    know, and now names them at startup. A `-- deevy: contract` comment above drizzle's table rebuild could
+    have hidden its PRAGMA from the D1 projection's refusal; the projection reads past leading comments now.
