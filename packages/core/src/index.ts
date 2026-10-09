@@ -9,6 +9,7 @@ export {
 // a context: which surface a request reached decides the audience it accepts.
 export { API_PATH, MCP_PATH, type ResourcePath } from "./auth.ts";
 export { basePathOf, wellKnownURL, type BasePath } from "./base-path.ts";
+export { providersFromEnv, type ProviderVariables } from "./provider-env.ts";
 export {
   relaySignInCallback,
   signInRelayFromEnv,
