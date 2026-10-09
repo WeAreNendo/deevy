@@ -1,8 +1,43 @@
 # Running deevy
 
-deevy is one container and one volume. A self-hosted instance serves one Workspace (CONTEXT.md), so there is
-no tenancy to configure: the first sign-in with `DEEVY_ADMIN_EMAIL` creates the Workspace and becomes its
-admin, and everyone else joins through the allowlist or an invitation.
+deevy is one container and one volume, or one Cloudflare Worker and one D1 database. Either serves one
+Workspace (CONTEXT.md), so there is nothing to partition: the first sign-in with `DEEVY_ADMIN_EMAIL` creates
+the Workspace and becomes its admin, and everyone else joins through the allowlist or an invitation. A third
+shape, the many-Workspaces Worker, serves many on one host, each in a database of its own; it is what hosted
+deevy runs.
+
+## Hosted deevy
+
+deevy is also run for teams that would rather not run it: a Workspace at `https://app.deevy.dev/<slug>`,
+asked for at [app.deevy.dev](https://app.deevy.dev), in a private beta for now. It is the deevy this
+repository releases, unmodified — Settings says which version runs and links to its source — served by the
+many-Workspaces Worker below, each Workspace's database a Durable Object of its own
+([ADR-0028](adr/0028-a-hosted-workspace-is-a-durable-object.md)). Everything in this document that is not
+about running deevy applies to a hosted Workspace too; what differs is this.
+
+- **Its address is a path.** Your Workspace lives at `https://app.deevy.dev/<slug>` — its pages, its API at
+  `…/<slug>/api`, its MCP endpoint at `…/<slug>/mcp`, its tools' webhooks at `…/<slug>/hooks/…`. An Agent's
+  `DEEVY_URL` and `deevy login` take that whole URL. A slug does not change once it is chosen.
+- **Signing in** is with the platform's GitHub, Google and other Apps, through one relay at
+  `app.deevy.dev/auth` ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)). The address you asked for the
+  Workspace with becomes its admin the first time it signs in, as on any deevy. Each Workspace is its own
+  sign-in: being in one signs you in to no other. A GitHub organization that restricts OAuth App access has to
+  approve the deevy App before a `github_org` allowlist rule can see that you belong to it; until then the
+  rule admits nobody, and an invitation still works.
+- **Your tools connect as they would to your own deevy.** A GitHub Socket is a GitHub App created in your
+  organization by the manifest flow, pointed at your Workspace's address; Linear, GitLab, Notion and Slack
+  are set up as in "Connecting your tools", with your Workspace's URLs.
+- **Where your data is.** Your Workspace's database is created in the European Union and stays there, and so
+  do its nightly backups, kept 30 days; its last 30 days can also be restored to any point. The edge that
+  terminates TLS and routes a request is Cloudflare's global network. Your Sockets' credentials are sealed
+  under a secret derived for your Workspace alone, which no backup contains.
+- **What one Workspace may do in a day**, during the beta: 50 invitations and 500 emails, so that one team's
+  invitations cannot hurt everybody's email. Settings › Email shows where you are.
+- **Leaving.** The console exports your Workspace: its database as SQL and the two secrets it was sealed
+  and signed with. "Taking a hosted Workspace home" below loads it into the image or a Worker of your own,
+  and says what to point at the new address.
+- **Deleting.** A Workspace you delete is suspended at once and removed after 30 days, during which you can
+  bring it back; its final backup is kept 30 days more, then nothing is.
 
 ## The image
 
