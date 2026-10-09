@@ -1,29 +1,36 @@
 // Two guards over generated SQL. drizzle-kit 1.0.0-rc.4 emits `id text PRIMARY
 // KEY` without NOT NULL (#6165), which lets SQLite store NULL ids, so the
 // generated SQL is patched by hand and this keeps CI honest about it. And the
-// D1 projection in packages/db/migrations is a committed build artifact of the
+// D1 projection in packages/db/migrations and the Durable Object one in
+// packages/db/src/durable-migrations.ts are committed build artifacts of the
 // same source, so a stale one fails here like a stale openapi.json (ADR-0008).
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   drizzleDir as defaultDrizzleDir,
+  durableMigrationsFile as defaultDurableMigrationsFile,
   migrationsDir as defaultMigrationsDir,
+  projectDurableMigrations,
   projectMigrations,
+  renderDurableMigrations,
 } from "./emit-d1-migrations.ts";
 
-export interface MigrationDirs {
+export interface MigrationPaths {
   drizzleDir: string;
   migrationsDir: string;
+  durableMigrationsFile: string;
 }
 
-/** Every complaint about the two migration folders, empty when they are sound. */
+/** Every complaint about the migrations and their projections, empty when they are sound. */
 export async function checkMigrations({
   drizzleDir,
   migrationsDir,
-}: MigrationDirs): Promise<string[]> {
+  durableMigrationsFile,
+}: MigrationPaths): Promise<string[]> {
   return [
     ...(await textPrimaryKeysAreNotNull(drizzleDir)),
     ...(await projectionIsCurrent(drizzleDir, migrationsDir)),
+    ...(await durableProjectionIsCurrent(drizzleDir, durableMigrationsFile)),
   ];
 }
 
@@ -69,12 +76,35 @@ async function projectionIsCurrent(drizzleDir: string, migrationsDir: string): P
   return problems;
 }
 
+/**
+ * The module is compared as text, not as the record it exports, because the
+ * text is what is committed: a hand edit that leaves the record the same is
+ * still a file nobody generated.
+ */
+async function durableProjectionIsCurrent(
+  drizzleDir: string,
+  durableMigrationsFile: string,
+): Promise<string[]> {
+  const expected = renderDurableMigrations(await projectDurableMigrations(drizzleDir));
+  const committed = await readFile(durableMigrationsFile, "utf8").catch(() => null);
+  if (committed === null) {
+    return ["packages/db/src/durable-migrations.ts is missing; run `vp run db#generate:d1`"];
+  }
+  if (committed !== expected) {
+    return ["packages/db/src/durable-migrations.ts is stale; run `vp run db#generate:d1`"];
+  }
+  return [];
+}
+
 if (import.meta.main) {
-  // The two folders are arguments so that a test can drive this script — the
-  // one CI runs, exit code and all — rather than only the function inside it.
-  const [drizzleDir = defaultDrizzleDir, migrationsDir = defaultMigrationsDir] =
-    process.argv.slice(2);
-  const problems = await checkMigrations({ drizzleDir, migrationsDir });
+  // The paths are arguments so that a test can drive this script — the one CI
+  // runs, exit code and all — rather than only the function inside it.
+  const [
+    drizzleDir = defaultDrizzleDir,
+    migrationsDir = defaultMigrationsDir,
+    durableMigrationsFile = defaultDurableMigrationsFile,
+  ] = process.argv.slice(2);
+  const problems = await checkMigrations({ drizzleDir, migrationsDir, durableMigrationsFile });
   if (problems.length > 0) {
     console.error(problems.join("\n"));
     process.exit(1);
