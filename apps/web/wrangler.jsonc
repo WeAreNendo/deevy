@@ -37,5 +37,10 @@
   // Cloudflare owns this schedule; the Worker's `scheduled` handler is one
   // bounded pass of the same work the Node runner's timer drives.
   "triggers": { "crons": ["* * * * *"] },
+  // Cloudflare Email Service, for DEEVY_EMAIL_SENDER=cloudflare
+  // (docs/plans/email-channel.md). Off by default: it is a beta, and reaching
+  // an address not verified on the account needs Workers Paid; every other
+  // sender works without it. Uncomment to send through it.
+  // "send_email": [{ "name": "EMAIL" }],
   "observability": { "enabled": true },
 }

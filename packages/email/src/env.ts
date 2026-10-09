@@ -29,6 +29,10 @@ const variables: Partial<Record<SenderKind, Variable[]>> = {
     { name: "MAILGUN_DOMAIN", key: "domain", secret: false, required: true },
     { name: "MAILGUN_REGION", key: "region", secret: false, required: false },
   ],
+  // Node only: the URL carries the password, so all of it is a secret.
+  smtp: [{ name: "SMTP_URL", key: "url", secret: true, required: true }],
+  // Workers only, through the `EMAIL` binding in wrangler.jsonc: nothing to read.
+  cloudflare: [],
   ses: [
     { name: "AWS_SES_REGION", key: "region", secret: false, required: true },
     { name: "AWS_SES_ACCESS_KEY_ID", key: "accessKeyId", secret: true, required: true },

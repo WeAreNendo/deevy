@@ -115,4 +115,22 @@ describe("email on the Worker", () => {
     expect(env.email).toBeNull();
     expect(env.emailProblem).toBe("DEEVY_EMAIL_SENDER=resend also needs RESEND_API_KEY.");
   });
+
+  it("runs Cloudflare Email Service only where the deployment declared its binding", () => {
+    const base = {
+      DB: undefined as never,
+      BETTER_AUTH_URL: "https://deevy.example.com",
+      BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters",
+    };
+    const without = isolateFor(base);
+    const withBinding = isolateFor({
+      ...base,
+      EMAIL: { send: () => Promise.resolve({ messageId: "cf-1" }) },
+    });
+
+    expect(without.emailSenders.cloudflare).toBeUndefined();
+    expect(withBinding.emailSenders.cloudflare).toBeTypeOf("function");
+    // And never SMTP, which a Worker cannot speak.
+    expect(withBinding.emailSenders.smtp).toBeUndefined();
+  });
 });

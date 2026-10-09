@@ -119,4 +119,23 @@ describe("the email sender an environment configures", () => {
       }),
     ).toThrow(/MAILGUN_DOMAIN/);
   });
+
+  it("reads SMTP's URL as a secret, and Cloudflare's binding as needing nothing but a From", () => {
+    expect(
+      emailSetupFromEnv({
+        DEEVY_EMAIL_SENDER: "smtp",
+        DEEVY_EMAIL_FROM: "deevy@example.com",
+        SMTP_URL: "smtps://deevy:pw@mail.example.com:465",
+      }),
+    ).toMatchObject({ credentials: { url: "smtps://deevy:pw@mail.example.com:465" } });
+    expect(() =>
+      emailSetupFromEnv({ DEEVY_EMAIL_SENDER: "smtp", DEEVY_EMAIL_FROM: "deevy@example.com" }),
+    ).toThrow(/SMTP_URL/);
+    expect(
+      emailSetupFromEnv({
+        DEEVY_EMAIL_SENDER: "cloudflare",
+        DEEVY_EMAIL_FROM: "deevy@example.com",
+      }),
+    ).toEqual({ sender: "cloudflare", from: "deevy@example.com", config: {}, credentials: {} });
+  });
 });

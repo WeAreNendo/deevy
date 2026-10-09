@@ -306,4 +306,17 @@ describe("email on the Node server", () => {
     expect((await real.app.request("/dev/email")).status).not.toBe(200);
     real.close();
   });
+
+  it("runs SMTP, which only the Node server can speak", async () => {
+    const { nodeEmailSenders } = await import("../src/server.ts");
+    expect(nodeEmailSenders(false).smtp).toBeTypeOf("function");
+    expect(nodeEmailSenders(false).cloudflare).toBeUndefined();
+    expect(
+      readEnv({
+        DEEVY_EMAIL_SENDER: "smtp",
+        DEEVY_EMAIL_FROM: "deevy@example.com",
+        SMTP_URL: "smtp://mail.example.com:587",
+      }).email,
+    ).toMatchObject({ sender: "smtp" });
+  });
 });

@@ -1,10 +1,9 @@
 import { createTimerCron } from "@deevy/adapters/node";
 import { serve } from "@hono/node-server";
 import { readEnv } from "./env.ts";
-import { emailSenders } from "@deevy/email";
 import { socketModules } from "@deevy/sockets";
 import { startRunner } from "./runner.ts";
-import { buildServer } from "./server.ts";
+import { buildServer, nodeEmailSenders } from "./server.ts";
 
 const env = readEnv();
 if (env.devStubOAuth) {
@@ -50,7 +49,7 @@ const runner = startRunner({
   socketCatchupMinutes: env.socketCatchupMinutes,
   // How email leaves this instance: the senders Node can run, and the one the
   // environment chose (docs/plans/email-channel.md).
-  emailSenders: emailSenders({ devStub: env.devStubEmail }),
+  emailSenders: nodeEmailSenders(env.devStubEmail),
   email: env.email,
   ...(env.secret ? { secret: env.secret } : {}),
 });

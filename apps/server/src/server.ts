@@ -1,8 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { mountSpa, openDatabase } from "@deevy/adapters/node";
+import { createSmtpSender, mountSpa, openDatabase } from "@deevy/adapters/node";
 import { createApp, createAuth, signInProviders, type AuthEnv } from "@deevy/core";
 import { emailSenders, stubOutbox } from "@deevy/email";
+import type { EmailSenders } from "@deevy/core/email";
 import { socketModules } from "@deevy/sockets";
 import { fetchClientMetadataResource } from "./cimd.ts";
 
@@ -41,6 +42,14 @@ function authEnv(env: ServerEnv): AuthEnv {
  * the listener rather than inside `createApp`, which owns no schedule on
  * either runtime (apps/server/src/runner.ts).
  */
+/**
+ * The email senders the Node server can run: the HTTP ones every deployment
+ * has, and SMTP, which only Node can speak (docs/plans/email-channel.md).
+ */
+export function nodeEmailSenders(devStub: boolean): EmailSenders {
+  return { ...emailSenders({ devStub }), smtp: createSmtpSender };
+}
+
 export function buildServer(env: ServerEnv) {
   if (env.databasePath !== ":memory:")
     mkdirSync(dirname(resolve(env.databasePath)), { recursive: true });
@@ -81,7 +90,7 @@ export function buildServer(env: ServerEnv) {
     ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
     // How email leaves, for what an operation sends now: a team address's
     // confirmation, a test (docs/plans/email-channel.md).
-    emailSenders: emailSenders({ devStub: env.devStubEmail }),
+    emailSenders: nodeEmailSenders(env.devStubEmail),
     email: env.email,
     // What the sign-in page draws its buttons from: the providers this
     // environment configured, decided where they are registered rather than in

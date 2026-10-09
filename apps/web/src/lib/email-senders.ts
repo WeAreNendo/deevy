@@ -54,6 +54,22 @@ export const senderForms: Record<string, SenderForm> = {
       },
     ],
   },
+  smtp: {
+    label: "SMTP server",
+    fields: [
+      {
+        key: "url",
+        label: "Server URL",
+        secret: true,
+        placeholder: "smtps://user:password@mail.example.com:465",
+        hint: "smtps:// on 465, or smtp:// on 587, which upgrades with STARTTLS.",
+      },
+    ],
+  },
+  cloudflare: {
+    label: "Cloudflare Email Service",
+    fields: [],
+  },
   ses: {
     label: "Amazon SES",
     fields: [
