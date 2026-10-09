@@ -1,4 +1,5 @@
 import {
+  defaultSendTimeoutMs,
   formatFrom,
   httpResult,
   unreachable,
@@ -14,14 +15,21 @@ import { signV4 } from "./sigv4.ts";
  * that may `ses:SendEmail`. SES names a refusal in `x-amzn-ErrorType`, which
  * is said beside its message.
  */
-export function createSesSender({ config, credentials, fetch }: EmailSenderInput): EmailSender {
+export function createSesSender({
+  config,
+  credentials,
+  fetch,
+  timeoutMs = defaultSendTimeoutMs,
+}: EmailSenderInput): EmailSender {
   const region = config.region;
-  if (!region) throw new Error("Amazon SES needs its region (AWS_SES_REGION).");
+  if (!region) throw new Error("Amazon SES needs its region.");
+  // The region becomes the host the signed request goes to, so it must be one.
+  if (!/^[a-z]{2}(-[a-z]+)+-\d$/.test(region)) {
+    throw new Error(`"${region}" isn't an AWS region, such as eu-west-1.`);
+  }
   const { accessKeyId, secretAccessKey } = credentials;
   if (!accessKeyId || !secretAccessKey) {
-    throw new Error(
-      "Amazon SES needs an access key (AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY).",
-    );
+    throw new Error("Amazon SES needs an access key ID and its secret.");
   }
   const url = `https://email.${region}.amazonaws.com/v2/email/outbound-emails`;
 
@@ -29,7 +37,7 @@ export function createSesSender({ config, credentials, fetch }: EmailSenderInput
     kind: "ses",
     async send(message) {
       const body = JSON.stringify({
-        FromEmailAddress: formatFrom(message.from),
+        FromEmailAddress: sesFrom(message.from),
         Destination: { ToAddresses: [message.to] },
         ...(message.replyTo ? { ReplyToAddresses: [message.replyTo] } : {}),
         Content: {
@@ -64,6 +72,7 @@ export function createSesSender({ config, credentials, fetch }: EmailSenderInput
         });
         const response = await fetch(url, {
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
           headers: { ...signed.headers, authorization: signed.authorization },
           body,
         });
@@ -81,4 +90,14 @@ export function createSesSender({ config, credentials, fetch }: EmailSenderInput
       }
     },
   };
+}
+
+/**
+ * SES takes the From as one header value, and a display name outside ASCII
+ * has to be RFC 2047-encoded there or the send is refused.
+ */
+function sesFrom(from: { address: string; name?: string }): string {
+  if (!from.name || /^[\x20-\x7e]*$/.test(from.name)) return formatFrom(from);
+  const bytes = new TextEncoder().encode(from.name);
+  return `=?UTF-8?B?${btoa(String.fromCharCode(...bytes))}?= <${from.address}>`;
 }

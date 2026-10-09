@@ -138,13 +138,46 @@ describe("Amazon SES", () => {
         credentials: { accessKeyId: "a", secretAccessKey: "b" },
         fetch: globalThis.fetch,
       }),
-    ).toThrow(/AWS_SES_REGION/);
+    ).toThrow("Amazon SES needs its region.");
     expect(() =>
       createSesSender({
         config: { region: "eu-west-1" },
         credentials: {},
         fetch: globalThis.fetch,
       }),
-    ).toThrow(/AWS_SES_ACCESS_KEY_ID/);
+    ).toThrow("Amazon SES needs an access key ID and its secret.");
+  });
+
+  it("refuses a region that is not one, rather than signing requests for some other host", () => {
+    for (const region of ["eu-west-1.evil.example", "EU-WEST-1", "nowhere"]) {
+      expect(() =>
+        createSesSender({
+          config: { region },
+          credentials: { accessKeyId: "a", secretAccessKey: "b" },
+          fetch: globalThis.fetch,
+        }),
+      ).toThrow(/isn.t an AWS region/);
+    }
+  });
+
+  it("encodes a display name that is not plain ASCII, as SES requires", async () => {
+    const { sender, calls } = ses(Response.json({ MessageId: "x" }));
+    await sender.send({ ...message, from: { address: "deevy@example.com", name: "Équipe deevy" } });
+    expect(JSON.parse(calls[0]?.init.body as string).FromEmailAddress).toBe(
+      `=?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode("Équipe deevy")))}?= <deevy@example.com>`,
+    );
+  });
+
+  it("gives up on a request that never answers, as a retry", async () => {
+    const sender = createSesSender({
+      config: { region: "eu-west-1" },
+      credentials: { accessKeyId: "a", secretAccessKey: "b" },
+      timeoutMs: 20,
+      fetch: ((_input: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        })) as typeof fetch,
+    });
+    expect(await sender.send(message)).toMatchObject({ delivered: false, retry: true });
   });
 });

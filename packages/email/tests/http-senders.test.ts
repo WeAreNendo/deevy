@@ -122,7 +122,7 @@ describe("Postmark", () => {
   it("refuses to be built without a server token", () => {
     expect(() =>
       createPostmarkSender({ config: {}, credentials: {}, fetch: globalThis.fetch }),
-    ).toThrow(/POSTMARK_SERVER_TOKEN/);
+    ).toThrow("Postmark needs a server token.");
   });
 });
 
@@ -190,7 +190,7 @@ describe("SendGrid", () => {
   it("refuses to be built without a key", () => {
     expect(() =>
       createSendgridSender({ config: {}, credentials: {}, fetch: globalThis.fetch }),
-    ).toThrow(/SENDGRID_API_KEY/);
+    ).toThrow("SendGrid needs an API key.");
   });
 });
 
@@ -267,13 +267,45 @@ describe("Mailgun", () => {
         credentials: {},
         fetch: globalThis.fetch,
       }),
-    ).toThrow(/MAILGUN_API_KEY/);
+    ).toThrow("Mailgun needs an API key.");
     expect(() =>
       createMailgunSender({
         config: {},
         credentials: { apiKey: "key" },
         fetch: globalThis.fetch,
       }),
-    ).toThrow(/MAILGUN_DOMAIN/);
+    ).toThrow("Mailgun needs its sending domain.");
+  });
+});
+
+describe("every HTTP sender", () => {
+  it("gives up on a request that never answers, as a retry, rather than holding the sweep", async () => {
+    const hanging = ((_input: unknown, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      })) as typeof fetch;
+    const senders = [
+      createPostmarkSender({
+        config: {},
+        credentials: { serverToken: "t" },
+        fetch: hanging,
+        timeoutMs: 20,
+      }),
+      createSendgridSender({
+        config: {},
+        credentials: { apiKey: "k" },
+        fetch: hanging,
+        timeoutMs: 20,
+      }),
+      createMailgunSender({
+        config: { domain: "mg.example.com" },
+        credentials: { apiKey: "k" },
+        fetch: hanging,
+        timeoutMs: 20,
+      }),
+    ];
+    for (const sender of senders) {
+      expect(await sender.send(message)).toMatchObject({ delivered: false, retry: true });
+    }
   });
 });

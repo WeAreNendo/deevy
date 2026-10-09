@@ -1,4 +1,5 @@
 import {
+  defaultSendTimeoutMs,
   httpResult,
   unreachable,
   type EmailSender,
@@ -10,9 +11,13 @@ import {
  * one POST with a bearer key, answered 202 with the message's id in a header.
  * Plain text goes before HTML, as SendGrid requires when both are given.
  */
-export function createSendgridSender({ credentials, fetch }: EmailSenderInput): EmailSender {
+export function createSendgridSender({
+  credentials,
+  fetch,
+  timeoutMs = defaultSendTimeoutMs,
+}: EmailSenderInput): EmailSender {
   const apiKey = credentials.apiKey;
-  if (!apiKey) throw new Error("SendGrid needs an API key (SENDGRID_API_KEY).");
+  if (!apiKey) throw new Error("SendGrid needs an API key.");
 
   return {
     kind: "sendgrid",
@@ -20,6 +25,7 @@ export function createSendgridSender({ credentials, fetch }: EmailSenderInput): 
       try {
         const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
           headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
           body: JSON.stringify({
             personalizations: [{ to: [{ email: message.to }] }],

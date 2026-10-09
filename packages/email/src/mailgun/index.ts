@@ -1,4 +1,5 @@
 import {
+  defaultSendTimeoutMs,
   formatFrom,
   httpResult,
   unreachable,
@@ -11,11 +12,16 @@ import {
  * to the sending domain with basic auth as `api`, and every extra header as an
  * `h:` field. An EU domain lives on Mailgun's EU host.
  */
-export function createMailgunSender({ config, credentials, fetch }: EmailSenderInput): EmailSender {
+export function createMailgunSender({
+  config,
+  credentials,
+  fetch,
+  timeoutMs = defaultSendTimeoutMs,
+}: EmailSenderInput): EmailSender {
   const apiKey = credentials.apiKey;
-  if (!apiKey) throw new Error("Mailgun needs an API key (MAILGUN_API_KEY).");
+  if (!apiKey) throw new Error("Mailgun needs an API key.");
   const domain = config.domain;
-  if (!domain) throw new Error("Mailgun needs the sending domain (MAILGUN_DOMAIN).");
+  if (!domain) throw new Error("Mailgun needs its sending domain.");
   const host = config.region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
 
   return {
@@ -33,6 +39,7 @@ export function createMailgunSender({ config, credentials, fetch }: EmailSenderI
       try {
         const response = await fetch(`${host}/v3/${encodeURIComponent(domain)}/messages`, {
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
           headers: {
             authorization: `Basic ${btoa(`api:${apiKey}`)}`,
             "content-type": "application/x-www-form-urlencoded",

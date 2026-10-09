@@ -1,4 +1,5 @@
 import {
+  defaultSendTimeoutMs,
   formatFrom,
   httpResult,
   unreachable,
@@ -15,9 +16,10 @@ export function createPostmarkSender({
   config,
   credentials,
   fetch,
+  timeoutMs = defaultSendTimeoutMs,
 }: EmailSenderInput): EmailSender {
   const token = credentials.serverToken;
-  if (!token) throw new Error("Postmark needs a server token (POSTMARK_SERVER_TOKEN).");
+  if (!token) throw new Error("Postmark needs a server token.");
   const stream = config.messageStream || "outbound";
 
   return {
@@ -26,6 +28,7 @@ export function createPostmarkSender({
       try {
         const response = await fetch("https://api.postmarkapp.com/email", {
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
           headers: {
             accept: "application/json",
             "content-type": "application/json",
