@@ -6,6 +6,7 @@
   "exports": {
     "./node": "./src/node/index.ts",
     "./workers": "./src/workers/index.ts",
+    "./testing": "./src/testing/index.ts",
     "./package.json": "./package.json"
   },
   "scripts": {},
