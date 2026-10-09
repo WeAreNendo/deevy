@@ -17,7 +17,7 @@ import type {
   SocketModule,
   SocketModuleInput,
 } from "@deevy/core/sockets";
-import { hmacHex, sameText } from "../signing.ts";
+import { credentialTag, hmacHex, sameText } from "../signing.ts";
 import { commentOf, issueOf, normalizeLinear } from "./payloads.ts";
 
 /**
@@ -81,6 +81,12 @@ const TOKEN_SLACK_MS = 60_000;
  * A module is built per request, and a token lives thirty days: minting one per
  * delivery would be a round trip for nothing, and Linear keeps at most a
  * thousand alive per app.
+ *
+ * Filed under the API, the client id and a tag of the client secret. The cache
+ * is read before the secret is ever sent, and a client id is public, so one
+ * keyed by the id alone would hand a Socket connected with somebody else's id
+ * and any secret the token that id's real owner minted — across Workspaces,
+ * once one isolate serves several.
  */
 const tokens = new Map<string, { token: string; expiresAt: number }>();
 
@@ -169,10 +175,21 @@ export function createLinearSocket({
     return (await response.json()) as T;
   }
 
+  let filed: Promise<string> | null = null;
+
+  /** Where this client's app token is cached: see `tokens`. */
+  function tokenKey(): Promise<string> {
+    filed ??= (async () => {
+      const { id, secret } = client();
+      return `${api}:${id}:${await credentialTag(secret)}`;
+    })();
+    return filed;
+  }
+
   /** A token for the app itself, from the one in hand or a fresh grant. */
   async function appToken(): Promise<string> {
     const { id, secret } = client();
-    const cacheKey = `${api}:${id}`;
+    const cacheKey = await tokenKey();
     const held = tokens.get(cacheKey);
     if (held && held.expiresAt - TOKEN_SLACK_MS > now().getTime()) return held.token;
     const minted = await form<{ access_token: string; expires_in?: number }>("/oauth/token", {
@@ -243,7 +260,7 @@ export function createLinearSocket({
       return await graphql<T>(await appToken(), query, variables);
     } catch (error) {
       if (!(error instanceof LinearError) || !error.unauthenticated) throw error;
-      tokens.delete(`${api}:${client().id}`);
+      tokens.delete(await tokenKey());
       return graphql<T>(await appToken(), query, variables);
     }
   }
