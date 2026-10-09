@@ -662,9 +662,6 @@ importers:
 
   packages/adapters:
     dependencies:
-      '@deevy/core':
-        specifier: workspace:*
-        version: link:../core
       '@deevy/db':
         specifier: workspace:*
         version: link:../db
