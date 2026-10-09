@@ -210,6 +210,7 @@ the walk's.
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `vp check`                       | Format, lint, and typecheck the whole tree (`--fix` to apply formatting).                                     |
 | `vp run -r test`                 | Tests in every package (Vitest through Vite+).                                                                |
+| `vp run core#test:durable`       | The core's suites again on the Durable Object driver a hosted Workspace runs (ADR-0028); CI runs both.        |
 | `vp run -r build`                | `apps/server/dist/index.mjs` (bundled Node server) and `apps/web/dist` (SPA).                                 |
 | `vp run web#build:workers`       | The Cloudflare Worker build (`DEEVY_TARGET=workers`); `vp run web#check:workers` then dry-runs what it wrote. |
 | `vp run web#test:workers`        | Boots the built Worker on `wrangler dev --local` against a migrated local D1 and drives it over HTTP.         |
