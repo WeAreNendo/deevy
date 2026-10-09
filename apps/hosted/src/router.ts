@@ -14,7 +14,7 @@ import type { WorkspaceObject } from "./workspace.ts";
  *   Workspace's object, which runs deevy.
  * - `/.well-known/<document>/<slug>…` is a Workspace's OAuth discovery, which
  *   RFC 8414 and RFC 9728 put at the root of the host (ADR-0029).
- * - `/auth/…` is the sign-in relay every provider's App calls back to (ADR-0031).
+ * - `/auth/…` is the sign-in relay every provider's App calls back to (ADR-0030).
  * - Everything else is the console's, when the platform has one bound.
  *
  * Nothing here wakes an object for a slug the directory does not know.
@@ -43,8 +43,9 @@ export async function route(
     return relaySignInCallback(request, path.slice("/auth".length), {
       secret: hosted.relaySecret,
       // A browser carrying a code goes only to a Workspace the directory knows,
-      // at exactly the URL its Better Auth lives at.
+      // at exactly the URL its Better Auth lives at, or to the console's.
       allows: async (target) => {
+        if (hosted.consoleAuthURL && target === hosted.consoleAuthURL) return true;
         const match = new RegExp(`^${escape(hosted.origin)}/([^/]+)/api/auth$`).exec(target);
         if (!match?.[1]) return false;
         return (await lookup(bindings.DIRECTORY, match[1]))?.status === "active";

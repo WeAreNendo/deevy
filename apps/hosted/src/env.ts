@@ -26,8 +26,14 @@ export interface HostedBindings extends ProviderVariables {
   DEEVY_HOSTED_MASTER_SECRET?: string;
   /** Where each Workspace's object is created: `eu` (ADR-0028). Fixed at creation. */
   DEEVY_HOSTED_JURISDICTION?: string;
-  /** The sign-in relay's shared secret; the relay is this Worker, at `/auth` (ADR-0031). */
+  /** The sign-in relay's shared secret; the relay is this Worker, at `/auth` (ADR-0030). */
   DEEVY_SIGN_IN_RELAY_SECRET?: string;
+  /**
+   * The console's own Better Auth URL, when it signs in through the relay too,
+   * such as `https://app.deevy.dev/console/api/auth`: the one URL besides a
+   * Workspace's the relay sends a browser back to.
+   */
+  DEEVY_HOSTED_CONSOLE_AUTH_URL?: string;
   /** The platform's sender, by the variables every deevy reads (docs/OPERATIONS.md, "Email"). */
   DEEVY_EMAIL_SENDER?: string;
   DEEVY_EMAIL_FROM?: string;
@@ -49,6 +55,7 @@ export interface HostedEnv {
   masterSecret: string;
   jurisdiction: string | null;
   relaySecret: string;
+  consoleAuthURL: string | null;
   providers: AuthProviders;
   email: EmailSetup | null;
   emailProblem: string | null;
@@ -118,6 +125,7 @@ export function readHostedEnv(bindings: HostedBindings): HostedEnv {
     masterSecret,
     jurisdiction: bindings.DEEVY_HOSTED_JURISDICTION?.trim() || null,
     relaySecret,
+    consoleAuthURL: bindings.DEEVY_HOSTED_CONSOLE_AUTH_URL?.trim().replace(/\/+$/, "") || null,
     providers: providersFromEnv(bindings),
     email: email.setup,
     emailProblem: email.problem,
