@@ -8,6 +8,7 @@ import { requireSocket, socketModuleFor } from "../sockets/registry.ts";
 import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
 import { newId } from "../ids.ts";
 import { resolveSender } from "../email/sender.ts";
+import { senderOptionsFor } from "../email/settings.ts";
 import {
   confirmToken,
   confirmUrl,
@@ -340,7 +341,7 @@ export const channels = {
       if (email) {
         if (!email.confirmedAt) return sendConfirmation(context, found);
         return sendNow(
-          context,
+          await senderOptionsFor(context),
           email.address,
           renderTeamTest({
             workspaceName: context.workspace.name,
@@ -417,7 +418,7 @@ async function sendConfirmation(context: ContextFor<"admin">, row: Channel) {
       })
     : null;
   return sendNow(
-    context,
+    await senderOptionsFor(context),
     email.address,
     renderConfirmation({
       workspaceName: context.workspace.name,

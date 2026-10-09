@@ -17,7 +17,7 @@ import {
 } from "./schema/auth.ts";
 import { agent, projectGrant } from "./schema/agent.ts";
 import { activity, run, runUsage } from "./schema/run.ts";
-import { channel, notificationPreference, routingRule } from "./schema/channel.ts";
+import { channel, emailSender, notificationPreference, routingRule } from "./schema/channel.ts";
 import { delivery } from "./schema/delivery.ts";
 import { webhookSubscription } from "./schema/webhook.ts";
 import { allowlistRule } from "./schema/allowlist.ts";
@@ -78,6 +78,7 @@ export const tables = {
   channel,
   routingRule,
   notificationPreference,
+  emailSender,
   delivery,
   webhookSubscription,
 };

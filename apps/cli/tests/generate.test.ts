@@ -65,6 +65,10 @@ describe("what the registry turns into", () => {
       // points at: both are lists of objects, and flattening either into flags
       // would be guessing at a shape a team decides (ADR-0020).
       "checkpoints.set.checkpoints",
+      // A sender's settings and secrets, whose keys are the sender's own:
+      // Mailgun's domain and region are not Resend's (docs/plans/email-channel.md).
+      "email.configure.config",
+      "email.configure.credentials",
       "gates.request.links",
       "preferences.set.preferences",
       "projects.create.docs",

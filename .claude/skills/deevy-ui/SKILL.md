@@ -364,6 +364,11 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   and `Add address`. The Channel is named after the address. The confirmation goes out as it is added, and
   what the sender said is the line under the forms. Until somebody confirms, its row reads `<address> ·
 Waiting for confirmation`, and its Test button sends the confirmation again.
+- **Settings › Email** (slice 3, under Agents and delivery): the sender in force and where it was set
+  (`Sending through <Sender>, as <From>`), `Send a test email` (to the admin, disabled while nothing can
+  send), `Use the environment's sender` when one is set here, and `form "Set the sender here"` with `From`
+  and the sender's own fields from `lib/email-senders.ts`. A secret field is never filled back in: empty
+  keeps the saved one.
 
 ## Test contracts
 

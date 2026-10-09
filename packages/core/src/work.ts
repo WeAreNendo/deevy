@@ -1861,6 +1861,7 @@ export async function runDueWork({
           ...(emailSenders ? { emailSenders } : {}),
           ...(email ? { email } : {}),
           ...(secret ? { secret } : {}),
+          ...(socketSecret ? { socketSecret } : {}),
           ...(fetch ? { fetch } : {}),
           ...deliveryBound,
         }),

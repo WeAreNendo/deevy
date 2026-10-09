@@ -152,6 +152,9 @@ export type EventKind =
    * change, or refused it six times (docs/plans/email-channel.md).
    */
   | "email.exhausted"
+  /** An admin set the email sender under Settings › Email, or cleared it (slice 3). */
+  | "email.configured"
+  | "email.cleared"
   /** Where Notifications go: the Channels themselves, and the rules that aim them. */
   | "channel.created"
   | "channel.updated"
