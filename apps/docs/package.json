@@ -1,0 +1,28 @@
+{
+  "name": "@deevy/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync.ts",
+    "serve": "node scripts/sync.ts && astro dev",
+    "build": "node scripts/sync.ts && astro build",
+    "preview": "astro preview",
+    "check:workers": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@astrojs/starlight": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
+    "@fontsource-variable/jetbrains-mono": "catalog:",
+    "@types/node": "catalog:",
+    "astro": "catalog:",
+    "github-slugger": "catalog:",
+    "starlight-links-validator": "catalog:",
+    "starlight-openapi": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

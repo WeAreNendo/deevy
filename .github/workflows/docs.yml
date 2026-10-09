@@ -1,0 +1,96 @@
+name: Docs
+
+# docs.deevy.dev, deployed from main whenever something it is written from
+# changes: the Markdown in docs/, the glossary, the README paragraph the landing
+# opens with, the OpenAPI snapshot, the site itself, or what it is built with.
+# CI builds the same site on every pull request (ci.yml), where a broken link
+# fails; this file only ever deploys what main already has.
+#
+# The site is a Worker with static assets (apps/docs/wrangler.jsonc), uploaded
+# with `wrangler deploy`. What it needs, all of it in the `docs` environment:
+#
+#  - the CLOUDFLARE_API_TOKEN secret, a token scoped to the one account and the
+#    deevy.dev zone: Workers Scripts edit on the account, and Workers Routes and
+#    DNS edit on the zone, which is what the Custom Domain the first deploy makes
+#    needs;
+#  - the CLOUDFLARE_ACCOUNT_ID variable;
+#  - protection: deployments from main only, which keeps the token away from any
+#    other branch's code, and a reviewer if a deploy should wait for one.
+#
+# Until the account exists (docs/plans/hosted.md, C1) neither is set, and every
+# run says so in a notice and stops after that one step, green: a deploy
+# nobody can do yet is not a failure of the commit that triggered it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - CONTEXT.md
+      - README.md
+      - package.json
+      - "apps/docs/**"
+      - packages/core/openapi.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+# One deploy at a time, and a newer commit waits rather than cancelling one
+# halfway through an upload.
+concurrency:
+  group: docs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy docs.deevy.dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: docs
+      url: https://docs.deevy.dev
+    steps:
+      # Both from the environment, so this step can only see them once the job
+      # has been let into it. Through env rather than `${{ }}` in the script, so
+      # the token's value never becomes part of a command line.
+      - name: Is there an account to deploy to?
+        id: account
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Docs not deployed::The docs environment has no CLOUDFLARE_API_TOKEN secret or CLOUDFLARE_ACCOUNT_ID variable yet, so nothing was built or deployed."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.account.outputs.ready == 'true'
+
+      - name: Set up Vite+
+        if: steps.account.outputs.ready == 'true'
+        uses: voidzero-dev/setup-vp@v1.19.0
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: false
+
+      - name: Install
+        if: steps.account.outputs.ready == 'true'
+        run: vp install --frozen-lockfile
+
+      - name: Build, checking every link
+        if: steps.account.outputs.ready == 'true'
+        run: vp run docs#build
+
+      - name: Deploy
+        if: steps.account.outputs.ready == 'true'
+        run: vp run docs#deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
