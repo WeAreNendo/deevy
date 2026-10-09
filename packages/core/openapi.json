@@ -17613,20 +17613,31 @@
                           },
                           "slackDm": {
                             "type": "boolean"
+                          },
+                          "email": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
                           "kind",
                           "inbox",
                           "slack",
-                          "slackDm"
+                          "slackDm",
+                          "email"
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "emailAddress": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "preferences"
+                    "preferences",
+                    "emailAddress"
                   ],
                   "additionalProperties": false
                 }
@@ -17637,7 +17648,7 @@
       },
       "put": {
         "operationId": "preferences.set",
-        "summary": "Say which of your Notifications reach the inbox and Slack",
+        "summary": "Say which of your Notifications reach the inbox, Slack and your email",
         "requestBody": {
           "required": true,
           "content": {
@@ -17669,6 +17680,9 @@
                           "type": "boolean"
                         },
                         "slackDm": {
+                          "type": "boolean"
+                        },
+                        "email": {
                           "type": "boolean"
                         }
                       },
@@ -17719,20 +17733,31 @@
                           },
                           "slackDm": {
                             "type": "boolean"
+                          },
+                          "email": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
                           "kind",
                           "inbox",
                           "slack",
-                          "slackDm"
+                          "slackDm",
+                          "email"
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "emailAddress": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "preferences"
+                    "preferences",
+                    "emailAddress"
                   ],
                   "additionalProperties": false
                 }

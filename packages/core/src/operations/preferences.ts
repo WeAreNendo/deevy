@@ -1,4 +1,10 @@
-import { humanNotificationKinds, notificationPreference } from "@deevy/db";
+import {
+  humanNotificationKinds,
+  notificationPreference,
+  type Db,
+  type HumanNotificationKind,
+} from "@deevy/db";
+import { emailByDefault } from "../notifications.ts";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { NoInput, defineOperation } from "./registry.ts";
@@ -27,10 +33,48 @@ const PreferenceView = z.object({
    * (ADR-0025). Nothing is sent before then, whatever this says.
    */
   slackDm: z.boolean(),
+  /**
+   * By email, at the address your sign-in verified (docs/plans/email-channel.md).
+   * Until you choose, on for what waits on you and off for the rest.
+   */
+  email: z.boolean(),
 });
 
-/** What a caller sets: the direct-message column may be left out, and keeps its value. */
-const PreferenceInput = PreferenceView.extend({ slackDm: z.boolean().optional() });
+/** What a caller sets: the direct-message and email columns may be left out, and keep their value. */
+const PreferenceInput = PreferenceView.extend({
+  slackDm: z.boolean().optional(),
+  email: z.boolean().optional(),
+});
+
+const PreferencesOutput = z.object({
+  preferences: z.array(PreferenceView),
+  /**
+   * Where deevy would email you: your address, when your sign-in verified it,
+   * and null when it did not — deevy never emails an address it was not sure of.
+   */
+  emailAddress: z.string().nullable(),
+});
+
+type Saved = Map<HumanNotificationKind, typeof notificationPreference.$inferSelect>;
+
+/** Every kind, always, at its saved value or its default: the SPA draws the matrix from this. */
+function viewOf(saved: Saved) {
+  return humanNotificationKinds.map((kind) => ({
+    kind,
+    inbox: saved.get(kind)?.inbox ?? true,
+    slack: saved.get(kind)?.slack ?? true,
+    slackDm: saved.get(kind)?.slackDm ?? true,
+    email: saved.get(kind)?.email ?? emailByDefault(kind),
+  }));
+}
+
+async function emailAddressOf(db: Db, userId: string): Promise<string | null> {
+  const found = await db.query.user.findFirst({
+    where: { id: userId },
+    columns: { email: true, emailVerified: true },
+  });
+  return found?.emailVerified ? found.email : null;
+}
 
 export const preferences = {
   get: defineOperation({
@@ -40,34 +84,28 @@ export const preferences = {
     path: "/preferences",
     auth: "member",
     input: NoInput,
-    output: z.object({ preferences: z.array(PreferenceView) }),
+    output: PreferencesOutput,
     handler: async ({ context }) => {
       const rows = await context.db.query.notificationPreference.findMany({
         where: { memberId: context.member.id },
       });
-      const saved = new Map(rows.map((row) => [row.kind, row]));
-      // Every kind, always: a Human who has never said anything wants
-      // everything, and the SPA renders the matrix from this rather than
-      // knowing the default itself.
+      // Every kind, always: the SPA renders the matrix from this rather than
+      // knowing the defaults itself.
       return {
-        preferences: humanNotificationKinds.map((kind) => ({
-          kind,
-          inbox: saved.get(kind)?.inbox ?? true,
-          slack: saved.get(kind)?.slack ?? true,
-          slackDm: saved.get(kind)?.slackDm ?? true,
-        })),
+        preferences: viewOf(new Map(rows.map((row) => [row.kind, row]))),
+        emailAddress: await emailAddressOf(context.db, context.member.userId),
       };
     },
   }),
 
   set: defineOperation({
     name: "preferences.set",
-    summary: "Say which of your Notifications reach the inbox and Slack",
+    summary: "Say which of your Notifications reach the inbox, Slack and your email",
     method: "PUT",
     path: "/preferences",
     auth: "member",
     input: z.object({ preferences: z.array(PreferenceInput).max(humanNotificationKinds.length) }),
-    output: z.object({ preferences: z.array(PreferenceView) }),
+    output: PreferencesOutput,
     handler: async ({ input, context }) => {
       const changed = [...new Map(input.preferences.map((row) => [row.kind, row])).values()];
       // What a caller left out keeps the value it had, which a client that
@@ -99,6 +137,7 @@ export const preferences = {
             inbox: row.inbox,
             slack: row.slack,
             slackDm: row.slackDm ?? before.get(row.kind)?.slackDm ?? true,
+            email: row.email ?? before.get(row.kind)?.email ?? null,
           })),
         );
       }
@@ -106,14 +145,9 @@ export const preferences = {
       const rows = await context.db.query.notificationPreference.findMany({
         where: { memberId: context.member.id },
       });
-      const saved = new Map(rows.map((row) => [row.kind, row]));
       return {
-        preferences: humanNotificationKinds.map((kind) => ({
-          kind,
-          inbox: saved.get(kind)?.inbox ?? true,
-          slack: saved.get(kind)?.slack ?? true,
-          slackDm: saved.get(kind)?.slackDm ?? true,
-        })),
+        preferences: viewOf(new Map(rows.map((row) => [row.kind, row]))),
+        emailAddress: await emailAddressOf(context.db, context.member.userId),
       };
     },
   }),

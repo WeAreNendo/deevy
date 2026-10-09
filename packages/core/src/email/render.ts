@@ -41,6 +41,8 @@ export interface RenderInput {
   /** For a Run awaiting their answer: what the Agent asked, and the Run. */
   question?: string | null;
   runId?: string | null;
+  /** The signed link that turns this kind of email off for this Human. */
+  unsubscribeUrl?: string | null;
 }
 
 export interface RenderedEmail {
@@ -183,7 +185,9 @@ export function renderEmail(input: RenderInput): RenderedEmail {
   const origin = input.baseUrl.replace(/\/+$/, "");
   const settings = `${origin}/settings/notifications`;
   const why = `You get this because you are a Member of ${input.workspaceName} on deevy.`;
-  const stop = `Change what deevy emails you: ${settings}`;
+  const stop = input.unsubscribeUrl
+    ? `Stop emails like this one: ${input.unsubscribeUrl}\nChange what deevy emails you: ${settings}`
+    : `Change what deevy emails you: ${settings}`;
 
   const text = [
     body.headline,
@@ -218,7 +222,11 @@ ${
 }
 </td></tr>
 <tr><td style="padding:16px 28px 24px;border-top:1px solid #eceef4;font-family:Inter,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#7a8296;">
-${escape(why)} <a href="${escape(settings)}" style="color:#7a8296;">Change what deevy emails you</a>.
+${escape(why)} ${
+    input.unsubscribeUrl
+      ? `<a href="${escape(input.unsubscribeUrl)}" style="color:#7a8296;">Stop emails like this one</a> or `
+      : ""
+  }<a href="${escape(settings)}" style="color:#7a8296;">${input.unsubscribeUrl ? "change" : "Change"} what deevy emails you</a>.
 </td></tr>
 </table>
 </td></tr>

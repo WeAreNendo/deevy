@@ -1,6 +1,12 @@
 import { projectGrant, type Db } from "@deevy/db";
 import type { SocketModules } from "./sockets/port.ts";
 import { finishAccountLink } from "./account-links.ts";
+import {
+  kindLabels,
+  readUnsubscribeToken,
+  unsubscribe,
+  unsubscribePage,
+} from "./email/unsubscribe.ts";
 import { handleInbound, handleSetup } from "./sockets/hooks.ts";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
@@ -131,6 +137,15 @@ export function isDefinedRefusal(error: unknown): boolean {
  * ADR-0006): Better Auth under /api/auth, the RPC surface under /rpc, the
  * OpenAPI surface with its reference UI under /api.
  */
+/** What a link that was changed, or is too old, says instead. */
+function expiredLink(settingsUrl: string) {
+  return {
+    title: "This link doesn't work any more",
+    body: "It is too old, or it was changed on the way. You can still choose what deevy emails you in Settings.",
+    settingsUrl,
+  };
+}
+
 export function createApp({
   db,
   auth,
@@ -286,6 +301,39 @@ export function createApp({
       ...(c.req.query("error") ? { error: c.req.query("error") } : {}),
     });
     return c.redirect(location, 302);
+  });
+
+  // The one-click unsubscribe every personal email carries (RFC 8058,
+  // email/unsubscribe.ts). Opening it changes nothing — a mail scanner opens
+  // every link in an email — and only a POST, from the page's button or from
+  // a client's own "unsubscribe", turns the kind off. Routes rather than
+  // operations, because what answers is a page and the caller is a browser or
+  // a mail client with no session.
+  const settingsUrl = `${(webURL ?? baseURL ?? "").replace(/\/+$/, "")}/settings/notifications`;
+  app.get("/api/email/unsubscribe/:token", async (c) => {
+    const read = secret ? await readUnsubscribeToken(secret, c.req.param("token")) : null;
+    if (!read) return c.html(unsubscribePage(expiredLink(settingsUrl)), 400);
+    return c.html(
+      unsubscribePage({
+        title: "Stop these emails?",
+        body: `You'll no longer get emails for “${kindLabels[read.kind]}”. The inbox and Slack stay as they are.`,
+        form: { action: c.req.path, label: "Stop these emails" },
+        settingsUrl,
+      }),
+    );
+  });
+  app.post("/api/email/unsubscribe/:token", async (c) => {
+    const read = secret ? await readUnsubscribeToken(secret, c.req.param("token")) : null;
+    if (!read) return c.html(unsubscribePage(expiredLink(settingsUrl)), 400);
+    // A Member who has since left has nothing left to turn off.
+    await unsubscribe(db, read).catch(() => undefined);
+    return c.html(
+      unsubscribePage({
+        title: "Done",
+        body: `deevy won't email you for “${kindLabels[read.kind]}” any more. You can turn it back on any time.`,
+        settingsUrl,
+      }),
+    );
   });
 
   const corsPlugin = new CORSHandlerPlugin<AppContext>({ origin, credentials: true });

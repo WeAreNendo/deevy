@@ -217,6 +217,7 @@ export default {
           // bindings chose (docs/plans/email-channel.md).
           emailSenders: emailSenders({ devStub: isolate.env.devStubEmail }),
           email: isolate.env.email,
+          ...(isolate.env.secret ? { secret: isolate.env.secret } : {}),
         }),
       ),
     );

@@ -147,8 +147,14 @@ async function stateKey(secret: string): Promise<CryptoKey> {
 /** How long a redirect may take. An operator making a GitHub App is slow. */
 export const STATE_TTL_MS = 60 * 60_000;
 
-export async function signState(secret: string, names: string, now = new Date()): Promise<string> {
-  const expires = now.getTime() + STATE_TTL_MS;
+export async function signState(
+  secret: string,
+  names: string,
+  now = new Date(),
+  /** A redirect's hour, unless the state is a link that must keep working, like an unsubscribe. */
+  ttlMs = STATE_TTL_MS,
+): Promise<string> {
+  const expires = now.getTime() + ttlMs;
   const tag = await crypto.subtle.sign(
     "HMAC",
     await stateKey(secret),

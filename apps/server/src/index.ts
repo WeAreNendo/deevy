@@ -52,6 +52,7 @@ const runner = startRunner({
   // environment chose (docs/plans/email-channel.md).
   emailSenders: emailSenders({ devStub: env.devStubEmail }),
   email: env.email,
+  ...(env.secret ? { secret: env.secret } : {}),
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

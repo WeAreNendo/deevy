@@ -68,6 +68,13 @@ export const notificationPreference = sqliteTable(
      * default only matters once they have.
      */
     slackDm: integer("slack_dm", { mode: "boolean" }).default(true).notNull(),
+    /**
+     * By email, at the address their sign-in verified
+     * (docs/plans/email-channel.md). Null is the kind's default — on for what
+     * waits on them, off for the rest — so a default that changes reaches
+     * everybody who never chose.
+     */
+    email: integer("email", { mode: "boolean" }),
   },
   (table) => [primaryKey({ columns: [table.memberId, table.kind] })],
 );

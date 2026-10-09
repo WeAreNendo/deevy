@@ -37,6 +37,9 @@ describe("what one Human wants to hear about, and where", () => {
       inbox: true,
       slack: true,
       slackDm: true,
+      // Email is the one place that is not everything: only what waits on
+      // them (docs/plans/email-channel.md).
+      email: true,
     });
     expect(preferences.every((row) => row.inbox && row.slack)).toBe(true);
   });
@@ -54,6 +57,7 @@ describe("what one Human wants to hear about, and where", () => {
       inbox: true,
       slack: false,
       slackDm: true,
+      email: true,
     });
     // The kinds they said nothing about are untouched.
     expect(preferences).toContainEqual({
@@ -61,6 +65,7 @@ describe("what one Human wants to hear about, and where", () => {
       inbox: true,
       slack: true,
       slackDm: true,
+      email: false,
     });
   });
 
@@ -77,6 +82,7 @@ describe("what one Human wants to hear about, and where", () => {
       inbox: true,
       slack: true,
       slackDm: true,
+      email: false,
     });
     // Every row written belongs to the Member that asked for it: the operation
     // takes no Member, so there is no way to set another Human's.
