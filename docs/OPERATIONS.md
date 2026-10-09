@@ -330,6 +330,21 @@ bindings arrive with the request.
 | `DEEVY_SWEEP_INTERVAL_SECONDS` | env         | — the Cron Trigger | 60                       | Nothing: the sweep looks every minute. Node-only, because on Workers the schedule is `triggers.crons` in `apps/web/wrangler.jsonc`.                                                                                                                                                                                       |
 | `DEEVY_GATE_REMINDER_HOURS`    | env         | var                | 4                        | Nothing: an undecided Gate asks its approvers again every four hours.                                                                                                                                                                                                                                                     |
 | `DEEVY_STREAM_SECONDS`         | — unbounded | var                | 60                       | Nothing: a live stream on Workers ends after a minute and the browser resumes from the cursor it signed off with. Workers-only, because a Node process holds a connection for as long as the browser does.                                                                                                                |
+| `DEEVY_EMAIL_SENDER`           | env         | var                | —                        | deevy sends no email; the inbox and Slack still work. `resend`, `postmark`, `sendgrid`, `mailgun`, `ses`, `smtp` (Node) or `cloudflare` (Workers), with that sender's own variables below. A sender set up halfway stops the instance at startup, naming what is missing. Settings › Email may set one instead.           |
+| `DEEVY_EMAIL_FROM`             | env         | var                | —                        | Required with a sender: the From address, `deevy <deevy@yourcompany.com>`, on a domain that sender has verified.                                                                                                                                                                                                          |
+| `RESEND_API_KEY`               | env         | secret             | —                        | For `resend`.                                                                                                                                                                                                                                                                                                             |
+| `POSTMARK_SERVER_TOKEN`        | env         | secret             | —                        | For `postmark`.                                                                                                                                                                                                                                                                                                           |
+| `POSTMARK_MESSAGE_STREAM`      | env         | var                | `outbound`               | For `postmark`: the transactional stream, unless you name another.                                                                                                                                                                                                                                                        |
+| `SENDGRID_API_KEY`             | env         | secret             | —                        | For `sendgrid`.                                                                                                                                                                                                                                                                                                           |
+| `MAILGUN_API_KEY`              | env         | secret             | —                        | For `mailgun`.                                                                                                                                                                                                                                                                                                            |
+| `MAILGUN_DOMAIN`               | env         | var                | —                        | For `mailgun`: the sending domain, `mg.yourcompany.com`.                                                                                                                                                                                                                                                                  |
+| `MAILGUN_REGION`               | env         | var                | `us`                     | For `mailgun`: `eu` for a domain in Mailgun's EU region.                                                                                                                                                                                                                                                                  |
+| `AWS_SES_REGION`               | env         | var                | —                        | For `ses`: the region your identities are verified in.                                                                                                                                                                                                                                                                    |
+| `AWS_SES_ACCESS_KEY_ID`        | env         | secret             | —                        | For `ses`, with the secret below: an IAM key that may `ses:SendEmail` and nothing else.                                                                                                                                                                                                                                   |
+| `AWS_SES_SECRET_ACCESS_KEY`    | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                 |
+| `SMTP_URL`                     | env         | —                  | —                        | For `smtp`, Node only: `smtps://user:password@host:465`, or `smtp://…:587`, which upgrades with STARTTLS.                                                                                                                                                                                                                 |
+| `EMAIL`                        | —           | optional binding   | —                        | For `cloudflare`, Workers only: the `send_email` binding, commented out in `wrangler.jsonc`.                                                                                                                                                                                                                              |
+| `DEEVY_DEV_STUB_EMAIL`         | env         | var                | —                        | Development only: email goes to an in-process stand-in shown at `/dev/email`, when no sender is set. Refused under `NODE_ENV=production`.                                                                                                                                                                                 |
 | `JOBS`                         | — the sweep | optional binding   | — no queue               | Nothing: a webhook delivery goes out at the next Cron pass instead of the moment it is owed. Workers-only, and absent from the committed `apps/web/wrangler.jsonc` because Queues are a paid feature.                                                                                                                     |
 | `DEEVY_DATABASE_PATH`          | env         | — the `DB` binding | `/data/deevy.sqlite`     | Node writes to `./data/deevy.sqlite`. On Workers the rows are D1's and the path means nothing.                                                                                                                                                                                                                            |
 | `DEEVY_PORT`                   | env         | —                  | 3000                     | Node listens on 3000. Workers has no port: the platform routes to the Worker.                                                                                                                                                                                                                                             |
@@ -842,10 +857,11 @@ same either way.
 
 ## Notification Channels and routing
 
-A Notification reaches a Human through Channels: their in-app inbox always, and a Slack channel when the
-Workspace routes it there. Five kinds exist — `mention`, `assignment`, `gate_awaiting`, `run_awaiting_input`,
-`run_finished` — and who a Notification concerns is decided from the Event alone, never from where it is
-delivered. Turning Slack off changes where a Human hears about something, never whether it concerns them.
+A Notification reaches a Human through Channels: their in-app inbox always, a Slack channel or a team email
+address when the Workspace routes it there, and their own email when they want it (see [Email](#email)). Six
+kinds exist — `mention`, `assignment`, `gate_awaiting`, `run_awaiting_input`, `run_finished`, `delegation` —
+and who a Notification concerns is decided from the Event alone, never from where it is delivered. Turning
+Slack or email off changes where a Human hears about something, never whether it concerns them.
 
 An admin adds a Channel under Settings, Channels: a name, usually the Slack channel (`#deevy`), and a Slack
 [incoming webhook](https://api.slack.com/messaging/webhooks) URL. There is a Test button that posts to it now,
@@ -865,6 +881,63 @@ Humans concerned by one Event are not three messages in it.
 Slack messages link back to the Issue, so they are only sent when the instance knows its own URL. **Without
 `BETTER_AUTH_URL` the rows are written and wait** rather than going out with a dead link; the first tick after
 the instance is given an origin sends them.
+
+## Email
+
+deevy emails three things, through whichever service you already send with: what waits on a Human (a Gate, a
+Run's question), Notifications routed to a team address, and invitations. Nothing is emailed until a sender
+is configured; without one the inbox and Slack carry on as before (docs/plans/email-channel.md).
+
+### Choosing a sender
+
+Set `DEEVY_EMAIL_SENDER`, `DEEVY_EMAIL_FROM` and the sender's own variables ([Environment](#environment)), or
+let an admin choose under **Settings › Email**, which overrides the environment until they press **Use the
+environment's sender**. A key set there is sealed under `DEEVY_SECRET` like a tool's credentials and never
+shown again. **Send a test email** there mails the admin and says what came back, which is how to find a
+wrong key or an unverified domain before a Gate does.
+
+| Sender                   | Where it runs | What it needs                                                                                                                                                                      |
+| ------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resend                   | both          | An API key, and the From's domain verified in Resend.                                                                                                                              |
+| Postmark                 | both          | A server token; the From's domain or address verified as a sender signature.                                                                                                       |
+| SendGrid                 | both          | An API key with Mail Send; the From verified as a sender identity or domain.                                                                                                       |
+| Mailgun                  | both          | An API key and the sending domain (`MAILGUN_REGION=eu` for an EU domain).                                                                                                          |
+| Amazon SES               | both          | A region and an IAM key that may `ses:SendEmail`; the From verified in that region, and the account out of the SES sandbox to reach anyone. Signed in deevy itself, so no AWS SDK. |
+| SMTP                     | Docker        | `SMTP_URL` for your mail server or a provider's relay. A Worker cannot speak SMTP.                                                                                                 |
+| Cloudflare Email Service | Workers       | The `send_email` binding named `EMAIL` (uncomment it in `wrangler.jsonc`). A beta; reaching an address not verified on the account needs Workers Paid.                             |
+
+Whichever you choose, **the From's domain decides whether the email arrives.** Publish the SPF and DKIM
+records your sender gives you, and a DMARC record for the domain; without them most mail ends in spam or
+nowhere, and no setting in deevy can fix that. A sender's refusal it calls permanent — a bad key, an
+unverified domain, a suppressed address — is given up on at once and recorded in the Event log as
+`email.exhausted`, in the sender's own words; a throttle or an outage is tried again over about a quarter of
+an hour.
+
+### Who is emailed, and how it stops
+
+- **A Human, at their own address.** Only an address their sign-in provider verified: a Linear or Atlassian
+  sign-in is never emailed, and Settings › Notifications says why. By default they get a Gate awaiting them
+  and a Run awaiting their answer, and switch any kind on or off in that page's Email column. Every such
+  email carries a one-click unsubscribe (RFC 8058) that turns off that kind for them alone, signed with
+  `BETTER_AUTH_SECRET` and good for six months; opening the link only asks, so a mail scanner changes
+  nothing.
+- **A team address**, added under Settings › Channels and routed like a Slack room. deevy mails it a
+  confirmation link first and sends it nothing until somebody there confirms, so an admin cannot make deevy
+  mail a stranger. One Event routed there is one email, whoever it concerns. It stops where it was routed:
+  remove the Channel or its rule.
+- **An invitation**, to the address it is for, with the link that accepts it. The link is still shown once
+  in the dialog. Its token is kept sealed under `DEEVY_SECRET` until the email lands, and without that secret
+  invitations are not emailed.
+
+Email goes out on the sweep's schedule, like Slack: within a minute on Workers and `DEEVY_SWEEP_INTERVAL_SECONDS`
+on Node. An email about a Gate already ruled on, or a Run already answered, by the time the sweep reaches it
+is not sent: unlike a Slack message, an email cannot be changed afterwards. Without a sender, owed emails are
+dropped rather than kept, so configuring one next week does not send a week of stale Gates at once.
+
+This section has been checked against what each sender publishes — every request and answer is tested as its
+API reference documents it, SMTP against a real SMTP server, Amazon SES's signing against AWS's own test suite
+— and walked end to end through the development stand-in, but **no sender has yet sent to a real mailbox from
+deevy**. Send yourself a test email from Settings › Email first.
 
 ## Gates, and how many Humans they ask for
 

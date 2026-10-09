@@ -161,6 +161,15 @@ only way to say what the tracker contains from outside it; that is also how the 
 (`docs/sockets-acceptance.md`). `readEnv` refuses the flag under `NODE_ENV=production`, and `health.ping`
 reports it as `devSockets` the way it reports `devSignIn`.
 
+### Running without an email account
+
+`DEEVY_DEV_STUB_EMAIL=1` sends email to a stand-in in this process (`packages/email/src/stub`) when no
+`DEEVY_EMAIL_SENDER` is set. It keeps the last hundred emails, listed as JSON at `/dev/email` and each one as
+a client renders it at `/dev/email/<n>`, newest first — Gates, confirmations, invitations and the unsubscribe
+links in their headers. The `seeded` launch configuration turns it on and sweeps every five seconds, so the
+Gates its seed opens are in the outbox a moment after it starts. Refused under `NODE_ENV=production`, like
+the other stubs; on a Worker the stand-in runs, but there is no `/dev/email` to read it from.
+
 ### Walking a tool for real
 
 What the stub cannot show is whether a tool's real deliveries, API and setup pages say what deevy assumed they
@@ -379,13 +388,14 @@ apps/agent          the reference agent runtime, which talks to deevy as a stran
 apps/cli            the command line, generated from the operation registry
 packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory, the Socket port
 packages/sockets    one module per tool deevy speaks (github, linear, gitlab, notion, slack) and the stub
+packages/email      the email senders that speak HTTP (resend, postmark, sendgrid, mailgun, ses) and the stub
 packages/db         Drizzle schema, relations, migrations
-packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron) and workers/ (D1)
+packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron, SMTP) and workers/ (D1, Email Service)
 tools/release       the changelog fold and the commit-message rules
 ```
 
-Rules that keep the two deployment targets honest (ADR-0006): `packages/core`, `packages/db` and
-`packages/sockets` never import Node modules; anything runtime-specific lives in `packages/adapters`. The core
+Rules that keep the two deployment targets honest (ADR-0006): `packages/core`, `packages/db`,
+`packages/sockets` and `packages/email` never import Node modules; anything runtime-specific lives in `packages/adapters`. The core
 imports the Socket port's types and never a provider: the two entries build the registry and hand it to
 `createApp`. The Worker build in CI is what catches a
 leak.

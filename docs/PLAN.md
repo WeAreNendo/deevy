@@ -316,10 +316,10 @@ once against the real tool.
 
 **After Sockets.** Usage and time per Run came first and is done ([run-usage.md](./plans/run-usage.md),
 2026-09-26): every Run shows the tokens and the cost its client reported and how long it worked and waited,
-the Runs feed shows both, and an Agent's page tells its Sponsor what it costs a month. Next is email
-([email-channel.md](./plans/email-channel.md), chosen 2026-10-08): a Human's Notifications at their verified
-address, team addresses as Channels, invitations by email, through whichever sender the operator has. After
-it, in rough order: budgets that stop a Run or an Agent's month, sized on what Runs are now seen to spend;
+the Runs feed shows both, and an Agent's page tells its Sponsor what it costs a month. Email followed
+([email-channel.md](./plans/email-channel.md), done 2026-10-09): a Human's Notifications at their verified
+address, team addresses as Channels, invitations by email, through whichever of seven senders the operator
+has. Next, in rough order: budgets that stop a Run or an Agent's month, sized on what Runs are now seen to spend;
 per-Agent identities on a Socket where a provider makes them cheap; Jira and Asana; private Projects;
 Postgres adapter.
 
