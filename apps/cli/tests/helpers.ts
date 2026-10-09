@@ -11,6 +11,7 @@ import type { Auth } from "@deevy/core/auth";
 import type { ExternalIssue, SocketModule, SocketModules } from "@deevy/core/sockets";
 import { API_PATH } from "@deevy/core";
 import type { StoredToken } from "../src/credentials.ts";
+import type { Reporter } from "../src/identity.ts";
 import { authorizeUrl, discover, exchange, listen, pkce, register } from "../src/login.ts";
 import { createAuth } from "@deevy/core/auth";
 import { openDatabase } from "@deevy/adapters/node";
@@ -27,6 +28,8 @@ export const baseURL = "http://localhost:3000";
 const secret = "test-secret-that-is-at-least-32-characters";
 
 export interface TestDeevy {
+  /** Where it lives, path included: `baseURL`, unless the test put it under a path. */
+  baseURL: string;
   db: Db;
   auth: Auth;
   /** Drop-in for `fetch`, answering from the app rather than the network. */
@@ -34,12 +37,18 @@ export interface TestDeevy {
   close: () => void;
 }
 
-export function testDeevy(options: { version?: string } = {}): TestDeevy {
+/**
+ * A deevy at `baseURL`, or under a path of the same host when a test names one
+ * (`${baseURL}/acme`): its `BETTER_AUTH_URL`, which is all a deployment needs
+ * to be told to live there (ADR-0029).
+ */
+export function testDeevy(options: { version?: string; baseURL?: string } = {}): TestDeevy {
+  const at = options.baseURL ?? baseURL;
   const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
   const auth = createAuth({
     db,
     env: {
-      baseURL,
+      baseURL: at,
       secret,
       providers: { github: { clientId: "github-client", clientSecret: "github-secret" } },
     },
@@ -47,7 +56,7 @@ export function testDeevy(options: { version?: string } = {}): TestDeevy {
   const app = createApp({
     db,
     auth,
-    baseURL,
+    baseURL: at,
     sockets: fakeSockets(),
     ...(options.version ? { version: options.version } : {}),
   });
@@ -55,7 +64,7 @@ export function testDeevy(options: { version?: string } = {}): TestDeevy {
     const request = input instanceof Request ? input : new Request(String(input), init);
     return Promise.resolve(app.request(request));
   }) as typeof fetch;
-  return { db, auth, fetch: asFetch, close };
+  return { baseURL: at, db, auth, fetch: asFetch, close };
 }
 
 /**
@@ -136,7 +145,7 @@ export async function consent(
   cookie: Headers,
   location: string,
 ): Promise<string> {
-  const res = await deevy.fetch(`${baseURL}/api/auth/oauth2/consent`, {
+  const res = await deevy.fetch(`${deevy.baseURL}${API_PATH}/auth/oauth2/consent`, {
     method: "POST",
     headers: { ...Object.fromEntries(cookie), "content-type": "application/json" },
     body: JSON.stringify({ oauth_query: new URL(location, baseURL).search.slice(1), accept: true }),
@@ -177,12 +186,12 @@ export async function cookieHeaders(auth: Auth, userId: string): Promise<Headers
  * audience check (ADR-0023).
  */
 export async function apiToken(deevy: TestDeevy, userId: string): Promise<StoredToken> {
-  const metadata = await discover(baseURL, deevy.fetch);
+  const metadata = await discover(deevy.baseURL, deevy.fetch);
   const loopback = await listen("s");
   try {
-    const clientId = await register(metadata, baseURL, loopback.redirectUri, deevy.fetch);
+    const clientId = await register(metadata, deevy.baseURL, loopback.redirectUri, deevy.fetch);
     const { verifier, challenge } = pkce();
-    const resource = `${baseURL}${API_PATH}`;
+    const resource = `${deevy.baseURL}${API_PATH}`;
     const url = authorizeUrl(metadata, {
       clientId,
       redirectUri: loopback.redirectUri,
@@ -201,4 +210,53 @@ export async function apiToken(deevy: TestDeevy, userId: string): Promise<Stored
   } finally {
     loopback.close();
   }
+}
+
+/** Everything the CLI said, so a test reads what a person would see. */
+export function collect(): Reporter & { lines: { out: string[]; err: string[] } } {
+  const lines = { out: [] as string[], err: [] as string[] };
+  return {
+    lines,
+    out: (line: string) => lines.out.push(line),
+    err: (line: string) => lines.err.push(line),
+  };
+}
+
+/** Polls until the CLI has printed what the Human's browser would have opened. */
+export async function waitFor(look: () => string | undefined): Promise<string> {
+  for (let i = 0; i < 100; i += 1) {
+    const found = look();
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("the CLI never printed an authorize URL");
+}
+
+/**
+ * The Human's half of `deevy login`, driven from the URL the CLI printed:
+ * arrive at the authorize endpoint signed in, consent, and follow the redirect
+ * back to the CLI's listener. Answers with the URL the CLI printed.
+ */
+export async function approveInBrowser(
+  deevy: TestDeevy,
+  printed: () => string,
+  userId: string,
+): Promise<string> {
+  const url = await waitFor(() => /https?:\/\/\S+oauth2\/authorize\S*/.exec(printed())?.[0]);
+  const cookie = await cookieHeaders(deevy.auth, userId);
+  const redirected = await deevy.fetch(url, { headers: cookie, redirect: "manual" });
+  const code = await consent(deevy, cookie, redirected.headers.get("location") ?? "");
+  const asked = new URL(url).searchParams;
+  await fetch(`${asked.get("redirect_uri") ?? ""}?code=${code}&state=${asked.get("state") ?? ""}`);
+  return url;
+}
+
+/** A fetch that writes down every URL it is asked for, then asks the real one. */
+export function recording(inner: typeof fetch): { fetch: typeof fetch; urls: string[] } {
+  const urls: string[] = [];
+  const asking = ((input: Request | string | URL, init?: RequestInit) => {
+    urls.push(input instanceof Request ? input.url : String(input));
+    return inner(input, init);
+  }) as typeof fetch;
+  return { fetch: asking, urls };
 }

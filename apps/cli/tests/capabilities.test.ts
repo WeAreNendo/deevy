@@ -210,7 +210,7 @@ describe("a command this instance does not have", () => {
 
     const root = new Command().name("deevy").exitOverride();
     addGeneratedCommands(root, () => ({
-      origin: baseURL,
+      baseURL,
       cliVersion: "0.9.0",
       dir,
       environment: {},

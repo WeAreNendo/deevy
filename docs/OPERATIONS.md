@@ -597,7 +597,8 @@ path of `BETTER_AUTH_URL`, and everything follows it.
   `/.well-known/oauth-authorization-server/deevy` and the MCP resource at
   `/.well-known/oauth-protected-resource/deevy/mcp` — **at the root of the host, outside the path**. A proxy
   that forwards only `/deevy/*` has to forward `/.well-known/*/deevy*` to deevy too, or a Human's MCP client
-  and the CLI find no authorization server. deevy also answers `/deevy/.well-known/openid-configuration`.
+  finds no authorization server. deevy also answers `/deevy/.well-known/oauth-authorization-server` and
+  `/deevy/.well-known/openid-configuration`, which is where the CLI looks next.
 - The session cookie is scoped to the path, so two deevys on one host never share a sign-in.
 - The SPA's built files are the same; the index is served with `<base href="/deevy/">`, and everything the
   page loads and calls is relative to it.
@@ -605,6 +606,9 @@ path of `BETTER_AUTH_URL`, and everything follows it.
   knows nothing of the path, so every request under it has to reach the Worker, which serves the SPA itself
   through the `ASSETS` binding.
 - An Agent's `DEEVY_URL` names the whole URL, path included.
+- So does `deevy login`, from this release of the CLI on: after `deevy login https://company.example.com/deevy`
+  every command talks to the deevy under the path, and its token is kept apart from any other on the host. An
+  older CLI reduces the URL to its origin and reaches no deevy under a path.
 
 ## The CLI
 
@@ -622,10 +626,10 @@ deevy logout                            # forgets the token
 
 | Variable          | Default     | What it does                                                                                                                                                     |
 | ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEEVY_URL`       | —           | The instance every command talks to, when one is not named as an argument.                                                                                       |
+| `DEEVY_URL`       | —           | The instance every command talks to, path included, when one is not named as an argument.                                                                        |
 | `DEEVY_API_KEY`   | —           | An Agent's API key. Set it and the CLI acts as that Agent for the run, which is what a script wants; it wins over a signed-in Human, and `deevy whoami` says so. |
 | `DEEVY_WEB_URL`   | `DEEVY_URL` | Where the SPA is, when that is not where the API is. Only `deevy gates open` uses it, and a link built on the wrong one opens a 404.                             |
-| `XDG_CONFIG_HOME` | `~/.config` | Where the token is kept: `<that>/deevy/<scheme>_<host>.json`, mode 0600.                                                                                         |
+| `XDG_CONFIG_HOME` | `~/.config` | Where the token is kept: `<that>/deevy/<scheme>_<host>.json`, mode 0600, with the path after the host for a deevy under one (`https_app.deevy.dev%2Facme.json`). |
 | `NO_COLOR`        | —           | Turns colour off. It is off for a pipe either way.                                                                                                               |
 
 One file per instance, so signing into a second deevy does not sign you out of the first. `deevy logout`

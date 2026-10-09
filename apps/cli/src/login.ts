@@ -15,7 +15,7 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
-import { API_PATH } from "@deevy/core";
+import { API_PATH, basePathOf, wellKnownURL } from "@deevy/core";
 import type { StoredToken } from "./credentials.ts";
 
 /** What the authorization server says about itself (RFC 8414). */
@@ -34,16 +34,79 @@ export function pkce(): { verifier: string; challenge: string } {
   return { verifier, challenge: base64url(createHash("sha256").update(verifier).digest()) };
 }
 
-export async function discover(origin: string, fetchImpl = fetch): Promise<ServerMetadata> {
-  const res = await fetchImpl(`${origin}/.well-known/oauth-authorization-server`);
-  if (!res.ok) {
+/**
+ * Where an authorization server at `baseURL` describes itself, in the order the
+ * CLI asks.
+ *
+ * At the root of a host that is the one URL it always was. Under a path, RFC
+ * 8414 §3.1 puts the well-known segment between the host and the path, so
+ * `https://app.deevy.dev/acme` is described at
+ * `https://app.deevy.dev/.well-known/oauth-authorization-server/acme` — and a
+ * proxy that forwards only `/acme/*` never lets that reach deevy, which is why
+ * the two places under the path deevy also answers are asked after it.
+ */
+export function metadataURLs(baseURL: string): string[] {
+  const inserted = wellKnownURL(baseURL, "oauth-authorization-server");
+  if (!basePathOf(baseURL)) return [inserted];
+  return [
+    inserted,
+    `${baseURL}/.well-known/oauth-authorization-server`,
+    // OpenID Connect appends its segment to the issuer rather than inserting it.
+    `${baseURL}/.well-known/openid-configuration`,
+  ];
+}
+
+export async function discover(baseURL: string, fetchImpl = fetch): Promise<ServerMetadata> {
+  const statuses: number[] = [];
+  const issuers: string[] = [];
+  for (const url of metadataURLs(baseURL)) {
+    const res = await fetchImpl(url);
+    if (!res.ok) {
+      statuses.push(res.status);
+      continue;
+    }
+    const metadata = (await res.json().catch(() => null)) as Partial<ServerMetadata> | null;
+    // A 200 that is not metadata is some other service at the root of the
+    // host, which is exactly what the path-inserted URL can land on.
+    if (
+      typeof metadata?.issuer !== "string" ||
+      typeof metadata.authorization_endpoint !== "string" ||
+      typeof metadata.token_endpoint !== "string"
+    ) {
+      continue;
+    }
+    // RFC 8414 §3.3: metadata whose issuer is not the URL it was looked up for
+    // must not be used. Under a path, a deevy at the root of the same host
+    // answers the path-inserted URL about itself; and a deevy reached by a name
+    // other than its own would mint a token for an audience this CLI never
+    // asks for, which fails later and less clearly than this.
+    if (sameURL(metadata.issuer, baseURL)) return metadata as ServerMetadata;
+    issuers.push(metadata.issuer);
+  }
+  const elsewhere = issuers[0];
+  if (elsewhere !== undefined) {
     throw new Error(
-      `${origin} does not look like a deevy with sign-in configured ` +
-        `(its authorization server metadata answered ${String(res.status)}). ` +
-        `An instance without BETTER_AUTH_URL set has no OAuth server at all.`,
+      `The authorization server found for ${baseURL} is ${elsewhere}'s, and a token from it ` +
+        `is not one ${baseURL} accepts. If ${elsewhere} is the deevy you meant, ` +
+        `run \`deevy login ${elsewhere}\`.`,
     );
   }
-  return (await res.json()) as ServerMetadata;
+  throw new Error(
+    `${baseURL} does not look like a deevy with sign-in configured ` +
+      `(its authorization server metadata answered ${statuses.length > 0 ? statuses.map(String).join(", ") : "with something else"}). ` +
+      `An instance without BETTER_AUTH_URL set has no OAuth server at all.`,
+  );
+}
+
+/** Two spellings of one URL — a trailing slash, a host in capitals — are one URL. */
+function sameURL(left: string, right: string): boolean {
+  try {
+    const a = new URL(left);
+    const b = new URL(right);
+    return a.origin === b.origin && basePathOf(a.href) === basePathOf(b.href);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -58,11 +121,11 @@ export async function discover(origin: string, fetchImpl = fetch): Promise<Serve
  */
 export async function register(
   metadata: ServerMetadata,
-  origin: string,
+  baseURL: string,
   redirectUri: string,
   fetchImpl = fetch,
 ): Promise<string> {
-  const endpoint = metadata.registration_endpoint ?? `${origin}/api/auth/oauth2/register`;
+  const endpoint = metadata.registration_endpoint ?? `${baseURL}${API_PATH}/auth/oauth2/register`;
   const res = await fetchImpl(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -79,11 +142,13 @@ export async function register(
       application_type: "native",
       // The half that matters. Without it deevy links this client to the MCP
       // resource alone and every operation call is refused (ADR-0023).
-      resources: [`${origin}${API_PATH}`],
+      resources: [`${baseURL}${API_PATH}`],
     }),
   });
   if (res.status !== 201) {
-    throw new Error(`registering with ${origin} failed: ${String(res.status)} ${await res.text()}`);
+    throw new Error(
+      `registering with ${baseURL} failed: ${String(res.status)} ${await res.text()}`,
+    );
   }
   return ((await res.json()) as { client_id: string }).client_id;
 }
