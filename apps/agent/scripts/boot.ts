@@ -1,12 +1,13 @@
 /**
- * deevy, on either deployment, on this machine and nothing else.
+ * deevy, on every deployment, on this machine and nothing else.
  *
- * The acceptance walk's claim is that the runtime cannot tell the two apart
- * (ADR-0006), so it has to be able to start both: a Node process from the
- * packed bundle, and workerd from the built Worker on a local D1. Neither needs
- * an account, and sign-in is an OAuth stub prepended to the bundle — the same
- * trick `apps/web/scripts/smoke-workers.ts` uses, and the reason this walk
- * needs no OAuth App either (docs/sockets-acceptance.md).
+ * The acceptance walk's claim is that the runtime cannot tell them apart
+ * (ADR-0006), so it has to be able to start each: a Node process from the
+ * packed bundle, workerd from the built Worker on a local D1, and workerd from
+ * the many-Workspaces Worker with a Workspace in a Durable Object (ADR-0028).
+ * None needs an account, and sign-in is an OAuth stub prepended to the bundle
+ * — the same trick `apps/web/scripts/smoke-workers.ts` uses, and the reason
+ * this walk needs no OAuth App either (docs/sockets-acceptance.md).
  */
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
@@ -14,6 +15,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { localConfigs, platform, startLocal } from "../../hosted/scripts/local.ts";
 
 const here = new URL(".", import.meta.url).pathname;
 const root = join(here, "../../..");
@@ -227,4 +229,47 @@ export async function startWorkers({ containers }: StartOptions): Promise<Deploy
     },
     stop: () => child.kill("SIGTERM"),
   };
+}
+
+/**
+ * deevy as a hosted Workspace runs (ADR-0028): the many-Workspaces Worker on
+ * workerd beside the stand-in console, one Workspace provisioned through
+ * `Platform` the way the console provisions one, and the walk at its URL —
+ * `/acme` on the host, its database in an object of its own. Signing in goes
+ * through the relay at the root of the host, as every hosted sign-in does.
+ * Built by `vp run hosted#build:hosted`, after the SPA.
+ */
+export async function startHosted({ containers }: StartOptions): Promise<Deployment> {
+  const port = await freePort();
+  const host = `http://localhost:${String(port)}`;
+  const files = await localConfigs({
+    label: "acceptance",
+    origin: host,
+    vars: {
+      DEEVY_DEV_STUB_SOCKETS: "1",
+      DEEVY_DEV_STUB_CONTAINERS: containers,
+      // The Workspace's alarm, as often as it can: what a Gate says back in
+      // the tracker is a delivery it sends, and the walk waits for it.
+      DEEVY_HOSTED_PASS_SECONDS: "1",
+    },
+  });
+  const persistTo = await mkdtemp(join(tmpdir(), "deevy-acceptance-hosted-"));
+  const child = await startLocal(files, { port, persistTo });
+  try {
+    const { url } = await platform<{ url: string }>(host, "provision", {
+      slug: "acme",
+      name: "Acme",
+      adminEmail,
+    });
+    return {
+      name: "hosted",
+      origin: url,
+      // Nothing: the Workspace's alarm is the tick here, every second.
+      tick: () => Promise.resolve(),
+      stop: () => child.kill("SIGTERM"),
+    };
+  } catch (error) {
+    child.kill("SIGTERM");
+    throw error;
+  }
 }

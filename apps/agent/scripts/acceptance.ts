@@ -20,7 +20,7 @@
  * `tests/live.test.ts`, which is skipped unless DEEVY_AGENT_LIVE=1 and can be
  * pointed at either deployment this script starts.
  *
- *   vp run agent#acceptance              both deployments
+ *   vp run agent#acceptance              every deployment
  *   vp run agent#acceptance -- --url ... one that is already running
  */
 import { execFile } from "node:child_process";
@@ -36,7 +36,14 @@ import type { SessionEvent } from "../src/session.ts";
 import { deevyToolNames } from "../src/tools.ts";
 import { runOnce } from "../src/work.ts";
 import { openWorkspace, type RepoConfig } from "../src/workspace.ts";
-import { adminEmail, startNode, startWorkers, type Deployment, type StartOptions } from "./boot.ts";
+import {
+  adminEmail,
+  startHosted,
+  startNode,
+  startWorkers,
+  type Deployment,
+  type StartOptions,
+} from "./boot.ts";
 
 const git = promisify(execFile);
 const mcpProtocolVersion = "2026-07-28";
@@ -105,7 +112,15 @@ function cookiesOf(response: Response): string {
     .join("; ");
 }
 
-/** One Human signing in with GitHub, as the browser would do it. */
+/**
+ * One Human signing in with GitHub, as the browser would do it.
+ *
+ * The provider sends the browser to whatever callback the authorization URL
+ * names: this deevy's own, or a sign-in relay's when it signs in through one
+ * (ADR-0030), as every hosted Workspace does. The relay sets nothing and only
+ * sends the browser on to the deevy that started the sign-in, so its redirects
+ * are followed, with the browser's cookie, until one sets the session.
+ */
 async function signIn(origin: string, email: string): Promise<string> {
   const started = await fetch(`${origin}/api/auth/sign-in/social`, {
     method: "POST",
@@ -116,13 +131,24 @@ async function signIn(origin: string, email: string): Promise<string> {
   const url = (JSON.parse(text) as { url?: string }).url;
   if (!url)
     throw new Error(`no authorization URL: ${String(started.status)} ${text.slice(0, 200)}`);
-  const state = new URL(url).searchParams.get("state") ?? "";
-  const callback = await fetch(
-    `${origin}/api/auth/callback/github?state=${encodeURIComponent(state)}&code=${encodeURIComponent(email)}`,
-    { headers: { cookie: cookiesOf(started) }, redirect: "manual" },
+  const authorization = new URL(url);
+  const callback = new URL(
+    authorization.searchParams.get("redirect_uri") ?? `${origin}/api/auth/callback/github`,
   );
-  const cookie = cookiesOf(callback);
-  if (!cookie) throw new Error(`sign-in refused: ${callback.headers.get("location") ?? ""}`);
+  callback.searchParams.set("state", authorization.searchParams.get("state") ?? "");
+  callback.searchParams.set("code", email);
+  const browser = cookiesOf(started);
+  let answered = await fetch(callback, { headers: { cookie: browser }, redirect: "manual" });
+  for (let hops = 0; hops < 3 && !cookiesOf(answered); hops++) {
+    const location = answered.headers.get("location");
+    if (!location) break;
+    answered = await fetch(new URL(location, callback), {
+      headers: { cookie: browser },
+      redirect: "manual",
+    });
+  }
+  const cookie = cookiesOf(answered);
+  if (!cookie) throw new Error(`sign-in refused: ${answered.headers.get("location") ?? ""}`);
   return cookie;
 }
 
@@ -857,10 +883,12 @@ async function main(): Promise<void> {
     // Both deployments, from one codebase, and the runtime cannot tell them
     // apart: that is the claim ADR-0006 makes and this is what checks it. And
     // the image once more under a path, which is where a hosted Workspace
-    // lives (docs/plans/hosted.md): nothing the walk does may notice.
+    // lives (docs/plans/hosted.md): nothing the walk does may notice. Then a
+    // hosted Workspace itself, in its object behind the many-Workspaces
+    // Worker, signed in through the relay (ADR-0028).
     const stories: Record<string, string> = {};
     const underAPath = (options: StartOptions) => startNode({ ...options, basePath: "/deevy" });
-    for (const start of [startNode, startWorkers, underAPath]) {
+    for (const start of [startNode, startWorkers, underAPath, startHosted]) {
       let deployment: Deployment | null = null;
       // A repository each: the walk pushes the same branch on both, and a
       // shared remote would make the second push a non-fast-forward.
@@ -882,6 +910,11 @@ async function main(): Promise<void> {
       "and under a path",
       stories.node !== undefined && stories.node === stories["node under a path"],
       `node:    ${stories.node ?? "(none)"}\nunder a path: ${stories["node under a path"] ?? "(none)"}`,
+    );
+    check(
+      "and in a hosted Workspace",
+      stories.node !== undefined && stories.node === stories.hosted,
+      `node:    ${stories.node ?? "(none)"}\nhosted:  ${stories.hosted ?? "(none)"}`,
     );
   }
   console.log(
