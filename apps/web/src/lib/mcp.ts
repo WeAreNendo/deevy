@@ -1,3 +1,5 @@
+import { appURL } from "@/lib/base";
+
 /**
  * How something reaches this deevy over MCP. The endpoint is this instance, so
  * it is read off the page rather than configured, and the recipes are the ones
@@ -7,7 +9,7 @@
 
 /** The MCP endpoint is this deevy, so it is read off the page. */
 export function mcpEndpoint(): string {
-  return `${window.location.origin}/mcp`;
+  return appURL("/mcp");
 }
 
 /** What the runtime already calls the variable holding an Agent's key. */

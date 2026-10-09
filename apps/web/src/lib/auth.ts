@@ -1,6 +1,7 @@
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/react";
 import { lastLoginMethodClient } from "better-auth/client/plugins";
+import { withBase } from "@/lib/base";
 
 /**
  * `lastLoginMethodClient` reads the cookie the server's `lastLoginMethod()`
@@ -15,6 +16,6 @@ import { lastLoginMethodClient } from "better-auth/client/plugins";
  * with the client still waiting.
  */
 export const authClient = createAuthClient({
-  basePath: "/api/auth",
+  basePath: withBase("/api/auth"),
   plugins: [lastLoginMethodClient(), oauthProviderClient()],
 });

@@ -16,7 +16,7 @@
  * It reads `.env` like the server does, and it needs DEEVY_ADMIN_EMAIL.
  */
 import { existsSync, unlinkSync } from "node:fs";
-import { API_PATH } from "@deevy/core";
+import { API_PATH, basePathOf } from "@deevy/core";
 import { buildContext } from "@deevy/core/app";
 import { router } from "@deevy/core/router";
 import {
@@ -94,16 +94,18 @@ function cookiesOf(response: Response): string {
  * calling the callback with the state the sign-in just minted.
  */
 async function signIn(email: string): Promise<string> {
-  const start = await app.request("/api/auth/sign-in/social", {
+  // Under the path the deployment lives under, when it has one (base-path.ts).
+  const base = basePathOf(env.baseURL);
+  const start = await app.request(`${base}/api/auth/sign-in/social`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ provider: "github", callbackURL: "/" }),
+    body: JSON.stringify({ provider: "github", callbackURL: `${base}/` }),
   });
   const { url } = (await start.json()) as { url?: string };
   const state = url ? (new URL(url).searchParams.get("state") ?? "") : "";
   if (!state) throw new Error(`no authorization URL for ${email}`);
   const finished = await app.request(
-    `/api/auth/callback/github?state=${encodeURIComponent(state)}&code=${encodeURIComponent(email)}`,
+    `${base}/api/auth/callback/github?state=${encodeURIComponent(state)}&code=${encodeURIComponent(email)}`,
     { headers: { cookie: cookiesOf(start) }, redirect: "manual" },
   );
   const cookie = cookiesOf(finished);

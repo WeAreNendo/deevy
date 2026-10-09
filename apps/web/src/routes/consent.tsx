@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { withBase } from "@/lib/base";
 
 /**
  * The OAuth consent screen (`consentPage` in packages/core/src/auth.ts). Better
@@ -39,7 +40,7 @@ export function ConsentPage({ search }: ConsentPageProps = {}) {
     enabled: clientId !== "",
     queryFn: async (): Promise<PublicClient> => {
       const res = await fetch(
-        `/api/auth/oauth2/public-client?client_id=${encodeURIComponent(clientId)}`,
+        withBase(`/api/auth/oauth2/public-client?client_id=${encodeURIComponent(clientId)}`),
         { credentials: "include" },
       );
       if (!res.ok) throw new Error("Could not read who is asking");
@@ -49,7 +50,7 @@ export function ConsentPage({ search }: ConsentPageProps = {}) {
 
   const decide = useMutation({
     mutationFn: async (accept: boolean) => {
-      const res = await fetch("/api/auth/oauth2/consent", {
+      const res = await fetch(withBase("/api/auth/oauth2/consent"), {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },

@@ -295,7 +295,7 @@ bindings arrive with the request.
 
 | Variable                       | Node        | Workers            | Default                  | Without it                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------ | ----------- | ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, the OAuth server is off, and Slack deliveries wait.                                                                                                                                                                                                                                                                              |
+| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, the OAuth server is off, and Slack deliveries wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                                                                          |
 | `BETTER_AUTH_SECRET`           | env         | secret             | —                        | Better Auth falls back to a development key and says so; a Gate elicitation signed by one instance is then refused by the next. Changing it signs everyone out.                                                                                                                                                                                               |
 | `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume.                                                |
 | `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                                                                           |
@@ -614,6 +614,30 @@ A provider's access and refresh tokens are sealed under `BETTER_AUTH_SECRET` as 
 Human signs in with that provider. Rotating `BETTER_AUTH_SECRET` therefore also leaves the sealed tokens
 unreadable until each Human signs in again, which costs only the GitHub organization and GitLab group checks
 a join makes in the meantime.
+
+### Under a path
+
+deevy can live under a path of its host rather than at its root — `https://company.example.com/deevy`
+behind a reverse proxy, or a hosted Workspace at `https://app.deevy.dev/acme` ([hosted.md](plans/hosted.md),
+[ADR-0029](adr/0029-a-deployment-may-live-under-a-path.md)). There is no setting for it: the path is the
+path of `BETTER_AUTH_URL`, and everything follows it.
+
+- Every route is under the path: `/deevy/api`, `/deevy/rpc`, `/deevy/mcp`, `/deevy/hooks/<socket>`, the SPA
+  at `/deevy/`. `/healthz` answers at the root as well, so a container's health check needs no change.
+- Each provider's callback is `${BETTER_AUTH_URL}/api/auth/callback/<provider>`, which now carries the path.
+- deevy is its own OAuth issuer, `https://company.example.com/deevy`. RFC 8414 and RFC 9728 put the
+  well-known segment after the host, so a client discovers it at
+  `/.well-known/oauth-authorization-server/deevy` and the MCP resource at
+  `/.well-known/oauth-protected-resource/deevy/mcp` — **at the root of the host, outside the path**. A proxy
+  that forwards only `/deevy/*` has to forward `/.well-known/*/deevy*` to deevy too, or a Human's MCP client
+  and the CLI find no authorization server. deevy also answers `/deevy/.well-known/openid-configuration`.
+- The session cookie is scoped to the path, so two deevys on one host never share a sign-in.
+- The SPA's built files are the same; the index is served with `<base href="/deevy/">`, and everything the
+  page loads and calls is relative to it.
+- On the Worker, set `assets.run_worker_first` to `true` in `wrangler.jsonc`: the platform's asset handler
+  knows nothing of the path, so every request under it has to reach the Worker, which serves the SPA itself
+  through the `ASSETS` binding.
+- An Agent's `DEEVY_URL` names the whole URL, path included.
 
 ## The CLI
 
