@@ -79,6 +79,24 @@ describe("statements D1 will not take", () => {
   });
 
   /**
+   * The contraction a rebuild is (ADR-0031) is annotated on a line of its own,
+   * and drizzle opens every rebuild with the PRAGMA: a comment on top of a
+   * statement must not hide what the statement is.
+   */
+  it("reads past a comment above a statement, and names the statement's line", async () => {
+    const dir = await drizzleFolder({
+      "20261011000000_rebuild":
+        "-- deevy: contract nothing reads it, expanded in 20261010000000_one\n" +
+        "PRAGMA foreign_keys=OFF;--> statement-breakpoint\n" +
+        "DROP TABLE `a`;",
+    });
+
+    await expect(projectMigrations(dir)).rejects.toThrow(
+      /drizzle\/20261011000000_rebuild\/migration\.sql:2\b.*PRAGMA/s,
+    );
+  });
+
+  /**
    * The rest of what a local D1 answered with an error rather than a row:
    * transaction control (workerd sends you to `state.storage.transaction()`),
    * ATTACH and DETACH (`SQLITE_AUTH`), and VACUUM ("cannot VACUUM from within

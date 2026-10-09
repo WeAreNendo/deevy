@@ -11,7 +11,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Four jobs that need nothing from each other, because wall-clock time is what
+# Five jobs that need nothing from each other, because wall-clock time is what
 # anybody waits for. Run as one job these took six minutes, most of it one
 # machine running six test suites against each other for its four cores; split,
 # the slowest arm is the tests and everything else finishes under it. Each arm
@@ -159,6 +159,36 @@ jobs:
       # ruling, a branch, a pull request and a finish (docs/sockets-acceptance.md).
       - name: The reference runtime works a record end to end, on both deployments
         run: vp run agent#acceptance
+
+  # A gradual deploy runs the previous release on this one's schema, and so does
+  # a rollback (ADR-0031). The migration guard in `check` refuses what would
+  # break that; this runs it: the previous tag's server, built from the tag's
+  # own tree and lockfile, on a database this tree migrated, and this tree again
+  # on what that release wrote. Its own job because it is a second install and a
+  # second build — about half a minute warm — that nothing else here needs.
+  previous:
+    name: The previous release on this schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The previous release is the newest v* tag behind this commit, so
+          # the history and the tags have to be here.
+          fetch-depth: 0
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1.19.0
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: false
+
+      - name: Install
+        run: vp install --frozen-lockfile
+
+      - name: The previous release runs on this schema, and this one on what it wrote
+        run: vp run server#test:previous
 
   # Both images in one job: the runtime smoke needs a deevy to talk to, and
   # building that image twice in two jobs is the same minute spent twice. This
