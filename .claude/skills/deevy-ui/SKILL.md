@@ -356,6 +356,10 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   to.
 - **Channels** add a room in a connected Slack app beside the incoming-webhook kind, and **Notifications**
   has a Direct message column for a Human whose Slack account is linked.
+- **Notifications has an Email column** (docs/plans/email-channel.md, slice 1): `<Kind> by email` per row,
+  checked by default for Gate awaiting and Run awaiting input only, and disabled, with the reason said
+  beneath the table, when `preferences.get` answers `emailAddress: null` — deevy never emails an address the
+  sign-in did not confirm. When there is one, the line beneath names it.
 
 ## Test contracts
 

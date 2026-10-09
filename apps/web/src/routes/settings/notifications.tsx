@@ -29,6 +29,7 @@ interface Preference {
   inbox: boolean;
   slack: boolean;
   slackDm: boolean;
+  email: boolean;
 }
 
 /**
@@ -51,7 +52,11 @@ export function NotificationsPage() {
     }),
   );
 
-  const toggle = (kind: string, where: "inbox" | "slack" | "slackDm") =>
+  // Where email goes, or null when the sign-in did not confirm an address:
+  // deevy never emails one it was not sure of (docs/plans/email-channel.md).
+  const emailAddress = preferences.data?.emailAddress ?? null;
+
+  const toggle = (kind: string, where: "inbox" | "slack" | "slackDm" | "email") =>
     setDraft((current) =>
       current.map((row) => (row.kind === kind ? { ...row, [where]: !row[where] } : row)),
     );
@@ -69,6 +74,7 @@ export function NotificationsPage() {
               <TableHead className="w-24 text-center">Inbox</TableHead>
               <TableHead className="w-24 text-center">Slack</TableHead>
               <TableHead className="w-28 text-center">Direct message</TableHead>
+              <TableHead className="w-24 text-center">Email</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -102,6 +108,16 @@ export function NotificationsPage() {
                     />
                   </div>
                 </TableCell>
+                <TableCell className="w-24">
+                  <div className="flex justify-center">
+                    <Checkbox
+                      aria-label={`${labels[row.kind] ?? row.kind} by email`}
+                      checked={emailAddress !== null && row.email}
+                      disabled={emailAddress === null}
+                      onCheckedChange={() => toggle(row.kind, "email")}
+                    />
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -115,6 +131,13 @@ export function NotificationsPage() {
           there.
         </p>
       ) : null}
+      {draft.length > 0 && preferences.data ? (
+        <p className="text-sm text-muted-foreground">
+          {emailAddress
+            ? `Email goes to ${emailAddress}, the address your sign-in confirmed. Every email has a link that stops that kind in one click.`
+            : "We can't email you: the account you signed in with didn't confirm your email address."}
+        </p>
+      ) : null}
 
       <div>
         <Button
@@ -126,6 +149,7 @@ export function NotificationsPage() {
                 inbox: row.inbox,
                 slack: row.slack,
                 slackDm: row.slackDm,
+                email: row.email,
               })),
             })
           }

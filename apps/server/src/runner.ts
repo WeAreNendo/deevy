@@ -49,6 +49,8 @@ export interface RunnerOptions {
   /** The email senders this runtime can run, and the one in force. */
   emailSenders?: EmailSenders;
   email?: EmailSetup | null;
+  /** The instance secret (`BETTER_AUTH_SECRET`), which signs an email's unsubscribe link. */
+  secret?: string;
 }
 
 export interface Runner {
@@ -71,6 +73,7 @@ export function startRunner({
   socketCatchupMinutes,
   emailSenders,
   email,
+  secret,
 }: RunnerOptions): Runner {
   const limits: DueWorkLimits = {
     silenceMs: staleMinutes * 60_000,
@@ -95,6 +98,7 @@ export function startRunner({
       ...(socketSecret ? { socketSecret } : {}),
       ...(emailSenders ? { emailSenders } : {}),
       ...(email ? { email } : {}),
+      ...(secret ? { secret } : {}),
     });
     await inFlight;
   });

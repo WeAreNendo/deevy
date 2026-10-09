@@ -220,7 +220,12 @@ export async function routeEvent(db: Db, event: Event): Promise<Routing> {
       })),
     );
   const emails = forHumans
-    .filter((recipient) => verified.has(recipient.memberId) && emailByDefault(recipient.kind))
+    .filter(
+      (recipient) =>
+        verified.has(recipient.memberId) &&
+        (wanted.get(`${recipient.memberId}:${recipient.kind}`)?.email ??
+          emailByDefault(recipient.kind)),
+    )
     .map(({ memberId, kind }) => ({ memberId, kind }));
   const kinds = new Set(
     forHumans.filter((recipient) => wants(recipient, "slack")).map((recipient) => recipient.kind),

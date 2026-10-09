@@ -25,6 +25,7 @@ import {
   type EmailSetup,
 } from "./port.ts";
 import { renderEmail } from "./render.ts";
+import { unsubscribeToken, unsubscribeUrl } from "./unsubscribe.ts";
 
 /**
  * The email arm of the outbox (docs/plans/email-channel.md), beside Slack, the
@@ -80,6 +81,11 @@ export interface DeliverDueEmailsOptions extends ResolveSenderOptions {
   now?: Date;
   limit?: number;
   maxAttempts?: number;
+  /**
+   * The instance secret, which signs each email's one-click unsubscribe.
+   * Without it an email still links to Settings › Notifications.
+   */
+  secret?: string;
 }
 
 export interface EmailDeliveryResult {
@@ -97,6 +103,7 @@ export async function deliverDueEmails({
   now = new Date(),
   limit = defaultEmailLimit,
   maxAttempts = maxEmailAttempts,
+  secret,
   ...senderOptions
 }: DeliverDueEmailsOptions): Promise<EmailDeliveryResult> {
   const result: EmailDeliveryResult = {
@@ -230,7 +237,11 @@ export async function deliverDueEmails({
     }
     const shown = gate ? chatGateMessage(gate, baseUrl) : null;
     const payload = (event.payload ?? {}) as Record<string, unknown>;
+    const unsubscribe = secret
+      ? unsubscribeUrl(baseUrl, await unsubscribeToken(secret, member.id, kind, now))
+      : null;
     const rendered = renderEmail({
+      unsubscribeUrl: unsubscribe,
       kind,
       baseUrl,
       workspaceName: workspace?.name ?? "deevy",
@@ -256,7 +267,14 @@ export async function deliverDueEmails({
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      headers: {},
+      // One click turns this kind off for this Human (RFC 8058); a client
+      // that offers "unsubscribe" beside the sender's name posts here.
+      headers: unsubscribe
+        ? {
+            "List-Unsubscribe": `<${unsubscribe}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          }
+        : {},
       idempotencyKey: "",
     };
     // The delivery and what it says: a retry of the same email dedupes at a

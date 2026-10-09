@@ -1659,6 +1659,8 @@ export interface RunDueWorkOptions {
   emailSenders?: EmailSenders;
   /** The sender in force, from the environment; absent, an email owed is retired. */
   email?: EmailSetup | null;
+  /** The instance secret, which signs each email's one-click unsubscribe. */
+  secret?: string;
 }
 
 /** What one trigger's worth of background work actually did. */
@@ -1710,6 +1712,7 @@ export async function runDueWork({
   fetch,
   emailSenders,
   email,
+  secret,
 }: RunDueWorkOptions): Promise<DueWorkResult> {
   const {
     silenceMs = defaultSilenceMs,
@@ -1857,6 +1860,7 @@ export async function runDueWork({
           now,
           ...(emailSenders ? { emailSenders } : {}),
           ...(email ? { email } : {}),
+          ...(secret ? { secret } : {}),
           ...(fetch ? { fetch } : {}),
           ...deliveryBound,
         }),
