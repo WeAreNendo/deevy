@@ -164,8 +164,12 @@ export async function deliverDueEmails({
     with: { creator: { with: { user: { columns: { name: true } } } } },
   });
   const inviteById = new Map(invites.map((row) => [row.id, row]));
-  /** Invitations whose email landed: their sealed token is cleared after the pass. */
+  /** Invitations whose email landed or never will: their sealed token is cleared after the pass. */
   const invitedIds: string[] = [];
+  /** Invitations accepted, revoked or expired before their email went. */
+  const inviteSettled: string[] = [];
+  /** Invitations whose sealed link cannot be opened: the secret is gone or changed. */
+  const inviteUnopened: string[] = [];
   const gateOf = (event: Event): string | null =>
     event.subjectType === "gate" ? event.subjectId : gateRequestIdOf(event);
   const gateIds = [...new Set(events.map(gateOf).filter((id): id is string => id !== null))];
@@ -212,6 +216,8 @@ export async function deliverDueEmails({
     : [];
   const issueById = new Map(issues.map((row) => [row.id, row]));
 
+  const targetIds = new Map(claimed.map((row) => [row.id, row.targetId]));
+  const targetIdOf = (deliveryId: string) => targetIds.get(deliveryId) ?? "";
   const undeliverable: string[] = [];
   /** Emails about a wait that ended before they went: nothing failed, so no Event. */
   const settled: string[] = [];
@@ -225,16 +231,16 @@ export async function deliverDueEmails({
       // Accepted, revoked or expired before it went: nothing to send, and
       // nothing failed. Without the secret that sealed it, nothing can be.
       if (invite.acceptedAt || invite.revokedAt || invite.expiresAt <= now || !invite.sealedToken) {
-        settled.push(row.id);
+        inviteSettled.push(row.id);
+        invitedIds.push(invite.id);
         continue;
       }
-      if (!socketSecret) {
-        undeliverable.push(row.id);
-        continue;
-      }
-      const token = await openSecret(socketSecret, invite.sealedToken).catch(() => null);
+      const token = socketSecret
+        ? await openSecret(socketSecret, invite.sealedToken).catch(() => null)
+        : null;
       if (!token) {
-        undeliverable.push(row.id);
+        inviteUnopened.push(row.id);
+        invitedIds.push(invite.id);
         continue;
       }
       const rendered = renderInvitation({
@@ -244,21 +250,24 @@ export async function deliverDueEmails({
         expiresAt: invite.expiresAt,
         url: `${baseUrl.replace(/\/+$/, "")}/invite/${token}`,
       });
-      const sent = await sender.send({
+      const invitation: EmailMessage = {
         from,
         to: invite.email,
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
         headers: {},
-        idempotencyKey: row.id,
-      });
+        idempotencyKey: "",
+      };
+      invitation.idempotencyKey = await idempotencyKeyFor(row.id, invitation);
+      const sent = await sender.send(invitation);
       const outcome: Attempted = sent.delivered
         ? { id: row.id, delivered: true, status: sent.status, error: null }
         : { id: row.id, delivered: false, status: sent.status, error: sent.error };
       attempted.push(outcome);
-      if (sent.delivered) invitedIds.push(invite.id);
-      else if (!sent.retry) hopeless.set(row.id, outcome);
+      // Kept only while the email may still go: sent, or refused for good.
+      if (sent.delivered || !sent.retry) invitedIds.push(invite.id);
+      if (!sent.delivered && !sent.retry) hopeless.set(row.id, outcome);
       continue;
     }
     const event = eventBySeq.get(row.eventSeq);
@@ -368,6 +377,11 @@ export async function deliverDueEmails({
       .where(inArray(deliveryTable.id, [...hopeless.keys()]));
   }
   const exhausted = [...new Set([...recorded.exhausted, ...hopeless.keys()])];
+  // An invitation retried to exhaustion will not go either.
+  for (const id of recorded.exhausted) {
+    const invite = inviteById.get(targetIdOf(id));
+    if (invite) invitedIds.push(invite.id);
+  }
   // The token is kept only while an email that carries it is owed.
   if (invitedIds.length > 0) {
     await db
@@ -377,7 +391,24 @@ export async function deliverDueEmails({
   }
   result.delivered = recorded.delivered;
   result.failed = recorded.failed - hopeless.size;
-  result.gaveUp = exhausted.length + undeliverable.length + settled.length;
+  result.gaveUp =
+    exhausted.length +
+    undeliverable.length +
+    settled.length +
+    inviteSettled.length +
+    inviteUnopened.length;
+  await retireDeliveries(
+    db,
+    inviteSettled,
+    "The invitation was accepted, revoked or had expired before the email went.",
+    maxAttempts,
+  );
+  await retireDeliveries(
+    db,
+    inviteUnopened,
+    "deevy couldn't open the invitation's link: the server's secret for sealed keys is missing or changed.",
+    maxAttempts,
+  );
   await retireDeliveries(
     db,
     settled,

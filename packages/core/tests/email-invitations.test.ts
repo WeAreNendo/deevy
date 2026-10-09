@@ -1,3 +1,4 @@
+import { invitation as invitationTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { deliverDueEmails } from "../src/email/deliver.ts";
@@ -139,9 +140,11 @@ describe("an invitation by email", () => {
     expect(unsent.url).toMatch(/\/invite\//);
 
     const noSecret = await adminInviting({ socketSecret: null });
-    expect(
-      (await noSecret.asAda.invitations.create({ email: "grace@example.com" })).emailNotSent,
-    ).toMatch(/DEEVY_SECRET/);
+    const reason = (await noSecret.asAda.invitations.create({ email: "grace@example.com" }))
+      .emailNotSent;
+    expect(reason).toMatch(/no secret to keep the link/);
+    // Spoken to the admin, without a variable's name.
+    expect(reason).not.toMatch(/[A-Z]{4,}_[A-Z]+/);
   });
 
   it("is only a link when the admin asks for that", async () => {
@@ -151,5 +154,40 @@ describe("an invitation by email", () => {
     expect(made.emailStatus).toBeNull();
     expect(made.emailNotSent).toBeNull();
     expect(sent).toEqual([]);
+  });
+
+  it("forgets the sealed link once its email will never go, and says why in its own words", async () => {
+    const refused = await adminInviting({
+      answer: { delivered: false, retry: false, status: 422, error: "Invalid To address" },
+    });
+    await refused.asAda.invitations.create({ email: "grace@example.com" });
+    await refused.sweep();
+    const [afterRefusal] = await refused.db.query.invitation.findMany({});
+    expect(afterRefusal?.sealedToken).toBeNull();
+
+    const expired = await adminInviting();
+    await expired.asAda.invitations.create({ email: "ken@example.com" });
+    await expired.db.update(invitationTable).set({ expiresAt: new Date(Date.now() - 1000) });
+    await expired.sweep();
+    const [afterExpiry] = await expired.db.query.invitation.findMany({});
+    expect(afterExpiry?.sealedToken).toBeNull();
+    expect((await expired.asAda.invitations.list({})).invitations[0]).toMatchObject({
+      emailStatus: "failed",
+      emailError: "The invitation was accepted, revoked or had expired before the email went.",
+    });
+  });
+
+  it("lists the email of every invitation, however many there are", async () => {
+    // One bound parameter per invitation broke past D1's hundred; Node's
+    // SQLite allows far more, so this shows the behaviour, not the limit.
+    const { asAda } = await adminInviting();
+    for (let at = 0; at < 120; at += 1) {
+      await asAda.invitations.create({ email: `person${String(at)}@example.com`, send: at < 3 });
+    }
+
+    const { invitations } = await asAda.invitations.list({});
+
+    expect(invitations).toHaveLength(120);
+    expect(invitations.filter((one) => one.emailStatus === "queued")).toHaveLength(3);
   });
 });

@@ -71,12 +71,13 @@ type Shown = Omit<Invitation, "tokenHash" | "sealedToken"> & {
   emailError: string | null;
 };
 
-/** The email deliveries owed for these invitations, in one statement. */
-async function emailsFor(db: Db, ids: string[]): Promise<Map<string, Delivery>> {
-  if (ids.length === 0) return new Map();
-  const rows = await db.query.delivery.findMany({
-    where: { target: "invitation", targetId: { in: ids } },
-  });
+/**
+ * The email deliveries owed for this Workspace's invitations, in one
+ * statement that binds two parameters however many there are: a list of ids
+ * would bind one each, and D1 refuses a statement past a hundred.
+ */
+async function emailsFor(db: Db, workspaceId: string): Promise<Map<string, Delivery>> {
+  const rows = await db.query.delivery.findMany({ where: { target: "invitation", workspaceId } });
   return new Map(rows.map((row) => [row.targetId, row]));
 }
 
@@ -158,10 +159,7 @@ export const invitations = {
       // The token appears in no list: only its hash was ever stored, and the
       // URL existed exactly once, in the response that created it — and, while
       // its email was owed, sealed in a column no read returns.
-      const owed = await emailsFor(
-        context.db,
-        rows.map((row) => row.id),
-      );
+      const owed = await emailsFor(context.db, context.workspace.id);
       return { invitations: rows.map((row) => shown(row, owed.get(row.id))) };
     },
   }),
@@ -240,7 +238,7 @@ export const invitations = {
       const path = `/invite/${token}`;
       const emailed = input.send ? await queueEmail(context, row.id, token, created.seq) : null;
       const owed = emailed?.queued
-        ? (await emailsFor(context.db, [row.id])).get(row.id)
+        ? (await emailsFor(context.db, context.workspace.id)).get(row.id)
         : undefined;
       return {
         ...shown(row, owed),
@@ -394,7 +392,7 @@ async function queueEmail(
     return {
       queued: false,
       reason:
-        "This deevy has no DEEVY_SECRET to keep the link with until the email goes, so it was not emailed. Send the link yourself.",
+        "deevy has no secret to keep the link with until the email goes, so it wasn't emailed. Send the link yourself.",
     };
   }
   await context.db
