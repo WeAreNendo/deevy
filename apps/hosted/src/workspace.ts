@@ -14,12 +14,14 @@ import {
   emailsSince,
   invitationsSince,
   limitWindowStart,
+  onEventAppended,
   runDueWork,
   signInProviders,
   type App,
   type AuthEnv,
   type DueWorkLimits,
   type WorkspaceLimits,
+  type LiveReader,
 } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSenders } from "@deevy/core/email";
@@ -82,6 +84,15 @@ export interface WorkspaceStatus {
     emailsToday: number;
     runsThisMonth: number;
   } | null;
+  /**
+   * When this object last woke, in epoch milliseconds: it is billed from then
+   * while it stays awake, and an object that hibernates between Events with
+   * its tabs open wakes again for each one (ADR-0032). Asking wakes it too, so
+   * a Workspace that was asleep says "just now".
+   */
+  awakeSince: number;
+  /** How many tabs hold a socket here. */
+  openTabs: number;
 }
 
 /**
@@ -98,6 +109,28 @@ const passLimits: DueWorkLimits = {
 const CONFIG = "deevy:config";
 
 /**
+ * What an open tab's socket remembers through hibernation (ADR-0032): whose
+ * it is, when their session ends, and the last seq it was told. Kept on the
+ * socket rather than in the object, because the object forgets everything
+ * each time it sleeps and the socket does not.
+ */
+interface LiveAttachment {
+  memberId: string;
+  expiresAt: number;
+  seq: number;
+}
+
+/** How long appends are gathered before one push, so a burst is one message. */
+const PUSH_GATHER_MS = 25;
+
+/** Close codes of deevy's own (4000–4999): why the object let a socket go. */
+const CLOSED = {
+  sessionEnded: [4401, "The session ended"],
+  suspended: [4403, "This Workspace is suspended"],
+  gone: [4404, "This Workspace is gone"],
+} as const;
+
+/**
  * One hosted Workspace: its SQLite database, and deevy running beside it
  * (ADR-0028). The core is the one every deployment runs; what is the
  * object's own is where the database is, what wakes it, and who it is.
@@ -108,6 +141,12 @@ const CONFIG = "deevy:config";
  * and the senders. A failed migration is kept and answered as a 503 rather
  * than thrown, because a throw here resets the object and repeats on every
  * request after it.
+ *
+ * An open tab holds a hibernatable WebSocket here rather than a stream
+ * (ADR-0032): between Events the object sleeps with the sockets still open,
+ * and when one is appended — always while it is awake, since the write
+ * happened in it — it tells each socket the new seq. The tab reads what
+ * changed through the operations, so the socket carries no authority.
  */
 export class WorkspaceObject extends DurableObject<HostedBindings> {
   #hosted: HostedEnv;
@@ -115,11 +154,19 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
   #config: WorkspaceConfig | null = null;
   #migrations: DurableMigrationResult = { applied: [], error: null };
   #app: Promise<App> | null = null;
+  #pushTo = 0;
+  #gathering = false;
+  #awakeSince = Date.now();
 
   constructor(ctx: DurableObjectState, env: HostedBindings) {
     super(ctx, env);
     this.#hosted = readHostedEnv(env);
     this.#db = createDurableDb(ctx.storage);
+    // Every append in this Workspace goes through this handle, whoever made
+    // it: a request, a tool's delivery, a sign-in, the alarm.
+    onEventAppended(this.#db, (event) => this.#appended(event.seq));
+    // A tab's keepalive is answered by the runtime without waking the object.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     void ctx.blockConcurrencyWhile(async () => {
       this.#config = ctx.storage.kv.get<WorkspaceConfig>(CONFIG) ?? null;
       if (this.#config) this.#migrations = migrateDurable(this.#db, migrations);
@@ -143,6 +190,20 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
     });
     return (await this.#app).fetch(request);
   }
+
+  /** An open tab says nothing but its keepalive, which the runtime answers (constructor). */
+  override webSocketMessage(): void {}
+
+  /** The tab went away; answer its close, which a newer runtime has already done. */
+  override webSocketClose(socket: WebSocket, code: number, reason: string): void {
+    try {
+      socket.close(code, reason);
+    } catch {
+      // Already closed, or a code (1005, 1006) that is only ever received.
+    }
+  }
+
+  override webSocketError(): void {}
 
   /** The Workspace's background work, then the next alarm (replaces Cron and the JOBS queue). */
   override async alarm(): Promise<void> {
@@ -191,6 +252,8 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       migrations: this.#migrations,
       limits: config ? this.#limits(config) : null,
       counts: config && !this.#migrations.error ? await this.#counts() : null,
+      awakeSince: this.#awakeSince,
+      openTabs: this.ctx.getWebSockets().length,
     };
   }
 
@@ -212,6 +275,8 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
     this.ctx.storage.kv.put(CONFIG, this.#config);
     // The app was built with the old name and limits; the next request builds it again.
     this.#app = null;
+    // A suspended Workspace answers nobody, its open tabs included.
+    if (this.#config.status === "suspended") this.#closeSockets(CLOSED.suspended);
   }
 
   /**
@@ -235,9 +300,76 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
 
   /** Everything, alarm included (`deleteAll` takes the alarm since compatibility date 2026-02-24). */
   async destroy(): Promise<void> {
+    this.#closeSockets(CLOSED.gone);
     await this.ctx.storage.deleteAll();
     this.#config = null;
     this.#app = null;
+  }
+
+  /**
+   * An open tab, admitted by the core under `events.subscribe`'s rule
+   * (`/api/live`). Accepted through the hibernation API, so the socket stays
+   * open while the object sleeps, and told the head of the log at once: a tab
+   * coming back from hidden reads what it missed from there.
+   */
+  #accept(reader: LiveReader): Response {
+    const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
+    this.ctx.acceptWebSocket(server, [reader.memberId]);
+    const attachment: LiveAttachment = {
+      memberId: reader.memberId,
+      expiresAt: reader.expiresAt,
+      seq: reader.head,
+    };
+    server.serializeAttachment(attachment);
+    server.send(JSON.stringify({ seq: reader.head }));
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** The log grew; a burst of appends is gathered into one push. */
+  #appended(seq: number): void {
+    if (this.ctx.getWebSockets().length === 0) return;
+    this.#pushTo = Math.max(this.#pushTo, seq);
+    if (this.#gathering) return;
+    this.#gathering = true;
+    setTimeout(() => {
+      this.#gathering = false;
+      this.#push(this.#pushTo);
+    }, PUSH_GATHER_MS);
+  }
+
+  /**
+   * Tells every open tab the log reached `seq`. A number and nothing else: the
+   * tab reads the Events through `events.list` with its own session, so what a
+   * Member may not see is never sent to them. A socket whose session has ended
+   * is closed instead; the tab opens another, and is refused if it is over.
+   */
+  #push(seq: number): void {
+    const now = Date.now();
+    for (const socket of this.ctx.getWebSockets()) {
+      const reader = socket.deserializeAttachment() as LiveAttachment | null;
+      if (!reader) continue;
+      try {
+        if (reader.expiresAt <= now) {
+          socket.close(...CLOSED.sessionEnded);
+          continue;
+        }
+        if (reader.seq >= seq) continue;
+        socket.send(JSON.stringify({ seq }));
+        socket.serializeAttachment({ ...reader, seq } satisfies LiveAttachment);
+      } catch {
+        // A socket closing as this ran; its close handler tidies up.
+      }
+    }
+  }
+
+  #closeSockets([code, reason]: readonly [number, string]): void {
+    for (const socket of this.ctx.getWebSockets()) {
+      try {
+        socket.close(code, reason);
+      } catch {
+        // Already closing.
+      }
+    }
   }
 
   #urlOf(config: WorkspaceConfig): string {
@@ -322,11 +454,13 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       baseURL,
       secret,
       // A stream reads this object's own SQLite, which costs no query budget,
-      // and ends after minutes so a forgotten tab does not keep it awake.
+      // and ends after minutes so a forgotten tab does not keep it awake. It
+      // is the fallback: a tab here opens the socket below (ADR-0032).
       live: { pollMs: 1_000, maxDurationMs: this.#hosted.streamSeconds * 1_000 },
       // Every Workspace here mails through one sender whose quota and
       // reputation are all of theirs, so each is held to its day's share.
       limits: this.#limits(config),
+      liveSocket: { accept: (_request, reader) => this.#accept(reader) },
       signInProviders: signInProviders(identity),
       sockets: this.#sockets(),
       socketSecret: await workspaceSecret(this.#hosted.masterSecret, config.key, "seal"),

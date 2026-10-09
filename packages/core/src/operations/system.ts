@@ -44,6 +44,16 @@ export const health = {
        * builds that link from this.
        */
       version: z.string().nullable(),
+      /**
+       * How an open tab hears about new Events here (ADR-0032). `stream` is
+       * `events.subscribe`, which every deployment answers; `websocket` is a
+       * socket at `/api/live` that this deployment pushes each new seq to, so
+       * a tab holds nothing open on the server between Events — a hosted
+       * Workspace, whose object would otherwise be kept awake by the stream.
+       * Said here rather than discovered by trying, so a page never opens a
+       * socket that answers 501.
+       */
+      live: z.enum(["stream", "websocket"]),
     }),
     handler: async ({ context }) => ({
       ok: true as const,
@@ -52,6 +62,7 @@ export const health = {
       devSockets: context.devSockets === true,
       providers: context.signInProviders ?? [],
       version: context.version ?? null,
+      live: context.liveSocket === true ? ("websocket" as const) : ("stream" as const),
     }),
   }),
 };

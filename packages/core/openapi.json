@@ -1986,6 +1986,13 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "live": {
+                      "type": "string",
+                      "enum": [
+                        "stream",
+                        "websocket"
+                      ]
                     }
                   },
                   "required": [
@@ -1994,7 +2001,8 @@
                     "devSignIn",
                     "devSockets",
                     "providers",
-                    "version"
+                    "version",
+                    "live"
                   ],
                   "additionalProperties": false
                 }
