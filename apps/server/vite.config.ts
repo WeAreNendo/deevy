@@ -24,7 +24,10 @@ export default defineConfig({
     // The seed is a second entry rather than a script run from source: Node
     // cannot resolve the workspace packages' `.ts` exports on its own, and the
     // pack already knows how (docs/DEVELOPMENT.md, "Running without an OAuth App").
-    entry: ["src/index.ts", "src/seed.ts"],
+    // The import is a third, for the image, whose entrypoint is node and which
+    // has no shell to run anything else with (docs/OPERATIONS.md, "Taking a
+    // hosted Workspace home").
+    entry: ["src/index.ts", "src/seed.ts", "src/import.ts"],
     // The instance's own version, for the API document a client discovers it
     // through. Read here because the bundle has no package.json beside it.
     define: { __DEEVY_VERSION__: JSON.stringify(version) },

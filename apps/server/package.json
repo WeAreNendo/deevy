@@ -8,6 +8,7 @@
     "build": "vp pack",
     "start": "node dist/index.mjs",
     "test:image": "node scripts/smoke-image.ts",
+    "check:d1-import": "node scripts/check-d1-import.ts",
     "seed": "vp pack && node --env-file-if-exists=../../.env dist/seed.mjs"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "wrangler": "catalog:"
   }
 }

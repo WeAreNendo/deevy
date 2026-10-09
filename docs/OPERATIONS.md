@@ -324,7 +324,7 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
   test — is not counted.
 - **A Workspace's two secrets** are derived from `DEEVY_HOSTED_MASTER_SECRET` and the object's key, never
   stored. `Platform.secrets` hands them over with a `Platform.dump` when a team takes its Workspace to the
-  image or a Worker of its own.
+  image or a Worker of its own: [Taking a hosted Workspace home](#taking-a-hosted-workspace-home).
 
 | Binding or variable                | What                                                                                                          |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -374,6 +374,139 @@ apart with `tar`, checks every file against the manifest and dry-runs its `wrang
 pull request. `vp run hosted#test:hosted` runs two Workspaces on `wrangler dev --local` with a stand-in
 console and checks provisioning, sign-in through the relay, isolation, the alarm, the counts, a limit of a
 Workspace's own, a dump, suspension and removal, and the acceptance walk runs a record through a hosted Workspace beside the other deployments.
+
+## Taking a hosted Workspace home
+
+A hosted Workspace can leave for the image or for a Worker of its own whenever its team likes, with
+everything in it: its Members and their accounts, its Agents and their keys, its Sockets and their
+credentials, its Projects, Runs and Gates, and its Event log, which carries on numbering from where it was.
+
+**What the hosted console hands over** is two things, `Platform.dump` and `Platform.secrets`:
+
+- **The dump**, `workspace.sql`: SQL that rebuilds the Workspace's database in a fresh SQLite file — every
+  table and every row, the counter the next Event is numbered from, and the record of which migrations it
+  has, so the image opens it with nothing to apply.
+- **The Workspace's two secrets**: the `BETTER_AUTH_SECRET` its sign-ins, OAuth signing keys and signed
+  links were made with, and the `DEEVY_SECRET` its Sockets' credentials, its email sender's and its
+  invitation links are sealed under. They are derived for this Workspace alone and stored nowhere, and
+  neither can be replaced by a new one: without the second, every tool has to be connected again. Keep them
+  as you keep the volume.
+
+The dump is the Workspace at the moment it was taken, and anything written to the hosted copy afterwards
+stays there. A suspended Workspace can still be exported, so suspending it first is how to be sure.
+
+### Into the image
+
+`dist/import.mjs` is the import, a second script in the image beside the server. Run it once, on a new
+volume, before the server ever starts on it:
+
+```bash
+docker volume create deevy-data
+docker run --rm -i -v deevy-data:/data \
+  -e BETTER_AUTH_URL=https://deevy.example.com \
+  -e DEEVY_SECRET='<the value the export handed over>' \
+  ghcr.io/wearenendo/deevy:latest dist/import.mjs - < workspace.sql
+```
+
+`-` reads the dump from standard input, which needs no second mount and no file the container's user may
+read; a path to a mounted file works too. The command names the script and not `node`, because the
+image's entrypoint is node. Then start deevy on that
+volume as [The image](#the-image) does, with `BETTER_AUTH_SECRET` and `DEEVY_SECRET` set to the two values
+the export handed over rather than to new ones. `DEEVY_ADMIN_EMAIL` can stay unset: the Workspace and its
+admins came with the dump.
+
+What the import does, in order:
+
+- **It refuses a database that holds anything.** A Workspace is never merged into another, and a database in
+  use is never replaced. One a server made by starting on the volume first holds nothing but its schema,
+  and the refusal says so: stop that server, remove `deevy.sqlite` and its `-wal` and `-shm`, and import
+  again.
+- **It builds the new database beside the old place**, checks that it is exactly one Workspace whose rows
+  all hold together, and only then moves it into place, so a failure leaves nothing behind.
+- **It migrates it with the server's own migrator.** A dump from this release has nothing to apply. One from
+  an older release is brought forward exactly as an [upgrade](#upgrading) would be, and the import names
+  each migration it applied. One from a newer release than the image is refused, because this image would
+  run on a schema it does not know: import with an image at least as new as the hosted one.
+- **It forgets what was bound to the hosted address.** deevy is the OAuth authorization server for a Human's
+  MCP client and for the CLI, and what it issued names the address it lived at: its two protected
+  resources, `https://app.deevy.dev/<slug>/mcp` and `…/api`, and every token for them. None of it is
+  accepted at the new address, so it is removed, and the server registers the resources at the new one when
+  it starts. Registered clients, consents and the signing keys stay. Nothing else deevy stores names its
+  own address: a Socket's delivery address, a Gate's link and an email's are built from `BETTER_AUTH_URL` as
+  they are needed.
+- **It checks `DEEVY_SECRET` when it is set**, by opening everything sealed under it, and says plainly
+  which values it could not open. `BETTER_AUTH_URL`, when it is set, fills in the real addresses in what it
+  prints. Neither is needed to import.
+- **It prints what it imported** — the Workspace, its Humans and admins, Agents, Sockets, Projects, the
+  next Event's number, where it lived — and the list under [Pointing everything at the new
+  address](#pointing-everything-at-the-new-address), with each Socket's own address filled in.
+
+From a checkout instead of the image: `vp run server#build`, then
+`DEEVY_DATABASE_PATH=./data/deevy.sqlite node apps/server/dist/import.mjs workspace.sql`.
+
+### Into a Worker of your own
+
+D1 keeps wrangler's journal of what it applied, `d1_migrations`, and never drizzle's, and it runs a file in
+a transaction of its own with foreign keys enforced. So the dump is converted first, by the same script:
+
+```bash
+docker run --rm -i ghcr.io/wearenendo/deevy:latest dist/import.mjs --for-d1 - \
+  < workspace.sql > workspace.d1.sql
+# or, from a checkout after vp run server#build:
+node apps/server/dist/import.mjs --for-d1 workspace.sql > workspace.d1.sql
+```
+
+The SQL goes to standard output and everything said to you to standard error. The conversion leaves out
+the dump's transaction and its `PRAGMA foreign_keys`, loads the rows under `PRAGMA defer_foreign_keys` so
+their keys are checked once at the end, and records each migration the dump had applied in `d1_migrations`
+under the name of its file in `packages/db/migrations`. It refuses a row that would make a statement over
+D1's 100 KB limit, naming the table, rather than leaving D1 to refuse it halfway: such a Workspace can go to
+the image, which has no such limit. Convert with the release you deploy.
+
+Then follow [Deploying to a free account](#deploying-to-a-free-account) with step 4 replaced: the database
+the first deploy provisioned is empty, and the converted file takes the place of the first
+`migrations apply`, so it goes into that database **before any `migrations apply`** has built tables there.
+
+```bash
+wrangler d1 execute deevy --remote --file workspace.d1.sql
+wrangler d1 migrations list deevy --remote    # nothing, or what this release added since the dump
+wrangler d1 migrations apply deevy --remote   # only if it listed something
+```
+
+In step 6, `BETTER_AUTH_SECRET` and `DEEVY_SECRET` are the two values the export handed over, not
+`openssl rand`. Every row the import writes counts against D1's rows written, which on a free account is
+a daily allowance a large Workspace can use up. `vp run server#check:d1-import` applies a converted dump to a
+local D1 and asks wrangler the same questions, as CI does on every commit; a remote D1 has not been walked
+yet.
+
+wrangler's _local_ `d1 execute --file` deletes the first `BEGIN TRANSACTION;` and `COMMIT;` it finds in a
+file, inside a value or not. The conversion warns when a value contains the first; `--remote` does not do
+this.
+
+### Pointing everything at the new address
+
+The Workspace's address changes from `https://app.deevy.dev/<slug>` to yours, and deevy cannot tell the rest
+of the world. In order:
+
+| What                        | What to change                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing in                  | A hosted Workspace signs in through the platform's relay and its Apps. Register your own for each provider you offer, with `<BETTER_AUTH_URL>/api/auth/callback/<provider>` ([Signing in](#signing-in-and-the-origin-better_auth_url-names)); an IdP or a GitLab of your own, which the relay never served, changes its callback instead. Everybody signs in again and lands on their own Member, because a provider's account is the same whichever App asks. |
+| Agents                      | Each one's `DEEVY_URL`, to the new URL. Their API keys belong to no address and keep working.                                                                                                                                                                                                                                                                                                                                                                  |
+| The CLI and MCP clients     | `deevy login <BETTER_AUTH_URL>`, and the new URL in each MCP client. What they held was issued by the old address, and the import removed it.                                                                                                                                                                                                                                                                                                                  |
+| A GitHub Socket             | **Point GitHub at this address** on the Socket's page (`sockets.rewire`) moves the App's webhook. In the App's own settings on GitHub, the **Setup URL** becomes `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                                     |
+| A Linear Socket             | In the OAuth application: the webhook URL, `<BETTER_AUTH_URL>/hooks/<socket>`, and both **Callback URLs**, `/api/identities/linear/callback` and `/hooks/<socket>/setup` on the new URL.                                                                                                                                                                                                                                                                       |
+| A GitLab Socket             | On every project or group bound to it, the webhook's URL, `<BETTER_AUTH_URL>/hooks/<socket>`. The secret token stays.                                                                                                                                                                                                                                                                                                                                          |
+| A Notion Socket             | On the connection's **Webhooks** tab, a new subscription to `<BETTER_AUTH_URL>/hooks/<socket>`, verified with the token the Socket's page shows, then the old one deleted.                                                                                                                                                                                                                                                                                     |
+| A Slack Socket              | In the app: the **Interactivity** request URL and the `/deevy` command's URL, both `<BETTER_AUTH_URL>/hooks/<socket>`.                                                                                                                                                                                                                                                                                                                                         |
+| Channels, outgoing webhooks | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+Only GitHub lets deevy move a webhook itself; every other tool keeps it in its own settings
+([Where a tool delivers](#where-a-tool-delivers)). Until a tool is pointed at the new address, polling still
+brings its records in, late, but not a comment or a click. The import prints this table for your own
+Sockets, with their addresses.
+
+Last, once the new deevy is up, delete the hosted Workspace in the console, so that nothing still pointed at
+the old address — an Agent somebody forgot — goes on working against the copy you left.
 
 ## Environment
 
