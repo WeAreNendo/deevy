@@ -466,49 +466,49 @@ and the full authorization-code flow, the MCP challenge and token audiences work
 tests); real MCP clients against a path issuer, and real provider Apps through the relay, are still owed. S3
 waits for an account: what an open stream bills, and a gradual deploy with a migration.
 
-0. **The queue path sends only webhooks** (#135). The claim now names its target, so a stray id can never
-   retire another arm's row, and `appendEvent` queues only webhooks. Email and Slack-room deliveries were
-   never affected; they were never queued.
-1. **Socket caches keyed by their credential** (#134). Linear's and GitHub's token caches are keyed by the
-   API base, the client or App id, and a digest of the secret or private key. No other cache in the Sockets or
-   the senders had the shape.
-2. **A page runs only deevy's script** (#142). The audit found one real hole: `links.add` took `javascript:`
-   URLs, drawn as links on a Gate and a record; it takes http and https only now, and every link the SPA
-   builds from a tool's or an Agent's data skips anything else. `/mcp` accepted a browser's session cookie;
-   it takes bearer tokens only. Inline styles stay allowed, because three of the UI's libraries write
-   `<style>` as they run; scripts are locked to deevy's own. Better Auth's decrypt throws on an unencrypted
-   token, so deevy's own reads accept both until a row is written again. `/api/docs` still loads its reference
-   UI from a CDN, unpinned — owed.
-3. **The source of the running version** (#136). `health.ping` and `/healthz` say the version; Settings
-   links to `v<version>` on GitHub.
-4. **deevy under a path** (#138). Better Auth routes on the path of its own URL and keeps a URL that has one
-   as given, so it is handed `…/acme/api/auth` outright; Hono's `basePath` shares its router, so the app
-   mounts under the path with discovery at the root of the host beside it. The SPA is built once, relative to
-   a `<base href>` the server writes; `lib/base.ts` is the one place it is read. The acceptance walk runs a
-   third time under `/deevy` and leaves the same Event log.
-5. **The CLI keeps the path** (#140). Login checks the discovered document's issuer, which it used to skip:
-   a deevy reached by another name than its own now says which URL to log in to.
-6. **The durable migration projection** (#137). Both migrators journal by folder name and decide what is
-   pending by name alone, so a database migrated in a Durable Object opens under the Node migrator with
-   nothing to apply.
-7. **`@deevy/adapters/durable`** (#143). Every core suite passed on the durable driver with no change to the
-   core. drizzle's durable migrator answers any failure with a bare "Rollback", so the adapter watches each
-   statement to name the migration and SQLite's message. The dump writes values with SQLite's `quote()`,
-   because a Durable Object reads an integer past 2^53 back rounded, and restores `sqlite_sequence`, or a
-   restored Workspace could hand out an Event's `seq` twice.
-8. **Relayed sign-in** (#144). Built as a redirector rather than on `oAuthProxy`, whose callback follows each
-   Workspace's base path (which Google's exact match refuses) and whose relay holds the tokens; ADR-0030.
-   Better Auth normalises `options.baseURL`, so the Workspace's own URL is handed to the plugin rather than
-   read back. The development sign-in now follows the authorization URL's `redirect_uri`, as a provider would.
-9. **`apps/hosted`** (#145). workerd does not implement jurisdictions, so the smoke runs without `eu`. RPC
-   types an empty tuple as `never[]`. The assets binding needs the single-page fallback even though the router
-   serves the SPA, because a deep route is asked of the binding by the inner path.
-10. **Every release upgrades in place** (#141). The Node migrator already tolerates migrations it does not
-    know, and now names them at startup. A `-- deevy: contract` comment above drizzle's table rebuild could
-    have hidden its PRAGMA from the D1 projection's refusal; the projection reads past leading comments now.
-11. **The docs site** (#146). Starlight on Workers static assets, generated from the repository's own
-    Markdown at build time — OPERATIONS.md split at its sections, DEVELOPMENT, harnesses, the glossary, every
-    ADR — and an API reference from the OpenAPI snapshot, grouped by area since it carries no tags. The link
-    validator fails the build on a broken internal link. Astro is pinned below the release that needs a newer
-    Vite than the workspace's, and its own CSP is off, because it blocked the search's inline script. The
-    deploy waits for the account: it finishes green with a notice until the `docs` environment has a token.
+- **Slice 0, The queue path sends only webhooks** (#135). The claim now names its target, so a stray id can never
+  retire another arm's row, and `appendEvent` queues only webhooks. Email and Slack-room deliveries were
+  never affected; they were never queued.
+- **Slice 1, Socket caches keyed by their credential** (#134). Linear's and GitHub's token caches are keyed by the
+  API base, the client or App id, and a digest of the secret or private key. No other cache in the Sockets or
+  the senders had the shape.
+- **Slice 2, A page runs only deevy's script** (#142). The audit found one real hole: `links.add` took `javascript:`
+  URLs, drawn as links on a Gate and a record; it takes http and https only now, and every link the SPA
+  builds from a tool's or an Agent's data skips anything else. `/mcp` accepted a browser's session cookie;
+  it takes bearer tokens only. Inline styles stay allowed, because three of the UI's libraries write
+  `<style>` as they run; scripts are locked to deevy's own. Better Auth's decrypt throws on an unencrypted
+  token, so deevy's own reads accept both until a row is written again. `/api/docs` still loads its reference
+  UI from a CDN, unpinned — owed.
+- **Slice 3, The source of the running version** (#136). `health.ping` and `/healthz` say the version; Settings
+  links to `v<version>` on GitHub.
+- **Slice 4, deevy under a path** (#138). Better Auth routes on the path of its own URL and keeps a URL that has one
+  as given, so it is handed `…/acme/api/auth` outright; Hono's `basePath` shares its router, so the app
+  mounts under the path with discovery at the root of the host beside it. The SPA is built once, relative to
+  a `<base href>` the server writes; `lib/base.ts` is the one place it is read. The acceptance walk runs a
+  third time under `/deevy` and leaves the same Event log.
+- **Slice 5, The CLI keeps the path** (#140). Login checks the discovered document's issuer, which it used to skip:
+  a deevy reached by another name than its own now says which URL to log in to.
+- **Slice 6, The durable migration projection** (#137). Both migrators journal by folder name and decide what is
+  pending by name alone, so a database migrated in a Durable Object opens under the Node migrator with
+  nothing to apply.
+- **Slice 7, `@deevy/adapters/durable`** (#143). Every core suite passed on the durable driver with no change to the
+  core. drizzle's durable migrator answers any failure with a bare "Rollback", so the adapter watches each
+  statement to name the migration and SQLite's message. The dump writes values with SQLite's `quote()`,
+  because a Durable Object reads an integer past 2^53 back rounded, and restores `sqlite_sequence`, or a
+  restored Workspace could hand out an Event's `seq` twice.
+- **Slice 8, Relayed sign-in** (#144). Built as a redirector rather than on `oAuthProxy`, whose callback follows each
+  Workspace's base path (which Google's exact match refuses) and whose relay holds the tokens; ADR-0030.
+  Better Auth normalises `options.baseURL`, so the Workspace's own URL is handed to the plugin rather than
+  read back. The development sign-in now follows the authorization URL's `redirect_uri`, as a provider would.
+- **Slice 9, `apps/hosted`** (#145). workerd does not implement jurisdictions, so the smoke runs without `eu`. RPC
+  types an empty tuple as `never[]`. The assets binding needs the single-page fallback even though the router
+  serves the SPA, because a deep route is asked of the binding by the inner path.
+- **Slice 11, Every release upgrades in place** (#141). The Node migrator already tolerates migrations it does not
+  know, and now names them at startup. A `-- deevy: contract` comment above drizzle's table rebuild could
+  have hidden its PRAGMA from the D1 projection's refusal; the projection reads past leading comments now.
+- **Slice 15, The docs site** (#146). Starlight on Workers static assets, generated from the repository's own
+  Markdown at build time — OPERATIONS.md split at its sections, DEVELOPMENT, harnesses, the glossary, every
+  ADR — and an API reference from the OpenAPI snapshot, grouped by area since it carries no tags. The link
+  validator fails the build on a broken internal link. Astro is pinned below the release that needs a newer
+  Vite than the workspace's, and its own CSP is off, because it blocked the search's inline script. The
+  deploy waits for the account: it finishes green with a notice until the `docs` environment has a token.
