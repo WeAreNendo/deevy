@@ -227,12 +227,15 @@ export async function routeEvent(db: Db, event: Event): Promise<Routing> {
           emailByDefault(recipient.kind)),
     )
     .map(({ memberId, kind }) => ({ memberId, kind }));
-  const kinds = new Set(
+  // A Slack room hears a kind when some Human it concerns wants Slack for it.
+  // A team address hears every kind its rules name: it is an admin's choice
+  // of mailbox, and one Human's Slack switch says nothing about it.
+  const slackKinds = new Set(
     forHumans.filter((recipient) => wants(recipient, "slack")).map((recipient) => recipient.kind),
   );
-  if (kinds.size === 0) return { inbox, slack: [], dms, emails };
+  const allKinds = new Set(forHumans.map((recipient) => recipient.kind));
 
-  return { inbox, slack: await slackTargets(db, event, kinds), dms, emails };
+  return { inbox, slack: await slackTargets(db, event, slackKinds, allKinds), dms, emails };
 }
 
 /**
@@ -243,7 +246,8 @@ export async function routeEvent(db: Db, event: Event): Promise<Routing> {
 async function slackTargets(
   db: Db,
   event: Event,
-  kinds: Set<HumanNotificationKind>,
+  slackKinds: Set<HumanNotificationKind>,
+  allKinds: Set<HumanNotificationKind>,
 ): Promise<SlackTarget[]> {
   const rules = await db.query.routingRule.findMany({
     where: { workspaceId: event.workspaceId },
@@ -255,7 +259,7 @@ async function slackTargets(
     if (rule.projectId !== null && rule.projectId !== event.projectId) continue;
     const target = targetOf(rule.channel);
     if (!target) continue;
-    for (const kind of kinds) {
+    for (const kind of target === "email" ? allKinds : slackKinds) {
       if (rule.notificationKind !== null && rule.notificationKind !== kind) continue;
       targets.set(`${rule.channelId}:${kind}`, { channelId: rule.channelId, target, kind });
     }

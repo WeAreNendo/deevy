@@ -162,7 +162,14 @@ function bodyOf(input: RenderInput): Body {
   }
   if (input.kind === "run_awaiting_input") {
     return {
-      subject: issue ? `Waiting for your answer: ${issue.key}` : "A Run is waiting for your answer",
+      subject:
+        input.audience === "team"
+          ? issue
+            ? `Waiting for an answer: ${issue.key}`
+            : "A Run is waiting for an answer"
+          : issue
+            ? `Waiting for your answer: ${issue.key}`
+            : "A Run is waiting for your answer",
       headline:
         input.audience === "team"
           ? "A Run is waiting for an answer"

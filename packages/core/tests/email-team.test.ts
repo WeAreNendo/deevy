@@ -1,8 +1,9 @@
-import { routingRule, type Db } from "@deevy/db";
+import { notificationPreference, routingRule, type Db } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
 import { deliverDueEmails } from "../src/email/deliver.ts";
+import { renderEmail } from "../src/email/render.ts";
 import type { EmailMessage, EmailSender, EmailSetup, SendResult } from "../src/email/port.ts";
 import { newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
@@ -198,5 +199,46 @@ describe("a team address", () => {
     await expect(
       asAda.channels.createEmail({ name: "Ops", address: "ops@example.com" }),
     ).rejects.toThrow(/No email sender is configured/);
+  });
+
+  it("is routed however a Human set their own Slack switch", async () => {
+    // The Slack column is a Human's say over Slack, not over an admin's team address.
+    const { db, ada, asAda, asPlanner, run, sent, app, workspaceId } = await adminWithSender();
+    const { channel } = await asAda.channels.createEmail({
+      name: "Approvals",
+      address: "approvals@example.com",
+    });
+    await routeGatesTo(db, workspaceId, channel.id);
+    await app.request(confirmPath(sent[0]), { method: "POST" });
+    await db.insert(notificationPreference).values({
+      memberId: ada.member.id,
+      kind: "gate_awaiting",
+      slack: false,
+    });
+
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
+
+    const owed = await db.query.delivery.findMany({ where: { target: "email" } });
+    expect(owed).toHaveLength(1);
+  });
+});
+
+describe("what a team address is told", () => {
+  it("asks for an answer without saying it is the team's", () => {
+    const said = renderEmail({
+      kind: "run_awaiting_input",
+      audience: "team",
+      baseUrl,
+      workspaceName: "Acme",
+      issue: {
+        id: "iss_1",
+        key: "ENG-12",
+        title: "Retry",
+        url: "https://linear.app/acme/issue/ENG-12",
+      },
+      question: "Exponential or fixed?",
+      runId: "run_1",
+    });
+    expect(said.subject).toBe("Waiting for an answer: ENG-12");
   });
 });
