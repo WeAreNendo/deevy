@@ -321,7 +321,7 @@ the Runs feed shows both, and an Agent's page tells its Sponsor what it costs a 
 address, team addresses as Channels, invitations by email, through whichever of seven senders the operator
 has. Hosted Workspaces were planned next ([hosted.md](./plans/hosted.md), 2026-10-09,
 [ADR-0028](./adr/0028-a-hosted-workspace-is-a-durable-object.md)): one Worker serving every hosted Workspace
-at `<slug>.deevy.dev`, each Workspace's database a Durable Object of its own, sign-in through one relay, an
+at `app.deevy.dev/<slug>`, each Workspace's database a Durable Object of its own, sign-in through one relay, an
 invite-only free beta first and billing after. Then, in rough order: budgets that stop a Run or an Agent's
 month, sized on what Runs are now seen to spend; per-Agent identities on a Socket where a provider makes them
 cheap; Jira and Asana; private Projects; Postgres adapter.

@@ -5,7 +5,7 @@ Node with SQLite in Docker, and a Worker with D1 — each serving one Workspace,
 serves many. Planned in [hosted.md](../plans/hosted.md).
 
 deevy is to be offered hosted as well as self-hosted ([ADR-0002](./0002-agpl-3-license.md) kept that door
-open): a team asks for a Workspace at `app.deevy.dev` and uses it at `<slug>.deevy.dev` without running
+open): a team asks for a Workspace at `app.deevy.dev` and uses it at `app.deevy.dev/<slug>` without running
 anything. Every part of deevy assumes one Workspace per database — `bootstrapWorkspace`, `workspace.findFirst()`,
 users and handles unique per database — and every deployment is configured by its environment. The question
 is how one platform on Cloudflare holds many Workspaces' data, configuration and secrets, and upgrades all of
@@ -14,10 +14,11 @@ them, without a person doing anything per Workspace.
 ## The decision
 
 **One Worker serves every hosted Workspace, and each Workspace's SQLite database is its own Durable Object,
-which runs the app.** A router maps the host to the Workspace's object; the object applies its pending
+which runs the app.** Every Workspace lives under its own path on one host, `app.deevy.dev/<slug>`, and a
+router maps the path's first segment to the Workspace's object; the object applies its pending
 migrations when it wakes, builds the app with `createApp` the first time a request needs it, and runs the
-sweep from its alarm. Its configuration — origin, name, the admin's address, status — lives in its own
-storage, set by the control plane through an RPC entrypoint no host routes to. Its secrets are derived from
+sweep from its alarm. Its configuration — slug, name, the admin's address, status — lives in its own
+storage, set by the control plane through an RPC entrypoint no URL routes to. Its secrets are derived from
 a platform secret and the object's immutable key, and never stored. Every object is created in the `eu`
 jurisdiction.
 
@@ -47,16 +48,29 @@ about tenancy: it would be the shared-database refactor above, plus a second SQL
 every self-hosted deployment keeps, plus a server to patch, back up and keep up. deevy has no Postgres
 support yet (PLAN.md lists it as later). Refused.
 
-**Workspaces on a registrable domain of their own, on the Public Suffix List.** It would make every
-Workspace its own site to the browser, so no cookie or `SameSite` rule could cross between them. Refused for
-now because Matt wants `deevy.dev` reused, and because nothing but deevy's own code is served on any
-deevy.dev host: the plan's hardening slice (a CSP with `frame-ancestors`, same-origin checks on
-cookie-authenticated writes, host-locked cookies, no third-party script on any deevy.dev host) is what makes
-sharing the domain safe. A Workspace's origin is baked into OAuth issuers, MCP audiences and webhook URLs, so
-this is the choice hardest to undo; it is written down here so it is undone on purpose if ever.
+**A subdomain per Workspace, `<slug>.deevy.dev`.** Each Workspace would be its own origin, so a script bug
+in one Workspace's page could not reach another, and no cookie could cross between them; deevy would need
+no base path, and the CLI none of its changes. Refused: Matt wants the Workspace in the path, as Linear and
+GitHub have it, on one host with no wildcard record. What that costs is written below and paid in the plan:
+a CSP that refuses any script deevy did not ship, a deployment that can live under a path, path-scoped
+cookies, and a CLI that keeps the path. A Workspace's URL is baked into OAuth issuers, MCP audiences and
+webhook URLs, so this is the choice hardest to undo; it is written down here so it is undone on purpose if
+ever.
+
+**One account across Workspaces.** Sign in once and every Workspace you belong to is there, as on Linear.
+Refused for now: it would move identity out of each Workspace's database into a platform service, amend
+[ADR-0007](./0007-better-auth-is-identity-and-oauth-server.md), and make hosted and self-hosted identity two
+designs. Each Workspace is its own sign-in, and switching goes through the platform's sign-in relay, one
+redirect when the provider already knows you.
 
 ## The cost, stated
 
+- **One origin for every Workspace.** The browser separates origins, not paths: a script that runs in one
+  Workspace's page can act in every other Workspace its visitor is signed into. Every page refuses any
+  script deevy did not ship, and every place a tool's text is rendered is audited; a CSP violation is a bug
+  of the highest priority.
+- **deevy learns to live under a path.** Routes, Better Auth, the OAuth issuer and its metadata, cookies, the
+  SPA and the CLI all follow the path of the deployment's URL. Self-hosted deployments gain the same ability.
 - **A third shape to keep.** The core's suites run again on the durable driver, and the acceptance walk runs
   on three deployments instead of two.
 - **An app per object in a shared isolate.** Many Workspaces share 128 MB, and a woken object rebuilds its
