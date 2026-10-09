@@ -408,6 +408,10 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say("gave up on a webhook delivery", str(p.error), "destructive");
     case "email.exhausted":
       return say("gave up on an email", str(p.error), "destructive");
+    case "email.configured":
+      return say(`set email to go through ${str(p.sender) ?? "a sender"}, as ${str(p.from) ?? ""}`);
+    case "email.cleared":
+      return say("cleared the email sender set in Settings");
     case "workspace.created":
       return say(`created the Workspace ${str(p.name) ?? ""}`);
     case "workspace.updated": {

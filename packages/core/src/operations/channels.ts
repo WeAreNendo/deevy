@@ -8,6 +8,7 @@ import { requireSocket, socketModuleFor } from "../sockets/registry.ts";
 import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
 import { newId } from "../ids.ts";
 import { resolveSender } from "../email/sender.ts";
+import { senderOptionsFor } from "../email/settings.ts";
 import {
   confirmToken,
   confirmUrl,
@@ -172,7 +173,9 @@ export const channels = {
     }),
     output: z.object({ channel: ChannelView, confirmation: SendOutcomeView }),
     handler: async ({ input, context }) => {
-      const sender = resolveSender(context);
+      // The sender in force, Settings › Email's included, as every other
+      // door that sends now reads it (email/settings.ts).
+      const sender = resolveSender(await senderOptionsFor(context));
       if ("reason" in sender)
         throw new ORPCError("PRECONDITION_FAILED", { message: sender.reason });
       if (!context.secret) {
@@ -340,7 +343,7 @@ export const channels = {
       if (email) {
         if (!email.confirmedAt) return sendConfirmation(context, found);
         return sendNow(
-          context,
+          await senderOptionsFor(context),
           email.address,
           renderTeamTest({
             workspaceName: context.workspace.name,
@@ -417,7 +420,7 @@ async function sendConfirmation(context: ContextFor<"admin">, row: Channel) {
       })
     : null;
   return sendNow(
-    context,
+    await senderOptionsFor(context),
     email.address,
     renderConfirmation({
       workspaceName: context.workspace.name,

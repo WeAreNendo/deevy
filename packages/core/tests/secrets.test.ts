@@ -22,6 +22,8 @@ const sentinels = {
   /** What a Socket authenticates as, which is the newest kind of secret here. */
   socketCredential: "ghs_SENTINEL_installation_token",
   socketWebhook: "whsec_SENTINEL_what_the_tracker_signs_with",
+  /** An email sender's key set in Settings › Email (docs/plans/email-channel.md). */
+  emailKey: "re_SENTINEL_email_sender_key",
 };
 
 /**
@@ -52,6 +54,12 @@ describe("the read surface", () => {
         sockets,
         socketSecret: testSealingSecret,
         apiKeys: betterAuthKeys(auth, db),
+        emailSenders: {
+          resend: () => ({
+            kind: "resend" as const,
+            send: () => Promise.resolve({ delivered: true as const, status: 200 }),
+          }),
+        },
       },
     });
     const socket = await asAda.sockets.connect({
@@ -95,6 +103,14 @@ describe("the read surface", () => {
       webhookSecret: sentinels.webhookSecret,
     });
 
+    await asAda.email.configure({
+      sender: "resend",
+      from: "deevy <deevy@example.com>",
+      config: {},
+      credentials: { apiKey: sentinels.emailKey },
+    });
+    const emailRow = await db.query.emailSender.findFirst({});
+
     const subscriptions = await asAda.webhooks.list({});
     const reads: Record<string, unknown> = {
       "me.get": await asAda.me.get({}),
@@ -120,6 +136,7 @@ describe("the read surface", () => {
       "channels.list": await asAda.channels.list({}),
       "routing.list": await asAda.routing.list({}),
       "preferences.get": await asAda.preferences.get({}),
+      "email.status": await asAda.email.status({}),
       "oauthClients.list": await asAda.oauthClients.list({}),
     };
 
@@ -131,6 +148,8 @@ describe("the read surface", () => {
       sentinels.socketWebhook,
       sealed?.credentials ?? "",
       sealed?.webhookSecret ?? "",
+      sentinels.emailKey,
+      emailRow?.credentials ?? "",
     ].filter((value) => value.length > 0);
     const leaks: string[] = [];
     for (const [name, answer] of Object.entries(reads)) {

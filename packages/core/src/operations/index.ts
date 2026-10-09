@@ -11,6 +11,7 @@ import { allowlist } from "./allowlist.ts";
 import { channels } from "./channels.ts";
 import { comments } from "./comments.ts";
 import { docs } from "./docs.ts";
+import { email } from "./email.ts";
 import { events } from "./events.ts";
 import { checkpoints, gates } from "./gates.ts";
 import { identities } from "./identities.ts";
@@ -54,6 +55,7 @@ export const router = {
   channels,
   routing,
   preferences,
+  email,
   oauthClients,
   webhooks,
 };
@@ -65,6 +67,7 @@ export {
   channels,
   checkpoints,
   comments,
+  email,
   events,
   gates,
   health,

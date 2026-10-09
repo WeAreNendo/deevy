@@ -80,3 +80,25 @@ export const notificationPreference = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.memberId, table.kind] })],
 );
+
+/**
+ * The email sender an admin chose under Settings › Email
+ * (docs/plans/email-channel.md, slice 3). One per Workspace, and it wins over
+ * the environment's while it exists. `credentials` is sealed under
+ * `DEEVY_SECRET` like a Socket's; `config` holds what is not secret (a region,
+ * a Mailgun domain, a Postmark stream).
+ */
+export const emailSender = sqliteTable("email_sender", {
+  workspaceId: text("workspace_id")
+    .primaryKey()
+    .notNull()
+    .references(() => workspace.id, { onDelete: "cascade" }),
+  sender: text("sender").notNull(),
+  from: text("from").notNull(),
+  config: text("config", { mode: "json" }).$type<Record<string, string>>().notNull(),
+  credentials: text("credentials").notNull(),
+  updatedBy: text("updated_by").references(() => member.id, { onDelete: "set null" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).default(now).notNull(),
+});
+
+export type EmailSenderRow = typeof emailSender.$inferSelect;

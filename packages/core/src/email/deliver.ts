@@ -19,6 +19,7 @@ import {
 import { chatGateMessage } from "../sockets/chat-out.ts";
 import { parseFrom, type EmailMessage } from "./port.ts";
 import { resolveSender, type ResolveSenderOptions } from "./sender.ts";
+import { setupInForce } from "./settings.ts";
 import { emailChannelOf } from "./team.ts";
 import { renderEmail } from "./render.ts";
 import { unsubscribeToken, unsubscribeUrl } from "./unsubscribe.ts";
@@ -53,6 +54,8 @@ export interface DeliverDueEmailsOptions extends ResolveSenderOptions {
    * Without it an email still links to Settings › Notifications.
    */
   secret?: string;
+  /** What a sender set in Settings › Email is sealed with; it wins over `email`. */
+  socketSecret?: string;
 }
 
 export interface EmailDeliveryResult {
@@ -73,6 +76,7 @@ export async function deliverDueEmails({
   limit = defaultEmailLimit,
   maxAttempts = maxEmailAttempts,
   secret,
+  socketSecret,
   ...senderOptions
 }: DeliverDueEmailsOptions): Promise<EmailDeliveryResult> {
   const result: EmailDeliveryResult = {
@@ -101,7 +105,16 @@ export async function deliverDueEmails({
   // Without a sender nothing is kept waiting for one: a sender configured next
   // week must not send a week of stale Gates in one go. The inbox still has
   // every one of them.
-  const resolved = resolveSender(senderOptions);
+  // Settings › Email's sender, else the environment's (email/settings.ts).
+  const inForce = await setupInForce({
+    db,
+    workspaceId,
+    ...(socketSecret ? { socketSecret } : {}),
+    ...(senderOptions.email ? { email: senderOptions.email } : {}),
+  });
+  const resolved = inForce.problem
+    ? { reason: inForce.problem }
+    : resolveSender({ ...senderOptions, email: inForce.setup });
   if ("reason" in resolved) {
     await retireDeliveries(
       db,

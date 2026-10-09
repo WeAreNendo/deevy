@@ -26,6 +26,7 @@ import { InboxPage, parseInboxSearch } from "./routes/inbox.tsx";
 import { NotFoundPage } from "./routes/not-found.tsx";
 import { ProjectsSettingsPage } from "./routes/settings/projects.tsx";
 import { ChannelsPage } from "./routes/settings/channels.tsx";
+import { EmailPage } from "./routes/settings/email.tsx";
 import { SocketsPage } from "./routes/settings/sockets.tsx";
 import { SocketPage } from "./routes/settings/socket.tsx";
 import { EventLogPage } from "./routes/settings/events.tsx";
@@ -227,6 +228,11 @@ const channelsRoute = createRoute({
   path: "channels",
   component: ChannelsPage,
 });
+const emailRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "email",
+  component: EmailPage,
+});
 const webhooksRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "webhooks",
@@ -322,6 +328,7 @@ const routeTree = rootRoute.addChildren([
     agentsRoute,
     agentRoute,
     channelsRoute,
+    emailRoute,
     webhooksRoute,
     notificationsRoute,
     allowlistRoute,

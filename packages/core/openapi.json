@@ -18008,6 +18008,433 @@
         }
       }
     },
+    "/email": {
+      "get": {
+        "operationId": "email.status",
+        "summary": "The email sender this Workspace sends through, and where it was set",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sender": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "cloudflare",
+                            "resend",
+                            "postmark",
+                            "sendgrid",
+                            "mailgun",
+                            "ses",
+                            "smtp",
+                            "stub"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "from": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "settings",
+                            "environment"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "runnable": {
+                      "type": "boolean"
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "available": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "cloudflare",
+                          "resend",
+                          "postmark",
+                          "sendgrid",
+                          "mailgun",
+                          "ses",
+                          "smtp",
+                          "stub"
+                        ]
+                      }
+                    },
+                    "config": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "sender",
+                    "from",
+                    "source",
+                    "runnable",
+                    "problem",
+                    "available",
+                    "config"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "email.configure",
+        "summary": "Set the email sender, over the environment's",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sender": {
+                    "type": "string",
+                    "enum": [
+                      "cloudflare",
+                      "resend",
+                      "postmark",
+                      "sendgrid",
+                      "mailgun",
+                      "ses",
+                      "smtp"
+                    ]
+                  },
+                  "from": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 320
+                  },
+                  "config": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 500
+                    }
+                  },
+                  "credentials": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  }
+                },
+                "required": [
+                  "sender",
+                  "from",
+                  "config",
+                  "credentials"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sender": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "cloudflare",
+                            "resend",
+                            "postmark",
+                            "sendgrid",
+                            "mailgun",
+                            "ses",
+                            "smtp",
+                            "stub"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "from": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "settings",
+                            "environment"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "runnable": {
+                      "type": "boolean"
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "available": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "cloudflare",
+                          "resend",
+                          "postmark",
+                          "sendgrid",
+                          "mailgun",
+                          "ses",
+                          "smtp",
+                          "stub"
+                        ]
+                      }
+                    },
+                    "config": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "sender",
+                    "from",
+                    "source",
+                    "runnable",
+                    "problem",
+                    "available",
+                    "config"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "email.clear",
+        "summary": "Forget the email sender set here, so the environment's is used again",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sender": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "cloudflare",
+                            "resend",
+                            "postmark",
+                            "sendgrid",
+                            "mailgun",
+                            "ses",
+                            "smtp",
+                            "stub"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "from": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "settings",
+                            "environment"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "runnable": {
+                      "type": "boolean"
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "available": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "cloudflare",
+                          "resend",
+                          "postmark",
+                          "sendgrid",
+                          "mailgun",
+                          "ses",
+                          "smtp",
+                          "stub"
+                        ]
+                      }
+                    },
+                    "config": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "sender",
+                    "from",
+                    "source",
+                    "runnable",
+                    "problem",
+                    "available",
+                    "config"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/test": {
+      "post": {
+        "operationId": "email.test",
+        "summary": "Send a test email to yourself through the sender in force",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "delivered": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "to": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "delivered",
+                    "status",
+                    "error",
+                    "to"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oauth-clients": {
       "get": {
         "operationId": "oauthClients.list",

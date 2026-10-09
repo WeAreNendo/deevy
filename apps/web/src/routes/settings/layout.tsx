@@ -43,6 +43,7 @@ export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
     pages: [
       { label: "Agents", to: "/settings/agents" },
       { label: "Channels", to: "/settings/channels" },
+      { label: "Email", to: "/settings/email" },
       { label: "Webhooks", to: "/settings/webhooks" },
     ],
   },
