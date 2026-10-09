@@ -364,19 +364,20 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
   stored. `Platform.secrets` hands them over with a `Platform.dump` when a team takes its Workspace to the
   image or a Worker of its own: [Taking a hosted Workspace home](#taking-a-hosted-workspace-home).
 
-| Binding or variable                | What                                                                                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `WORKSPACES`                       | The Durable Object namespace, `WorkspaceObject`, a SQLite class.                                              |
-| `DIRECTORY`                        | A KV namespace: slug → object key and status, written by `Platform` only.                                     |
-| `ASSETS`                           | The SPA `vp run web#build:workers` builds into `apps/web/dist/client`.                                        |
-| `CONSOLE`                          | Optional: the service that answers the host's root and its own paths.                                         |
-| `DEEVY_HOSTED_ORIGIN`              | The host every Workspace lives on, `https://app.example.com`. An origin, no path.                             |
-| `DEEVY_HOSTED_MASTER_SECRET`       | 32 or more random characters; every Workspace's secrets derive from it. Secret.                               |
-| `DEEVY_HOSTED_JURISDICTION`        | Where each object is created, such as `eu`; fixed when it is. workerd does not implement jurisdictions.       |
-| `DEEVY_SIGN_IN_RELAY_SECRET`       | 32 or more random characters, signing where a sign-in's callback may go. Secret.                              |
-| `DEEVY_HOSTED_CONSOLE_AUTH_URL`    | Optional: the console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to. |
-| `DEEVY_HOSTED_INVITATIONS_PER_DAY` | Invitations each Workspace may make in any 24 hours (50). `0` turns invitations off.                          |
-| `DEEVY_HOSTED_EMAILS_PER_DAY`      | Emails each Workspace may send in any 24 hours (500); the rest wait. `0` sends none.                          |
+| Binding or variable                | What                                                                                                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WORKSPACES`                       | The Durable Object namespace, `WorkspaceObject`, a SQLite class.                                                                                          |
+| `DIRECTORY`                        | A KV namespace: slug → object key and status, written by `Platform` only.                                                                                 |
+| `ASSETS`                           | The SPA `vp run web#build:workers` builds into `apps/web/dist/client`.                                                                                    |
+| `CONSOLE`                          | Optional: the service that answers the host's root and its own paths.                                                                                     |
+| `ANALYTICS`                        | Optional: a Workers Analytics Engine dataset, one data point per request indexed by Workspace slug — kind, method, status and duration, nothing personal. |
+| `DEEVY_HOSTED_ORIGIN`              | The host every Workspace lives on, `https://app.example.com`. An origin, no path.                                                                         |
+| `DEEVY_HOSTED_MASTER_SECRET`       | 32 or more random characters; every Workspace's secrets derive from it. Secret.                                                                           |
+| `DEEVY_HOSTED_JURISDICTION`        | Where each object is created, such as `eu`; fixed when it is. workerd does not implement jurisdictions.                                                   |
+| `DEEVY_SIGN_IN_RELAY_SECRET`       | 32 or more random characters, signing where a sign-in's callback may go. Secret.                                                                          |
+| `DEEVY_HOSTED_CONSOLE_AUTH_URL`    | Optional: the console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to.                                             |
+| `DEEVY_HOSTED_INVITATIONS_PER_DAY` | Invitations each Workspace may make in any 24 hours (50). `0` turns invitations off.                                                                      |
+| `DEEVY_HOSTED_EMAILS_PER_DAY`      | Emails each Workspace may send in any 24 hours (500); the rest wait. `0` sends none.                                                                      |
 
 Sign-in providers, email senders and the timings are the variables every deevy reads. Each provider's App is
 registered once, with `${DEEVY_HOSTED_ORIGIN}/auth/callback/<provider>`. The development stubs run only when
