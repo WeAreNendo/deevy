@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@better-auth/oauth-provider": "catalog:",
     "@deevy/adapters": "workspace:*",
     "@deevy/core": "workspace:*",
     "@deevy/email": "workspace:*",

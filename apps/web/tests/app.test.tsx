@@ -339,6 +339,60 @@ describe("DevSignIn", () => {
   });
 
   /**
+   * An MCP client sends a Human who is not signed in to the sign-in page with
+   * its authorization's signed query. The form hands the signed part to the
+   * sign-in, as the client plugin does for the buttons, so the server resumes
+   * the authorization at the callback instead of landing on home.
+   */
+  it("carries an authorization in progress through the sign-in", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?client_id=c1&redirect_uri=http%3A%2F%2F127.0.0.1%3A8765%2Fcb&ba_param=ba_param&ba_param=client_id&ba_param=redirect_uri&sig=abc&utm=x",
+    );
+    const fetchSpy = vi.fn(async () =>
+      Response.json({ url: "https://github.com/login/oauth/authorize?state=s3cret" }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const navigate = vi.fn();
+    mount(<DevSignIn navigate={navigate} />);
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ada@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in as this email" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    const sent = new URLSearchParams(
+      (JSON.parse(init.body as string) as { oauth_query: string }).oauth_query,
+    );
+    expect(sent.get("client_id")).toBe("c1");
+    expect(sent.get("redirect_uri")).toBe("http://127.0.0.1:8765/cb");
+    expect(sent.get("sig")).toBe("abc");
+    expect(sent.getAll("ba_param")).toEqual(["ba_param", "client_id", "redirect_uri"]);
+    // Only what was signed: anything else on the page is not the server's to check.
+    expect(sent.has("utm")).toBe(false);
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("sends no authorization from a page that is not partway through one", async () => {
+    window.history.replaceState(null, "", "/?invitation=inv_1");
+    const fetchSpy = vi.fn(async () =>
+      Response.json({ url: "https://github.com/login/oauth/authorize?state=s3cret" }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const navigate = vi.fn();
+    mount(<DevSignIn navigate={navigate} />);
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ada@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in as this email" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty("oauth_query");
+    window.history.replaceState(null, "", "/");
+  });
+
+  /**
    * A deployment can offer more than one provider, and under the stub they all
    * end in the same session, so the form takes the first one it is given
    * rather than naming GitHub (docs/plans/sign-in.md slice 4).
