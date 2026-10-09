@@ -38,7 +38,7 @@ export async function setupInForce({
         setup: null,
         source: "settings",
         problem:
-          "The sender set in Settings can't be read without DEEVY_SECRET, which sealed its key.",
+          "deevy can't open the key saved here: the server has no secret to unseal it with. Ask whoever runs deevy to set it, or set the sender in its environment.",
       };
     }
     try {
@@ -61,7 +61,7 @@ export async function setupInForce({
         setup: null,
         source: "settings",
         problem:
-          "The sender set in Settings can't be read: DEEVY_SECRET changed since it was saved. Set it again.",
+          "deevy can't open the key saved here: the server's secret for saved keys changed since. Save the sender again.",
       };
     }
   }

@@ -220,4 +220,54 @@ describe("who may touch it", () => {
 
     await expect(asBob.email.status({})).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  it("is the one a team address is confirmed through, when it is set only here", async () => {
+    // Every other door read Settings; adding a team address read only the environment.
+    const { asAda, sent } = await admin({ environment: null });
+    await asAda.email.configure({
+      sender: "resend",
+      from: "deevy <settings@example.com>",
+      config: {},
+      credentials: { apiKey: "re_from_settings" },
+    });
+
+    const added = await asAda.channels.createEmail({
+      name: "Approvals",
+      address: "approvals@example.com",
+    });
+
+    expect(added.confirmation.delivered).toBe(true);
+    expect(sent.map((one) => [one.to, one.key])).toEqual([
+      ["approvals@example.com", "re_from_settings"],
+    ]);
+  });
+
+  it("says what is wrong with the environment's sender, instead of nothing", async () => {
+    const { ada } = await admin({ environment: null });
+    const asAda = createRouterClient(router, {
+      context: { ...ada, emailProblem: "DEEVY_EMAIL_SENDER=resend also needs RESEND_API_KEY." },
+    });
+
+    expect(await asAda.email.status({})).toMatchObject({
+      sender: null,
+      runnable: false,
+      problem: "DEEVY_EMAIL_SENDER=resend also needs RESEND_API_KEY.",
+    });
+  });
+
+  it("says why a key saved here cannot be read, without naming a variable", async () => {
+    const { ada, asAda } = await admin();
+    await asAda.email.configure({
+      sender: "resend",
+      from: "deevy@example.com",
+      config: {},
+      credentials: { apiKey: "re_from_settings" },
+    });
+    // The same admin, on a deployment that lost the secret that sealed the key.
+    const withoutSecret = createRouterClient(router, { context: ada });
+
+    const { problem } = await withoutSecret.email.status({});
+    expect(problem).toMatch(/can.t open the key saved here/);
+    expect(problem).not.toMatch(/DEEVY_|[A-Z]{4,}_[A-Z]+/);
+  });
 });

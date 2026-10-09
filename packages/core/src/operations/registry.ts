@@ -93,6 +93,8 @@ export interface AppContext {
    */
   emailSenders?: EmailSenders;
   email?: EmailSetup | null;
+  /** Why the environment's sender could not be read, when it names one halfway. */
+  emailProblem?: string | null;
   /**
    * This instance's own secret (`BETTER_AUTH_SECRET`). Nothing is sealed with
    * it; what it signs is short-lived and public-facing — the `state` a

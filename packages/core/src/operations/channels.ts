@@ -173,7 +173,9 @@ export const channels = {
     }),
     output: z.object({ channel: ChannelView, confirmation: SendOutcomeView }),
     handler: async ({ input, context }) => {
-      const sender = resolveSender(context);
+      // The sender in force, Settings › Email's included, as every other
+      // door that sends now reads it (email/settings.ts).
+      const sender = resolveSender(await senderOptionsFor(context));
       if ("reason" in sender)
         throw new ORPCError("PRECONDITION_FAILED", { message: sender.reason });
       if (!context.secret) {

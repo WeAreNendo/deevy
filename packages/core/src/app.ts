@@ -104,6 +104,8 @@ export interface AppOptions {
    */
   emailSenders?: EmailSenders;
   email?: EmailSetup | null;
+  /** Why the environment's sender could not be read: Settings › Email says it. */
+  emailProblem?: string | null;
   /**
    * Which providers this deployment offers a Human to sign in with, from
    * `signInProviders(env)` in the entry that built the identity configuration.
@@ -185,6 +187,7 @@ export function createApp({
   socketSecret,
   emailSenders,
   email,
+  emailProblem,
   signInProviders = [],
   webURL,
 }: AppOptions) {
@@ -304,6 +307,7 @@ export function createApp({
     ...(socketSecret ? { socketSecret } : {}),
     ...(emailSenders ? { emailSenders } : {}),
     ...(email ? { email } : {}),
+    ...(emailProblem ? { emailProblem } : {}),
     ...(secret ? { secret } : {}),
     signInProviders: await offeredProviders(),
   });

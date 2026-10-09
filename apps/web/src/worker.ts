@@ -117,6 +117,8 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // How email leaves, for what an operation sends now (docs/plans/email-channel.md).
       emailSenders: emailSenders({ devStub: env.devStubEmail }),
       email: env.email,
+      // A sender the bindings set up halfway: said under Settings › Email.
+      ...(env.emailProblem ? { emailProblem: env.emailProblem } : {}),
       // Only when the account has Queues. Absent, `createApp` discards jobs
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).

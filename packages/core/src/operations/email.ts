@@ -56,7 +56,7 @@ async function statusOf(context: ContextFor<"admin">) {
   const problem =
     inForce.problem ??
     (resolved && "reason" in resolved ? resolved.reason : null) ??
-    (inForce.setup ? null : "No email sender is configured.");
+    (inForce.setup ? null : (context.emailProblem ?? "No email sender is configured."));
   return {
     sender: inForce.setup?.sender ?? null,
     from: inForce.setup?.from ?? null,
