@@ -32,6 +32,7 @@ function authEnv(env: ServerEnv): AuthEnv {
     ...(env.signInOrder ? { signInOrder: env.signInOrder } : {}),
     adminEmail: env.adminEmail,
     workspaceName: env.workspaceName,
+    ...(env.signInRelay.client ? { signInRelay: env.signInRelay.client } : {}),
     fetchClientMetadataResource,
   };
 }
@@ -96,6 +97,8 @@ export function buildServer(env: ServerEnv) {
     // environment configured, decided where they are registered rather than in
     // the SPA (docs/plans/sign-in.md).
     signInProviders: signInProviders(identity),
+    // A relay for other deployments' sign-ins, when this one is told to be.
+    ...(env.signInRelay.server ? { signInRelay: env.signInRelay.server } : {}),
   });
   // What the email stand-in was asked to send, for a developer and the walk:
   // the list as JSON, and one email's HTML as a client would show it.

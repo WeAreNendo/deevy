@@ -209,7 +209,13 @@ export function DevSignIn({
           const state = authorization?.searchParams.get("state") ?? null;
           if (!state) throw new Error("the server did not start a sign-in");
           const nonce = authorization?.searchParams.get("nonce");
-          const callback = new URL(appURL(`/api/auth/callback/${provider}`));
+          // Where the provider would send the browser: this deevy's own
+          // callback, or a sign-in relay's when it signs in through one
+          // (ADR-0030), which is what the authorization URL names.
+          const callback = new URL(
+            authorization?.searchParams.get("redirect_uri") ??
+              appURL(`/api/auth/callback/${provider}`),
+          );
           callback.searchParams.set("state", state);
           callback.searchParams.set("code", nonce ? `${email.trim()}|${nonce}` : email.trim());
           navigate(callback.toString());

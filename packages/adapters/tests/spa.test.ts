@@ -72,9 +72,9 @@ describe("the SPA under a path", () => {
       new URL("../../../apps/web/wrangler.jsonc", import.meta.url),
       "utf8",
     );
-    const rules = JSON.parse(
-      /"run_worker_first":\s*(\[[^\]]*\])/.exec(config)?.[1] ?? "[]",
-    ) as string[];
+    // JSONC: the list may break over lines and end in a comma.
+    const list = /"run_worker_first":\s*(\[[^\]]*\])/.exec(config)?.[1] ?? "[]";
+    const rules = JSON.parse(list.replace(/,(\s*\])/, "$1")) as string[];
     const ours = [...APP_PREFIXES.map((prefix) => `${prefix}*`), ...APP_PATHS];
     expect([...rules].sort()).toEqual([...ours].sort());
   });

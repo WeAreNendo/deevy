@@ -28,6 +28,7 @@ import { betterAuthKeys } from "./keys.ts";
 import type { ResourcePath } from "./auth.ts";
 import { API_PATH, AUTH_BASE_PATH } from "./auth.ts";
 import { basePathOf } from "./base-path.ts";
+import { relaySignInCallback, type SignInRelayServer } from "./sign-in-relay.ts";
 import { resolvePrincipal } from "./principal.ts";
 import { router } from "./operations/index.ts";
 import type { AppContext } from "./operations/registry.ts";
@@ -126,6 +127,12 @@ export interface AppOptions {
    * (docs/plans/sign-in.md).
    */
   webURL?: string;
+  /**
+   * When this deployment is a sign-in relay for others (sign-in-relay.ts,
+   * `DEEVY_SIGN_IN_RELAY_ALLOW`): `/relay/callback/<provider>` under its path
+   * sends a provider's callback on to the deevy that started it.
+   */
+  signInRelay?: SignInRelayServer;
 }
 
 /**
@@ -195,6 +202,7 @@ export function createApp({
   emailProblem,
   signInProviders = [],
   webURL,
+  signInRelay,
 }: AppOptions) {
   // A client asking for a Run that does not exist is a 404, not something for
   // an operator to read. Reporting every refusal buried the ones that matter in
@@ -249,6 +257,15 @@ export function createApp({
       jobs,
     }),
   );
+
+  // A provider's callback for another deevy, sent on to it unchanged but for
+  // its own state (sign-in-relay.ts). A browser navigation, so no session and
+  // no CORS: what decides is the signature on the state and the allowed list.
+  if (signInRelay) {
+    routes.get("/relay/*", (c) =>
+      relaySignInCallback(c.req.raw, c.req.path.slice(`${base}/relay`.length), signInRelay),
+    );
+  }
 
   if (auth) {
     routes.use(`${AUTH_BASE_PATH}/*`, cors({ origin, credentials: true }));

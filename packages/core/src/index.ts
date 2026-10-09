@@ -10,6 +10,14 @@ export {
 export { API_PATH, MCP_PATH, type ResourcePath } from "./auth.ts";
 export { basePathOf, wellKnownURL, type BasePath } from "./base-path.ts";
 export {
+  relaySignInCallback,
+  signInRelayFromEnv,
+  unwrapRelayState,
+  wrapRelayState,
+  type SignInRelayServer,
+  type SignInRelayVariables,
+} from "./sign-in-relay.ts";
+export {
   accountLinkingOf,
   apiKeyPrefix,
   bearerApiKey,
