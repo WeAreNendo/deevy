@@ -463,7 +463,12 @@ passing again on the durable driver; its memory and wake cost on Cloudflare's ow
 measured on a real account. S2's server half held without a change to Better Auth: its OAuth provider
 already answers a path issuer at `/.well-known/oauth-authorization-server/<path>` and at the appended form,
 and the full authorization-code flow, the MCP challenge and token audiences work under `/acme` (slice 4's
-tests); real MCP clients against a path issuer, and real provider Apps through the relay, are still owed. S3
+tests). Then a real Claude Code (2.1.282) against a deevy served under `/deevy`: it found the path issuer on its own,
+from the challenge's resource metadata, and asked `…/deevy/api/auth/oauth2/authorize` for `…/deevy/mcp` with its
+Client ID Metadata Document; the walk found that every consent had failed its signature since the UI redesign,
+on any deployment — the router kept one value of a repeated query key, and Better Auth repeats `ba_param` —
+fixed in #152, after which the login completed and the client connected. Real provider Apps through the
+relay are still owed, and Cursor and VS Code against a path issuer. S3
 waits for an account: what an open stream bills, and a gradual deploy with a migration.
 
 - **Slice 0, The queue path sends only webhooks** (#135). The claim now names its target, so a stray id can never
