@@ -277,6 +277,11 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
     this.#app = null;
     // A suspended Workspace answers nobody, its open tabs included.
     if (this.#config.status === "suspended") this.#closeSockets(CLOSED.suspended);
+    // An alarm that fired while it was suspended did nothing and set no next
+    // one, so a Workspace coming back is given its background work again at once.
+    if (this.#config.status === "active" && (await this.ctx.storage.getAlarm()) === null) {
+      await this.ctx.storage.setAlarm(Date.now());
+    }
   }
 
   /**

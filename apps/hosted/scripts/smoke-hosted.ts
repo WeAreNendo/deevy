@@ -324,8 +324,22 @@ async function phases(origin: string): Promise<string> {
 
   await platform(origin, "suspend", "beta");
   check("a suspended Workspace answers nobody", (await fetch(`${beta.url}/`)).status === 403);
+  // Long enough for its alarm to fire while suspended, which does nothing and
+  // sets no next one.
+  await new Promise((resolve) => setTimeout(resolve, 3_000));
   await platform(origin, "resume", "beta");
   check("and answers again when resumed", (await fetch(`${beta.url}/`)).status === 200);
+  await rpc(
+    beta.url,
+    "invitations/create",
+    { email: "dee@example.com", role: "member", send: true },
+    grace.cookie,
+  );
+  const resumedSent = await until(async () => {
+    const list = await rpc(beta.url, "invitations/list", {}, grace.cookie);
+    return JSON.stringify(list.output).includes('"emailStatus":"sent"');
+  }, 20_000);
+  check("and does its background work again, its alarm given back", resumedSent);
   await platform(origin, "destroy", "beta");
   check("a destroyed Workspace is gone", (await fetch(`${beta.url}/`)).status === 404);
   check(
