@@ -40,6 +40,37 @@ describe("createApp", () => {
     expect(body.json.ok).toBe(true);
   });
 
+  // deevy is AGPL-3.0 (ADR-0002): the SPA links whoever uses an instance to the
+  // source of the version it runs, so both public answers say which that is.
+  it("says which version answered, on /healthz and the RPC ping", async () => {
+    const context = anonymous();
+    const app = createApp({ db: context.db, version: "1.2.3" });
+    const health = await app.request("/healthz");
+    expect(await health.json()).toEqual({ ok: true, version: "1.2.3" });
+
+    const res = await app.request("/rpc/health/ping", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ json: undefined }),
+    });
+    const body = (await res.json()) as { json: { version: string | null } };
+    expect(body.json.version).toBe("1.2.3");
+  });
+
+  it("says the version is unknown when the build did not name one", async () => {
+    const context = anonymous();
+    const app = createApp({ db: context.db });
+    expect(await (await app.request("/healthz")).json()).toEqual({ ok: true, version: null });
+
+    const res = await app.request("/rpc/health/ping", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ json: undefined }),
+    });
+    const body = (await res.json()) as { json: { version: string | null } };
+    expect(body.json.version).toBeNull();
+  });
+
   it("serves the OpenAPI surface with a spec and a reference page", async () => {
     const context = anonymous();
     const app = createApp({ db: context.db });

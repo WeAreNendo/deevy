@@ -38,11 +38,12 @@ export const health = {
         }),
       ),
       /**
-       * Whether Documents on this deployment are live (ADR-0021). A Worker
-       * without a Durable Object binding says false and every editor stays what
-       * it was, rather than a page opening a socket that answers 501 — the same
-       * reason this endpoint says which providers exist.
+       * The version this instance runs, null when its build did not say. Public
+       * because deevy is AGPL-3.0 (ADR-0002): whoever uses an instance over the
+       * network is offered the source of the version they use, and the SPA
+       * builds that link from this.
        */
+      version: z.string().nullable(),
     }),
     handler: async ({ context }) => ({
       ok: true as const,
@@ -50,6 +51,7 @@ export const health = {
       devSignIn: context.devSignIn === true,
       devSockets: context.devSockets === true,
       providers: context.signInProviders ?? [],
+      version: context.version ?? null,
     }),
   }),
 };
