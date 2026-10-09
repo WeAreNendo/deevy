@@ -16,6 +16,7 @@
     "@base-ui/react": "catalog:",
     "@deevy/adapters": "workspace:*",
     "@deevy/core": "workspace:*",
+    "@deevy/email": "workspace:*",
     "@deevy/sockets": "workspace:*",
     "@fontsource-variable/inter": "catalog:",
     "@fontsource-variable/jetbrains-mono": "catalog:",

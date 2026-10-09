@@ -29,7 +29,7 @@ import { newId } from "./ids.ts";
  * action, and a suspended Member is told nothing at all.
  */
 export async function deriveNotifications(db: Db, event: Event): Promise<void> {
-  const { inbox, slack, dms } = await routeEvent(db, event);
+  const { inbox, slack, dms, emails } = await routeEvent(db, event);
 
   if (inbox.length > 0) {
     // One row per recipient per kind per Event, which the unique index makes
@@ -69,6 +69,16 @@ export async function deriveNotifications(db: Db, event: Event): Promise<void> {
       workspaceId: event.workspaceId,
       target: "chat_dm" as const,
       targetId: identityId,
+      eventSeq: event.seq,
+      recipientMemberId: memberId,
+    })),
+    // One per Human, at the address their sign-in verified: the unique index
+    // makes two kinds of one Event one email, which is what a person wants.
+    ...emails.map(({ memberId }) => ({
+      id: newId("delivery"),
+      workspaceId: event.workspaceId,
+      target: "email_member" as const,
+      targetId: memberId,
       eventSeq: event.seq,
       recipientMemberId: memberId,
     })),
@@ -115,6 +125,22 @@ export interface DirectTarget {
   kind: Notification["kind"];
 }
 
+/** One Human told by email, at the address their sign-in verified. */
+export interface EmailTarget {
+  memberId: string;
+  kind: Notification["kind"];
+}
+
+/**
+ * Whether a Human hears about this kind by email until they say otherwise
+ * (docs/plans/email-channel.md): what waits on them, and nothing else. An inbox
+ * that fills is read later; an email that arrives for every mention is
+ * filtered away, and with it the one that mattered.
+ */
+export function emailByDefault(kind: HumanNotificationKind): boolean {
+  return kind === "gate_awaiting" || kind === "run_awaiting_input";
+}
+
 /** Where one Event's Notifications go. */
 export interface Routing {
   /** The Members who get an inbox row, and what it says. */
@@ -127,9 +153,11 @@ export interface Routing {
   slack: SlackTarget[];
   /** The Humans told by direct message, one per linked account. */
   dms: DirectTarget[];
+  /** The Humans told by email, only ever at a verified address. */
+  emails: EmailTarget[];
 }
 
-const noRouting: Routing = { inbox: [], slack: [], dms: [] };
+const noRouting: Routing = { inbox: [], slack: [], dms: [], emails: [] };
 
 /** The providers whose accounts a direct message can reach. */
 const directProviders = ["slack"];
@@ -151,12 +179,15 @@ export async function routeEvent(db: Db, event: Event): Promise<Routing> {
   // is the endpoint ADR-0003 promised it (schema/notification.ts).
   const forAgents = recipients.filter((recipient) => !isHumanRecipient(recipient));
   const forHumans = recipients.filter(isHumanRecipient);
-  if (forHumans.length === 0) return { inbox: forAgents, slack: [], dms: [] };
+  if (forHumans.length === 0) return { inbox: forAgents, slack: [], dms: [], emails: [] };
 
   const members = await db.query.member.findMany({
     where: { id: { in: [...new Set(forHumans.map((recipient) => recipient.memberId))] } },
     columns: { id: true },
     with: {
+      // Whether there is an address deevy may write to: only one the sign-in
+      // provider verified, or deevy would mail whoever a Linear account named.
+      user: { columns: { emailVerified: true } },
       preferences: true,
       identities: {
         where: { provider: { in: directProviders }, revokedAt: { isNull: true } },
@@ -170,6 +201,9 @@ export async function routeEvent(db: Db, event: Event): Promise<Routing> {
     ),
   );
   const linked = new Map(members.map((member) => [member.id, member.identities]));
+  const verified = new Set(
+    members.filter((member) => member.user.emailVerified).map((member) => member.id),
+  );
   // A Member who has never said otherwise wants everything, everywhere: the
   // row is a preference, and its absence is the default (schema/channel.ts).
   const wants = (recipient: HumanRecipient, where: "inbox" | "slack" | "slackDm") =>
@@ -185,12 +219,15 @@ export async function routeEvent(db: Db, event: Event): Promise<Routing> {
         kind: recipient.kind,
       })),
     );
+  const emails = forHumans
+    .filter((recipient) => verified.has(recipient.memberId) && emailByDefault(recipient.kind))
+    .map(({ memberId, kind }) => ({ memberId, kind }));
   const kinds = new Set(
     forHumans.filter((recipient) => wants(recipient, "slack")).map((recipient) => recipient.kind),
   );
-  if (kinds.size === 0) return { inbox, slack: [], dms };
+  if (kinds.size === 0) return { inbox, slack: [], dms, emails };
 
-  return { inbox, slack: await slackTargets(db, event, kinds), dms };
+  return { inbox, slack: await slackTargets(db, event, kinds), dms, emails };
 }
 
 /**

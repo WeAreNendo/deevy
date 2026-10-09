@@ -103,6 +103,15 @@ export {
   type SweepSchedulesOptions,
   type SweepStaleRunsOptions,
 } from "./work.ts";
+export {
+  defaultEmailLimit,
+  deliverDueEmails,
+  maxEmailAttempts,
+  resolveSender,
+  type DeliverDueEmailsOptions,
+  type EmailDeliveryResult,
+} from "./email/deliver.ts";
+export { renderEmail, type RenderInput, type RenderedEmail } from "./email/render.ts";
 export { idPrefixes, isId, newId, type IdKind } from "./ids.ts";
 /**
  * Sealing, for the entries and for a provider package's own tests: what goes

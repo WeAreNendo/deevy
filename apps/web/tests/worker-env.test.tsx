@@ -89,3 +89,30 @@ describe("the Worker's sign-in providers", () => {
     expect(offered({})).toEqual([]);
   });
 });
+
+describe("email on the Worker", () => {
+  it("reads the sender from the same variables the Node server reads", () => {
+    const read = (bindings: Record<string, string>) =>
+      readWorkerEnv({ DB: undefined as never, ...bindings }).email;
+    expect(read({})).toBeNull();
+    expect(
+      read({
+        DEEVY_EMAIL_SENDER: "resend",
+        DEEVY_EMAIL_FROM: "deevy@example.com",
+        RESEND_API_KEY: "re_not_a_real_key",
+      }),
+    ).toMatchObject({ sender: "resend", from: "deevy@example.com" });
+    expect(read({ DEEVY_DEV_STUB_EMAIL: "1" })?.sender).toBe("stub");
+  });
+
+  it("stays up when the sender is set up halfway, and keeps the problem to say", () => {
+    // A throw here would answer every request with a 500, sign-in included.
+    const env = readWorkerEnv({
+      DB: undefined as never,
+      DEEVY_EMAIL_SENDER: "resend",
+      DEEVY_EMAIL_FROM: "deevy@example.com",
+    });
+    expect(env.email).toBeNull();
+    expect(env.emailProblem).toBe("DEEVY_EMAIL_SENDER=resend also needs RESEND_API_KEY.");
+  });
+});

@@ -45,6 +45,11 @@ SLACK_CLIENT_SECRET=
 # Atlassian never says an address is verified, so an Atlassian sign-in comes in by invitation only.
 ATLASSIAN_CLIENT_ID=
 ATLASSIAN_CLIENT_SECRET=
+# Email (docs/plans/email-channel.md): the sender deevy sends through and the address it sends as, whose
+# domain the sender must have verified. Without them deevy sends no email; the inbox and Slack still work.
+# DEEVY_EMAIL_SENDER=resend
+# DEEVY_EMAIL_FROM=deevy <deevy@example.com>
+# RESEND_API_KEY=
 # The provider ids to offer first, in this order; the rest follow the default order.
 # DEEVY_SIGN_IN_ORDER=oidc,github
 # The first sign-in with this email becomes the Workspace admin and creates the Workspace.

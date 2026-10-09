@@ -402,6 +402,8 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say(`removed a webhook on ${str(p.host) ?? "a host"}`, null, "destructive");
     case "webhook.exhausted":
       return say("gave up on a webhook delivery", str(p.error), "destructive");
+    case "email.exhausted":
+      return say("gave up on an email", str(p.error), "destructive");
     case "workspace.created":
       return say(`created the Workspace ${str(p.name) ?? ""}`);
     case "workspace.updated": {
