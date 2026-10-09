@@ -40,6 +40,16 @@
       "autoPort": true
     },
     {
+      "name": "docs",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/docs && node scripts/sync.ts && exec ./node_modules/.bin/astro dev --ignore-lock --port \"${PORT:-4321}\""
+      ],
+      "port": 4321,
+      "autoPort": true
+    },
+    {
       "name": "walk",
       "runtimeExecutable": "sh",
       "runtimeArgs": [

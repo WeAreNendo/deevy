@@ -1,0 +1,69 @@
+---
+title: Documentation
+description: The glue between a team's tools and its Agents. The work stays in GitHub, Linear, GitLab or Notion; deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on.
+template: splash
+editUrl: false
+hero:
+  title: deevy
+  tagline: The work stays in GitHub, Linear, GitLab or Notion. deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on.
+  actions:
+    - text: Run it yourself
+      link: /running/
+      icon: right-arrow
+    - text: Connect your tools
+      link: /running/connecting-your-tools/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+{/* README.md: Status */}
+
+## Where it runs
+
+<CardGrid>
+  <Card title="Self-host" icon="laptop">
+    One image and one volume, or a Cloudflare Worker with D1: the same deevy from the same codebase, serving
+    one Workspace, on infrastructure you choose.
+
+    - [Run the image](/running/the-image/)
+    - [Deploy the Worker](/running/the-worker/)
+    - [Configure it](/running/environment/)
+
+  </Card>
+  <Card title="Hosted (coming soon)" icon="rocket">
+    deevy, run for you at app.deevy.dev: a Workspace of your own, with nothing to deploy and nothing to
+    upgrade. It is the same code as the image, under the same license. It is not open yet.
+  </Card>
+</CardGrid>
+
+## Read on
+
+<CardGrid>
+  <LinkCard
+    title="Connecting your tools"
+    description="GitHub, Linear, GitLab, Notion and Slack: what each needs, and what deevy does there."
+    href="/running/connecting-your-tools/"
+  />
+  <LinkCard
+    title="Agents and MCP"
+    description="Give an Agent its own identity and key, and point a coding agent at deevy."
+    href="/running/agents-and-mcp/"
+  />
+  <LinkCard
+    title="Glossary"
+    description="Member, Agent, Socket, Gate, Run: the words deevy uses, and the ones it avoids."
+    href="/glossary/"
+  />
+  <LinkCard title="API reference" description="Every operation, over HTTP." href="/api/" />
+  <LinkCard
+    title="Design decisions"
+    description="The choices that would be expensive to reverse, and why each was made."
+    href="/decisions/"
+  />
+  <LinkCard
+    title="The source"
+    description="AGPL-3.0, on GitHub, with every page here in its docs/ directory."
+    href="https://github.com/WeAreNendo/deevy"
+  />
+</CardGrid>

@@ -37,8 +37,9 @@ jobs:
       - name: Format, lint, typecheck
         run: vp check
 
+      # Everything but the docs site, which has a step of its own below.
       - name: Build (Node server and SPA)
-        run: vp run -r build
+        run: vp run -F '!@deevy/docs' build
 
       - name: Build (Cloudflare Worker)
         run: vp run web#build:workers
@@ -60,6 +61,16 @@ jobs:
           vp run core#snapshot:mcp-tools
           git diff --exit-code -- packages/core/mcp-tools.json
 
+      # docs.deevy.dev, built from docs/, CONTEXT.md and the snapshot above: a
+      # link to a file, a page or a heading that does not exist fails the build,
+      # so a pull request that breaks one is red here (apps/docs). Deployed from
+      # main by docs.yml, never from here.
+      - name: The docs site builds, and every link in it lands
+        run: vp run docs#build
+
+      - name: Validate the docs Worker
+        run: vp run docs#check:workers
+
   # Sharded, because six suites on one four-core runner spent most of their time
   # waiting for each other. The groups are balanced on measured time — apps/web
   # is 73s on its own and sets the floor, so splitting further buys nothing
@@ -75,7 +86,7 @@ jobs:
           - name: web
             filters: -F web
           - name: core
-            filters: -F core -F db -F adapters -F sockets -F email -F release -F cli
+            filters: -F core -F db -F adapters -F sockets -F email -F release -F cli -F docs
           - name: runtime and server
             filters: -F agent -F server
     steps:
@@ -138,8 +149,9 @@ jobs:
       - name: Install
         run: vp install --frozen-lockfile
 
+      # The docs site is the check job's, and nothing here reads it.
       - name: Build (Node server and SPA)
-        run: vp run -r build
+        run: vp run -F '!@deevy/docs' build
 
       - name: Build (Cloudflare Worker)
         run: vp run web#build:workers

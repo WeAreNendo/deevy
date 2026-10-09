@@ -210,7 +210,8 @@ the walk's.
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `vp check`                       | Format, lint, and typecheck the whole tree (`--fix` to apply formatting).                                     |
 | `vp run -r test`                 | Tests in every package (Vitest through Vite+).                                                                |
-| `vp run -r build`                | `apps/server/dist/index.mjs` (bundled Node server) and `apps/web/dist` (SPA).                                 |
+| `vp run -r build`                | `apps/server/dist/index.mjs` (bundled Node server), `apps/web/dist` (SPA) and `apps/docs/dist` (docs site).   |
+| `vp run docs#serve`              | The docs site on http://localhost:4321, written from `docs/` first ([The docs site](#the-docs-site)).         |
 | `vp run web#build:workers`       | The Cloudflare Worker build (`DEEVY_TARGET=workers`); `vp run web#check:workers` then dry-runs what it wrote. |
 | `vp run web#test:workers`        | Boots the built Worker on `wrangler dev --local` against a migrated local D1 and drives it over HTTP.         |
 | `vp run db#generate`             | Generate a migration from `packages/db/src/schema` with drizzle-kit. Then run `vp run db#check:migrations`.   |
@@ -386,6 +387,7 @@ apps/web            React SPA; also the Cloudflare Worker entry (src/worker.ts) 
 apps/server         Node entry (Hono on @hono/node-server), bundled by vp pack; the seed; Dockerfile
 apps/agent          the reference agent runtime, which talks to deevy as a stranger does
 apps/cli            the command line, generated from the operation registry
+apps/docs           docs.deevy.dev, written from docs/, CONTEXT.md and the OpenAPI snapshot
 packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory, the Socket port
 packages/sockets    one module per tool deevy speaks (github, linear, gitlab, notion, slack) and the stub
 packages/email      the email senders that speak HTTP (resend, postmark, sendgrid, mailgun, ses) and the stub
@@ -498,6 +500,28 @@ DEEVY_AGENT_LIVE=1 vp run agent#test tests/live.test.ts
 ```
 
 CI never sets it. A milestone whose suite needs a paid key is a milestone nobody runs twice.
+
+## The docs site
+
+docs.deevy.dev is `apps/docs`: Starlight, built to static files and served from a Worker's static assets. It
+has one page of its own, the landing (`apps/docs/content/index.mdx`). Every other page is written by
+`apps/docs/scripts/sync.ts` from the repository before Astro starts, into directories git ignores:
+
+- `docs/OPERATIONS.md` becomes a page per `##` section under Running deevy, each `###` raised to that page's `##`;
+- `docs/agent-loop.md` and `docs/as-yourself.md` are the worked examples, `CONTEXT.md` is the Glossary, this
+  file and `docs/harnesses.md` are Developing deevy, and each ADR is a page under Design decisions;
+- the API reference is `packages/core/openapi.json`, grouped by the first part of each operation's id.
+
+`docs/plans`, `docs/research` and the acceptance walks stay in the repository. So a page is changed where it
+lives, and a link is written the way GitHub reads it: relative, to the file and its heading. The sync turns it
+into a link to the page, landing on the same heading even when the split moved that heading to a page of its
+own; a link to a file it does not publish goes to the file on GitHub, and `ADR-0024` in prose links to that
+decision. A link to a file or a heading that does not exist stops the sync, and the build checks every link on
+every page it made, so CI fails a pull request that breaks one.
+
+`vp run docs#serve` runs the site on http://localhost:4321; the sync runs when it starts, so after editing a
+source run `vp run docs#sync` and the page reloads. `vp run docs#build` writes `apps/docs/dist` and
+`vp run docs#preview` serves it. A push to main that touches the docs deploys them (`.github/workflows/docs.yml`).
 
 ## Docker
 

@@ -34,8 +34,9 @@ format, so pnpm 11 is required and pinned twice over: `devEngines.packageManager
 the prompt to wipe `node_modules`, so if an install hangs with no output, check `pnpm --version` first.
 `vp dev`, `vp build`, `vp test`, `vp check` are built-ins that ignore package.json scripts; `vp run <script>`
 runs scripts, `-r` recursively, `pkg#script` for one package (package names are `web`, `server`, `core`, `db`,
-`adapters`, `sockets`, `email`, `agent`, `cli`, `release`; `agent` has its own `apps/agent/README.md`, and
-`release` is `tools/release`, which holds the changelog fold and the commit-message rules).
+`adapters`, `sockets`, `email`, `agent`, `cli`, `release`, `docs`; `agent` has its own `apps/agent/README.md`,
+`release` is `tools/release`, which holds the changelog fold and the commit-message rules, and `docs` is
+`apps/docs`, the docs.deevy.dev site).
 
 - `vp check` (root): format, lint, typecheck the whole tree; `vp check --fix` applies formatting. Run it before
   every commit; CI runs it first.
@@ -50,6 +51,10 @@ runs scripts, `-r` recursively, `pkg#script` for one package (package names are 
 - `vp run -r build`, `vp run web#build:workers` then `vp run web#check:workers` (wrangler dry run). In that
   order: the check dry-runs `apps/web/dist/deevy/wrangler.json`, which the build writes, and the committed
   `wrangler.jsonc` is a source that wrangler will not deploy on its own.
+- `vp run docs#build`: docs.deevy.dev into `apps/docs/dist`. Its pages are written from `docs/`, `CONTEXT.md`
+  and the OpenAPI snapshot by `apps/docs/scripts/sync.ts` (OPERATIONS.md a page per `##`, every ADR a page,
+  `docs/plans` not published), and a link to a missing file, page or heading fails the build, so write links
+  in `docs/` the way GitHub reads them and the sync turns them into the site's. `vp run docs#serve` runs it.
 - Schema change: edit `packages/db/src/schema`, `vp run db#generate`, then hand-patch `NOT NULL` onto every
   `text PRIMARY KEY` in the new `migration.sql` (drizzle-kit rc regression) and run `vp run db#check:migrations`.
 - API change: `vp run core#snapshot:openapi` and commit `packages/core/openapi.json`; CI fails on a stale snapshot.
