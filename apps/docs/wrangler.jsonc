@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // docs.deevy.dev: a Worker with static assets and no script of its own. Not
+  // Pages: Cloudflare points new projects at Workers, and this is the same
+  // product deevy's own Worker deployment is. `vp run docs#build` writes
+  // ./dist, and `.github/workflows/docs.yml` deploys it from main.
+  "name": "deevy-docs",
+  // No later than the catalog's wrangler can run locally (`wrangler dev`).
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    // Astro writes a 404.html, and a missing page answers with it and a 404.
+    "not_found_handling": "404-page",
+  },
+  // The Custom Domain is made when the first deploy names it, which needs the
+  // deevy.dev zone in the same account; nothing reads it before then.
+  "routes": [{ "pattern": "docs.deevy.dev", "custom_domain": true }],
+  // Only the Custom Domain serves the site; a workers.dev copy would be a second
+  // address for search engines to find.
+  "workers_dev": false,
+  "preview_urls": false,
+}

@@ -5,7 +5,9 @@ FROM ghcr.io/voidzero-dev/vite-plus:0.3.0 AS build
 WORKDIR /src
 COPY --chown=vp:vp . .
 RUN vp install --frozen-lockfile
-RUN vp run -r build
+# Every package but the docs site (apps/docs), which is its own Worker and none
+# of this image.
+RUN vp run -F '!@deevy/docs' build
 # The runtime stage has no shell to make a directory with, and this stage is not
 # root so it cannot give one away either — but `COPY --chown` sets ownership in
 # the layer itself, and an empty directory is all /data has to start as.

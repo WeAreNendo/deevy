@@ -29,6 +29,6 @@
       "@deevy/release"
     ]
   ],
-  "ignore": [],
+  "ignore": ["@deevy/docs"],
   "changedFilePatterns": ["**", "!**/*.md", "!**/tests/**", "!**/*.test.ts"]
 }
