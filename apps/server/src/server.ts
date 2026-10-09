@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createSmtpSender, mountSpa, openDatabase } from "@deevy/adapters/node";
-import { createApp, createAuth, signInProviders, type AuthEnv } from "@deevy/core";
+import { basePathOf, createApp, createAuth, signInProviders, type AuthEnv } from "@deevy/core";
 import { emailSenders, stubOutbox } from "@deevy/email";
 import type { EmailSenders } from "@deevy/core/email";
 import { socketModules } from "@deevy/sockets";
@@ -106,6 +106,8 @@ export function buildServer(env: ServerEnv) {
       return kept ? c.html(kept.html) : c.notFound();
     });
   }
-  if (env.webDist) mountSpa(app, resolve(env.webDist));
+  // Under the path of BETTER_AUTH_URL, which is the root unless an operator
+  // serves deevy under a path (docs/OPERATIONS.md).
+  if (env.webDist) mountSpa(app, resolve(env.webDist), basePathOf(env.baseURL));
   return { app, db, auth, close, authEnv: identity };
 }

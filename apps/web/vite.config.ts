@@ -33,6 +33,11 @@ export default defineConfig({
   // through — the same thing apps/server does, so the Workers deployment names
   // a version rather than serving 0.0.0 (apps/cli/src/capabilities.ts).
   define: { __DEEVY_VERSION__: JSON.stringify(version) },
+  // Relative, so the built index names its assets against the page's
+  // `<base href>`, which the server writes: `/` at the root of a host, `/acme/`
+  // for a deevy that lives under a path (src/lib/base.ts, docs/plans/hosted.md).
+  // One build serves both, and the dev server treats it as `/`.
+  base: "./",
   run: {
     // Cached, and per package: see packages/core/vite.config.ts.
     tasks: {

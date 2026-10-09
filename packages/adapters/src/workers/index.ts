@@ -12,3 +12,12 @@ export {
   type CloudflareEmailBinding,
   type CloudflareMessage,
 } from "./email.ts";
+export {
+  APP_PATHS,
+  APP_PREFIXES,
+  isAppPath,
+  serveSpaUnder,
+  underBase,
+  withBaseHref,
+  type AssetFetcher,
+} from "../spa.ts";

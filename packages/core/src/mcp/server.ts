@@ -1,3 +1,4 @@
+import { wellKnownURL } from "../base-path.ts";
 import type { Db } from "@deevy/db";
 import type {
   CallToolResult,
@@ -274,8 +275,9 @@ function challenge(request: Request, baseURL?: string): Response {
   // between the host and the resource's own path, so a resource at /mcp is
   // described at /.well-known/oauth-protected-resource/mcp. A client that
   // derives the URL instead of reading this header looks there, so slice 7
-  // has to serve the document at this exact path.
-  const metadata = `${base}/.well-known/oauth-protected-resource${MCP_PATH}`;
+  // has to serve the document at this exact path. Under a path the resource is
+  // `…/acme/mcp`, and the segment still goes right after the host.
+  const metadata = `${wellKnownURL(base, "oauth-protected-resource")}${MCP_PATH}`;
   return new Response(
     JSON.stringify({
       error: "invalid_token",

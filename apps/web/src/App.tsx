@@ -15,6 +15,7 @@ import {
   holdInvitation,
   invitationInPath,
 } from "@/lib/invitation.ts";
+import { appURL, inApp, withBase } from "@/lib/base.ts";
 import { orpc } from "@/lib/orpc.ts";
 import { arrangeSignIn } from "@/lib/sign-in.ts";
 import { cn } from "@/lib/utils";
@@ -45,7 +46,7 @@ export default function App() {
  */
 function useInvitation(): [string | null, (token: null) => void] {
   const [token, setToken] = useState(() => {
-    const inPath = invitationInPath(window.location.pathname);
+    const inPath = invitationInPath(inApp(window.location.pathname));
     if (inPath) holdInvitation(inPath);
     return inPath ?? heldInvitation();
   });
@@ -53,8 +54,8 @@ function useInvitation(): [string | null, (token: null) => void] {
   // bookmarked, kept in history and sent as a `Referer`. Once it is held there
   // is nothing left for the address bar to carry (docs/plans/sign-in.md).
   useEffect(() => {
-    if (!invitationInPath(window.location.pathname)) return;
-    window.history.replaceState(null, "", "/");
+    if (!invitationInPath(inApp(window.location.pathname))) return;
+    window.history.replaceState(null, "", withBase("/"));
   }, []);
   return [token, setToken];
 }
@@ -197,7 +198,7 @@ export function DevSignIn({
         setPending(true);
         setError(null);
         try {
-          const started = await fetch("/api/auth/sign-in/social", {
+          const started = await fetch(withBase("/api/auth/sign-in/social"), {
             method: "POST",
             headers: { "content-type": "application/json" },
             credentials: "include",
@@ -208,7 +209,7 @@ export function DevSignIn({
           const state = authorization?.searchParams.get("state") ?? null;
           if (!state) throw new Error("the server did not start a sign-in");
           const nonce = authorization?.searchParams.get("nonce");
-          const callback = new URL(`/api/auth/callback/${provider}`, window.location.origin);
+          const callback = new URL(appURL(`/api/auth/callback/${provider}`));
           callback.searchParams.set("state", state);
           callback.searchParams.set("code", nonce ? `${email.trim()}|${nonce}` : email.trim());
           navigate(callback.toString());
@@ -441,9 +442,10 @@ export function Suspended({ email }: { email: string }) {
 }
 
 // Absolute so Better Auth sends the browser back to the SPA origin (5173 in dev),
-// not to its own base URL (the Node server on 3000).
+// not to its own base URL (the Node server on 3000), and under the path this
+// deevy lives under (lib/base.ts).
 function home(): string {
-  return `${window.location.origin}/`;
+  return appURL("/");
 }
 
 // What the legend shows: not real Members, the four things the colours mean.

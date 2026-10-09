@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Where this deevy lives on its origin. The server rewrites it for a
+         deployment under a path, and everything the page loads, calls and
+         links to is relative to it (src/lib/base.ts). -->
+    <base href="/" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>deevy</title>
   </head>

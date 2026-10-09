@@ -11,6 +11,7 @@ import { authClient } from "@/lib/auth";
 import { leaveFor } from "@/lib/leave";
 import { orpc } from "@/lib/orpc";
 import { providerLabel } from "@/lib/providers";
+import { withBase } from "@/lib/base";
 
 /**
  * The accounts on the tools that rule as you (ADR-0025).
@@ -266,7 +267,7 @@ export function IdentitiesPage({ search = {} }: { search?: IdentitiesSearch }) {
                         provider: provider.id as Parameters<
                           typeof authClient.linkSocial
                         >[0]["provider"],
-                        callbackURL: "/settings/identities",
+                        callbackURL: withBase("/settings/identities"),
                       });
                       if (started.error) {
                         setLinkFailed(`We couldn't start linking ${provider.label}. Try again.`);

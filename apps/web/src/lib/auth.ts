@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import { lastLoginMethodClient } from "better-auth/client/plugins";
+import { withBase } from "@/lib/base";
 
 /**
  * `lastLoginMethodClient` reads the cookie the server's `lastLoginMethod()`
@@ -7,6 +8,6 @@ import { lastLoginMethodClient } from "better-auth/client/plugins";
  * can put the button this browser used last first.
  */
 export const authClient = createAuthClient({
-  basePath: "/api/auth",
+  basePath: withBase("/api/auth"),
   plugins: [lastLoginMethodClient()],
 });

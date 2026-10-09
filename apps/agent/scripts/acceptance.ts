@@ -36,7 +36,7 @@ import type { SessionEvent } from "../src/session.ts";
 import { deevyToolNames } from "../src/tools.ts";
 import { runOnce } from "../src/work.ts";
 import { openWorkspace, type RepoConfig } from "../src/workspace.ts";
-import { adminEmail, startNode, startWorkers, type Deployment } from "./boot.ts";
+import { adminEmail, startNode, startWorkers, type Deployment, type StartOptions } from "./boot.ts";
 
 const git = promisify(execFile);
 const mcpProtocolVersion = "2026-07-28";
@@ -855,9 +855,12 @@ async function main(): Promise<void> {
     );
   } else {
     // Both deployments, from one codebase, and the runtime cannot tell them
-    // apart: that is the claim ADR-0006 makes and this is what checks it.
+    // apart: that is the claim ADR-0006 makes and this is what checks it. And
+    // the image once more under a path, which is where a hosted Workspace
+    // lives (docs/plans/hosted.md): nothing the walk does may notice.
     const stories: Record<string, string> = {};
-    for (const start of [startNode, startWorkers]) {
+    const underAPath = (options: StartOptions) => startNode({ ...options, basePath: "/deevy" });
+    for (const start of [startNode, startWorkers, underAPath]) {
       let deployment: Deployment | null = null;
       // A repository each: the walk pushes the same branch on both, and a
       // shared remote would make the second push a non-fast-forward.
@@ -874,6 +877,11 @@ async function main(): Promise<void> {
       "the same walk leaves the same Event log on both deployments",
       stories.node !== undefined && stories.node === stories.workers,
       `node:    ${stories.node ?? "(none)"}\nworkers: ${stories.workers ?? "(none)"}`,
+    );
+    check(
+      "and under a path",
+      stories.node !== undefined && stories.node === stories["node under a path"],
+      `node:    ${stories.node ?? "(none)"}\nunder a path: ${stories["node under a path"] ?? "(none)"}`,
     );
   }
   console.log(

@@ -5,7 +5,7 @@ import { router } from "./operations/index.ts";
 const generator = new OpenAPIGenerator({ converters: [new ZodToJsonSchemaConverter()] });
 
 /** The OpenAPI 3.1 document for the HTTP surface, served at /api/spec.json and snapshotted in CI (ADR-0009). */
-export function generateSpec(version?: string) {
+export function generateSpec(version?: string, basePath = "") {
   return generator.generate(router, {
     base: {
       // The instance's own version when an entry knows it, so one fetch of this
@@ -13,7 +13,9 @@ export function generateSpec(version?: string) {
       // and which deevy it is. The committed snapshot is generated without one,
       // so it stays stable (ADR-0009).
       info: { title: "deevy", version: version ?? "0.0.0" },
-      servers: [{ url: "/api" }],
+      // Relative to the host, so it names the path a deployment lives under
+      // (base-path.ts); the snapshot is generated at the root.
+      servers: [{ url: `${basePath}/api` }],
     },
   });
 }

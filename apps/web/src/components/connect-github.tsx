@@ -6,6 +6,7 @@ import { SecretInput } from "@/components/secret-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { orpc } from "@/lib/orpc";
+import { appURL } from "@/lib/base";
 
 /**
  * Connecting GitHub (ADR-0024).
@@ -76,7 +77,7 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
         setBegun({
           manifest: githubManifest({
             name: name.trim(),
-            deevyUrl: window.location.origin,
+            deevyUrl: appURL(""),
             inboundUrl: socket.inboundUrl,
             setupUrl: socket.setupUrl,
           }),
