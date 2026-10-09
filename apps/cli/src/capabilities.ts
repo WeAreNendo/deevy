@@ -14,6 +14,7 @@
  */
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { API_PATH } from "@deevy/core";
 import { configDirectory, fileNameFor } from "./credentials.ts";
 
 export interface Capabilities {
@@ -28,8 +29,8 @@ export interface Capabilities {
 /** A day: long enough not to be a per-command fetch, short enough to follow a deploy. */
 export const CAPABILITIES_TTL_MS = 24 * 60 * 60 * 1000;
 
-function cachePath(origin: string, dir: string): string {
-  return join(dir, `${fileNameFor(origin).replace(/\.json$/, "")}.capabilities.json`);
+function cachePath(baseURL: string, dir: string): string {
+  return join(dir, `${fileNameFor(baseURL).replace(/\.json$/, "")}.capabilities.json`);
 }
 
 export function operationsIn(spec: unknown): string[] {
@@ -48,17 +49,17 @@ export function operationsIn(spec: unknown): string[] {
 const ASK_TIMEOUT_MS = 5000;
 
 export async function fetchCapabilities(
-  origin: string,
+  baseURL: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<Capabilities> {
   // Nobody asked for this request, so it must not be the one that hangs: a
   // black-holed host would otherwise stall every command before the command.
-  const res = await fetchImpl(`${origin}/api/spec.json`, {
+  const res = await fetchImpl(`${baseURL}${API_PATH}/spec.json`, {
     signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(
-      `${origin} did not say what it can do (its API document answered ${String(res.status)}). ` +
+      `${baseURL} did not say what it can do (its API document answered ${String(res.status)}). ` +
         `Is that a deevy?`,
     );
   }
@@ -72,7 +73,7 @@ export async function fetchCapabilities(
   // parses is likelier than a host that refuses to answer.
   if (operations.length === 0) {
     throw new Error(
-      `${origin} answered, but not with an API document deevy would serve. Is that a deevy?`,
+      `${baseURL} answered, but not with an API document deevy would serve. Is that a deevy?`,
     );
   }
   const version = spec?.info?.version;
@@ -93,7 +94,7 @@ export async function fetchCapabilities(
  * for the fetch once a day rather than once a command.
  */
 export async function capabilitiesFor(
-  origin: string,
+  baseURL: string,
   options: {
     fetchImpl?: typeof fetch;
     dir?: string;
@@ -104,7 +105,7 @@ export async function capabilitiesFor(
 ): Promise<Capabilities> {
   const dir = options.dir ?? configDirectory();
   const now = options.now ?? Date.now();
-  const path = cachePath(origin, dir);
+  const path = cachePath(baseURL, dir);
   if (!options.refresh) {
     const cached = await readFile(path, "utf8")
       .then((raw) => JSON.parse(raw) as unknown)
@@ -121,7 +122,7 @@ export async function capabilitiesFor(
       if (age >= 0 && age < CAPABILITIES_TTL_MS) return cached;
     }
   }
-  const fresh = await fetchCapabilities(origin, options.fetchImpl ?? fetch);
+  const fresh = await fetchCapabilities(baseURL, options.fetchImpl ?? fetch);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   // Not a secret — it is the document the instance serves to anybody — so the
   // mode is ordinary, unlike the token beside it. The temp-and-rename is the
@@ -151,11 +152,11 @@ function usable(cached: unknown): cached is Capabilities {
 export function missingFrom(
   operation: string,
   words: string[],
-  origin: string,
+  baseURL: string,
   capabilities: Capabilities,
   cliVersion: string,
 ): string {
-  const said = `${origin} has no \`${operation}\`, so \`deevy ${words.join(" ")}\` is not something it can do.`;
+  const said = `${baseURL} has no \`${operation}\`, so \`deevy ${words.join(" ")}\` is not something it can do.`;
   if (!capabilities.version) {
     return `${said}\nThis CLI is ${cliVersion}; that deevy did not say which version it is.`;
   }

@@ -46,7 +46,7 @@ function openInBrowser(url: string): void {
 }
 
 export async function signIn(
-  origin: string,
+  baseURL: string,
   options: {
     openBrowser?: boolean;
     report?: Reporter;
@@ -56,13 +56,13 @@ export async function signIn(
 ): Promise<void> {
   const report = options.report ?? console_;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const metadata = await discover(origin, fetchImpl);
+  const metadata = await discover(baseURL, fetchImpl);
   const state = randomBytes(16).toString("base64url");
   const { verifier, challenge } = pkce();
   const loopback = await listen(state);
   try {
-    const clientId = await register(metadata, origin, loopback.redirectUri, fetchImpl);
-    const resource = `${origin}${API_PATH}`;
+    const clientId = await register(metadata, baseURL, loopback.redirectUri, fetchImpl);
+    const resource = `${baseURL}${API_PATH}`;
     const url = authorizeUrl(metadata, {
       clientId,
       redirectUri: loopback.redirectUri,
@@ -70,7 +70,7 @@ export async function signIn(
       state,
       resource,
     });
-    report.err(`Opening ${origin} to sign in. If nothing happens, go to:\n  ${url}`);
+    report.err(`Opening ${baseURL} to sign in. If nothing happens, go to:\n  ${url}`);
     if (options.openBrowser !== false) openInBrowser(url);
 
     const code = await loopback.code;
@@ -79,28 +79,34 @@ export async function signIn(
       { code, clientId, verifier, redirectUri: loopback.redirectUri, resource },
       fetchImpl,
     );
-    const path = await writeToken(origin, token, options.dir);
-    report.err(`Signed in to ${origin}. Token stored at ${path}.`);
+    const path = await writeToken(baseURL, token, options.dir);
+    report.err(`Signed in to ${baseURL}. Token stored at ${path}.`);
   } finally {
     loopback.close();
   }
 }
 
 export async function signOut(
-  origin: string,
+  baseURL: string,
   options: { report?: Reporter; dir?: string } = {},
 ): Promise<void> {
   const report = options.report ?? console_;
-  const existed = await forgetToken(origin, options.dir);
+  const existed = await forgetToken(baseURL, options.dir);
   report.err(
     existed
-      ? `Forgot the token for ${origin}. The consent is still listed in deevy until you revoke it there.`
-      : `Nothing stored for ${origin}.`,
+      ? `Forgot the token for ${baseURL}. The consent is still listed in deevy until you revoke it there.`
+      : `Nothing stored for ${baseURL}.`,
   );
 }
 
 /** What `whoami` answers with, and what `--json` prints verbatim. */
 export interface Identity {
+  /** The deevy that answered: its whole URL, path included. */
+  url: string;
+  /**
+   * The origin of that URL, which is all an older CLI printed here. Kept for a
+   * script that reads it; `url` is the one that names a deevy under a path.
+   */
   origin: string;
   /**
    * Who this terminal is to deevy, which decides what it may do.
@@ -119,7 +125,7 @@ export interface Identity {
 }
 
 export async function whoAmI(
-  origin: string,
+  baseURL: string,
   options: {
     json?: boolean;
     report?: Reporter;
@@ -130,14 +136,15 @@ export async function whoAmI(
   } = {},
 ): Promise<Identity> {
   const report = options.report ?? console_;
-  const credential = await credentialFor(origin, options.environment ?? process.env, options.dir);
+  const where = { url: baseURL, origin: new URL(baseURL).origin };
+  const credential = await credentialFor(baseURL, options.environment ?? process.env, options.dir);
   if (!credential) {
-    const identity: Identity = { origin, authenticatedAs: "nobody", via: "none" };
+    const identity: Identity = { ...where, authenticatedAs: "nobody", via: "none" };
     say(
       identity,
       options.json === true,
       report,
-      `Not signed in to ${origin}. Run \`deevy login\`.`,
+      `Not signed in to ${baseURL}. Run \`deevy login\`.`,
     );
     return identity;
   }
@@ -150,7 +157,7 @@ export async function whoAmI(
   });
   const member = me.member;
   const identity: Identity = {
-    origin,
+    ...where,
     authenticatedAs: !member ? "stranger" : member.kind === "agent" ? "agent" : "human",
     via: credential.kind === "key" ? "key" : "token",
     ...(member
@@ -168,14 +175,14 @@ export async function whoAmI(
 
 function humanLine(identity: Identity, credential: Credential): string {
   if (identity.authenticatedAs === "stranger") {
-    return `${identity.origin} knows that credential, but it belongs to no Member there. An admin has to invite you, or the allowlist has to match.`;
+    return `${identity.url} knows that credential, but it belongs to no Member there. An admin has to invite you, or the allowlist has to match.`;
   }
   const how =
     credential.kind === "key"
       ? "an Agent's API key, from DEEVY_API_KEY"
       : "a token from `deevy login`";
   const who = identity.handle ?? identity.memberId ?? "somebody";
-  const line = `${who} (${identity.role ?? "member"}) at ${identity.origin}, as ${identity.authenticatedAs}, via ${how}.`;
+  const line = `${who} (${identity.role ?? "member"}) at ${identity.url}, as ${identity.authenticatedAs}, via ${how}.`;
   // A suspended Member is refused every operation while looking like a Member,
   // so the fact belongs in the answer rather than in the first refusal.
   return identity.suspended
