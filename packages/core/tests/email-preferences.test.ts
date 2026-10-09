@@ -208,4 +208,42 @@ describe("the unsubscribe in every email", () => {
     expect(await emailFor(db, bob.member.id, "gate_awaiting")).toBeNull();
     expect(await emailFor(db, bob.member.id, "run_finished")).toBeNull();
   });
+
+  it("is the same link on every attempt, so a retry is the same email", async () => {
+    const world = await bobAndHisPlanner();
+    await world.asPlanner.gates.request({
+      runId: world.run.id,
+      checkpoint: "plan",
+      proposal: "Cap it.",
+    });
+    const seen: EmailMessage[] = [];
+    const busy = {
+      resend: () => ({
+        kind: "resend" as const,
+        send: (message: EmailMessage) => {
+          seen.push(message);
+          return Promise.resolve({
+            delivered: false as const,
+            retry: true,
+            status: 429,
+            error: "busy",
+          });
+        },
+      }),
+    };
+    for (const minutes of [0, 5]) {
+      await deliverDueEmails({
+        db: world.db,
+        workspaceId: world.workspaceId,
+        baseUrl,
+        emailSenders: busy,
+        email: setup,
+        secret,
+        now: new Date(Date.now() + minutes * 60_000),
+      });
+    }
+    expect(seen).toHaveLength(2);
+    expect(seen[1]?.headers["List-Unsubscribe"]).toBe(seen[0]?.headers["List-Unsubscribe"]);
+    expect(seen[1]?.idempotencyKey).toBe(seen[0]?.idempotencyKey);
+  });
 });

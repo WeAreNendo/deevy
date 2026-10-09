@@ -58,7 +58,6 @@ describe("the Notifications settings page", () => {
       inbox: true,
       slack: false,
       slackDm: true,
-      email: true,
     });
   });
 
@@ -78,7 +77,6 @@ describe("the Notifications settings page", () => {
       inbox: true,
       slack: false,
       slackDm: true,
-      email: true,
     });
     // Said beside it, because nothing is sent until an account is linked.
     expect(screen.getByText(/once your Slack account is linked/)).toBeTruthy();
@@ -120,5 +118,22 @@ describe("the Notifications settings page", () => {
     ).toMatch(/true/);
     expect(screen.getByText(/didn.t confirm your email address/)).toBeTruthy();
     stub.emailAddress = "ada@example.com";
+  });
+
+  it("sends only the email switches a Human changed, so a default stays a default", async () => {
+    stub.saved = [];
+    stub.emailAddress = "ada@example.com";
+    await mountAt("/settings/notifications", { memberName: "Ada" });
+
+    fireEvent.click(await screen.findByLabelText("Mention by email"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(stub.saved).toHaveLength(1));
+    const [saved] = stub.saved as [{ preferences: Array<Record<string, unknown>> }];
+    expect(saved.preferences.find((row) => row.kind === "mention")).toMatchObject({ email: true });
+    // Untouched: left out, so the server keeps what it had, default or choice.
+    expect(saved.preferences.find((row) => row.kind === "gate_awaiting")).not.toHaveProperty(
+      "email",
+    );
   });
 });

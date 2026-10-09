@@ -238,7 +238,9 @@ export async function deliverDueEmails({
     const shown = gate ? chatGateMessage(gate, baseUrl) : null;
     const payload = (event.payload ?? {}) as Record<string, unknown>;
     const unsubscribe = secret
-      ? unsubscribeUrl(baseUrl, await unsubscribeToken(secret, member.id, kind, now))
+      ? // Signed from when the Event happened, not from this pass: every attempt
+        // then carries the same link, and so is the same email to a sender.
+        unsubscribeUrl(baseUrl, await unsubscribeToken(secret, member.id, kind, event.createdAt))
       : null;
     const rendered = renderEmail({
       unsubscribeUrl: unsubscribe,

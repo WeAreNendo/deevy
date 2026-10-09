@@ -55,6 +55,10 @@ export function NotificationsPage() {
   // Where email goes, or null when the sign-in did not confirm an address:
   // deevy never emails one it was not sure of (docs/plans/email-channel.md).
   const emailAddress = preferences.data?.emailAddress ?? null;
+  /** Each kind's email switch as the server last said it. */
+  const loaded = new Map<string, boolean>(
+    (preferences.data?.preferences ?? []).map((row) => [row.kind, row.email]),
+  );
 
   const toggle = (kind: string, where: "inbox" | "slack" | "slackDm" | "email") =>
     setDraft((current) =>
@@ -149,7 +153,10 @@ export function NotificationsPage() {
                 inbox: row.inbox,
                 slack: row.slack,
                 slackDm: row.slackDm,
-                email: row.email,
+                // Only a switch the Human changed: one left alone stays a
+                // default that can still change, and an unsubscribe made from
+                // an email since this page loaded is not undone by saving it.
+                ...(row.email !== loaded.get(row.kind) ? { email: row.email } : {}),
               })),
             })
           }
