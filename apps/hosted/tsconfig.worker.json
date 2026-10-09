@@ -17,5 +17,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests"],
+  // Reads files and runs tar: a Node test of a Node script (tsconfig.node.json).
+  "exclude": ["tests/artifact.test.ts"]
 }
