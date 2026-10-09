@@ -2,7 +2,7 @@ import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSetup } from "@deevy/core/email";
 import { readEmailEnv } from "@deevy/email";
-import type { createDb, QueueProducer } from "@deevy/adapters/workers";
+import type { CloudflareEmailBinding, createDb, QueueProducer } from "@deevy/adapters/workers";
 
 /**
  * How often a stream on Workers looks for new Events. Slower than Node's
@@ -44,6 +44,12 @@ export interface WorkerBindings {
    * beat later (docs/OPERATIONS.md, docs/plans/m3.md slice 9).
    */
   JOBS?: QueueProducer;
+  /**
+   * Cloudflare Email Service's `send_email` binding (docs/plans/email-channel.md),
+   * when the deployment declared one: `DEEVY_EMAIL_SENDER=cloudflare` sends
+   * through it. Beta, and reaching any recipient needs Workers Paid.
+   */
+  EMAIL?: CloudflareEmailBinding;
   /**
    * One Durable Object per live Document (ADR-0021). Optional for the same
    * reason `JOBS` is: Durable Objects are a paid feature, and a deployment

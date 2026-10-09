@@ -13,11 +13,14 @@
     "@deevy/db": "workspace:*",
     "@hono/node-server": "catalog:",
     "drizzle-orm": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "nodemailer": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@types/node": "catalog:",
+    "@types/smtp-server": "catalog:",
+    "smtp-server": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"
