@@ -599,10 +599,15 @@ describe("oauthClients", () => {
     });
     expect(viaToken.status).toBe(403);
 
-    const cookie = Object.fromEntries(await cookieHeaders(auth, "u1"));
-    const bearer = cookie;
+    // deevy's own page, as its browser sends a request: the cookie, and that
+    // the page is on this origin, without which a revoke is refused
+    // (app.ts, `crossSiteWrite`).
+    const browser = {
+      ...Object.fromEntries(await cookieHeaders(auth, "u1")),
+      "sec-fetch-site": "same-origin",
+    };
 
-    const listed = await app.request("/api/oauth-clients", { headers: bearer });
+    const listed = await app.request("/api/oauth-clients", { headers: browser });
     expect(listed.status).toBe(200);
     const { clients } = (await listed.json()) as {
       clients: Array<{ clientId: string; name: string; scopes: string[] }>;
@@ -613,11 +618,11 @@ describe("oauthClients", () => {
 
     const revoked = await app.request(`/api/oauth-clients/${clientId}`, {
       method: "DELETE",
-      headers: bearer,
+      headers: browser,
     });
     expect(revoked.status).toBe(200);
 
-    const again = await app.request("/api/oauth-clients", { headers: bearer });
+    const again = await app.request("/api/oauth-clients", { headers: browser });
     expect((await again.json()) as { clients: unknown[] }).toEqual({ clients: [] });
   });
 
@@ -632,7 +637,10 @@ describe("oauthClients", () => {
 
     const res = await app.request(`/api/oauth-clients/${clientId}`, {
       method: "DELETE",
-      headers: await cookieHeaders(auth, "u2"),
+      headers: {
+        ...Object.fromEntries(await cookieHeaders(auth, "u2")),
+        "sec-fetch-site": "same-origin",
+      },
     });
     expect(res.status).toBe(404);
   });

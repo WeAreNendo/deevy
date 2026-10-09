@@ -41,7 +41,10 @@ export const links = {
     mcp: true,
     input: z.object({
       issue: z.string().trim().min(1),
-      url: z.url().max(2000),
+      // A web page and nothing else: a Link is drawn as a link on a Gate and
+      // on its record, and a `javascript:` one would run in deevy's page for
+      // whoever clicked it. `z.url()` alone takes any scheme.
+      url: z.url({ protocol: /^https?$/ }).max(2000),
       title: z.string().trim().max(300).nullish(),
       /** Derived from the URL unless given. */
       kind: z.enum(issueLinkKinds).optional(),

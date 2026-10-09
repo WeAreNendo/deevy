@@ -8,7 +8,10 @@ import {
   createAuth,
   joinPorts,
   joinWorkspace,
+  plainOAuthToken,
+  type ReadOAuthToken,
 } from "../src/auth.ts";
+import { symmetricEncrypt } from "better-auth/crypto";
 import { router } from "../src/operations/index.ts";
 import { memberContext, testDb, type MemberContext } from "./helpers.ts";
 import { authId, newId } from "../src/ids.ts";
@@ -458,18 +461,92 @@ describe("one Human, one Member", () => {
 
 describe("joinPorts", () => {
   /** A signed-in Human with one provider account, and the token the ports read. */
-  const signedInWith = async (db: Awaited<ReturnType<typeof testDb>>["db"], providerId: string) => {
+  const signedInWith = async (
+    db: Awaited<ReturnType<typeof testDb>>["db"],
+    providerId: string,
+    accessToken = "token",
+  ) => {
     await db.insert(user).values({ id: "u-bob", name: "Bob Vance", email: "bob@example.com" });
     await db.insert(account).values({
       id: authId("account"),
       userId: "u-bob",
       accountId: "bob",
       providerId,
-      accessToken: "token",
+      accessToken,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
   };
+
+  /**
+   * The context Better Auth seals a token with, and the reader a join gets
+   * from it: the pair `createAuth` wires into its hooks, so a test reads a row
+   * exactly as a sign-in does.
+   */
+  const sealing = async (db: Awaited<ReturnType<typeof testDb>>["db"]) => {
+    const auth = createAuth({
+      db,
+      env: {
+        baseURL: "https://deevy.example.com",
+        secret: "test-secret-that-is-at-least-32-chars",
+      },
+    });
+    const context = await auth.$context;
+    const read: ReadOAuthToken = (stored) => plainOAuthToken(stored, context.secretConfig);
+    return { context, read };
+  };
+  const portsFor = async (db: Awaited<ReturnType<typeof testDb>>["db"]) =>
+    joinPorts(db, { providers: {} }, "u-bob", (await sealing(db)).read);
+
+  /**
+   * What a forge was asked with. Tokens are sealed at rest
+   * (`encryptOAuthTokens`), and the forge wants the one it issued.
+   */
+  const bearersSent = () => {
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers).get("authorization") ?? "");
+      return Response.json([{ login: "Acme" }]);
+    });
+    return sent;
+  };
+
+  it("asks the forge with the token Better Auth sealed, opened", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { context } = await sealing(db);
+    // What Better Auth's `setTokenUtil` writes when the option is on, which
+    // `createAuth` turns on (a sign-in through the stub writes one for real in
+    // apps/server/tests/stub-oauth.test.ts).
+    expect(context.options.account?.encryptOAuthTokens).toBe(true);
+    const sealed = await symmetricEncrypt({
+      key: context.secretConfig,
+      data: "gho_the-token-github-issued",
+    });
+    expect(sealed).not.toContain("gho_");
+    await signedInWith(db, "github", sealed);
+    const sent = bearersSent();
+
+    expect(await (await portsFor(db)).listOrgs?.()).toEqual(["Acme"]);
+    expect(sent).toEqual(["Bearer gho_the-token-github-issued"]);
+  });
+
+  /**
+   * A row from before tokens were sealed. GitHub's reads as plain to Better
+   * Auth; GitLab's is sixty-four hex characters, which Better Auth takes for a
+   * sealed one and fails to open, so deevy's reader is what keeps it working
+   * until that Human signs in again and it is sealed.
+   */
+  it("still asks with a token written in the clear before sealing was on", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const gitlabToken = "de6780bc506a0446309bd9362820ba8aed28aa506c71eedbe1c5c4f9dd350e54";
+    await signedInWith(db, "gitlab", gitlabToken);
+    const sent = bearersSent();
+
+    await (await portsFor(db)).listGroups?.();
+    expect(sent).toEqual([`Bearer ${gitlabToken}`]);
+  });
 
   /**
    * Both forges page — thirty organizations, twenty groups — so the rule that
@@ -488,7 +565,7 @@ describe("joinPorts", () => {
       return Response.json(page === 1 ? full : [{ full_path: "acme/platform" }]);
     });
 
-    const groups = await joinPorts(db, { providers: {} }, "u-bob").listGroups?.();
+    const groups = await (await portsFor(db)).listGroups?.();
 
     expect(groups).toHaveLength(101);
     expect(groups).toContain("acme/platform");
@@ -514,7 +591,7 @@ describe("joinPorts", () => {
       );
     });
 
-    await expect(joinPorts(db, { providers: {} }, "u-bob").listGroups?.()).rejects.toThrow();
+    await expect((await portsFor(db)).listGroups?.()).rejects.toThrow();
   });
 
   it("stops asking when a page is the last one", async () => {
@@ -527,7 +604,7 @@ describe("joinPorts", () => {
       return Response.json([{ login: "Acme" }]);
     });
 
-    expect(await joinPorts(db, { providers: {} }, "u-bob").listOrgs?.()).toEqual(["Acme"]);
+    expect(await (await portsFor(db)).listOrgs?.()).toEqual(["Acme"]);
     expect(asked).toHaveLength(1);
   });
 
@@ -546,7 +623,7 @@ describe("joinPorts", () => {
         : Response.json(null, { status: 404 }),
     );
 
-    expect(await joinPorts(db, { providers: {} }, "u-bob").login?.()).toBe("bvance");
+    expect(await (await portsFor(db)).login?.()).toBe("bvance");
   });
 
   it("spends no request on a provider this Human never signed in with", async () => {
@@ -559,7 +636,7 @@ describe("joinPorts", () => {
       return Response.json({ login: "bvance" });
     });
 
-    expect(await joinPorts(db, { providers: {} }, "u-bob").login?.()).toBe("bvance");
+    expect(await (await portsFor(db)).login?.()).toBe("bvance");
     // GitHub answered, so GitLab is never asked; a Human with neither account
     // costs no request at all.
     expect(asked).toBe(1);

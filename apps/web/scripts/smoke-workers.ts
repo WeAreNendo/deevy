@@ -30,6 +30,7 @@
  * (docs/plans/m3.md slice 10).
  */
 import type { AppRouter } from "@deevy/core";
+import { pagePolicy } from "../../../packages/core/src/headers.ts";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { RouterClient } from "@orpc/server";
@@ -315,7 +316,15 @@ async function rpc(
 ): Promise<RpcResult> {
   const response = await fetch(`${origin}/rpc/${procedure}`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+    // The SPA's page is on this origin, and its browser says so: a write the
+    // session cookie signed in is refused from anywhere else
+    // (packages/core/src/app.ts, `crossSiteWrite`).
+    headers: {
+      "content-type": "application/json",
+      origin,
+      "sec-fetch-site": "same-origin",
+      ...(cookie ? { cookie } : {}),
+    },
     body: JSON.stringify({ json: input }),
   });
   const body = await response.text();
@@ -530,7 +539,11 @@ interface Watcher {
 
 function watch(origin: string, cookie: string, after?: number): Watcher {
   const controller = new AbortController();
-  const link = new RPCLink({ origin, url: "/rpc", headers: { cookie } });
+  const link = new RPCLink({
+    origin,
+    url: "/rpc",
+    headers: { cookie, origin, "sec-fetch-site": "same-origin" },
+  });
   const client: RouterClient<AppRouter> = createORPCClient(link);
   const watcher: Watcher = {
     messages: [],
@@ -1076,12 +1089,25 @@ async function theWorkerServesDeevy(origin: string): Promise<void> {
     spa.status === 200 && (await spa.text()) === index,
     `status ${String(spa.status)}`,
   );
+  // The asset handler answers the SPA before the Worker runs, so its headers
+  // come from `_headers` in the build, which is the file this proves shipped.
+  check(
+    "and it carries deevy's page policy, which nothing may frame",
+    spa.headers.get("content-security-policy") === pagePolicy &&
+      spa.headers.get("x-frame-options") === "DENY",
+    `content-security-policy ${spa.headers.get("content-security-policy") ?? "absent"}`,
+  );
 
   const issue = await fetch(`${origin}/api/issues/DEV-1`);
   check(
     "/api/issues/DEV-1 is the API",
     (issue.headers.get("content-type") ?? "").includes("application/json") && issue.status === 401,
     `status ${String(issue.status)}, ${issue.headers.get("content-type") ?? "no content-type"}`,
+  );
+  check(
+    "and it is never to be read as a page",
+    issue.headers.get("x-content-type-options") === "nosniff",
+    `x-content-type-options ${issue.headers.get("x-content-type-options") ?? "absent"}`,
   );
 
   const unauthenticated = await rpc(origin, "me/get", undefined);
@@ -1171,6 +1197,24 @@ async function aHumanSignsIn(origin: string): Promise<void> {
     "only the session cookie the Worker minted authenticates /rpc/members.list",
     anonymous.status === 401 && (await membersOn(origin, admin.cookie)).length === 1,
     `an anonymous call was ${String(anonymous.status)}`,
+  );
+
+  // The same write, from a page on another site: the browser attaches the
+  // cookie all the same, and only where the request came from tells them apart.
+  const crossSite = await fetch(`${origin}/rpc/allowlist/add`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      cookie: admin.cookie,
+      origin: "https://evil.example",
+      "sec-fetch-site": "cross-site",
+    },
+    body: JSON.stringify({ json: { kind: "email_domain", value: "evil.example" } }),
+  });
+  check(
+    "a cross-site write with the admin's session cookie is refused",
+    crossSite.status === 403,
+    `status ${String(crossSite.status)}`,
   );
 
   const rule = await rpc(

@@ -582,6 +582,39 @@ GitLab application each hold a list, so one of those can carry both. Move betwee
 and the callbacks together: either one alone leaves sign-in refused by the provider or the session cookie set
 for an origin nobody is on.
 
+### What a page may run, and where a change may come from
+
+Every page deevy serves runs only the scripts it shipped. The SPA and the few pages the server writes itself
+leave with a `Content-Security-Policy` of `script-src 'self'` — no inline script, no `eval`, nothing from
+another host — with `frame-ancestors 'none'`, `object-src 'none'` and `base-uri 'none'`, beside
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy:
+strict-origin-when-cross-origin`; everything that is not a page is sent as something never to render
+(`packages/core/src/headers.ts`). The image sets them in the app. On the Worker the asset handler answers the
+SPA before deevy's code runs, so they ride in `apps/web/public/_headers`, which the build copies beside the
+SPA and a test holds to the same policy. Styles may be inline, because the libraries the SPA is built from
+write `<style>` elements as they run; images may come from any `https:` host, because avatars do; a form may
+post to `https://github.com`, because creating a GitHub App is one. `/api/docs` is the one exception: it
+loads Scalar from jsDelivr and names that script and its own inline one, by hash, in a policy of its own.
+
+So a proxy in front of deevy must pass these headers through rather than replace them, and must not add a
+script to the page: an analytics snippet, Cloudflare's Rocket Loader, Email Address Obfuscation or Web
+Analytics injection are inline scripts the browser will now refuse. A browser console that reports a
+Content Security Policy violation on a page of deevy's is a bug to report.
+
+A change made with the session cookie must come from deevy's own page. A `POST`, `PUT`, `PATCH` or `DELETE`
+to `/rpc` or `/api` that the cookie authenticated is refused with `403 FORBIDDEN` unless the browser says
+`Sec-Fetch-Site: same-origin`, or sends an `Origin` that is `BETTER_AUTH_URL` or `DEEVY_WEB_ORIGIN` (with
+`BETTER_AUTH_URL` unset, the origin the request arrived on). A proxy that strips both headers, or rewrites `Origin`, makes every change in
+the SPA fail that way; a SPA served from an origin of its own needs that origin in `DEEVY_WEB_ORIGIN`, as it
+already did for CORS. A bearer — an Agent's key, a CLI or MCP client's token — is unaffected, and `/mcp`
+takes nothing but a bearer.
+
+A provider's access and refresh tokens are sealed under `BETTER_AUTH_SECRET` as Better Auth writes them
+(`account.encryptOAuthTokens`). A row written before deevy sealed them stays readable, and is sealed the next time its
+Human signs in with that provider. Rotating `BETTER_AUTH_SECRET` therefore also leaves the sealed tokens
+unreadable until each Human signs in again, which costs only the GitHub organization and GitLab group checks
+a join makes in the meantime.
+
 ## The CLI
 
 `deevy` is deevy from a terminal (`docs/plans/cli.md`). It signs in through the same OAuth server a browser

@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { NotFoundPage } from "@/routes/not-found";
+import { webHref } from "@/lib/href";
 import { leaveFor } from "@/lib/leave";
 import { orpc } from "@/lib/orpc";
 import { ago } from "@/lib/time";
@@ -85,12 +86,14 @@ export function SocketPage({ socketId }: { socketId: string }) {
         account: typeof one.account === "string" ? one.account : "",
       }))
     : [];
-  const appPage =
-    typeof config.htmlUrl === "string"
-      ? config.htmlUrl.replace(/\/+$/, "")
-      : typeof config.slug === "string"
-        ? `https://github.com/apps/${config.slug}`
-        : null;
+  // What GitHub said the App's page is, and only if it is a web page: it is
+  // drawn as a link below (lib/href.ts).
+  const htmlUrl = typeof config.htmlUrl === "string" ? webHref(config.htmlUrl) : undefined;
+  const appPage = htmlUrl
+    ? htmlUrl.replace(/\/+$/, "")
+    : typeof config.slug === "string"
+      ? `https://github.com/apps/${config.slug}`
+      : null;
   const quiet = standing.tone === "quiet" && socket.status === "active";
   const columns: DataColumn<Delivery>[] = [
     {

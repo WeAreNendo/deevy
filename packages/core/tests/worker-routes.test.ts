@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { App } from "../src/app.ts";
 import { createApp } from "../src/app.ts";
 import { createAuth } from "../src/auth.ts";
+import { securityHeaders } from "../src/headers.ts";
 import { testDb } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
@@ -59,7 +60,11 @@ function ruleMatches(rule: string, path: string): boolean {
 function servedByTheAssetHandler(app: App, runWorkerFirst: string[]): string[] {
   const excluded = runWorkerFirst.filter((rule) => rule.startsWith("!"));
   const included = runWorkerFirst.filter((rule) => !rule.startsWith("!"));
-  const paths = [...new Set(app.routes.map((route) => route.path))];
+  // The headers middleware sits on every path and answers none of them: what
+  // the asset handler serves carries the same headers through `_headers`
+  // (headers.test.ts), so it is the one route the table need not carry.
+  const answering = app.routes.filter((route) => route.handler !== securityHeaders);
+  const paths = [...new Set(answering.map((route) => route.path))];
   return paths.filter((route) => {
     const path = requestPath(route);
     return (

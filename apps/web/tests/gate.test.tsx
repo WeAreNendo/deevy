@@ -35,7 +35,11 @@ vi.mock("../src/lib/orpc.ts", async () => {
             approverMemberIds: [],
           },
           approvals: 1,
-          links: [{ url: "https://github.test/acme/deevy/pull/7", title: "Pull request 7" }],
+          links: [
+            { url: "https://github.test/acme/deevy/pull/7", title: "Pull request 7" },
+            // What an Agent could have sent before `links.add` took only web pages.
+            { url: "javascript:alert(document.cookie)", title: "The fix" },
+          ],
           decisions: [
             {
               id: "dec_1",
@@ -120,6 +124,20 @@ describe("the Gate a Human opens", () => {
     expect(screen.getByRole("heading", { name: /What I will do/ })).toBeTruthy();
     const gate = await screen.findByRole("group", { name: /ship Gate/ });
     expect(within(gate).getByText("1 of 2")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Pull request 7/ })).toBeTruthy();
+  });
+
+  /**
+   * A Link is an Agent's text, and an anchor with a `javascript:` address runs
+   * in deevy's page for whoever clicks it: such a Link is named and not drawn
+   * as a link (lib/href.ts).
+   */
+  it("draws no link to an address that is not a web page", async () => {
+    state.you = { mayRule: true, hasRuled: false, why: null };
+    await mountAt("/gates/gate_stub00000");
+
+    expect(await screen.findByText("The fix")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /The fix/ })).toBeNull();
     expect(screen.getByRole("link", { name: /Pull request 7/ })).toBeTruthy();
   });
 
