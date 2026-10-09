@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "wrangler deploy --dry-run --config wrangler.jsonc --outdir dist/hosted",
-    "check:hosted": "wrangler deploy --dry-run --config wrangler.jsonc --outdir dist/wrangler-dry-run",
+    "build:hosted": "wrangler deploy --dry-run --config wrangler.jsonc --outdir dist/hosted",
     "test:hosted": "node scripts/smoke-hosted.ts"
   },
   "dependencies": {
@@ -13,7 +12,8 @@
     "@deevy/core": "workspace:*",
     "@deevy/db": "workspace:*",
     "@deevy/email": "workspace:*",
-    "@deevy/sockets": "workspace:*"
+    "@deevy/sockets": "workspace:*",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

@@ -61,7 +61,9 @@ export class Platform extends WorkerEntrypoint<HostedBindings> {
   /** What a Workspace says about itself: version, migrations, counts. */
   async status(slug: string): Promise<WorkspaceStatus | null> {
     const entry = await lookup(this.env.DIRECTORY, slug);
-    return entry ? workspaceStub(this.env, this.#env, entry.key).status() : null;
+    if (!entry) return null;
+    // RPC types a returned empty tuple as `never[]`; the value is the same.
+    return (await workspaceStub(this.env, this.#env, entry.key).status()) as WorkspaceStatus;
   }
 
   async suspend(slug: string): Promise<void> {

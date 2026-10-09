@@ -32,6 +32,7 @@ const packageDirs = [
   "apps/server",
   "apps/agent",
   "apps/cli",
+  "apps/hosted",
   "tools/release",
 ];
 

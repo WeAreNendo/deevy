@@ -14,6 +14,8 @@
     // own path (@deevy/adapters/spa). Build apps/web first.
     "directory": "../web/dist/client",
     "binding": "ASSETS",
+    // A route the SPA owns, asked of the binding, is its index.
+    "not_found_handling": "single-page-application",
     // Every request is the router's: a Workspace's index says where it lives,
     // and a slug the directory does not know is a 404 rather than the SPA.
     "run_worker_first": true,
