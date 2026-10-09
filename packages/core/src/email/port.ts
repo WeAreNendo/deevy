@@ -77,7 +77,15 @@ export interface EmailSenderInput {
   credentials: Record<string, string>;
   /** The way out. A test passes its own and never reaches the network. */
   fetch: typeof fetch;
+  /**
+   * How long one request may take before it is a retry rather than a hang:
+   * a sweep is bounded, and a service that does not answer must not hold it.
+   */
+  timeoutMs?: number;
 }
+
+/** Twenty seconds: far beyond any sender's normal answer, well inside a sweep. */
+export const defaultSendTimeoutMs = 20_000;
 
 /** Builds a sender from its setup, or throws when the setup cannot work. */
 export type EmailSenderFactory = (input: EmailSenderInput) => EmailSender;

@@ -1,4 +1,4 @@
-import { user as userTable, type Db } from "@deevy/db";
+import { user as userTable, workspace as workspaceTable, type Db } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -126,7 +126,7 @@ describe("delivering what is owed by email", () => {
     expect(message?.html).toContain(`href="${baseUrl}/gates/${gate.id}"`);
     // Keyed by the delivery, so a retry is the same email to a sender that deduplicates.
     const [row] = await emailsOwed(db);
-    expect(message?.idempotencyKey).toBe(row?.id);
+    expect(message?.idempotencyKey?.startsWith(`${row?.id ?? "?"}.`)).toBe(true);
     expect(row?.deliveredAt).toBeInstanceOf(Date);
   });
 
@@ -358,5 +358,95 @@ describe("a pass over what is owed by email", () => {
     expect(one.result.delivered).toBe(1);
     expect(three.result.delivered).toBe(3);
     expect(three.statements).toEqual(one.statements);
+  });
+});
+
+describe("an email tried twice", () => {
+  it("keeps its key while it says the same thing, and takes a new one when it changed", async () => {
+    // Resend refuses a key reused with a different body, as a permanent 409;
+    // a retry of the same email must dedupe, and a changed one must not collide.
+    const { db, asPlanner, run, workspaceId } = await waitingOnBob();
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
+    const keys: string[] = [];
+    const busy = {
+      resend: () => ({
+        kind: "resend" as const,
+        send: (message: EmailMessage) => {
+          keys.push(message.idempotencyKey ?? "");
+          return Promise.resolve({
+            delivered: false as const,
+            retry: true,
+            status: 429,
+            error: "busy",
+          });
+        },
+      }),
+    };
+    const later = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+
+    await deliverDueEmails({ db, workspaceId, baseUrl, emailSenders: busy, email: setup });
+    await deliverDueEmails({
+      db,
+      workspaceId,
+      baseUrl,
+      emailSenders: busy,
+      email: setup,
+      now: later(5),
+    });
+    await db.update(workspaceTable).set({ name: "Renamed" });
+    await deliverDueEmails({
+      db,
+      workspaceId,
+      baseUrl,
+      emailSenders: busy,
+      email: setup,
+      now: later(30),
+    });
+
+    const [row] = await db.query.delivery.findMany({ where: { target: "email_member" } });
+    expect(keys).toHaveLength(3);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(keys.every((key) => key.startsWith(`${row?.id ?? "?"}.`))).toBe(true);
+  });
+});
+
+describe("a pass that gives up on emails", () => {
+  it("records them in batches D1 can bind, and costs the same for one as for three", async () => {
+    const count = async (checkpoints: string[]) => {
+      const { db, asPlanner, run, workspaceId } = await waitingOnBob();
+      for (const checkpoint of checkpoints) {
+        await asPlanner.gates.request({ runId: run.id, checkpoint, proposal: `At ${checkpoint}.` });
+      }
+      const { counted, statements } = countingDb(db);
+      const { emailSenders } = fakeSender({
+        delivered: false,
+        retry: false,
+        status: 403,
+        error: "The example.com domain is not verified.",
+      });
+      const result = await deliverDueEmails({
+        db: counted,
+        workspaceId,
+        baseUrl,
+        emailSenders,
+        email: setup,
+      });
+      const events = await db.query.event.findMany({ where: { kind: "email.exhausted" } });
+      return { result, statements, events };
+    };
+
+    const one = await count(["plan"]);
+    const three = await count(["plan", "review", "ship"]);
+
+    expect(three.result.gaveUp).toBe(3);
+    expect(three.events).toHaveLength(3);
+    expect(three.statements).toEqual(one.statements);
+    // Seventeen Events at six columns each is past D1's hundred bound
+    // parameters in one statement, so they go in two.
+    const many = await count(Array.from({ length: 17 }, (_, at) => `step-${String(at)}`));
+    expect(many.events).toHaveLength(17);
+    const inserts = (statements: string[]) => statements.filter((one) => one === "insert").length;
+    expect(inserts(many.statements)).toBe(inserts(one.statements) + 1);
   });
 });

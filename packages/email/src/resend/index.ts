@@ -1,4 +1,5 @@
 import {
+  defaultSendTimeoutMs,
   formatFrom,
   httpResult,
   unreachable,
@@ -11,9 +12,14 @@ import {
  * bearer key. It deduplicates on `Idempotency-Key` for a day, which is what
  * makes a retry after a timeout safe.
  */
-export function createResendSender({ credentials, fetch }: EmailSenderInput): EmailSender {
+export function createResendSender({
+  credentials,
+  fetch,
+  timeoutMs = defaultSendTimeoutMs,
+}: EmailSenderInput): EmailSender {
   const apiKey = credentials.apiKey;
-  if (!apiKey) throw new Error("Resend needs an API key (RESEND_API_KEY).");
+  // Said without a variable's name: from Settings › Email there is none.
+  if (!apiKey) throw new Error("Resend needs an API key.");
   const base = "https://api.resend.com";
 
   return {
@@ -22,6 +28,7 @@ export function createResendSender({ credentials, fetch }: EmailSenderInput): Em
       try {
         const response = await fetch(`${base}/emails`, {
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
           headers: {
             authorization: `Bearer ${apiKey}`,
             "content-type": "application/json",
@@ -39,8 +46,19 @@ export function createResendSender({ credentials, fetch }: EmailSenderInput): Em
         });
         const body = (await response.json().catch(() => null)) as {
           id?: string;
+          name?: string;
           message?: string;
         } | null;
+        // The same key while the first request is still being handled: Resend
+        // says to try again (resend.com/docs/dashboard/emails/idempotency-keys).
+        if (response.status === 409 && body?.name === "concurrent_idempotent_requests") {
+          return {
+            delivered: false,
+            retry: true,
+            status: 409,
+            error: body.message ?? "Resend is still handling this email",
+          };
+        }
         return httpResult(
           response.status,
           body?.message ?? `Resend answered ${String(response.status)}`,

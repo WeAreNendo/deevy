@@ -24,6 +24,23 @@ const variables: Partial<Record<SenderKind, Variable[]>> = {
 /** What a development stand-in sends as, so it needs nothing set at all. */
 const stubFrom = "deevy <deevy@example.com>";
 
+/**
+ * The sender an environment configures, or the problem with it. The Worker
+ * reads this: a half-configured sender must not take down every request,
+ * sign-in included, when the page that says what is wrong is one of them.
+ */
+export function readEmailEnv(
+  env: Env,
+  options: { devStub?: boolean } = {},
+): { setup: EmailSetup | null; problem: string | null } {
+  try {
+    return { setup: emailSetupFromEnv(env, options), problem: null };
+  } catch (failure) {
+    return { setup: null, problem: failure instanceof Error ? failure.message : String(failure) };
+  }
+}
+
+/** The same, refusing a half-configured sender: the Node server stops at startup, naming it. */
 export function emailSetupFromEnv(
   env: Env,
   { devStub = false }: { devStub?: boolean } = {},

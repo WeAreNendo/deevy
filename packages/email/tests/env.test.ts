@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { emailSetupFromEnv } from "../src/env.ts";
+import { emailSetupFromEnv, readEmailEnv } from "../src/env.ts";
 
 /**
  * The sender in force, read from the environment the same way on the Node
@@ -55,5 +55,15 @@ describe("the email sender an environment configures", () => {
         { devStub: true },
       )?.sender,
     ).toBe("resend");
+  });
+
+  it("hands a half-configured sender back as a problem, for a runtime that must stay up", () => {
+    expect(
+      readEmailEnv({ DEEVY_EMAIL_SENDER: "resend", DEEVY_EMAIL_FROM: "deevy@example.com" }),
+    ).toEqual({
+      setup: null,
+      problem: "DEEVY_EMAIL_SENDER=resend also needs RESEND_API_KEY.",
+    });
+    expect(readEmailEnv({})).toEqual({ setup: null, problem: null });
   });
 });

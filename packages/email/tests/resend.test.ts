@@ -100,9 +100,40 @@ describe("Resend", () => {
     }
   });
 
+  it("tries again when Resend is still handling the same key, as its docs say to", async () => {
+    const { sender } = resend(
+      Response.json(
+        {
+          statusCode: 409,
+          name: "concurrent_idempotent_requests",
+          message: "Same idempotency key used while original request is still in progress",
+        },
+        { status: 409 },
+      ),
+    );
+    expect(await sender.send(message)).toMatchObject({
+      delivered: false,
+      retry: true,
+      status: 409,
+    });
+  });
+
+  it("gives up on a request that never answers, rather than holding the sweep", async () => {
+    const sender = createResendSender({
+      config: {},
+      credentials: { apiKey: "re_not_a_real_key" },
+      timeoutMs: 20,
+      fetch: ((_input: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        })) as typeof fetch,
+    });
+    expect(await sender.send(message)).toMatchObject({ delivered: false, retry: true, status: 0 });
+  });
+
   it("refuses to be built without a key, rather than failing every send", () => {
     expect(() =>
       createResendSender({ config: {}, credentials: {}, fetch: globalThis.fetch }),
-    ).toThrow(/RESEND_API_KEY/);
+    ).toThrow("Resend needs an API key.");
   });
 });

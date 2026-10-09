@@ -10,7 +10,7 @@ import type { EmailSenders } from "@deevy/core/email";
 import { createResendSender } from "./resend/index.ts";
 import { createStubSender } from "./stub/index.ts";
 
-export { emailSetupFromEnv } from "./env.ts";
+export { emailSetupFromEnv, readEmailEnv } from "./env.ts";
 export { createResendSender } from "./resend/index.ts";
 export { clearStubOutbox, createStubSender, stubOutbox } from "./stub/index.ts";
 

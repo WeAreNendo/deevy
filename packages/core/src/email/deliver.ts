@@ -257,8 +257,13 @@ export async function deliverDueEmails({
       text: rendered.text,
       html: rendered.html,
       headers: {},
-      idempotencyKey: row.id,
+      idempotencyKey: "",
     };
+    // The delivery and what it says: a retry of the same email dedupes at a
+    // sender that keys on it, and an email whose words changed between tries
+    // (an approval came in) is a new request rather than a reused key, which
+    // Resend refuses for good.
+    message.idempotencyKey = await idempotencyKeyFor(row.id, message);
     // One at a time: every service rate-limits, and a pass is twenty at most.
     const sent = await sender.send(message);
     const outcome: Attempted = sent.delivered
@@ -306,25 +311,46 @@ export async function deliverDueEmails({
   if (exhausted.length > 0) {
     const outcomeById = new Map(attempted.map((one) => [one.id, one]));
     const memberOf = new Map(claimed.map((row) => [row.id, row.targetId]));
-    await db.insert(eventTable).values(
-      exhausted.map((id) => {
-        const event = sentEvent.get(id) as Event;
-        const outcome = outcomeById.get(id);
-        return {
-          workspaceId: event.workspaceId,
-          kind: "email.exhausted" satisfies EventKind,
-          subjectType: "member",
-          subjectId: memberOf.get(id) as string,
-          projectId: event.projectId,
-          payload: {
-            eventSeq: event.seq,
-            sender: setup.sender,
-            status: outcome?.status ?? 0,
-            error: outcome?.error ?? null,
-          },
-        };
-      }),
-    );
+    const rows = exhausted.map((id) => {
+      const event = sentEvent.get(id) as Event;
+      const outcome = outcomeById.get(id);
+      return {
+        workspaceId: event.workspaceId,
+        kind: "email.exhausted" satisfies EventKind,
+        subjectType: "member",
+        subjectId: memberOf.get(id) as string,
+        projectId: event.projectId,
+        payload: {
+          eventSeq: event.seq,
+          sender: setup.sender,
+          status: outcome?.status ?? 0,
+          error: outcome?.error ?? null,
+        },
+      };
+    });
+    // D1 binds at most a hundred parameters per statement, and each row binds six.
+    for (let at = 0; at < rows.length; at += exhaustedRowsPerInsert) {
+      await db.insert(eventTable).values(rows.slice(at, at + exhaustedRowsPerInsert));
+    }
   }
   return result;
+}
+
+/** Exhausted deliveries whose Events go in one statement, as work.ts batches its own. */
+const exhaustedRowsPerInsert = 16;
+
+/** `<delivery>.<16 hex of the content's SHA-256>`. */
+async function idempotencyKeyFor(deliveryId: string, message: EmailMessage): Promise<string> {
+  const content = JSON.stringify([
+    message.to,
+    message.subject,
+    message.text,
+    message.html,
+    message.headers,
+  ]);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+  const hex = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return `${deliveryId}.${hex.slice(0, 16)}`;
 }

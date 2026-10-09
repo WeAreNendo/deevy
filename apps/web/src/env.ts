@@ -1,7 +1,7 @@
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSetup } from "@deevy/core/email";
-import { emailSetupFromEnv } from "@deevy/email";
+import { readEmailEnv } from "@deevy/email";
 import type { createDb, QueueProducer } from "@deevy/adapters/workers";
 
 /**
@@ -143,6 +143,8 @@ export interface WorkerEnv {
   gateReminderHours: number;
   /** The email sender these bindings configure, or none (docs/plans/email-channel.md). */
   email: EmailSetup | null;
+  /** Why the bindings' sender could not be read, when they set one up halfway. */
+  emailProblem: string | null;
   /** Whether the email stand-in may run here, as the Socket stub may. */
   devStubEmail: boolean;
   /**
@@ -159,6 +161,15 @@ function positive(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/** The email half of the bindings: a sender, or the problem with the one they name. */
+function emailFrom(env: WorkerBindings): { email: EmailSetup | null; emailProblem: string | null } {
+  const read = readEmailEnv(env as unknown as Record<string, string | undefined>, {
+    devStub: env.DEEVY_DEV_STUB_EMAIL === "1",
+  });
+  if (read.problem) console.error(`deevy sends no email: ${read.problem}`);
+  return { email: read.setup, emailProblem: read.problem };
+}
+
 /**
  * The Worker's configuration, read once per isolate from the bindings the
  * request carried. Nothing here reads `process.env`, which does not exist on
@@ -171,10 +182,10 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
     socketSecret: env.DEEVY_SECRET,
     githubApi: env.DEEVY_GITHUB_API,
     devStubSockets: env.DEEVY_DEV_STUB_SOCKETS === "1",
-    // One reader for both runtimes, so a variable means the same on either.
-    email: emailSetupFromEnv(env as unknown as Record<string, string | undefined>, {
-      devStub: env.DEEVY_DEV_STUB_EMAIL === "1",
-    }),
+    // One reader for both runtimes, so a variable means the same on either;
+    // here a half-configured sender is kept as a problem rather than thrown,
+    // or every request — the page that would say so included — fails.
+    ...emailFrom(env),
     devStubEmail: env.DEEVY_DEV_STUB_EMAIL === "1",
     devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
     ...(env.DEEVY_SOCKET_CATCHUP_MINUTES
