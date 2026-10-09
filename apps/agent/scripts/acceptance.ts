@@ -135,7 +135,14 @@ async function human(
 ): Promise<Record<string, unknown>> {
   const response = await fetch(`${origin}/rpc/${procedure}`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    // What the SPA's browser says about its page: a write the session cookie
+    // signed in is taken only from deevy's own (packages/core/src/app.ts).
+    headers: {
+      "content-type": "application/json",
+      cookie,
+      origin,
+      "sec-fetch-site": "same-origin",
+    },
     body: JSON.stringify({ json: input }),
   });
   const body = await response.text();

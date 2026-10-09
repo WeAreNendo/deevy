@@ -107,6 +107,24 @@ describe("links.add", () => {
 
     expect(link).toMatchObject({ kind: "branch", title: "The design" });
   });
+
+  /**
+   * A Link is drawn as a link on the Gate a Human rules on, and a
+   * `javascript:` one would run in deevy's page when they clicked it. An Agent
+   * is somebody else's text, so it may point only at a web page.
+   */
+  it("takes only a web page's address", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { client, issue } = await withIssue(db);
+
+    for (const url of ["javascript:alert(document.cookie)", "data:text/html,<b>hi</b>"]) {
+      await expect(client.links.add({ issue: issue.externalKey, url })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+    }
+    expect((await client.links.list({ issue: issue.externalKey })).links).toEqual([]);
+  });
 });
 
 describe("links.remove", () => {

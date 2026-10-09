@@ -13,6 +13,7 @@ import { orpc } from "@/lib/orpc";
 import { isNotFound } from "@/routes/not-found";
 import { providerLabel } from "@/lib/providers";
 import { useMembersById } from "@/lib/members";
+import { webHref } from "@/lib/href";
 import { ago } from "@/lib/time";
 
 /**
@@ -55,7 +56,7 @@ export function GatePage({ requestId, focused = true }: { requestId: string; foc
             {/* The record is the tracker's; the key is the way back to it. */}
             {record ? (
               <a
-                href={record.url}
+                href={webHref(record.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
@@ -95,7 +96,7 @@ export function GatePage({ requestId, focused = true }: { requestId: string; foc
                 {found.links.map((link) => (
                   <li key={link.url}>
                     <a
-                      href={link.url}
+                      href={webHref(link.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-sm hover:underline"
