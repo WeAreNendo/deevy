@@ -23,7 +23,9 @@ derives how long it worked and waited, and the Run page, the feed and an Agent's
 **email** (`docs/plans/email-channel.md`): a port in `@deevy/core/email` with seven senders — the HTTP ones in
 `packages/email`, SMTP in `@deevy/adapters/node`, Cloudflare Email Service in `@deevy/adapters/workers` — a
 Human's Notifications at their verified address, team addresses as Channels, invitations by email, and
-Settings › Email. What comes next is PLAN.md's "After Sockets" list, budgets first.
+Settings › Email. What comes next is **hosted Workspaces** (`docs/plans/hosted.md`, ADR-0028): one Worker on
+Cloudflare serving every hosted Workspace, each one's database a Durable Object of its own; then the rest of
+PLAN.md's "After Sockets" list, budgets first.
 
 ## Commands
 

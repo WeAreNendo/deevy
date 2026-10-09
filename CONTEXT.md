@@ -36,7 +36,9 @@ _Avoid_: alias, external user, linked account
 ### Structure
 
 **Workspace**:
-The top-level boundary that holds Members, Sockets, Projects, and settings. A self-hosted instance serves one Workspace.
+The top-level boundary that holds Members, Sockets, Projects, and settings, in a database of its own. A
+self-hosted deployment serves one Workspace; a hosted one serves many, each in its own database
+(ADR-0028).
 _Avoid_: organization, tenant, account, instance
 
 **Socket**:
