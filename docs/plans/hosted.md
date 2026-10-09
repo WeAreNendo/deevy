@@ -483,7 +483,9 @@ waits for an account: what an open stream bills, and a gradual deploy with a mig
   it takes bearer tokens only. Inline styles stay allowed, because three of the UI's libraries write
   `<style>` as they run; scripts are locked to deevy's own. Better Auth's decrypt throws on an unencrypted
   token, so deevy's own reads accept both until a row is written again. `/api/docs` still loads its reference
-  UI from a CDN, unpinned — owed.
+  UI from a CDN, now pinned to a version (`@scalar/api-reference@1.72.0`). CI then found that a refused
+  cross-site write answered before its body was read broke the next request on that connection under
+  workerd on Linux; the refusal reads the body first.
 - **Slice 3, The source of the running version** (#136). `health.ping` and `/healthz` say the version; Settings
   links to `v<version>` on GitHub.
 - **Slice 4, deevy under a path** (#138). Better Auth routes on the path of its own URL and keeps a URL that has one
@@ -537,3 +539,15 @@ waits for an account: what an open stream bills, and a gradual deploy with a mig
   validator fails the build on a broken internal link. Astro is pinned below the release that needs a newer
   Vite than the workspace's, and its own CSP is off, because it blocked the search's inline script. The
   deploy waits for the account: it finishes green with a notice until the `docs` environment has a token.
+- **The control plane** (WeAreNendo/deevy-cloud, private). C3 and C4 are the console (#1): a React SPA and its
+  API behind the hosted Worker's `CONSOLE` binding, signing in through the same relay with its state wrapping
+  reimplemented from ADR-0030 and pinned to an envelope deevy's own code produced; an invite-only beta gate
+  that keeps nothing about whoever it turns away; slugs never reused; export, delete with its grace, restore,
+  nightly dumps to R2 and the deletions' finish on crons. It was run beside the released archive under
+  `wrangler dev`, over real RPC. C1, C2, C5's runbook and C6 are #2: SETUP.md for the account once, a deploy
+  that verifies the attested archive, fills its blanks from the manifest, refuses a missing secret, rolls out
+  gradually and touches every Workspace before going to 100%; the first deploy has to go hosted Worker,
+  console, hosted Worker again, because a service binding cannot name a Worker that does not exist yet; and
+  the deevy.dev site with its waitlist, which works without JavaScript too.
+- **Metering** (#153). One Workers Analytics Engine data point per request, by Workspace, with nothing
+  personal in it; what a console shows and a plan will be billed by.
