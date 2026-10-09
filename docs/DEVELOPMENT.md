@@ -214,6 +214,7 @@ the walk's.
 | `vp run web#build:workers`       | The Cloudflare Worker build (`DEEVY_TARGET=workers`); `vp run web#check:workers` then dry-runs what it wrote. |
 | `vp run web#test:workers`        | Boots the built Worker on `wrangler dev --local` against a migrated local D1 and drives it over HTTP.         |
 | `vp run db#generate`             | Generate a migration from `packages/db/src/schema` with drizzle-kit. Then run `vp run db#check:migrations`.   |
+| `vp run server#test:previous`    | Builds the previous release's server from its tag and runs it on the schema this tree migrates (ADR-0031).    |
 | `vp run db#generate:auth`        | Regenerate `packages/db/src/schema/auth.ts` from Better Auth's config. Needs the bootstrap step below.        |
 | `vp run core#snapshot:openapi`   | Regenerate `packages/core/openapi.json`; CI fails when it is stale.                                           |
 | `vp run core#snapshot:mcp-tools` | Regenerate `packages/core/mcp-tools.json`; CI fails when it is stale.                                         |
@@ -378,6 +379,21 @@ rm auth.bootstrap.ts                    # never committed
 
 Then the ordinary migration steps: `vp run db#generate`, hand-patch `NOT NULL` onto every `text PRIMARY KEY`
 in the new `migration.sql` (a drizzle-kit rc regression), and `vp run db#check:migrations`.
+
+A migration only adds, so the previous release keeps running on the schema during a gradual deploy and after
+a rollback (ADR-0031). `db#check:migrations` refuses a dropped or renamed table or column, drizzle-kit's
+table rebuild (what it writes to change a column's type, nullability or default), and a unique index on a
+table that already has rows, and says what to do instead: stop using the thing in one release, remove it in
+a later one. That later migration says so on a line of its own, naming an earlier migration that shipped
+with the release that stopped using it:
+
+```sql
+-- deevy: contract issue.body has been unread since 0.12, expanded in 20261104090000_issue_text
+```
+
+`vp run server#test:previous` checks the rest: it builds the previous tag's server (once per tag, kept in
+`node_modules/.cache/deevy-previous`), runs it on a database this tree migrated, and checks that the
+migration an annotation names is one that release carried. `DEEVY_PREVIOUS_TAG=v0.9.0` picks another.
 
 ## Layout
 

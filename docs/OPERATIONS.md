@@ -1526,6 +1526,11 @@ stale one exactly as a stale `openapi.json` does. `apps/web/wrangler.jsonc` poin
 through `migrations_dir`, and `vp run db#check:d1` applies it to an empty local D1 and checks that what
 wrangler built is the schema `packages/db/src/schema` describes. None of that needs a Cloudflare account.
 
+The same check refuses a migration that takes something away — a dropped or renamed table or column, a table
+rebuild, a unique index on a table with rows — unless it says it is the later release that may
+([Upgrading](#upgrading)), and `vp run server#test:previous` runs the previous release on the schema this
+tree migrates.
+
 The projection is not a copy. drizzle separates statements with `--> statement-breakpoint`; the emitter turns
 those into plain statement separation and refuses, naming the file and the line, anything D1 will not honour:
 transaction control, `ATTACH`, `DETACH`, `VACUUM`, and every `PRAGMA`. The PRAGMA is the one that matters.
@@ -1541,10 +1546,9 @@ repository — step 3 of [Deploying to a free account](#deploying-to-a-free-acco
 
 ## Upgrading
 
-Pull the new image and start it on the same volume; the Node migrator applies what is new at startup. deevy
-is not at 1.0, so a minor release may break what came before: its release notes say when it cannot be
-upgraded in place, as 0.9 cannot ([below](#coming-from-08-or-before-start-again)). On Workers, run `wrangler d1 migrations apply deevy --remote` **before** deploying the new
-Worker, so the code never runs ahead of its schema.
+Pull the new image and start it on the same volume; the Node migrator applies what is new at startup. On
+Workers, run `wrangler d1 migrations apply deevy --remote` **before** deploying the new Worker, so the code
+never runs ahead of its schema.
 
 ```bash
 docker pull ghcr.io/wearenendo/deevy:<version>
@@ -1552,8 +1556,25 @@ docker stop deevy && docker rm deevy
 docker run -d --name deevy ... ghcr.io/wearenendo/deevy:<version>   # same -v deevy-data:/data
 ```
 
-Take a backup first (below). Migrations only ever move forward: there is no down migration, so restoring a
-backup is how you go back.
+From 0.11 on, every release upgrades in place, and the release before it still runs on the schema it leaves
+([ADR-0031](./adr/0031-every-release-upgrades-in-place.md)). A release's migrations only add — a table, a
+column that is nullable or has a default, an index — and whatever it stops using stays in the schema until a
+later release removes it. That is what makes applying D1 migrations ahead of the deploy safe, what lets a
+gradual deployment run two versions side by side, and what lets you go back one release without restoring
+anything:
+
+- **Docker**: start the previous image on the same volume. It finds the newer release's migrations applied,
+  leaves them alone — a release from 0.11 on also names them in its log — and runs on that schema. Starting
+  the newer image again later picks up where it was.
+- **Workers**: roll the Worker back to its previous version (`wrangler rollback`, or the dashboard's
+  Deployments tab). Leave the D1 database as it is; there is nothing to undo.
+
+One release back, not two: a release may remove what the one before it stopped using and the one before
+that still used. Take a backup before every upgrade (below). Migrations only ever move forward — there is no
+down migration — so restoring that backup is how you go back further, and how you undo anything else.
+
+Releases before 0.11 promised less: a minor release could break in place when its release notes said so, and
+one did ([below](#coming-from-08-or-before-start-again)).
 
 A browser picks the new version up on its next page load: the image serves `index.html` to be revalidated
 every time and the content-hashed files it names to be kept for good, so nobody runs the old app against the

@@ -3,8 +3,12 @@
 // generated SQL is patched by hand and this keeps CI honest about it. And the
 // D1 projection in packages/db/migrations is a committed build artifact of the
 // same source, so a stale one fails here like a stale openapi.json (ADR-0008).
+// A third keeps every release able to run on the next one's schema: a
+// migration only adds, unless it says it is the later release that removes
+// (ADR-0031, expand-only.ts).
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { checkExpandOnly } from "./expand-only.ts";
 import {
   drizzleDir as defaultDrizzleDir,
   migrationsDir as defaultMigrationsDir,
@@ -21,6 +25,12 @@ export async function checkMigrations({
   drizzleDir,
   migrationsDir,
 }: MigrationDirs): Promise<string[]> {
+  // A migration that takes something away is rewritten rather than projected,
+  // so it is said first and alone: drizzle's table rebuild also trips the D1
+  // projection's PRAGMA refusal, which throws, and would otherwise be all that
+  // anybody heard about it.
+  const removals = await checkExpandOnly(drizzleDir);
+  if (removals.length > 0) return [...(await textPrimaryKeysAreNotNull(drizzleDir)), ...removals];
   return [
     ...(await textPrimaryKeysAreNotNull(drizzleDir)),
     ...(await projectionIsCurrent(drizzleDir, migrationsDir)),
