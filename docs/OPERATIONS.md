@@ -615,6 +615,22 @@ Human signs in with that provider. Rotating `BETTER_AUTH_SECRET` therefore also 
 unreadable until each Human signs in again, which costs only the GitHub organization and GitLab group checks
 a join makes in the meantime.
 
+### Signing in through a relay
+
+Several deevys can share one set of provider Apps — every hosted Workspace does, and an operator running
+several deployments can — when one URL, a relay's, is the callback every App is registered with
+([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)). The relay only redirects: each deevy exchanges its own
+code with the App's secret, so each still holds the client ids and secrets.
+
+| Variable                     | On                       | What                                                                                               |
+| ---------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------- |
+| `DEEVY_SIGN_IN_RELAY_SECRET` | the relay and each deevy | A shared secret that signs where a callback may go. Without it neither half is on.                 |
+| `DEEVY_SIGN_IN_RELAY_URL`    | each deevy behind it     | The relay's URL. Every App's callback is `${DEEVY_SIGN_IN_RELAY_URL}/callback/<provider>`.         |
+| `DEEVY_SIGN_IN_RELAY_ALLOW`  | the relay                | Comma-separated URL prefixes the relay may send a callback to, such as `https://app.example.com/`. |
+
+A deevy is a relay at `${BETTER_AUTH_URL}/relay`, so `DEEVY_SIGN_IN_RELAY_URL` names that. Its own OpenID
+Connect IdP and a self-managed GitLab are never relayed; their callbacks stay the deevy's own.
+
 ### Under a path
 
 deevy can live under a path of its host rather than at its root — `https://company.example.com/deevy`

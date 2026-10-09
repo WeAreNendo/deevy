@@ -1,4 +1,5 @@
 import type { AssetFetcher } from "@deevy/adapters/workers";
+import { signInRelayFromEnv } from "@deevy/core";
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSetup } from "@deevy/core/email";
@@ -68,6 +69,10 @@ export interface WorkerBindings {
   ROOMS?: DurableObjectBinding;
   BETTER_AUTH_URL?: string;
   BETTER_AUTH_SECRET?: string;
+  /** A relay to sign in through, or the deevys this one relays for (docs/OPERATIONS.md). */
+  DEEVY_SIGN_IN_RELAY_URL?: string;
+  DEEVY_SIGN_IN_RELAY_SECRET?: string;
+  DEEVY_SIGN_IN_RELAY_ALLOW?: string;
   DEEVY_WEB_ORIGIN?: string;
   /** What a Socket's credentials are sealed with (`wrangler secret put`). */
   DEEVY_SECRET?: string;
@@ -137,6 +142,8 @@ export interface WorkerBindings {
 export interface WorkerEnv {
   baseURL?: string;
   secret?: string;
+  /** The relay this deployment signs in through, and the one it is (sign-in-relay.ts). */
+  signInRelay: ReturnType<typeof signInRelayFromEnv>;
   /**
    * What a Socket's credentials are sealed with (secrets.ts). Deliberately not
    * Better Auth's: rotating that one signs everybody out, and must not also
@@ -202,6 +209,7 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
   return {
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
+    signInRelay: signInRelayFromEnv(env),
     socketSecret: env.DEEVY_SECRET,
     githubApi: env.DEEVY_GITHUB_API,
     devStubSockets: env.DEEVY_DEV_STUB_SOCKETS === "1",
@@ -285,6 +293,7 @@ export function workerAuthEnv(env: WorkerEnv): AuthEnv {
     ...(env.signInOrder ? { signInOrder: env.signInOrder } : {}),
     adminEmail: env.adminEmail,
     workspaceName: env.workspaceName,
+    ...(env.signInRelay.client ? { signInRelay: env.signInRelay.client } : {}),
     fetchClientMetadataResource,
   };
 }

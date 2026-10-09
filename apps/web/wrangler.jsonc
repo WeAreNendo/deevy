@@ -21,7 +21,15 @@
     // worker-routes.test.ts asserts this list against the app's own routes.
     // A deployment under a path sets `true` instead: every request under it
     // is the Worker's to answer (docs/OPERATIONS.md, "Under a path").
-    "run_worker_first": ["/api/*", "/rpc/*", "/healthz", "/mcp", "/hooks/*", "/.well-known/*"],
+    "run_worker_first": [
+      "/api/*",
+      "/rpc/*",
+      "/healthz",
+      "/mcp",
+      "/hooks/*",
+      "/.well-known/*",
+      "/relay/*",
+    ],
   },
   "d1_databases": [
     {
