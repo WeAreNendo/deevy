@@ -73,6 +73,15 @@ export interface WorkerBindings {
   DEEVY_EMAIL_SENDER?: string;
   DEEVY_EMAIL_FROM?: string;
   RESEND_API_KEY?: string;
+  POSTMARK_SERVER_TOKEN?: string;
+  POSTMARK_MESSAGE_STREAM?: string;
+  SENDGRID_API_KEY?: string;
+  MAILGUN_API_KEY?: string;
+  MAILGUN_DOMAIN?: string;
+  MAILGUN_REGION?: string;
+  AWS_SES_REGION?: string;
+  AWS_SES_ACCESS_KEY_ID?: string;
+  AWS_SES_SECRET_ACCESS_KEY?: string;
   DEEVY_DEV_STUB_EMAIL?: string;
   DEEVY_DEV_STUB_CONTAINERS?: string;
   GITHUB_CLIENT_ID?: string;

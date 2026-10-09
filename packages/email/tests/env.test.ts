@@ -66,4 +66,57 @@ describe("the email sender an environment configures", () => {
     });
     expect(readEmailEnv({})).toEqual({ setup: null, problem: null });
   });
+
+  it("reads every HTTP sender's own variables, secrets apart from settings", () => {
+    const from = "deevy@example.com";
+    expect(
+      emailSetupFromEnv({
+        DEEVY_EMAIL_SENDER: "postmark",
+        DEEVY_EMAIL_FROM: from,
+        POSTMARK_SERVER_TOKEN: "pm-token",
+        POSTMARK_MESSAGE_STREAM: "deevy",
+      }),
+    ).toMatchObject({
+      config: { messageStream: "deevy" },
+      credentials: { serverToken: "pm-token" },
+    });
+    expect(
+      emailSetupFromEnv({
+        DEEVY_EMAIL_SENDER: "sendgrid",
+        DEEVY_EMAIL_FROM: from,
+        SENDGRID_API_KEY: "SG.k",
+      }),
+    ).toMatchObject({ credentials: { apiKey: "SG.k" } });
+    expect(
+      emailSetupFromEnv({
+        DEEVY_EMAIL_SENDER: "mailgun",
+        DEEVY_EMAIL_FROM: from,
+        MAILGUN_API_KEY: "key",
+        MAILGUN_DOMAIN: "mg.example.com",
+        MAILGUN_REGION: "eu",
+      }),
+    ).toMatchObject({
+      config: { domain: "mg.example.com", region: "eu" },
+      credentials: { apiKey: "key" },
+    });
+    expect(
+      emailSetupFromEnv({
+        DEEVY_EMAIL_SENDER: "ses",
+        DEEVY_EMAIL_FROM: from,
+        AWS_SES_REGION: "eu-west-1",
+        AWS_SES_ACCESS_KEY_ID: "AKIDEXAMPLE",
+        AWS_SES_SECRET_ACCESS_KEY: "secret",
+      }),
+    ).toMatchObject({
+      config: { region: "eu-west-1" },
+      credentials: { accessKeyId: "AKIDEXAMPLE", secretAccessKey: "secret" },
+    });
+    expect(() =>
+      emailSetupFromEnv({
+        DEEVY_EMAIL_SENDER: "mailgun",
+        DEEVY_EMAIL_FROM: from,
+        MAILGUN_API_KEY: "key",
+      }),
+    ).toThrow(/MAILGUN_DOMAIN/);
+  });
 });

@@ -19,6 +19,21 @@ interface Variable {
 /** What each sender reads, beside `DEEVY_EMAIL_FROM`. */
 const variables: Partial<Record<SenderKind, Variable[]>> = {
   resend: [{ name: "RESEND_API_KEY", key: "apiKey", secret: true, required: true }],
+  postmark: [
+    { name: "POSTMARK_SERVER_TOKEN", key: "serverToken", secret: true, required: true },
+    { name: "POSTMARK_MESSAGE_STREAM", key: "messageStream", secret: false, required: false },
+  ],
+  sendgrid: [{ name: "SENDGRID_API_KEY", key: "apiKey", secret: true, required: true }],
+  mailgun: [
+    { name: "MAILGUN_API_KEY", key: "apiKey", secret: true, required: true },
+    { name: "MAILGUN_DOMAIN", key: "domain", secret: false, required: true },
+    { name: "MAILGUN_REGION", key: "region", secret: false, required: false },
+  ],
+  ses: [
+    { name: "AWS_SES_REGION", key: "region", secret: false, required: true },
+    { name: "AWS_SES_ACCESS_KEY_ID", key: "accessKeyId", secret: true, required: true },
+    { name: "AWS_SES_SECRET_ACCESS_KEY", key: "secretAccessKey", secret: true, required: true },
+  ],
 };
 
 /** What a development stand-in sends as, so it needs nothing set at all. */
