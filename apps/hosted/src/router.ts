@@ -98,7 +98,10 @@ function escape(text: string): string {
 function page(status: number, title: string, body: string): Response {
   return new Response(
     `<!doctype html><meta charset="utf-8"><title>${title}</title><p>${body}</p>`,
-    { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
+    {
+      status,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    },
   );
 }
 

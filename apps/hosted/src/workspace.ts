@@ -51,15 +51,16 @@ export interface WorkspaceStatus {
 }
 
 /**
- * The background work a pass may do, and how soon the next one comes. A
- * Workspace's alarm is its own and costs nobody else a query, so a pass has
- * the Node runner's room rather than a Cron Trigger's, and comes back at once
- * while it says there is more.
+ * The background work an alarm may do. A Workspace's alarm is its own and costs
+ * nobody else a query, so it has the Node runner's room — up to five passes
+ * while each finds more — rather than a Cron Trigger's single pass.
  */
-const passLimits: DueWorkLimits = { maxPasses: 1, sweepLimit: 100, deliveryLimit: 50, socketPageLimit: 25 };
-const PASS_EVERY_MS = 60_000;
-const AGAIN_SOON_MS = 1_000;
-
+const passLimits: DueWorkLimits = {
+  maxPasses: 5,
+  sweepLimit: 100,
+  deliveryLimit: 50,
+  socketPageLimit: 25,
+};
 const CONFIG = "deevy:config";
 
 /**
@@ -113,9 +114,8 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
   override async alarm(): Promise<void> {
     const config = this.#config;
     if (!config || config.status !== "active" || this.#migrations.error) return;
-    let more = false;
     try {
-      const result = await runDueWork({
+      await runDueWork({
         db: this.#db,
         limits: {
           ...passLimits,
@@ -130,9 +130,8 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
         email: this.#hosted.email,
         secret: await workspaceSecret(this.#hosted.masterSecret, config.key, "auth"),
       });
-      more = result.more;
     } finally {
-      await this.ctx.storage.setAlarm(Date.now() + (more ? AGAIN_SOON_MS : PASS_EVERY_MS));
+      await this.ctx.storage.setAlarm(Date.now() + this.#hosted.passSeconds * 1_000);
     }
   }
 
@@ -144,7 +143,7 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
     this.#config = this.#config ?? { ...input, status: "active", createdAt: Date.now() };
     this.ctx.storage.kv.put(CONFIG, this.#config);
     this.#migrations = migrateDurable(this.#db, migrations);
-    await this.ctx.storage.setAlarm(Date.now() + PASS_EVERY_MS);
+    await this.ctx.storage.setAlarm(Date.now() + this.#hosted.passSeconds * 1_000);
     return this.status();
   }
 
@@ -220,8 +219,14 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
   }
 
   async #counts(): Promise<WorkspaceStatus["counts"]> {
-    const [humans] = await this.#db.select({ n: count() }).from(member).where(eq(member.kind, "human"));
-    const [agents] = await this.#db.select({ n: count() }).from(member).where(eq(member.kind, "agent"));
+    const [humans] = await this.#db
+      .select({ n: count() })
+      .from(member)
+      .where(eq(member.kind, "human"));
+    const [agents] = await this.#db
+      .select({ n: count() })
+      .from(member)
+      .where(eq(member.kind, "agent"));
     const [sockets] = await this.#db.select({ n: count() }).from(socket);
     return { humans: humans?.n ?? 0, agents: agents?.n ?? 0, sockets: sockets?.n ?? 0 };
   }

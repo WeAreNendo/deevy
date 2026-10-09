@@ -32,6 +32,8 @@ export interface HostedBindings extends ProviderVariables {
   DEEVY_EMAIL_SENDER?: string;
   DEEVY_EMAIL_FROM?: string;
   DEEVY_STREAM_SECONDS?: string;
+  /** How often a Workspace's alarm runs its background work when nothing asks sooner. */
+  DEEVY_HOSTED_PASS_SECONDS?: string;
   DEEVY_RUN_STALE_MINUTES?: string;
   DEEVY_GATE_REMINDER_HOURS?: string;
   DEEVY_SOCKET_CATCHUP_MINUTES?: string;
@@ -51,6 +53,7 @@ export interface HostedEnv {
   email: EmailSetup | null;
   emailProblem: string | null;
   streamSeconds: number;
+  passSeconds: number;
   runStaleMinutes: number;
   gateReminderHours: number;
   socketCatchupMinutes: number;
@@ -101,7 +104,9 @@ export function readHostedEnv(bindings: HostedBindings): HostedEnv {
   const devStubSockets = bindings.DEEVY_DEV_STUB_SOCKETS === "1";
   const devStubEmail = bindings.DEEVY_DEV_STUB_EMAIL === "1";
   if ((devStubSockets || devStubEmail) && !loopback) {
-    throw new Error("The development stubs run only on a loopback origin, never for a hosted Workspace");
+    throw new Error(
+      "The development stubs run only on a loopback origin, never for a hosted Workspace",
+    );
   }
   // Every sender's variables by name, whichever the platform chose; the same
   // reader the other two entries use (packages/email/src/env.ts).
@@ -117,6 +122,7 @@ export function readHostedEnv(bindings: HostedBindings): HostedEnv {
     email: email.setup,
     emailProblem: email.problem,
     streamSeconds: positive(bindings.DEEVY_STREAM_SECONDS, 300),
+    passSeconds: positive(bindings.DEEVY_HOSTED_PASS_SECONDS, 60),
     runStaleMinutes: positive(bindings.DEEVY_RUN_STALE_MINUTES, 30),
     gateReminderHours: positive(bindings.DEEVY_GATE_REMINDER_HOURS, 4),
     socketCatchupMinutes: positive(bindings.DEEVY_SOCKET_CATCHUP_MINUTES, 30),
