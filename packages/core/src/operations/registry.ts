@@ -68,6 +68,11 @@ export interface AppContext {
    */
   limits?: WorkspaceLimits;
   /**
+   * Whether this deployment pushes to an open tab over a socket, so the tab
+   * need not hold a stream open (ADR-0032). Only `health.ping` reads it.
+   */
+  liveSocket?: boolean;
+  /**
    * Where a write's tail nudges the deliveries it just owed, when this
    * deployment has a queue to nudge (jobs.ts). It rides on the context because
    * `appendEvent` takes the context as its `EventSource`, so an operation goes
@@ -229,38 +234,54 @@ export const [operationMeta, getOperationMeta] = defineMeta(
 
 export const base = os.$context<AppContext>();
 
-function authorize(meta: OperationMeta) {
+/**
+ * Why `context` may not call an operation described by `meta`, or null when it
+ * may. The middleware every operation carries throws it; anything else that
+ * stands in for an operation — the pushed socket that is `events.subscribe` on
+ * a hosted Workspace (ADR-0032) — asks the same question here rather than
+ * deciding it a second time.
+ */
+export function refusal(
+  meta: Pick<OperationMeta, "auth" | "agents" | "agentsOnly" | "sessionOnly">,
+  context: AppContext,
+): ORPCError<string, unknown> | null {
   const rule = meta.auth;
+  if (rule === "public") return null;
+  if (!context.session) return new ORPCError("UNAUTHORIZED");
+  // These two are about who is asking, not how much authority the operation
+  // wants, so they are checked for every rule above `public`. Returning at
+  // the `session` rung first would make it a side door: an Agent's key would
+  // reach an operation nobody marked for it, and `sessionOnly` would be
+  // quietly ignored on the rung where a Human's own MCP client shows up.
+  if (context.member?.kind === "agent" && !meta.agents) {
+    return new ORPCError("FORBIDDEN", { message: "An Agent cannot do that" });
+  }
+  if (meta.sessionOnly && context.principal && context.principal.kind !== "cookie") {
+    return new ORPCError("FORBIDDEN", {
+      message: "Only a Human signed in to deevy can do that",
+    });
+  }
+  if (rule === "session") return null;
+  // A suspended Member keeps their row so the SPA can say why, but is no
+  // Member as far as the Workspace is concerned (docs/plans/m1.md).
+  if (!context.member || !context.workspace || context.member.suspendedAt) {
+    return new ORPCError("FORBIDDEN", { message: "Not a Member of this Workspace" });
+  }
+  // The mirror of the agent rule above: a Run is an Agent's, so its writing
+  // side is refused to a Human here rather than in each handler (ADR-0016).
+  if (meta.agentsOnly && context.member.kind !== "agent") {
+    return new ORPCError("FORBIDDEN", { message: "Only an Agent can do that" });
+  }
+  if (rule === "admin" && context.member.role !== "admin") {
+    return new ORPCError("FORBIDDEN", { message: "Only an admin of this Workspace can do that" });
+  }
+  return null;
+}
+
+function authorize(meta: OperationMeta) {
   return base.middleware(async ({ context, next }) => {
-    if (rule === "public") return next();
-    if (!context.session) throw new ORPCError("UNAUTHORIZED");
-    // These two are about who is asking, not how much authority the operation
-    // wants, so they are checked for every rule above `public`. Returning at
-    // the `session` rung first would make it a side door: an Agent's key would
-    // reach an operation nobody marked for it, and `sessionOnly` would be
-    // quietly ignored on the rung where a Human's own MCP client shows up.
-    if (context.member?.kind === "agent" && !meta.agents) {
-      throw new ORPCError("FORBIDDEN", { message: "An Agent cannot do that" });
-    }
-    if (meta.sessionOnly && context.principal && context.principal.kind !== "cookie") {
-      throw new ORPCError("FORBIDDEN", {
-        message: "Only a Human signed in to deevy can do that",
-      });
-    }
-    if (rule === "session") return next();
-    // A suspended Member keeps their row so the SPA can say why, but is no
-    // Member as far as the Workspace is concerned (docs/plans/m1.md).
-    if (!context.member || !context.workspace || context.member.suspendedAt) {
-      throw new ORPCError("FORBIDDEN", { message: "Not a Member of this Workspace" });
-    }
-    // The mirror of the agent rule above: a Run is an Agent's, so its writing
-    // side is refused to a Human here rather than in each handler (ADR-0016).
-    if (meta.agentsOnly && context.member.kind !== "agent") {
-      throw new ORPCError("FORBIDDEN", { message: "Only an Agent can do that" });
-    }
-    if (rule === "admin" && context.member.role !== "admin") {
-      throw new ORPCError("FORBIDDEN", { message: "Only an admin of this Workspace can do that" });
-    }
+    const refused = refusal(meta, context);
+    if (refused) throw refused;
     return next();
   });
 }

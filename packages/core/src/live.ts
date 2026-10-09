@@ -29,6 +29,86 @@ export interface LiveOptions {
   maxDurationMs?: number;
 }
 
+/**
+ * Who a pushed socket is for, once the core has admitted them: the same rule
+ * `events.subscribe` answers to, decided by the core so the entry decides
+ * nothing about who may read (ADR-0032).
+ */
+export interface LiveReader {
+  memberId: string;
+  workspaceId: string;
+  /** When the session behind the socket ends; a socket outliving it is closed at the next push. */
+  expiresAt: number;
+  /** The newest seq in the log as the socket opens: the first thing it is told. */
+  head: number;
+}
+
+/**
+ * A runtime that can keep a browser's socket open without keeping itself
+ * awake, and push to it when the log grows (ADR-0032): a hosted Workspace's
+ * Durable Object, with WebSocket hibernation. The core admits the reader and
+ * the entry answers the upgrade, holds the socket, and sends it a seq whenever
+ * `onEventAppended` says the log grew. What the socket carries is a number and
+ * nothing else, so what changed is read through the operations, under the
+ * reader's own authority, and no authorization is decided twice.
+ *
+ * Absent — Node, the self-hosted Worker — `health.ping` says `stream` and the
+ * SPA reads `events.subscribe` as it always has.
+ */
+export interface LiveSocket {
+  accept(request: Request, reader: LiveReader): Response | Promise<Response>;
+}
+
+type AppendedListener = (event: Event) => void;
+
+/**
+ * The log's listeners, by the database they listen to. Keyed by the handle
+ * rather than held globally, because one isolate runs many hosted Workspaces,
+ * each its own object with its own handle: a listener can only ever hear the
+ * log of the database it registered on.
+ */
+const listeners = new WeakMap<Db, Set<AppendedListener>>();
+
+/**
+ * Calls `listener` with every Event appended through `db` from now on, once
+ * its Notifications and deliveries are written, and returns the function that
+ * stops it. Every append goes through `appendEvent`, whichever path built its
+ * source — an operation, a tool's delivery, a sign-in, a sweep — so a listener
+ * on the handle hears all of them without each path having to carry it.
+ *
+ * A listener must not throw and must not wait: it runs in the tail of a write
+ * that has already succeeded. One that throws is ignored.
+ */
+export function onEventAppended(db: Db, listener: AppendedListener): () => void {
+  let set = listeners.get(db);
+  if (!set) {
+    set = new Set();
+    listeners.set(db, set);
+  }
+  set.add(listener);
+  return () => {
+    listeners.get(db)?.delete(listener);
+  };
+}
+
+/** Tells `db`'s listeners about an Event `appendEvent` just wrote (events.ts). */
+export function announceAppended(db: Db, event: Event): void {
+  const set = listeners.get(db);
+  if (!set) return;
+  for (const listener of set) {
+    try {
+      listener(event);
+    } catch {
+      // A push that failed must not turn a write that succeeded into a failure.
+    }
+  }
+}
+
+/** The newest seq in a Workspace's log, or 0 when it has none. */
+export async function headOf(db: Db, workspaceId: string): Promise<number> {
+  return latestSeq({ db, workspaceId });
+}
+
 export interface SubscribeOptions extends LiveOptions {
   db: Db;
   workspaceId: string;
@@ -93,7 +173,9 @@ export async function* subscribeToEvents(
   }
 }
 
-async function latestSeq(options: SubscribeOptions): Promise<number> {
+async function latestSeq(
+  options: Pick<SubscribeOptions, "db" | "workspaceId" | "projectId">,
+): Promise<number> {
   const rows = await options.db.query.event.findMany({
     where: {
       workspaceId: options.workspaceId,

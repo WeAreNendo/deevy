@@ -1,5 +1,6 @@
 import { event, type Db, type Event, type Member, type Workspace } from "@deevy/db";
 import type { JobQueue } from "./jobs.ts";
+import { announceAppended } from "./live.ts";
 import { deriveNotifications } from "./notifications.ts";
 import { triggersFor } from "./triggers.ts";
 import { deriveChatUpdates } from "./sockets/chat-out.ts";
@@ -234,6 +235,11 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
       // The row is the record. The next sweep finds exactly this.
     }
   }
+  // And whoever listens to this database's log — a hosted Workspace pushing
+  // to its open tabs (ADR-0032) — once everything the Event owes is written,
+  // so a tab that reads on the nudge finds its inbox row already there. Before
+  // the triggers, so listeners hear the log in the order it was written.
+  announceAppended(source.db, row);
   // Triggers derive from the same Event, right after it (docs/plans/m2.md).
   // They write their own rows and hand back the Events those deserve, so this
   // stays the only writer of the log. The recursion that follows is bounded:
