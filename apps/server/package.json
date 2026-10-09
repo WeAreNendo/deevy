@@ -14,6 +14,7 @@
     "@deevy/adapters": "workspace:*",
     "@deevy/core": "workspace:*",
     "@deevy/db": "workspace:*",
+    "@deevy/email": "workspace:*",
     "@deevy/sockets": "workspace:*",
     "@hono/node-server": "catalog:",
     "@orpc/server": "catalog:",

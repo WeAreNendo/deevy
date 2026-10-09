@@ -89,3 +89,19 @@ describe("the Worker's sign-in providers", () => {
     expect(offered({})).toEqual([]);
   });
 });
+
+describe("email on the Worker", () => {
+  it("reads the sender from the same variables the Node server reads", () => {
+    const read = (bindings: Record<string, string>) =>
+      readWorkerEnv({ DB: undefined as never, ...bindings }).email;
+    expect(read({})).toBeNull();
+    expect(
+      read({
+        DEEVY_EMAIL_SENDER: "resend",
+        DEEVY_EMAIL_FROM: "deevy@example.com",
+        RESEND_API_KEY: "re_not_a_real_key",
+      }),
+    ).toMatchObject({ sender: "resend", from: "deevy@example.com" });
+    expect(read({ DEEVY_DEV_STUB_EMAIL: "1" })?.sender).toBe("stub");
+  });
+});

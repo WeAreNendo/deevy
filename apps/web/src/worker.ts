@@ -10,6 +10,7 @@ import {
   type AuthEnv,
   type DueWorkLimits,
 } from "@deevy/core";
+import { emailSenders } from "@deevy/email";
 import { socketModules } from "@deevy/sockets";
 import type { WorkerBindings, WorkerEnv } from "./env.ts";
 import { readWorkerEnv, workerAuthEnv } from "./env.ts";
@@ -212,6 +213,10 @@ export default {
               : {}),
           }),
           ...(isolate.env.socketSecret ? { socketSecret: isolate.env.socketSecret } : {}),
+          // How email leaves: the senders a Worker can run, and the one the
+          // bindings chose (docs/plans/email-channel.md).
+          emailSenders: emailSenders({ devStub: isolate.env.devStubEmail }),
+          email: isolate.env.email,
         }),
       ),
     );

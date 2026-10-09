@@ -27,6 +27,7 @@ const packageDirs = [
   "packages/db",
   "packages/adapters",
   "packages/sockets",
+  "packages/email",
   "apps/web",
   "apps/server",
   "apps/agent",

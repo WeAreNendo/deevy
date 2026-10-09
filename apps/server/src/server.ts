@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { mountSpa, openDatabase } from "@deevy/adapters/node";
 import { createApp, createAuth, signInProviders, type AuthEnv } from "@deevy/core";
+import { stubOutbox } from "@deevy/email";
 import { socketModules } from "@deevy/sockets";
 import { fetchClientMetadataResource } from "./cimd.ts";
 
@@ -83,6 +84,15 @@ export function buildServer(env: ServerEnv) {
     // the SPA (docs/plans/sign-in.md).
     signInProviders: signInProviders(identity),
   });
+  // What the email stand-in was asked to send, for a developer and the walk:
+  // the list as JSON, and one email's HTML as a client would show it.
+  if (env.devStubEmail) {
+    app.get("/dev/email", (c) => c.json(stubOutbox()));
+    app.get("/dev/email/:index", (c) => {
+      const kept = stubOutbox()[Number(c.req.param("index"))];
+      return kept ? c.html(kept.html) : c.notFound();
+    });
+  }
   if (env.webDist) mountSpa(app, resolve(env.webDist));
   return { app, db, auth, close, authEnv: identity };
 }

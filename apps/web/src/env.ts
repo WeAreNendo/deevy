@@ -1,5 +1,7 @@
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
+import type { EmailSetup } from "@deevy/core/email";
+import { emailSetupFromEnv } from "@deevy/email";
 import type { createDb, QueueProducer } from "@deevy/adapters/workers";
 
 /**
@@ -67,6 +69,11 @@ export interface WorkerBindings {
    * runtime cannot tell them apart (docs/sockets-acceptance.md).
    */
   DEEVY_DEV_STUB_SOCKETS?: string;
+  /** Email (docs/plans/email-channel.md): the sender, its From, and its key. */
+  DEEVY_EMAIL_SENDER?: string;
+  DEEVY_EMAIL_FROM?: string;
+  RESEND_API_KEY?: string;
+  DEEVY_DEV_STUB_EMAIL?: string;
   DEEVY_DEV_STUB_CONTAINERS?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
@@ -134,6 +141,10 @@ export interface WorkerEnv {
   runStaleMinutes: number;
   /** Hours a Gate may sit undecided before its approvers are asked again. */
   gateReminderHours: number;
+  /** The email sender these bindings configure, or none (docs/plans/email-channel.md). */
+  email: EmailSetup | null;
+  /** Whether the email stand-in may run here, as the Socket stub may. */
+  devStubEmail: boolean;
   /**
    * What this runtime allows an Event stream. Workers-only: on Node the stream
    * lives as long as the request, and `apps/server` passes nothing
@@ -160,6 +171,11 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
     socketSecret: env.DEEVY_SECRET,
     githubApi: env.DEEVY_GITHUB_API,
     devStubSockets: env.DEEVY_DEV_STUB_SOCKETS === "1",
+    // One reader for both runtimes, so a variable means the same on either.
+    email: emailSetupFromEnv(env as unknown as Record<string, string | undefined>, {
+      devStub: env.DEEVY_DEV_STUB_EMAIL === "1",
+    }),
+    devStubEmail: env.DEEVY_DEV_STUB_EMAIL === "1",
     devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
     ...(env.DEEVY_SOCKET_CATCHUP_MINUTES
       ? { socketCatchupMinutes: Number(env.DEEVY_SOCKET_CATCHUP_MINUTES) }

@@ -50,7 +50,7 @@ export interface SlackMessageInput {
  * them: Slack is a room full of Humans, `run_answered` is owed to the Agent
  * that asked, and the Workspace's routing rules cannot name it.
  */
-const headlines: Record<HumanNotificationKind, string> = {
+export const headlines: Record<HumanNotificationKind, string> = {
   mention: "You were mentioned",
   assignment: "An Issue was assigned",
   gate_awaiting: "A Gate is waiting for a Human",

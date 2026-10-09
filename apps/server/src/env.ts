@@ -1,3 +1,5 @@
+import type { EmailSetup } from "@deevy/core/email";
+import { emailSetupFromEnv } from "@deevy/email";
 import type { AuthProviders } from "@deevy/core";
 
 export interface ServerEnv {
@@ -62,6 +64,17 @@ export interface ServerEnv {
   devStubSockets: boolean;
   /** What that stub's tracker holds: `name[=cloneUrl]`, separated by commas. */
   devStubContainers?: string;
+  /**
+   * The email sender this environment configures (`DEEVY_EMAIL_SENDER` and
+   * its variables), or none (docs/plans/email-channel.md).
+   */
+  email: EmailSetup | null;
+  /**
+   * Send email through the in-process stand-in, which keeps what it was asked
+   * to send for `/dev/email` (packages/email/src/stub). Refused in production
+   * for the same reason as the other stubs.
+   */
+  devStubEmail: boolean;
 }
 
 /** A positive number from the environment, or the default when it is absent or nonsense. */
@@ -152,6 +165,10 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
       "DEEVY_DEV_STUB_SOCKETS registers a Socket provider that is not a tool and cannot be set in production",
     );
   }
+  const devStubEmail = env.DEEVY_DEV_STUB_EMAIL === "1";
+  if (devStubEmail && env.NODE_ENV === "production") {
+    throw new Error("DEEVY_DEV_STUB_EMAIL sends email nowhere and cannot be set in production");
+  }
   const providers: AuthProviders = {
     github: {
       clientId: env.GITHUB_CLIENT_ID ?? "",
@@ -222,5 +239,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     devStubOAuth,
     devStubSockets,
     devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
+    email: emailSetupFromEnv(env, { devStub: devStubEmail }),
+    devStubEmail,
   };
 }

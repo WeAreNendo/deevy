@@ -10,9 +10,19 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
  * tool a Project's records come from — deevy saying back where the work lives,
  * which is what `socket` is (ADR-0024) — or a chat tool's room (`chat`, a
  * `slack_app` Channel) or one Human's direct messages there (`chat_dm`, their
- * linked Identity), where a Gate carries its buttons (ADR-0025).
+ * linked Identity), where a Gate carries its buttons (ADR-0025) — or an email:
+ * to a team address (`email`, an `email` Channel) or to one Human's verified
+ * address (`email_member`, the Member), docs/plans/email-channel.md.
  */
-export const deliveryTargets = ["webhook", "slack", "socket", "chat", "chat_dm"] as const;
+export const deliveryTargets = [
+  "webhook",
+  "slack",
+  "socket",
+  "chat",
+  "chat_dm",
+  "email",
+  "email_member",
+] as const;
 
 /**
  * One outbound attempt, and the only record that it is owed.

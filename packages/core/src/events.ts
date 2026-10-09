@@ -147,6 +147,11 @@ export type EventKind =
   | "webhook.subscribed"
   | "webhook.removed"
   | "webhook.exhausted"
+  /**
+   * An email given up on: the sender refused it in a way waiting would not
+   * change, or refused it six times (docs/plans/email-channel.md).
+   */
+  | "email.exhausted"
   /** Where Notifications go: the Channels themselves, and the rules that aim them. */
   | "channel.created"
   | "channel.updated"

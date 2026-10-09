@@ -8,6 +8,7 @@
     "./app": "./src/app.ts",
     "./auth": "./src/auth.ts",
     "./cimd": "./src/cimd.ts",
+    "./email": "./src/email/port.ts",
     "./openapi": "./src/openapi.ts",
     "./package.json": "./package.json",
     "./router": "./src/operations/index.ts",

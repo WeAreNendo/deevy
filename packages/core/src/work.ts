@@ -43,6 +43,8 @@ import {
 } from "./slack.ts";
 import { deriveWebhookDeliveriesForMany, postWebhook } from "./webhooks.ts";
 import { newId } from "./ids.ts";
+import { deliverDueEmails } from "./email/deliver.ts";
+import type { EmailSenders, EmailSetup } from "./email/port.ts";
 import {
   claimDeliveries,
   dueDeliveries,
@@ -1653,6 +1655,10 @@ export interface RunDueWorkOptions {
   socketSecret?: string;
   /** Injected, so a test reaches a fake tracker rather than the network. */
   fetch?: typeof fetch;
+  /** The email senders this runtime can run (docs/plans/email-channel.md). */
+  emailSenders?: EmailSenders;
+  /** The sender in force, from the environment; absent, an email owed is retired. */
+  email?: EmailSetup | null;
 }
 
 /** What one trigger's worth of background work actually did. */
@@ -1675,6 +1681,8 @@ export interface DueWorkResult {
   mirrored: number;
   /** Messages a chat tool was sent or had changed: a Gate in Slack, and its update. */
   chatMessages: number;
+  /** Emails a sender accepted. */
+  emails: number;
   /** The signal was aborted, so the passes after that point did not run. */
   aborted: boolean;
 }
@@ -1700,6 +1708,8 @@ export async function runDueWork({
   sockets,
   socketSecret,
   fetch,
+  emailSenders,
+  email,
 }: RunDueWorkOptions): Promise<DueWorkResult> {
   const {
     silenceMs = defaultSilenceMs,
@@ -1723,6 +1733,7 @@ export async function runDueWork({
     forgottenDeliveries: 0,
     mirrored: 0,
     chatMessages: 0,
+    emails: 0,
     aborted: false,
   };
 
@@ -1831,6 +1842,26 @@ export async function runDueWork({
         }),
       (of) => {
         result.chatMessages += of.delivered;
+      },
+    );
+  }
+  // And what is owed by email. Without an origin an email could not link back
+  // into deevy, so it waits, as a Slack message does.
+  if (baseUrl) {
+    await drain(
+      () =>
+        deliverDueEmails({
+          db,
+          workspaceId,
+          baseUrl,
+          now,
+          ...(emailSenders ? { emailSenders } : {}),
+          ...(email ? { email } : {}),
+          ...(fetch ? { fetch } : {}),
+          ...deliveryBound,
+        }),
+      (of) => {
+        result.emails += of.delivered;
       },
     );
   }

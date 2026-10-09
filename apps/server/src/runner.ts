@@ -1,3 +1,4 @@
+import type { EmailSenders, EmailSetup } from "@deevy/core/email";
 import { runDueWork, type Cron, type DueWorkLimits, type SocketModules } from "@deevy/core";
 import type { Db } from "@deevy/db";
 
@@ -45,6 +46,9 @@ export interface RunnerOptions {
   socketSecret?: string;
   /** Silence after which a Socket is asked rather than waited on. */
   socketCatchupMinutes?: number;
+  /** The email senders this runtime can run, and the one in force. */
+  emailSenders?: EmailSenders;
+  email?: EmailSetup | null;
 }
 
 export interface Runner {
@@ -65,6 +69,8 @@ export function startRunner({
   sockets,
   socketSecret,
   socketCatchupMinutes,
+  emailSenders,
+  email,
 }: RunnerOptions): Runner {
   const limits: DueWorkLimits = {
     silenceMs: staleMinutes * 60_000,
@@ -87,6 +93,8 @@ export function startRunner({
       ...(baseUrl ? { baseUrl } : {}),
       ...(sockets ? { sockets } : {}),
       ...(socketSecret ? { socketSecret } : {}),
+      ...(emailSenders ? { emailSenders } : {}),
+      ...(email ? { email } : {}),
     });
     await inFlight;
   });

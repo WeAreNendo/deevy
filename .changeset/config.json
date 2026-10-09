@@ -21,6 +21,7 @@
       "@deevy/db",
       "@deevy/adapters",
       "@deevy/sockets",
+      "@deevy/email",
       "@deevy/web",
       "@deevy/server",
       "@deevy/agent",

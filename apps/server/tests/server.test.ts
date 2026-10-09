@@ -259,3 +259,51 @@ describe("the development Socket stub", () => {
     );
   });
 });
+
+describe("email on the Node server", () => {
+  it("reads the sender from the environment, and refuses the stub in production", () => {
+    expect(readEnv({}).email).toBeNull();
+    expect(
+      readEnv({
+        DEEVY_EMAIL_SENDER: "resend",
+        DEEVY_EMAIL_FROM: "deevy <deevy@example.com>",
+        RESEND_API_KEY: "re_not_a_real_key",
+      }).email,
+    ).toMatchObject({ sender: "resend", credentials: { apiKey: "re_not_a_real_key" } });
+    expect(readEnv({ DEEVY_DEV_STUB_EMAIL: "1" }).email?.sender).toBe("stub");
+    expect(() => readEnv({ DEEVY_DEV_STUB_EMAIL: "1", NODE_ENV: "production" })).toThrow(
+      /DEEVY_DEV_STUB_EMAIL/,
+    );
+  });
+
+  it("shows what the stub sent at /dev/email, and only when it is the stub", async () => {
+    const { clearStubOutbox, createStubSender } = await import("@deevy/email");
+    clearStubOutbox();
+    await createStubSender().send({
+      from: { address: "deevy@example.com" },
+      to: "ada@example.com",
+      subject: "Gate waiting: acme/deevy#42 · plan",
+      text: "Planner is waiting for you at plan",
+      html: "<p>Planner is waiting for you at plan</p>",
+      headers: {},
+    });
+    const stubbed = buildServer({
+      ...readEnv({ DEEVY_DEV_STUB_EMAIL: "1" }),
+      databasePath: ":memory:",
+      migrationsFolder,
+    });
+    const listed = await stubbed.app.request("/dev/email");
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject([
+      { to: "ada@example.com", subject: "Gate waiting: acme/deevy#42 · plan" },
+    ]);
+    const latest = await stubbed.app.request("/dev/email/0");
+    expect(latest.headers.get("content-type")).toMatch(/text\/html/);
+    expect(await latest.text()).toContain("Planner is waiting for you at plan");
+    stubbed.close();
+
+    const real = testServer();
+    expect((await real.app.request("/dev/email")).status).not.toBe(200);
+    real.close();
+  });
+});
