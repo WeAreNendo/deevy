@@ -26,7 +26,7 @@ import { discardingJobQueue, type JobQueue } from "./jobs.ts";
 import type { LiveOptions } from "./live.ts";
 import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
-import { securityHeaders } from "./headers.ts";
+import { SCALAR_SCRIPT, securityHeaders } from "./headers.ts";
 import { betterAuthKeys } from "./keys.ts";
 import type { ResourcePath } from "./auth.ts";
 import { API_PATH } from "./auth.ts";
@@ -426,6 +426,8 @@ export function createApp({
         docsPath: "/docs",
         specPath: "/spec.json",
         spec: () => generateSpec(version),
+        // The version the page's policy names, never jsDelivr's latest (headers.ts).
+        providerScriptUrl: SCALAR_SCRIPT,
       }),
     ],
     interceptors: [onError(reportUnexpected), sameOriginWrites],

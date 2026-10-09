@@ -66,10 +66,12 @@ export const dataHeaders: Readonly<Record<string, string>> = {
 export const DOCS_PATH = "/api/docs";
 
 /**
- * Where the reference page's viewer comes from: oRPC's default for Scalar,
- * which `OpenAPIReferenceHandlerPlugin` writes as the page's one script tag.
+ * Where the reference page's viewer comes from, which
+ * `OpenAPIReferenceHandlerPlugin` writes as the page's one script tag (app.ts).
+ * Pinned: oRPC's default names no version, so every load ran whatever jsDelivr
+ * served as latest that minute. Moved on purpose, like a catalog line.
  */
-export const SCALAR_SCRIPT = "https://cdn.jsdelivr.net/npm/@scalar/api-reference";
+export const SCALAR_SCRIPT = "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.0";
 
 /**
  * The reference page's own policy. It is the one page deevy serves that runs a
