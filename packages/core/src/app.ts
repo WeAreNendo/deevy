@@ -538,7 +538,14 @@ function refuseCrossSiteWrites(
 ): StandardHandlerInterceptor<AppContext> {
   return async (options) => {
     const refused = crossSiteWrite(options.request, options.context, origins);
-    if (refused) throw refused;
+    if (refused) {
+      // Read and dropped before the refusal goes out: a request answered with
+      // its body still unread left the connection it came on unusable under
+      // workerd on Linux, and the next request on it was "Network connection
+      // lost" (apps/web/scripts/smoke-workers.ts).
+      await options.request.resolveBody().catch(() => undefined);
+      throw refused;
+    }
     return options.next();
   };
 }

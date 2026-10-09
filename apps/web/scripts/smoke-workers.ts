@@ -1216,6 +1216,8 @@ async function aHumanSignsIn(origin: string): Promise<void> {
     crossSite.status === 403,
     `status ${String(crossSite.status)}`,
   );
+  // Read to the end, as a browser does, so the connection is free for the next.
+  await crossSite.text();
 
   const rule = await rpc(
     origin,
