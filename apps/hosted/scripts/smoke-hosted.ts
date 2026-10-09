@@ -12,38 +12,17 @@
  * somebody, and never see the other team's — and what the console would: read
  * a Workspace's counts and give it a limit of its own.
  */
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-
-const here = new URL(".", import.meta.url).pathname;
-const app = join(here, "..");
-const wrangler = join(app, "node_modules/.bin/wrangler");
-const childEnv = { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" };
+import { app, buildHosted, localConfigs, platform, run, startLocal, version } from "./local.ts";
 
 const failures: string[] = [];
 function check(name: string, ok: boolean, detail = ""): void {
   if (ok) console.log(`  ok  ${name}`);
   else failures.push(detail ? `${name}: ${detail}` : name);
-}
-
-function run(
-  command: string,
-  args: string[],
-  cwd = app,
-  extra: Record<string, string> = {},
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: "inherit", env: { ...childEnv, ...extra } });
-    child.on("exit", (code) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`${command} ${args.join(" ")} exited ${String(code)}`)),
-    );
-  });
 }
 
 function freePort(): Promise<number> {
@@ -57,115 +36,11 @@ function freePort(): Promise<number> {
   });
 }
 
-/** The built Worker with the providers' endpoints stubbed, and the two configurations wrangler dev runs. */
-async function configs(port: number): Promise<{ hosted: string; console: string }> {
-  const dist = join(app, "dist/hosted");
-  const [oauth, bundle, source] = await Promise.all([
-    readFile(join(app, "../web/scripts/stub-oauth.js"), "utf8"),
-    readFile(join(dist, "worker.js"), "utf8"),
-    readFile(join(app, "wrangler.jsonc"), "utf8"),
-  ]);
-  await writeFile(join(dist, "worker.smoke.js"), `${oauth}\n${bundle}`);
-  const compatibility = JSON.parse(
-    `{${/"compatibility_date":\s*"[^"]+"/.exec(source)?.[0] ?? ""}}`,
-  ) as { compatibility_date: string };
-  const hosted = join(dist, "wrangler.smoke.json");
-  await writeFile(
-    hosted,
-    JSON.stringify({
-      name: "deevy-hosted",
-      main: "worker.smoke.js",
-      no_bundle: true,
-      rules: [{ type: "ESModule", globs: ["**/*.js"] }],
-      compatibility_date: compatibility.compatibility_date,
-      compatibility_flags: ["new_module_registry"],
-      assets: {
-        directory: join(app, "../web/dist/client"),
-        binding: "ASSETS",
-        not_found_handling: "single-page-application",
-        run_worker_first: true,
-      },
-      durable_objects: { bindings: [{ name: "WORKSPACES", class_name: "WorkspaceObject" }] },
-      migrations: [{ tag: "v1", new_sqlite_classes: ["WorkspaceObject"] }],
-      kv_namespaces: [{ binding: "DIRECTORY", id: "smoke-directory" }],
-      services: [{ binding: "CONSOLE", service: "deevy-console-stub" }],
-      vars: {
-        DEEVY_HOSTED_ORIGIN: `http://127.0.0.1:${String(port)}`,
-        DEEVY_HOSTED_MASTER_SECRET: "smoke-master-secret-smoke-master-secret-1234",
-        // workerd does not implement jurisdictions ("not implemented in
-        // workerd"), so locally every object is created without one; a
-        // deployment's `eu` is Cloudflare's to enforce (wrangler.jsonc).
-        DEEVY_HOSTED_JURISDICTION: "",
-        DEEVY_SIGN_IN_RELAY_SECRET: "smoke-relay-secret-smoke-relay-secret-12345",
-        DEEVY_HOSTED_PASS_SECONDS: "2",
-        GITHUB_CLIENT_ID: "stub-client-id",
-        GITHUB_CLIENT_SECRET: "stub-client-secret",
-        DEEVY_DEV_STUB_EMAIL: "1",
-      },
-    }),
-  );
-  const consoleConfig = join(dist, "wrangler.console.json");
-  await writeFile(
-    consoleConfig,
-    JSON.stringify({
-      name: "deevy-console-stub",
-      main: join(app, "scripts/console-stub.js"),
-      compatibility_date: compatibility.compatibility_date,
-      services: [{ binding: "PLATFORM", service: "deevy-hosted", entrypoint: "Platform" }],
-    }),
-  );
-  return { hosted, console: consoleConfig };
-}
-
-function start(port: number, persistTo: string, files: { hosted: string; console: string }) {
-  const child = spawn(
-    wrangler,
-    ["dev", "--local", "-c", files.hosted, "-c", files.console, "--persist-to", persistTo].concat([
-      "--ip",
-      "127.0.0.1",
-      "--port",
-      String(port),
-    ]),
-    { cwd: app, stdio: ["ignore", "pipe", "pipe"], env: childEnv },
-  );
-  return new Promise<ChildProcess>((resolve, reject) => {
-    let output = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error(`wrangler dev was not ready in 90s:\n${output}`));
-    }, 90_000);
-    const watch = (chunk: Buffer) => {
-      output += chunk.toString();
-      if (/Ready on https?:\/\//.test(output)) {
-        clearTimeout(timer);
-        resolve(child);
-      }
-    };
-    child.stdout?.on("data", watch);
-    child.stderr?.on("data", watch);
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`wrangler dev exited ${String(code)}:\n${output}`));
-    });
-  });
-}
-
 function cookiesOf(response: Response): string {
   return response.headers
     .getSetCookie()
     .map((cookie) => cookie.split(";")[0])
     .join("; ");
-}
-
-async function platform<T>(origin: string, method: string, ...args: unknown[]): Promise<T> {
-  const response = await fetch(`${origin}/console/platform/${method}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(args),
-  });
-  const body = (await response.json()) as { result?: T; error?: string };
-  if (!response.ok) throw new Error(`Platform.${method}: ${body.error ?? response.status}`);
-  return body.result as T;
 }
 
 async function rpc(url: string, procedure: string, input: unknown, cookie: string) {
@@ -307,6 +182,7 @@ async function phases(origin: string): Promise<void> {
   check("the Workspace's alarm sends what a write owed", sent);
 
   type Status = {
+    version: string | null;
     limits: { invitationsPerDay: number; emailsPerDay: number } | null;
     counts: {
       humans: number;
@@ -321,6 +197,11 @@ async function phases(origin: string): Promise<void> {
     "a Workspace reports itself to the platform",
     status.counts?.humans === 1 && status.migrations.error === null,
     JSON.stringify(status),
+  );
+  check(
+    "and says which version it runs, as the build stamped it",
+    status.version === (await version()),
+    String(status.version),
   );
   check(
     "and what it did today and this month, under the platform's limits",
@@ -391,22 +272,20 @@ async function phases(origin: string): Promise<void> {
   );
 }
 
-// The SPA every Workspace serves, as the Worker build makes it (apps/web).
+// The SPA every Workspace serves, as the Worker build makes it (apps/web), and
+// the hosted Worker around it, stamped with its version as a release is.
 await run(join(app, "../web/node_modules/.bin/vp"), ["build"], join(app, "../web"), {
   DEEVY_TARGET: "workers",
 });
-await run(wrangler, [
-  "deploy",
-  "--dry-run",
-  "--config",
-  "wrangler.jsonc",
-  "--outdir",
-  "dist/hosted",
-]);
+await buildHosted();
 const port = await freePort();
 const persistTo = await mkdtemp(join(tmpdir(), "deevy-hosted-"));
-const files = await configs(port);
-const server = await start(port, persistTo, files);
+const files = await localConfigs({
+  label: "smoke",
+  origin: `http://127.0.0.1:${String(port)}`,
+  vars: { DEEVY_HOSTED_PASS_SECONDS: "2", DEEVY_DEV_STUB_EMAIL: "1" },
+});
+const server = await startLocal(files, { port, persistTo });
 try {
   await phases(`http://127.0.0.1:${String(port)}`);
 } catch (error) {

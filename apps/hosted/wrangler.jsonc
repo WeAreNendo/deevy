@@ -2,13 +2,17 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // The many-Workspaces Worker (ADR-0028). This is the open-source half: what
   // it runs and what it is bound to. Where it is routed, its secrets, and the
-  // console it hands the root of the host to are the platform's, rendered over
-  // this file by whoever deploys it (docs/plans/hosted.md, "C2 Deploys").
+  // console it hands the root of the host to are the platform's: a release
+  // ships this file as the `wrangler.json` beside the bundle, those left as
+  // marked blanks (scripts/artifact.ts), and whoever deploys it fills them in
+  // (docs/plans/hosted.md, "C2 Deploys").
   "name": "deevy-hosted",
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["new_module_registry"],
-  "define": { "__DEEVY_VERSION__": "\"0.10.0\"" },
+  // `__DEEVY_VERSION__`, what a Workspace reports to `Platform.status`, is
+  // defined by the build from package.json (scripts/build.ts) rather than here,
+  // so a release never ships the version before it.
   "assets": {
     // The SPA apps/web builds; every Workspace serves the same files under its
     // own path (@deevy/adapters/spa). Build apps/web first.
