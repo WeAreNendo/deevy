@@ -10,6 +10,7 @@ import { genericOAuth, jwt, lastLoginMethod } from "better-auth/plugins";
 import { fetchClientMetadataResource, type MetadataResourceFetch } from "./cimd.ts";
 import { appendEvent } from "./events.ts";
 import { authId, newId } from "./ids.ts";
+import { basePathOf } from "./base-path.ts";
 
 /**
  * Both halves of an OAuth client. Half a pair is not a provider: a `clientId`
@@ -158,14 +159,25 @@ export interface CreateAuthOptions {
  * Member is a Better Auth user; deevy keeps its own workspace and member tables.
  */
 export function createAuth({ db, env }: CreateAuthOptions) {
+  const base = basePathOf(env.baseURL);
   const auth = betterAuth({
-    baseURL: env.baseURL,
+    // Better Auth routes on the path of its own URL, and keeps a URL that
+    // already has one exactly as given, so it is handed `…/api/auth` outright:
+    // at the root of a host that is what it worked out before, and under a
+    // path it is the only way its routes land under the base (base-path.ts).
+    ...(env.baseURL ? { baseURL: `${env.baseURL.replace(/\/+$/, "")}${AUTH_BASE_PATH}` } : {}),
     secret: env.secret,
-    basePath: AUTH_BASE_PATH,
+    basePath: `${base}${AUTH_BASE_PATH}`,
     trustedOrigins: env.trustedOrigins,
     database: drizzleAdapter(db, { provider: "sqlite" }),
-    // Its rows get deevy's prefixed ids too (ids.ts, ADR-0015): usr_, ses_, acct_, key_…
-    advanced: { database: { generateId: ({ model }) => authId(model) } },
+    advanced: {
+      // Its rows get deevy's prefixed ids too (ids.ts, ADR-0015): usr_, ses_, acct_, key_…
+      database: { generateId: ({ model }) => authId(model) },
+      // Under a path, a session is the path's: two deployments on one host —
+      // two hosted Workspaces, say — would otherwise overwrite each other's
+      // cookie, and signing in to one would sign you out of the other.
+      ...(base ? { defaultCookieAttributes: { path: base } } : {}),
+    },
     emailAndPassword: { enabled: false },
     plugins: [
       ...apiKeyPlugins(),
@@ -527,7 +539,10 @@ export const CONSENT_PATH = "/consent";
  * Better Auth's base path. RFC 8414 builds a metadata URL by inserting the
  * well-known segment after the issuer's host, so an issuer of `…/api/auth`
  * would publish the document at `/.well-known/oauth-authorization-server/api/auth`
- * and nowhere a client looking at the origin would find it.
+ * and nowhere a client looking at the origin would find it. A deployment under
+ * a path is its own issuer, `…/acme`, described at
+ * `/.well-known/oauth-authorization-server/acme`: one segment longer, by the
+ * same rule, and the provider answers both forms (docs/plans/hosted.md).
  *
  * Nothing is enabled without a configured `baseURL`: a resource identifier is
  * an absolute URL (RFC 8707) and guessing it per request would mint tokens
@@ -539,11 +554,13 @@ export const CONSENT_PATH = "/consent";
 export function oauthServerPlugins(env: AuthEnv) {
   const baseURL = env.baseURL?.replace(/\/+$/, "");
   if (!baseURL) return [];
+  // The SPA's pages, under the path the deployment lives under (base-path.ts).
+  const base = basePathOf(baseURL);
   return [
     jwt({ jwt: { issuer: baseURL } }),
     mcp({
-      loginPage: "/",
-      consentPage: CONSENT_PATH,
+      loginPage: `${base}/`,
+      consentPage: `${base}${CONSENT_PATH}`,
       // RFC 8707: every token this server mints is bound to this audience, and
       // one minted for anything else is refused at /mcp (principal.ts).
       resource: `${baseURL}${MCP_PATH}`,

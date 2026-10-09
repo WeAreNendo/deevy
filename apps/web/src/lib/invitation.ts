@@ -10,7 +10,17 @@
  * sent should live on their machine. Every access is guarded, because a
  * browser that refuses storage should still be able to sign in.
  */
-const HELD = "deevy.invitation";
+import { basePath } from "@/lib/base";
+
+/**
+ * One per deployment on an origin: two hosted Workspaces share
+ * `app.deevy.dev`, and an invitation to one must not be spent signing in to the
+ * other (lib/base.ts).
+ */
+function held(): string {
+  const base = basePath();
+  return base ? `deevy.invitation:${base}` : "deevy.invitation";
+}
 
 /**
  * The token in `/invite/<token>`, or null for any other path — and for a path
@@ -26,7 +36,7 @@ export function invitationInPath(pathname: string): string | null {
 /** Keep it for the sign-in to come back to. */
 export function holdInvitation(token: string): void {
   try {
-    window.sessionStorage.setItem(HELD, token);
+    window.sessionStorage.setItem(held(), token);
   } catch {
     // A browser with storage turned off signs in the same way; it just cannot
     // carry the token past the redirect, and says so on the screen it lands on.
@@ -36,7 +46,7 @@ export function holdInvitation(token: string): void {
 /** The token this tab is holding, if any. */
 export function heldInvitation(): string | null {
   try {
-    return window.sessionStorage.getItem(HELD);
+    return window.sessionStorage.getItem(held());
   } catch {
     return null;
   }
@@ -45,7 +55,7 @@ export function heldInvitation(): string | null {
 /** Spent, refused for good, or the Human is already in: stop holding it. */
 export function dropInvitation(): void {
   try {
-    window.sessionStorage.removeItem(HELD);
+    window.sessionStorage.removeItem(held());
   } catch {
     // Nothing was held if nothing could be stored.
   }

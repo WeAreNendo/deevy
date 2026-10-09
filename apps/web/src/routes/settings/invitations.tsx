@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { SettingsRow } from "@/components/settings-page";
 import { orpc } from "@/lib/orpc.ts";
+import { appURL } from "@/lib/base";
 
 type Role = "member" | "admin";
 
@@ -162,8 +163,9 @@ function InviteDialog({
         );
         // The link is built on the origin this browser is on, not the API's:
         // they are the same in the image and on Workers, and two ports in the
-        // dev loop or a split-origin deployment (docs/plans/sign-in.md).
-        setLink(new URL(created.path, window.location.origin).toString());
+        // dev loop or a split-origin deployment (docs/plans/sign-in.md). And
+        // under the path this deevy lives under (lib/base.ts).
+        setLink(appURL(created.path));
         await onCreated();
       },
     }),

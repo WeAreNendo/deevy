@@ -373,6 +373,15 @@ Waiting for confirmation`, and its Test button sends the confirmation again.
   `Emailing the link to <address>.` or `Not emailed: <reason>`. An outstanding row says `Emailed`, `Email on
 its way`, or `Email failed: <the sender's words>`.
 
+## Where the SPA lives
+
+deevy may be served under a path — `company.com/deevy`, or a hosted Workspace at `app.deevy.dev/acme`
+(ADR-0029). The page's `<base href>` says which, and `lib/base.ts` is the only place that reads it: every
+call, redirect and copied link goes through `withBase("/…")` or `appURL("/…")`, and a router `Link` is
+already under the router's `basepath`. Never `window.location.origin + "/…"`, a root-absolute `fetch("/api/…")`,
+or a root-absolute `href`; they work at the root of a host and nowhere else. Anything kept in browser storage
+is keyed by the base, because two deployments on one host share it.
+
 ## Test contracts
 
 Tests in `apps/web/tests` query by role and accessible name, mock `lib/orpc` with `tests/stub-client.ts`

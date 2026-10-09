@@ -2,11 +2,15 @@ import {
   createCloudflareSender,
   createDb,
   createQueueJobQueue,
+  isAppPath,
   jobIn,
+  serveSpaUnder,
+  underBase,
 } from "@deevy/adapters/workers";
 import type { QueueBatch } from "@deevy/adapters/workers";
 import type { App } from "@deevy/core/app";
 import {
+  basePathOf,
   createApp,
   createAuth,
   deliverWebhook,
@@ -192,6 +196,19 @@ export default {
   async fetch(request: Request, bindings: WorkerBindings): Promise<Response> {
     const isolate = isolateFor(bindings);
     await isolate.ready;
+    // Under a path, the SPA is the Worker's to serve: the platform's asset
+    // handler knows nothing of the path and would hand back an index that
+    // says it lives at the root. Everything else — the app's routes under the
+    // path, discovery at the root of the host — is the app's
+    // (docs/OPERATIONS.md, "Under a path").
+    const base = basePathOf(isolate.env.baseURL);
+    if (base && bindings.ASSETS) {
+      const path = underBase(new URL(request.url).pathname, base);
+      if (path !== null && !isAppPath(path)) {
+        const served = await serveSpaUnder(request, base, bindings.ASSETS);
+        if (served) return served;
+      }
+    }
     return isolate.app.fetch(request);
   },
 

@@ -40,6 +40,7 @@ import { MembersPage } from "./routes/settings/members.tsx";
 import { AgentsPage } from "./routes/settings/agents.tsx";
 import { AgentPage } from "./routes/settings/agent.tsx";
 import { AppShell, type ShellProps } from "./routes/shell.tsx";
+import { basePath } from "./lib/base.ts";
 
 /**
  * Routes are declared in code rather than by file convention, so every page is
@@ -380,7 +381,9 @@ export function createAppRouter(context: ShellProps, options: AppRouterOptions =
     stringifySearch: stringifySearch,
     ...(memory
       ? { history: createMemoryHistory({ initialEntries: options.initialEntries ?? ["/"] }) }
-      : {}),
+      : // In a browser, every route is under the path this deevy lives under,
+        // which is the root unless it is hosted or proxied there (lib/base.ts).
+        { basepath: basePath() || "/" }),
   });
 }
 

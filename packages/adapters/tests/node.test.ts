@@ -84,4 +84,33 @@ describe("node adapters", () => {
       "public, max-age=31536000, immutable",
     );
   });
+
+  /**
+   * A deevy an operator serves under a path, `company.com/deevy`
+   * (docs/plans/hosted.md): its files under the path, and an index that says
+   * where it lives, so the assets it names relatively land under the path too.
+   */
+  it("serves the SPA under a path, with an index that says where it lives", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "deevy-spa-"));
+    await writeFile(
+      join(dir, "index.html"),
+      '<head><base href="/" /><script src="./assets/index-3SdJuIbB.js"></script></head>',
+    );
+    await mkdir(join(dir, "assets"));
+    await writeFile(join(dir, "assets", "index-3SdJuIbB.js"), "console.log(1)");
+    const app = new Hono();
+    mountSpa(app, dir, "/deevy");
+
+    for (const path of ["/deevy", "/deevy/", "/deevy/index.html", "/deevy/gates/gate_1"]) {
+      const page = await app.request(path);
+      expect(page.status).toBe(200);
+      expect(page.headers.get("cache-control")).toBe("no-cache");
+      expect(await page.text()).toContain('<base href="/deevy/" />');
+    }
+    const asset = await app.request("/deevy/assets/index-3SdJuIbB.js");
+    expect(await asset.text()).toBe("console.log(1)");
+    expect(asset.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    // Outside the path is somebody else's: the proxy in front never sends it.
+    expect((await app.request("/assets/index-3SdJuIbB.js")).status).toBe(404);
+  });
 });

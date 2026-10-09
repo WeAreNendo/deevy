@@ -1003,6 +1003,84 @@ function check(name: string, ok: boolean, detail = ""): void {
   else failures.push(detail ? `${name}: ${detail}` : name);
 }
 
+/**
+ * The stubbed Worker as a deployment under a path configures it: every request
+ * is the Worker's, because the asset handler knows nothing of the path and
+ * would answer with an index that says it lives at the root
+ * (docs/OPERATIONS.md, "Under a path").
+ */
+async function underAPathConfig(stubbed: string): Promise<string> {
+  const pathConfig = join(here, "../dist/deevy/wrangler.path.json");
+  const written = JSON.parse(await readFile(stubbed, "utf8")) as { assets?: object };
+  await writeFile(
+    pathConfig,
+    JSON.stringify({ ...written, assets: { ...written.assets, run_worker_first: true } }),
+  );
+  return pathConfig;
+}
+
+/**
+ * docs/plans/hosted.md slice 4: a deevy that lives under a path — a hosted
+ * Workspace at `app.deevy.dev/acme`, or one an operator serves at
+ * `company.com/deevy` — serves its SPA, its API, its sign-in and its discovery
+ * under the path, and names the path wherever it names itself.
+ */
+async function deevyUnderAPath(origin: string): Promise<void> {
+  const here = `${origin}/deevy`;
+  for (const path of ["/", "/gates/gate_1"]) {
+    const page = await fetch(`${here}${path}`);
+    const html = await page.text();
+    check(
+      `the SPA at /deevy${path} says it lives under the path`,
+      page.status === 200 && html.includes('<base href="/deevy/" />'),
+      `status ${String(page.status)}`,
+    );
+  }
+  const index = await (await fetch(`${here}/`)).text();
+  const script = /src="\.\/(assets\/[^"]+\.js)"/.exec(index)?.[1];
+  const asset = script ? await fetch(`${here}/${script}`) : null;
+  check(
+    "the assets the index names are served under the path",
+    asset?.status === 200 && (asset.headers.get("content-type") ?? "").includes("javascript"),
+    script ? `status ${String(asset?.status)}` : "the index names no script",
+  );
+  check("/deevy/healthz answers", (await fetch(`${here}/healthz`)).status === 200);
+
+  const discovered = await fetch(`${origin}/.well-known/oauth-authorization-server/deevy`);
+  const metadata = (await discovered.json().catch(() => ({}))) as { issuer?: string };
+  check(
+    "the issuer is the path, discovered with the path inserted after the host",
+    discovered.status === 200 && metadata.issuer === here,
+    `status ${String(discovered.status)}, issuer ${String(metadata.issuer)}`,
+  );
+
+  const started = await fetch(`${here}/api/auth/sign-in/social`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ provider: "github", callbackURL: "/deevy/" }),
+  });
+  const { url } = (await started.json().catch(() => ({}))) as { url?: string };
+  const state = url ? (new URL(url).searchParams.get("state") ?? "") : "";
+  const callback = await fetch(
+    `${here}/api/auth/callback/github?state=${encodeURIComponent(state)}&code=${encodeURIComponent(adminEmail)}`,
+    { headers: { cookie: cookiesOf(started) }, redirect: "manual" },
+  );
+  const session = callback.headers
+    .getSetCookie()
+    .find((cookie) => cookie.includes("session_token="));
+  check(
+    "a sign-in under the path keeps its session to the path",
+    (session ?? "").includes("Path=/deevy"),
+    session ?? "no session cookie",
+  );
+  const me = await rpc(here, "me/get", undefined, cookiesOf(callback));
+  check(
+    "a signed-in Human reaches the API under the path",
+    me.status === 200 && me.parsed,
+    `status ${String(me.status)}: ${me.body.slice(0, 200)}`,
+  );
+}
+
 /** wrangler dev for the length of one phase, and down again whatever happens. */
 async function withServer(
   persistTo: string,
@@ -1361,6 +1439,42 @@ try {
     );
   } finally {
     await far.close();
+  }
+
+  // A deployment under a path, on its own D1 so its admin bootstraps a
+  // Workspace of its own (docs/plans/hosted.md slice 4).
+  const pathPort = await freePort();
+  const pathPersist = await mkdtemp(join(tmpdir(), "deevy-smoke-path-"));
+  try {
+    await run(wrangler, [
+      "d1",
+      "migrations",
+      "apply",
+      database,
+      "--local",
+      "--config",
+      config,
+      "--persist-to",
+      pathPersist,
+    ]);
+    await withServer(
+      pathPersist,
+      {
+        config: await underAPathConfig(await stubbedOutside()),
+        port: pathPort,
+        vars: {
+          BETTER_AUTH_URL: `http://127.0.0.1:${String(pathPort)}/deevy`,
+          BETTER_AUTH_SECRET: "smoke-secret-that-is-at-least-32-characters",
+          GITHUB_CLIENT_ID: "stub-client-id",
+          GITHUB_CLIENT_SECRET: "stub-client-secret",
+          DEEVY_ADMIN_EMAIL: adminEmail,
+          DEEVY_WORKSPACE_NAME: "Acme",
+        },
+      },
+      deevyUnderAPath,
+    );
+  } finally {
+    await rm(pathPersist, { recursive: true, force: true });
   }
 
   await deploysWithoutAQueueBlock();

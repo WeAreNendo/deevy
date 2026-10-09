@@ -26,7 +26,8 @@ import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
 import { betterAuthKeys } from "./keys.ts";
 import type { ResourcePath } from "./auth.ts";
-import { API_PATH } from "./auth.ts";
+import { API_PATH, AUTH_BASE_PATH } from "./auth.ts";
+import { basePathOf } from "./base-path.ts";
 import { resolvePrincipal } from "./principal.ts";
 import { router } from "./operations/index.ts";
 import type { AppContext } from "./operations/registry.ts";
@@ -37,7 +38,11 @@ export interface AppOptions {
   auth?: Auth;
   /** Browser origins allowed to call the API with credentials. */
   origin?: string[];
-  /** The public origin of this instance, for the MCP surface's RFC 9728 challenge. */
+  /**
+   * The public URL of this instance: the OAuth issuer, the base of the MCP and
+   * API resources and of every link. Usually an origin; when it has a path,
+   * everything this app answers is mounted under that path (base-path.ts).
+   */
   baseURL?: string;
   /**
    * What this deevy is, as a version string. It reaches the OpenAPI document a
@@ -200,15 +205,24 @@ export function createApp({
     report(error);
   };
   const app = new Hono<{ Variables: { ctx: AppContext } }>();
+  // Everything this deployment answers lives under the path of its URL, which
+  // is empty at the root of a host. `basePath` shares the router, so `app`
+  // still serves all of it, and the few documents RFC 8414 and RFC 9728 put at
+  // the root of the host are registered on `app` itself (docs/plans/hosted.md).
+  const base = basePathOf(baseURL);
+  const routes = app.basePath(base || "/");
 
+  // At the root too, so a container's health check need not know the path a
+  // proxy in front of it serves deevy under.
   app.get("/healthz", (c) => c.json({ ok: true }));
+  if (base) routes.get("/healthz", (c) => c.json({ ok: true }));
 
   // Before everything else, and outside every middleware that builds a
   // session: the caller here is a tool with a signature over the raw body, and
   // a framework that read the body first would have changed what it signed
   // (ADR-0024). `/hooks/*` is in the Worker's `run_worker_first` list, which
   // `worker-routes.test.ts` holds.
-  app.post("/hooks/:socketId", (c) =>
+  routes.post("/hooks/:socketId", (c) =>
     handleInbound(c.req.raw, {
       db,
       socketId: c.req.param("socketId"),
@@ -223,7 +237,7 @@ export function createApp({
   // Where a provider's own flow sends an operator back: GitHub's App manifest
   // conversion and its installation callback are both redirects, so this is a
   // GET as often as it is a POST (ADR-0024).
-  app.all("/hooks/:socketId/setup", (c) =>
+  routes.all("/hooks/:socketId/setup", (c) =>
     handleSetup(c.req.raw, {
       db,
       socketId: c.req.param("socketId"),
@@ -237,20 +251,24 @@ export function createApp({
   );
 
   if (auth) {
-    app.use("/api/auth/*", cors({ origin, credentials: true }));
-    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+    routes.use(`${AUTH_BASE_PATH}/*`, cors({ origin, credentials: true }));
+    routes.all(`${AUTH_BASE_PATH}/*`, (c) => auth.handler(c.req.raw));
 
     // OAuth discovery lives at the origin, not under Better Auth's base path:
     // RFC 8414 and RFC 9728 both insert the well-known segment right after the
     // host, and a client that derives the URL rather than reading the 401's
     // header looks nowhere else. The plugins answer these from `onRequest`,
     // which runs on the raw request before any base-path routing, so handing
-    // them the request unchanged is all it takes (docs/plans/m2.md).
+    // them the request unchanged is all it takes (docs/plans/m2.md). Under a
+    // path, the issuer `…/acme` is described at `/.well-known/…/acme`, which
+    // the wildcards already reach, and OpenID Connect appends its segment to
+    // the issuer instead, which is the one route under the base.
     app.all("/.well-known/oauth-authorization-server", wellKnown(auth));
     app.all("/.well-known/oauth-authorization-server/*", wellKnown(auth));
     app.all("/.well-known/openid-configuration", wellKnown(auth));
     app.all("/.well-known/oauth-protected-resource", wellKnown(auth));
     app.all("/.well-known/oauth-protected-resource/*", wellKnown(auth));
+    if (base) routes.all("/.well-known/*", wellKnown(auth));
   }
 
   // Before the oRPC handlers: the MCP surface builds its own context, because
@@ -270,7 +288,7 @@ export function createApp({
     ...(socketSecret ? { socketSecret } : {}),
     onError: reportUnexpected,
   });
-  app.all("/mcp", (c) => mcp.fetch(c.req.raw));
+  routes.all("/mcp", (c) => mcp.fetch(c.req.raw));
 
   // The origin a handler builds a link back into deevy from: what this
   // instance was configured with, or, in development, whatever it was reached
@@ -311,11 +329,11 @@ export function createApp({
     ...(secret ? { secret } : {}),
     signInProviders: await offeredProviders(),
   });
-  app.use("/rpc/*", async (c, next) => {
+  routes.use("/rpc/*", async (c, next) => {
     c.set("ctx", await contextFor(c.req.raw));
     await next();
   });
-  app.use("/api/*", async (c, next) => {
+  routes.use("/api/*", async (c, next) => {
     c.set("ctx", await contextFor(c.req.raw));
     await next();
   });
@@ -324,7 +342,7 @@ export function createApp({
   // rather than an operation, because what answers a browser mid-redirect is a
   // redirect, and after the context so the session is the one that started it
   // (account-links.ts, ADR-0025).
-  app.get("/api/identities/:provider/callback", async (c) => {
+  routes.get("/api/identities/:provider/callback", async (c) => {
     const { location } = await finishAccountLink(c.get("ctx"), {
       provider: c.req.param("provider"),
       ...(c.req.query("code") ? { code: c.req.query("code") } : {}),
@@ -341,7 +359,7 @@ export function createApp({
   // operations, because what answers is a page and the caller is a browser or
   // a mail client with no session.
   const settingsUrl = `${(webURL ?? baseURL ?? "").replace(/\/+$/, "")}/settings/notifications`;
-  app.get("/api/email/unsubscribe/:token", async (c) => {
+  routes.get("/api/email/unsubscribe/:token", async (c) => {
     const read = secret ? await readUnsubscribeToken(secret, c.req.param("token")) : null;
     if (!read) return c.html(unsubscribePage(expiredLink(settingsUrl)), 400);
     return c.html(
@@ -353,7 +371,7 @@ export function createApp({
       }),
     );
   });
-  app.post("/api/email/unsubscribe/:token", async (c) => {
+  routes.post("/api/email/unsubscribe/:token", async (c) => {
     const read = secret ? await readUnsubscribeToken(secret, c.req.param("token")) : null;
     if (!read) return c.html(unsubscribePage(expiredLink(settingsUrl)), 400);
     // A Member who has since left has nothing left to turn off.
@@ -369,7 +387,7 @@ export function createApp({
 
   // The link a team address is mailed to confirm it (email/team.ts): opening
   // it asks, as the unsubscribe does, and only the button confirms.
-  app.get("/api/email/confirm/:token", async (c) => {
+  routes.get("/api/email/confirm/:token", async (c) => {
     const found = secret ? await readConfirmToken(db, secret, c.req.param("token")) : null;
     const email = found ? emailChannelOf(found) : null;
     if (!found || !email) return c.html(unsubscribePage(expiredConfirmation), 400);
@@ -382,7 +400,7 @@ export function createApp({
       }),
     );
   });
-  app.post("/api/email/confirm/:token", async (c) => {
+  routes.post("/api/email/confirm/:token", async (c) => {
     const found = secret ? await readConfirmToken(db, secret, c.req.param("token")) : null;
     const email = found ? emailChannelOf(found) : null;
     if (!found || !email) return c.html(unsubscribePage(expiredConfirmation), 400);
@@ -411,23 +429,23 @@ export function createApp({
       new OpenAPIReferenceHandlerPlugin({
         docsPath: "/docs",
         specPath: "/spec.json",
-        spec: () => generateSpec(version),
+        spec: () => generateSpec(version, base),
       }),
     ],
     interceptors: [onError(reportUnexpected)],
   });
 
-  app.use("/rpc/*", async (c, next) => {
+  routes.use("/rpc/*", async (c, next) => {
     const { matched, response } = await rpc.handle(c.req.raw, {
-      prefix: "/rpc",
+      prefix: `${base}/rpc`,
       context: c.get("ctx"),
     });
     if (matched) return c.newResponse(response.body, response);
     await next();
   });
-  app.use("/api/*", async (c, next) => {
+  routes.use("/api/*", async (c, next) => {
     const { matched, response } = await api.handle(c.req.raw, {
-      prefix: "/api",
+      prefix: `${base}/api`,
       context: c.get("ctx"),
     });
     if (matched) return c.newResponse(response.body, response);
