@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { Session, SignInProvider } from "../auth.ts";
 import type { JobQueue } from "../jobs.ts";
 import type { LiveOptions } from "../live.ts";
+import type { WorkspaceLimits } from "../limits.ts";
 
 /**
  * The operation registry (ADR-0009). Every API operation is described by this
@@ -61,6 +62,11 @@ export interface AppContext {
    * browser does, a Worker cannot (docs/plans/m3.md).
    */
   live?: LiveOptions;
+  /**
+   * What this Workspace may do in a day, when the deployment limits it
+   * (limits.ts). Absent, nothing is limited and nothing is counted.
+   */
+  limits?: WorkspaceLimits;
   /**
    * Where a write's tail nudges the deliveries it just owed, when this
    * deployment has a queue to nudge (jobs.ts). It rides on the context because

@@ -1,12 +1,14 @@
-import { emailSender as emailSenderTable } from "@deevy/db";
+import { delivery as deliveryTable, emailSender as emailSenderTable } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
-import { eq } from "drizzle-orm";
+import { and, count, eq, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import { appendEvent } from "../events.ts";
 import { senderKinds, type EmailSetup } from "../email/port.ts";
 import { resolveSender } from "../email/sender.ts";
 import { availableSenders, saveSender, senderOptionsFor, setupInForce } from "../email/settings.ts";
+import { maxEmailAttempts } from "../email/deliver.ts";
 import { renderPlain } from "../email/render.ts";
+import { emailsSince, limitWindowStart, mailsSomebody, nextEmailAt } from "../limits.ts";
 import { sendNow } from "../email/team.ts";
 import { requireSealingSecret } from "../secrets.ts";
 import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
@@ -37,7 +39,48 @@ const StatusView = z.object({
   available: z.array(SenderKind),
   /** What is not secret, so the form can show it; credentials never leave. */
   config: z.record(z.string(), z.string()),
+  /**
+   * How many emails this Workspace may send in a day, when this deployment
+   * limits it, and where it stands: what went in the last 24 hours and, once
+   * that is the limit, how many wait and when the next may go.
+   */
+  limit: z
+    .object({
+      perDay: z.number().int(),
+      sent: z.number().int(),
+      waiting: z.number().int(),
+      nextAt: z.date().nullable(),
+    })
+    .nullable(),
 });
+
+/** The day's email limit and where the Workspace stands against it, or null without one. */
+async function limitOf(context: ContextFor<"admin">) {
+  const perDay = context.limits?.emailsPerDay;
+  if (perDay === undefined) return null;
+  const now = new Date();
+  const workspaceId = context.workspace.id;
+  const sent = await emailsSince(context.db, workspaceId, limitWindowStart(now));
+  if (sent < perDay) return { perDay, sent, waiting: 0, nextAt: null };
+  // Full: what is owed and not given up on is what waits for the window.
+  const [owed] = await context.db
+    .select({ n: count() })
+    .from(deliveryTable)
+    .where(
+      and(
+        isNull(deliveryTable.deliveredAt),
+        eq(deliveryTable.workspaceId, workspaceId),
+        mailsSomebody(),
+        lt(deliveryTable.attempts, maxEmailAttempts),
+      ),
+    );
+  return {
+    perDay,
+    sent,
+    waiting: owed?.n ?? 0,
+    nextAt: perDay < 1 ? null : await nextEmailAt(context.db, workspaceId, perDay, now),
+  };
+}
 
 /** The sender in force and everything said about it. */
 async function statusOf(context: ContextFor<"admin">) {
@@ -65,6 +108,7 @@ async function statusOf(context: ContextFor<"admin">) {
     problem,
     available: availableSenders(context.emailSenders),
     config: inForce.setup?.config ?? {},
+    limit: await limitOf(context),
   };
 }
 

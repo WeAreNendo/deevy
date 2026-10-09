@@ -7,6 +7,7 @@ import {
 } from "@deevy/db";
 import { inArray } from "drizzle-orm";
 import type { EventKind } from "../events.ts";
+import { emailRoom, emailTargets } from "../limits.ts";
 import {
   gateRequestIdOf,
   isHumanNotificationKind,
@@ -64,6 +65,13 @@ export interface DeliverDueEmailsOptions extends ResolveSenderOptions {
   secret?: string;
   /** What a sender set in Settings › Email is sealed with; it wins over `email`. */
   socketSecret?: string;
+  /**
+   * Emails this Workspace may send in any 24 hours (limits.ts). Past it, what
+   * is owed is not even claimed: it waits in its row, neither failed nor given
+   * up on, and goes on the first pass after the window has room. Absent, there
+   * is no limit and no statement is spent counting.
+   */
+  perDay?: number;
 }
 
 export interface EmailDeliveryResult {
@@ -85,6 +93,7 @@ export async function deliverDueEmails({
   maxAttempts = maxEmailAttempts,
   secret,
   socketSecret,
+  perDay,
   ...senderOptions
 }: DeliverDueEmailsOptions): Promise<EmailDeliveryResult> {
   const result: EmailDeliveryResult = {
@@ -94,13 +103,19 @@ export async function deliverDueEmails({
     gaveUp: 0,
     more: false,
   };
-  const due = await dueDeliveries(db, ["email_member", "email", "invitation"], {
+  // The day's room, when the Workspace has a limit: a pass sends no more than
+  // fits, and a full window leaves every row as it was for a later pass.
+  const room = perDay === undefined ? null : await emailRoom(db, workspaceId, perDay, now);
+  if (room === 0) return result;
+  const bound = room === null ? limit : Math.min(limit, room);
+  const due = await dueDeliveries(db, emailTargets, {
     workspaceId,
     now,
-    limit,
+    limit: bound,
     maxAttempts,
   });
-  result.more = due.length >= limit;
+  // A pass the room cut short has filled the window, so another would find none.
+  result.more = due.length >= bound && (room === null || room > limit);
   if (due.length === 0) return result;
   const claimed = await claimDeliveries(
     db,

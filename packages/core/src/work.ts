@@ -45,6 +45,7 @@ import { deriveWebhookDeliveriesForMany, postWebhook } from "./webhooks.ts";
 import { newId } from "./ids.ts";
 import { deliverDueEmails } from "./email/deliver.ts";
 import type { EmailSenders, EmailSetup } from "./email/port.ts";
+import type { WorkspaceLimits } from "./limits.ts";
 import {
   claimDeliveries,
   dueDeliveries,
@@ -1661,6 +1662,14 @@ export interface RunDueWorkOptions {
   email?: EmailSetup | null;
   /** The instance secret, which signs each email's one-click unsubscribe. */
   secret?: string;
+  /**
+   * What this Workspace may do in a day (limits.ts), which the sweep reads
+   * for its emails: past `emailsPerDay` what is owed waits for the window.
+   * Not `limits`, which is what a trigger may cost; this is what a Workspace
+   * may do, and it comes from the Workspace's configuration rather than the
+   * runtime. Absent, nothing is limited, as `createApp`'s `limits`.
+   */
+  workspaceLimits?: WorkspaceLimits;
 }
 
 /** What one trigger's worth of background work actually did. */
@@ -1713,6 +1722,7 @@ export async function runDueWork({
   emailSenders,
   email,
   secret,
+  workspaceLimits,
 }: RunDueWorkOptions): Promise<DueWorkResult> {
   const {
     silenceMs = defaultSilenceMs,
@@ -1863,6 +1873,9 @@ export async function runDueWork({
           ...(secret ? { secret } : {}),
           ...(socketSecret ? { socketSecret } : {}),
           ...(fetch ? { fetch } : {}),
+          ...(workspaceLimits?.emailsPerDay === undefined
+            ? {}
+            : { perDay: workspaceLimits.emailsPerDay }),
           ...deliveryBound,
         }),
       (of) => {
