@@ -459,17 +459,31 @@ as pull requests of their own on `main`, and 6, 4, 5, 7, 8 and 9 as one stack.
 
 **The spikes, as far as a machine with no account can take them.** S1's functional half is slice 9's smoke:
 the app runs in a SQLite Durable Object on workerd, two Workspaces side by side, with every core suite
-passing again on the durable driver; its memory and wake cost on Cloudflare's own isolates are still to be
-measured on a real account. S2's server half held without a change to Better Auth: its OAuth provider
+passing again on the durable driver. Measured on workerd with 300 Workspaces on one `wrangler dev`: a
+Workspace is provisioned, every migration included, in about 120 ms; an object put away after 20 seconds
+idle (every sampled one was constructed again) answers its first request, app built, in 4 to 5 ms at the
+median and 17 ms at p95, against 2 ms once built; and the process grows by about 0.4 MB for each awake
+Workspace's app, and by at most 3 MB for each Workspace provisioned, its SQLite included. Locally every
+object shares one process, so those are upper bounds; the same on Cloudflare's own isolates, under their
+128 MB, still needs a real account. S2's server half held without a change to Better Auth: its OAuth provider
 already answers a path issuer at `/.well-known/oauth-authorization-server/<path>` and at the appended form,
 and the full authorization-code flow, the MCP challenge and token audiences work under `/acme` (slice 4's
 tests). Then a real Claude Code (2.1.282) against a deevy served under `/deevy`: it found the path issuer on its own,
 from the challenge's resource metadata, and asked `…/deevy/api/auth/oauth2/authorize` for `…/deevy/mcp` with its
 Client ID Metadata Document; the walk found that every consent had failed its signature since the UI redesign,
 on any deployment — the router kept one value of a repeated query key, and Better Auth repeats `ba_param` —
-fixed in #152, after which the login completed and the client connected. Real provider Apps through the
-relay are still owed, and Cursor and VS Code against a path issuer. S3
-waits for an account: what an open stream bills, and a gradual deploy with a migration.
+fixed in #152, after which the login completed and the client connected. Then the MCP SDK's own client
+(`@modelcontextprotocol/sdk` 1.30), which registers itself rather than naming a metadata document: it found
+`/.well-known/oauth-protected-resource/deevy/mcp` and `/.well-known/oauth-authorization-server/deevy` by
+itself, and once registered, signed in, consented and listed the 14 tools. The walk found two bugs on any
+deployment. A registration that does not state `application_type` was a web client, refused any loopback
+callback, which turned away VS Code, the Inspector and every SDK client (#154); and a Human signed out of
+deevy landed at home after signing in, the client still waiting, because nothing carried the authorization
+through the sign-in (#155). Better Auth also refuses a private-use scheme that is not a reverse-domain name
+without an authority (RFC 8252 §7.1), so a client calling back on `cursor://host/…` cannot register at all;
+Cursor itself, VS Code's own window and real provider Apps through the relay are still to be walked. S3's
+local half is slice 10's smoke, where an object holding a tab's socket is put away and wakes for the next
+Event; what an open stream bills, and a gradual deploy with a migration, wait for an account.
 
 - **Slice 0, The queue path sends only webhooks** (#135). The claim now names its target, so a stray id can never
   retire another arm's row, and `appendEvent` queues only webhooks. Email and Slack-room deliveries were
