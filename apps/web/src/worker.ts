@@ -150,6 +150,8 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).
       ...(bindings.JOBS ? { jobs: createQueueJobQueue(bindings.JOBS) } : {}),
+      // A relay for other deployments' sign-ins, when this one is told to be.
+      ...(env.signInRelay.server ? { signInRelay: env.signInRelay.server } : {}),
     }),
     db,
     env,

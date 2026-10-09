@@ -11,6 +11,7 @@ import { fetchClientMetadataResource, type MetadataResourceFetch } from "./cimd.
 import { appendEvent } from "./events.ts";
 import { authId, newId } from "./ids.ts";
 import { basePathOf } from "./base-path.ts";
+import { signInRelay } from "./sign-in-relay.ts";
 
 /**
  * Both halves of an OAuth client. Half a pair is not a provider: a `clientId`
@@ -99,6 +100,20 @@ const DEFAULT_SIGN_IN_ORDER = [
 /** Where a GitLab client lives when the deployment names no instance of its own. */
 const DEFAULT_GITLAB_ISSUER = "https://gitlab.com";
 
+/**
+ * The providers a relay carries: every configured one whose App is the
+ * platform's. A Workspace's own OpenID Connect IdP is registered with the
+ * Workspace, and so is a GitLab instance that is not gitlab.com; both come
+ * back to the deevy that asked, as they would without a relay.
+ */
+export function relayedProviders(providers: AuthProviders): string[] {
+  return Object.keys(socialProvidersOf(providers)).filter(
+    (id) =>
+      id !== OIDC_PROVIDER_ID &&
+      (id !== "gitlab" || gitlabIssuer(providers.gitlab) === DEFAULT_GITLAB_ISSUER),
+  );
+}
+
 /** What deevy calls its one generic OIDC provider, in every URL it appears in. */
 export const OIDC_PROVIDER_ID = "oidc";
 
@@ -126,6 +141,14 @@ export interface SignInProvider {
 export interface AuthEnv {
   /** Public URL of the server; callbacks derive from it. */
   baseURL?: string;
+  /**
+   * A relay to sign in through, when this deevy is one of many behind one
+   * set of provider Apps — a hosted Workspace, or one of an operator's several
+   * deployments (`DEEVY_SIGN_IN_RELAY_URL`, sign-in-relay.ts, ADR-0030). Every
+   * provider but this deevy's own OpenID Connect IdP and a GitLab instance of
+   * its own then comes back through the relay's `/callback/<provider>`.
+   */
+  signInRelay?: { url: string; secret: string };
   /** At least 32 random characters in production. */
   secret?: string;
   /** Browser origins allowed to use the session cookie (the Vite dev server). */
@@ -187,6 +210,15 @@ export function createAuth({ db, env }: CreateAuthOptions) {
       // own (no account, no address), so the sign-in page can offer it first
       // with "Last used" (docs/plans/sign-in.md, "More ways to sign in").
       lastLoginMethod(),
+      ...(env.signInRelay && env.baseURL
+        ? [
+            signInRelay({
+              ...env.signInRelay,
+              providers: relayedProviders(env.providers ?? {}),
+              own: `${env.baseURL.replace(/\/+$/, "")}${AUTH_BASE_PATH}`,
+            }),
+          ]
+        : []),
     ],
     socialProviders: socialProvidersOf(env.providers ?? {}),
     account: { accountLinking: accountLinkingOf(env) },
