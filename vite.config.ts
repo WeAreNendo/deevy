@@ -28,7 +28,10 @@ export default defineConfig({
     // compiled by the sync's own esbuild, never by the app, and are written as
     // story files (many exports per file); the rules for app code do not apply.
     ignorePatterns: [".design-sync/**"],
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    jsPlugins: [
+      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
+      { name: "deevy", specifier: "./tools/lint/oxlint-plugin.js" },
+    ],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: { typeAware: true, typeCheck: true },
     overrides: [
@@ -41,6 +44,26 @@ export default defineConfig({
         // and a real type error in a component we ship should still fail.
         files: ["apps/web/src/components/ui/**"],
         rules: { "typescript/restrict-template-expressions": "off" },
+      },
+      {
+        // The core runs on the Node driver and on a Durable Object's, where a
+        // raw `db.get(sql)` that finds no row throws (ADR-0028). The rule is
+        // tools/lint/oxlint-plugin.js; `vp run core#test:durable` is the net
+        // for whatever else differs.
+        files: ["packages/core/src/**"],
+        rules: { "deevy/no-raw-db-get": "error" },
+      },
+      {
+        // Runs inside a Durable Object, on workerd: web-standard APIs only, as
+        // for the core (ADR-0006). The Worker build cannot catch a leak here,
+        // because the Worker does not import it.
+        files: ["packages/adapters/src/durable/**"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            { patterns: [{ group: ["node:*"], message: "The durable adapter runs on workerd." }] },
+          ],
+        },
       },
       {
         files: [
