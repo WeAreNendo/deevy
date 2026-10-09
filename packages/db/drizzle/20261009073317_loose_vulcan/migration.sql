@@ -1,0 +1,1 @@
+ALTER TABLE `invitation` ADD `sealed_token` text;

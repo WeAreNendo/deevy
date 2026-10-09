@@ -79,6 +79,16 @@ export function InvitationsRow() {
                 <span className="text-xs text-muted-foreground">
                   {lifeLeft(invitation.expiresAt)}
                 </span>
+                {/* Whether the link went by email, when it was sent that way. */}
+                {invitation.emailStatus === "sent" ? (
+                  <span className="text-xs text-muted-foreground">Emailed</span>
+                ) : invitation.emailStatus === "queued" ? (
+                  <span className="text-xs text-muted-foreground">Email on its way</span>
+                ) : invitation.emailStatus === "failed" ? (
+                  <span className="text-xs text-destructive">
+                    Email failed: {invitation.emailError ?? "the sender refused it"}
+                  </span>
+                ) : null}
                 {/* No Copy link: only the hash was stored, so the URL existed
                     exactly once, in the dialog that made it. */}
                 <Button
@@ -117,8 +127,9 @@ export function InvitationsRow() {
 
 /**
  * Inviting somebody, and the one sight of the link. deevy stores a hash of the
- * token and has no email Channel, so this dialog is both the only place the URL
- * exists and the only chance to copy it; it says so.
+ * token, so this dialog is the only place the URL is shown; when a sender is
+ * configured it is also emailed to the address (docs/plans/email-channel.md),
+ * and the dialog says whether it was, or why not.
  */
 function InviteDialog({
   open,
@@ -132,10 +143,23 @@ function InviteDialog({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("member");
   const [link, setLink] = useState<string | null>(null);
+  const [emailed, setEmailed] = useState<string | null>(null);
 
   const create = useMutation(
     orpc.invitations.create.mutationOptions({
-      onSuccess: async (created: { path: string }) => {
+      onSuccess: async (created: {
+        path: string;
+        email: string;
+        emailStatus: string | null;
+        emailNotSent: string | null;
+      }) => {
+        setEmailed(
+          created.emailStatus
+            ? `Emailing the link to ${created.email}.`
+            : created.emailNotSent
+              ? `Not emailed: ${created.emailNotSent}`
+              : null,
+        );
         // The link is built on the origin this browser is on, not the API's:
         // they are the same in the image and on Workers, and two ports in the
         // dev loop or a split-origin deployment (docs/plans/sign-in.md).
@@ -150,6 +174,7 @@ function InviteDialog({
       setEmail("");
       setRole("member");
       setLink(null);
+      setEmailed(null);
       create.reset();
     }
     onOpenChange(next);
@@ -161,12 +186,14 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Invite someone</DialogTitle>
           <DialogDescription>
-            Invite one person by email address. The invitation is good for seven days. deevy
-            doesn&apos;t send the email itself — you&apos;ll get a link to share however you like.
+            Invite one person by email address. The invitation is good for seven days. deevy emails
+            them the link when a sender is set up under Settings › Email, and shows it to you once
+            either way.
           </DialogDescription>
         </DialogHeader>
         {link ? (
           <div className="flex flex-col gap-3">
+            {emailed ? <p className="text-sm text-muted-foreground">{emailed}</p> : null}
             <div className="flex min-w-0 flex-col gap-1 rounded-md border border-gate/50 bg-gate/10 p-3">
               <p className="text-sm font-medium">
                 Copy this now: it is the only time the link is shown.

@@ -1,4 +1,10 @@
-import { delivery as deliveryTable, event as eventTable, type Db, type Event } from "@deevy/db";
+import {
+  delivery as deliveryTable,
+  event as eventTable,
+  invitation as invitationTable,
+  type Db,
+  type Event,
+} from "@deevy/db";
 import { inArray } from "drizzle-orm";
 import type { EventKind } from "../events.ts";
 import {
@@ -21,6 +27,8 @@ import { parseFrom, type EmailMessage } from "./port.ts";
 import { resolveSender, type ResolveSenderOptions } from "./sender.ts";
 import { setupInForce } from "./settings.ts";
 import { emailChannelOf } from "./team.ts";
+import { openSecret } from "../secrets.ts";
+import { renderInvitation } from "./invitation.ts";
 import { renderEmail } from "./render.ts";
 import { unsubscribeToken, unsubscribeUrl } from "./unsubscribe.ts";
 
@@ -86,7 +94,7 @@ export async function deliverDueEmails({
     gaveUp: 0,
     more: false,
   };
-  const due = await dueDeliveries(db, ["email_member", "email"], {
+  const due = await dueDeliveries(db, ["email_member", "email", "invitation"], {
     workspaceId,
     now,
     limit,
@@ -150,6 +158,14 @@ export async function deliverDueEmails({
     },
   });
   const teamById = new Map(teams.map((row) => [row.id, row]));
+  // An invitation's link, owed to the address it is for (slice 6).
+  const invites = await db.query.invitation.findMany({
+    where: { id: { in: [...new Set(claimed.map((row) => row.targetId))] }, workspaceId },
+    with: { creator: { with: { user: { columns: { name: true } } } } },
+  });
+  const inviteById = new Map(invites.map((row) => [row.id, row]));
+  /** Invitations whose email landed: their sealed token is cleared after the pass. */
+  const invitedIds: string[] = [];
   const gateOf = (event: Event): string | null =>
     event.subjectType === "gate" ? event.subjectId : gateRequestIdOf(event);
   const gateIds = [...new Set(events.map(gateOf).filter((id): id is string => id !== null))];
@@ -204,6 +220,47 @@ export async function deliverDueEmails({
   const hopeless = new Map<string, Attempted>();
   const sentEvent = new Map<string, Event>();
   for (const row of claimed) {
+    const invite = inviteById.get(row.targetId);
+    if (invite) {
+      // Accepted, revoked or expired before it went: nothing to send, and
+      // nothing failed. Without the secret that sealed it, nothing can be.
+      if (invite.acceptedAt || invite.revokedAt || invite.expiresAt <= now || !invite.sealedToken) {
+        settled.push(row.id);
+        continue;
+      }
+      if (!socketSecret) {
+        undeliverable.push(row.id);
+        continue;
+      }
+      const token = await openSecret(socketSecret, invite.sealedToken).catch(() => null);
+      if (!token) {
+        undeliverable.push(row.id);
+        continue;
+      }
+      const rendered = renderInvitation({
+        workspaceName: workspace?.name ?? "deevy",
+        inviterName: invite.creator?.user.name ?? null,
+        role: invite.role,
+        expiresAt: invite.expiresAt,
+        url: `${baseUrl.replace(/\/+$/, "")}/invite/${token}`,
+      });
+      const sent = await sender.send({
+        from,
+        to: invite.email,
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html,
+        headers: {},
+        idempotencyKey: row.id,
+      });
+      const outcome: Attempted = sent.delivered
+        ? { id: row.id, delivered: true, status: sent.status, error: null }
+        : { id: row.id, delivered: false, status: sent.status, error: sent.error };
+      attempted.push(outcome);
+      if (sent.delivered) invitedIds.push(invite.id);
+      else if (!sent.retry) hopeless.set(row.id, outcome);
+      continue;
+    }
     const event = eventBySeq.get(row.eventSeq);
     const member = memberById.get(row.targetId);
     const team = teamById.get(row.targetId);
@@ -311,6 +368,13 @@ export async function deliverDueEmails({
       .where(inArray(deliveryTable.id, [...hopeless.keys()]));
   }
   const exhausted = [...new Set([...recorded.exhausted, ...hopeless.keys()])];
+  // The token is kept only while an email that carries it is owed.
+  if (invitedIds.length > 0) {
+    await db
+      .update(invitationTable)
+      .set({ sealedToken: null })
+      .where(inArray(invitationTable.id, invitedIds));
+  }
   result.delivered = recorded.delivered;
   result.failed = recorded.failed - hopeless.size;
   result.gaveUp = exhausted.length + undeliverable.length + settled.length;
@@ -334,16 +398,21 @@ export async function deliverDueEmails({
     const outcomeById = new Map(attempted.map((one) => [one.id, one]));
     const memberOf = new Map(claimed.map((row) => [row.id, row.targetId]));
     const rows = exhausted.map((id) => {
-      const event = sentEvent.get(id) as Event;
+      const event = sentEvent.get(id);
       const outcome = outcomeById.get(id);
+      const target = memberOf.get(id) as string;
       return {
-        workspaceId: event.workspaceId,
+        workspaceId,
         kind: "email.exhausted" satisfies EventKind,
-        subjectType: teamById.has(memberOf.get(id) as string) ? "channel" : "member",
-        subjectId: memberOf.get(id) as string,
-        projectId: event.projectId,
+        subjectType: inviteById.has(target)
+          ? "invitation"
+          : teamById.has(target)
+            ? "channel"
+            : "member",
+        subjectId: target,
+        projectId: event?.projectId ?? null,
         payload: {
-          eventSeq: event.seq,
+          eventSeq: event?.seq ?? null,
           sender: setup.sender,
           status: outcome?.status ?? 0,
           error: outcome?.error ?? null,
