@@ -178,6 +178,7 @@ export function stubClient(overrides: StubOverrides = {}): never {
         devSignIn: false,
         devSockets: false,
         providers: [{ id: "github", label: "GitHub", kind: "social" }],
+        version: null,
       }),
     },
     me: {

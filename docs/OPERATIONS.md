@@ -185,8 +185,8 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
    database it made, so the next deploy finds the same one, and nothing account-specific is ever committed. It
    then prints the `workers.dev` URL — `https://deevy.<subdomain>.workers.dev` — and the Cron Trigger it
    registered. Sign-in does not work yet and nothing else has to:
-   `curl https://deevy.<subdomain>.workers.dev/healthz` answers `{"ok":true}`, and the SPA loads and says
-   nobody is signed in.
+   `curl https://deevy.<subdomain>.workers.dev/healthz` answers `{"ok":true,"version":"<the version>"}`, and
+   the SPA loads and says nobody is signed in.
 
 4. **Build the schema.** The database exists now but is empty, so this follows the first deploy rather than
    preceding it.
@@ -1601,9 +1601,9 @@ the alternative but still a restore that does not come back up.
 
 ## Health
 
-`/healthz` answers `{"ok":true}` as soon as the server is listening and the migrations have run, which makes
-it a usable readiness probe. The image asks it of itself every 30 seconds, so `docker ps` reports `healthy`
-with nothing configured; `docker inspect -f '{{json .State.Health}}' deevy` says what the last few answers
+`/healthz` answers `{"ok":true,"version":"0.10.0"}` — the version this image runs — as soon as the server is
+listening and the migrations have run, which makes it a usable readiness probe. The image asks it of itself
+every 30 seconds, so `docker ps` reports `healthy` with nothing configured; `docker inspect -f '{{json .State.Health}}' deevy` says what the last few answers
 were. It follows `DEEVY_PORT`, so moving the port keeps it working.
 
 If it answers at all the server can write its database: that is checked before the listener binds, so a

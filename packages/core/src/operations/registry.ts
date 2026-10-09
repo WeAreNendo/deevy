@@ -109,6 +109,12 @@ export interface AppContext {
    * (docs/plans/sign-in.md).
    */
   signInProviders?: SignInProvider[];
+  /**
+   * The version this instance runs, when its build says (app.ts). Only
+   * `health.ping` reads it, so the SPA can link to the source of what is
+   * running (AGPL-3.0 §13, ADR-0002).
+   */
+  version?: string;
 }
 
 export type ContextFor<TAuth extends AuthRule> = TAuth extends "member" | "admin"
