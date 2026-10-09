@@ -1,13 +1,22 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { invitation as invitationTable, member as memberTable, memberRoles } from "@deevy/db";
-import type { Db, Invitation, Workspace } from "@deevy/db";
+import {
+  delivery as deliveryTable,
+  invitation as invitationTable,
+  member as memberTable,
+  memberRoles,
+} from "@deevy/db";
+import type { Db, Delivery, Invitation, Workspace } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
 import { allocateHandle } from "../handles.ts";
 import { appendEvent } from "../events.ts";
 import { InvitationSchema, MemberSchema } from "../schemas.ts";
 import { newId } from "../ids.ts";
-import { defineOperation, NoInput, type AppContext } from "./registry.ts";
+import { maxEmailAttempts } from "../email/deliver.ts";
+import { resolveSender } from "../email/sender.ts";
+import { senderOptionsFor } from "../email/settings.ts";
+import { sealSecret } from "../secrets.ts";
+import { defineOperation, NoInput, type AppContext, type ContextFor } from "./registry.ts";
 import { linkOrigin } from "./shared.ts";
 
 /**
@@ -47,8 +56,34 @@ async function hashInvitationToken(token: string): Promise<string> {
  * destructured so the one column that must never leave the server is named
  * here, and a column added later has to be named here too.
  */
-function shown(row: Invitation): Omit<Invitation, "tokenHash"> {
+/** Whether an invitation's email went, from the delivery row that owes it. */
+function emailOf(owed: Delivery | undefined): Pick<Shown, "emailStatus" | "emailError"> {
+  if (!owed) return { emailStatus: null, emailError: null };
+  if (owed.deliveredAt) return { emailStatus: "sent", emailError: null };
+  if (owed.attempts >= maxEmailAttempts) {
+    return { emailStatus: "failed", emailError: owed.lastError };
+  }
+  return { emailStatus: "queued", emailError: null };
+}
+
+type Shown = Omit<Invitation, "tokenHash" | "sealedToken"> & {
+  emailStatus: "queued" | "sent" | "failed" | null;
+  emailError: string | null;
+};
+
+/**
+ * The email deliveries owed for this Workspace's invitations, in one
+ * statement that binds two parameters however many there are: a list of ids
+ * would bind one each, and D1 refuses a statement past a hundred.
+ */
+async function emailsFor(db: Db, workspaceId: string): Promise<Map<string, Delivery>> {
+  const rows = await db.query.delivery.findMany({ where: { target: "invitation", workspaceId } });
+  return new Map(rows.map((row) => [row.targetId, row]));
+}
+
+function shown(row: Invitation, owed?: Delivery): Shown {
   return {
+    ...emailOf(owed),
     id: row.id,
     workspaceId: row.workspaceId,
     email: row.email,
@@ -96,7 +131,7 @@ async function spend(context: AppContext, token: string, memberId: string): Prom
   const hash = await hashInvitationToken(token);
   await context.db
     .update(invitationTable)
-    .set({ acceptedAt: new Date(), acceptedMemberId: memberId })
+    .set({ acceptedAt: new Date(), acceptedMemberId: memberId, sealedToken: null })
     .where(
       and(
         eq(invitationTable.workspaceId, context.workspace.id),
@@ -122,8 +157,10 @@ export const invitations = {
         orderBy: { createdAt: "desc" },
       });
       // The token appears in no list: only its hash was ever stored, and the
-      // URL existed exactly once, in the response that created it.
-      return { invitations: rows.map(shown) };
+      // URL existed exactly once, in the response that created it — and, while
+      // its email was owed, sealed in a column no read returns.
+      const owed = await emailsFor(context.db, context.workspace.id);
+      return { invitations: rows.map((row) => shown(row, owed.get(row.id))) };
     },
   }),
 
@@ -133,7 +170,15 @@ export const invitations = {
     method: "POST",
     path: "/invitations",
     auth: "admin",
-    input: z.object({ email: InvitedEmail, role: z.enum(memberRoles).default("member") }),
+    input: z.object({
+      email: InvitedEmail,
+      role: z.enum(memberRoles).default("member"),
+      /**
+       * Email the link to the address too, when a sender is configured
+       * (docs/plans/email-channel.md, slice 6). The link is returned either way.
+       */
+      send: z.boolean().default(true),
+    }),
     output: InvitationSchema.extend({
       /**
        * The link to send, and the only sight of the token in it. Nothing reads
@@ -149,6 +194,8 @@ export const invitations = {
        * cannot know (docs/plans/sign-in.md).
        */
       path: z.string(),
+      /** Why it was not emailed, when it was asked to be and could not be. */
+      emailNotSent: z.string().nullable(),
     }),
     handler: async ({ input, context }) => {
       const live = await context.db.query.invitation.findFirst({
@@ -182,14 +229,23 @@ export const invitations = {
         })
         .returning();
       if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
-      await appendEvent(context, {
+      const created = await appendEvent(context, {
         kind: "invitation.created",
         subjectType: "invitation",
         subjectId: row.id,
         payload: { email: row.email, role: row.role },
       });
       const path = `/invite/${token}`;
-      return { ...shown(row), url: `${linkOrigin(context)}${path}`, path };
+      const emailed = input.send ? await queueEmail(context, row.id, token, created.seq) : null;
+      const owed = emailed?.queued
+        ? (await emailsFor(context.db, context.workspace.id)).get(row.id)
+        : undefined;
+      return {
+        ...shown(row, owed),
+        url: `${linkOrigin(context)}${path}`,
+        path,
+        emailNotSent: emailed && !emailed.queued ? emailed.reason : null,
+      };
     },
   }),
 
@@ -215,7 +271,8 @@ export const invitations = {
 
       const [row] = await context.db
         .update(invitationTable)
-        .set({ revokedAt: new Date() })
+        // The sealed token goes too: nothing will ever send it now.
+        .set({ revokedAt: new Date(), sealedToken: null })
         .where(eq(invitationTable.id, found.id))
         .returning();
       if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
@@ -287,7 +344,7 @@ export const invitations = {
       });
       await context.db
         .update(invitationTable)
-        .set({ acceptedAt: new Date(), acceptedMemberId: memberId })
+        .set({ acceptedAt: new Date(), acceptedMemberId: memberId, sealedToken: null })
         .where(eq(invitationTable.id, found.id));
 
       // The Member exists by now, so both Events carry the Human who joined as
@@ -317,3 +374,37 @@ export const invitations = {
     },
   }),
 };
+
+/**
+ * Owes an invitation's email: the token sealed on the row, and a delivery the
+ * sweep sends (email/deliver.ts). Nothing is queued without a sender to send
+ * it, or without `DEEVY_SECRET` to keep the token sealed until then.
+ */
+async function queueEmail(
+  context: ContextFor<"admin">,
+  invitationId: string,
+  token: string,
+  eventSeq: number,
+): Promise<{ queued: true } | { queued: false; reason: string }> {
+  const sender = resolveSender(await senderOptionsFor(context));
+  if ("reason" in sender) return { queued: false, reason: sender.reason };
+  if (!context.socketSecret) {
+    return {
+      queued: false,
+      reason:
+        "deevy has no secret to keep the link with until the email goes, so it wasn't emailed. Send the link yourself.",
+    };
+  }
+  await context.db
+    .update(invitationTable)
+    .set({ sealedToken: await sealSecret(context.socketSecret, token) })
+    .where(eq(invitationTable.id, invitationId));
+  await context.db.insert(deliveryTable).values({
+    id: newId("delivery"),
+    workspaceId: context.workspace.id,
+    target: "invitation",
+    targetId: invitationId,
+    eventSeq,
+  });
+  return { queued: true };
+}

@@ -36,7 +36,19 @@ export const AllowlistRuleSchema = createSelectSchema(allowlistRule);
  * The token exists in one HTTP response, `invitations.create`'s, and nothing
  * reads it back (docs/plans/sign-in.md).
  */
-export const InvitationSchema = createSelectSchema(invitation).omit({ tokenHash: true });
+/**
+ * An invitation as every surface shows one: never its token's hash, never the
+ * token sealed while its email is owed, and whether that email went
+ * (docs/plans/email-channel.md, slice 6).
+ */
+export const InvitationSchema = createSelectSchema(invitation)
+  .omit({ tokenHash: true, sealedToken: true })
+  .extend({
+    /** `queued` while owed, `sent` once it landed, `failed` once given up on; null when never emailed. */
+    emailStatus: z.enum(["queued", "sent", "failed"]).nullable(),
+    /** What the sender said when it refused. */
+    emailError: z.string().nullable(),
+  });
 
 /**
  * A Socket as every surface shows one: never its credentials and never its

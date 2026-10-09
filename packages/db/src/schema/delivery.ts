@@ -12,7 +12,8 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
  * `slack_app` Channel) or one Human's direct messages there (`chat_dm`, their
  * linked Identity), where a Gate carries its buttons (ADR-0025) — or an email:
  * to a team address (`email`, an `email` Channel) or to one Human's verified
- * address (`email_member`, the Member), docs/plans/email-channel.md.
+ * address (`email_member`, the Member), or an invitation's link to the address
+ * it is for (`invitation`), docs/plans/email-channel.md.
  */
 export const deliveryTargets = [
   "webhook",
@@ -22,6 +23,7 @@ export const deliveryTargets = [
   "chat_dm",
   "email",
   "email_member",
+  "invitation",
 ] as const;
 
 /**

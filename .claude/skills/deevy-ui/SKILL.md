@@ -369,6 +369,9 @@ Waiting for confirmation`, and its Test button sends the confirmation again.
   send), `Use the environment's sender` when one is set here, and `form "Set the sender here"` with `From`
   and the sender's own fields from `lib/email-senders.ts`. A secret field is never filled back in: empty
   keeps the saved one.
+- **An invitation is emailed too** (slice 6): the Invite dialog still shows the link once, and above it says
+  `Emailing the link to <address>.` or `Not emailed: <reason>`. An outstanding row says `Emailed`, `Email on
+its way`, or `Email failed: <the sender's words>`.
 
 ## Test contracts
 

@@ -19,6 +19,8 @@ const stub = vi.hoisted(() => ({
   accepted: [] as string[],
   /** What `invitations.accept` refuses with, when it refuses. */
   refusal: null as string | null,
+  /** Why `invitations.create` did not email the link, when it did not. */
+  emailNotSent: null as string | null,
   session: null as { user: { email: string; emailVerified?: boolean } } | null,
   member: null as { id: string; role: string } | null,
 }));
@@ -57,6 +59,9 @@ vi.mock("../src/lib/orpc.ts", async () => {
           revokedAt: null,
           url: "https://deevy.example.com/invite/s3cret-token",
           path: "/invite/s3cret-token",
+          emailStatus: stub.emailNotSent ? null : "queued",
+          emailError: null,
+          emailNotSent: stub.emailNotSent,
         };
       },
       revoke: async (input: { invitationId: string }) => {
@@ -91,6 +96,7 @@ afterEach(() => {
   stub.revoked = [];
   stub.accepted = [];
   stub.refusal = null;
+  stub.emailNotSent = null;
   stub.session = null;
   stub.member = null;
   window.sessionStorage.clear();
@@ -163,6 +169,61 @@ describe("the Invited row of Workspace › General", () => {
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByText(url)).toBeNull());
     expect(await screen.findByText("grace@example.com")).toBeTruthy();
+  });
+
+  it("says the link is on its way by email, and still shows it once", async () => {
+    mount(<InvitationsRow />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Invite someone" }));
+    fireEvent.change(await screen.findByLabelText("Email"), {
+      target: { value: "grace@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create invitation" }));
+
+    expect(await screen.findByText(/Emailing the link to grace@example\.com/)).toBeTruthy();
+    expect(screen.getByText(/only time the link is shown/)).toBeTruthy();
+  });
+
+  it("says why the link was not emailed, so the admin sends it", async () => {
+    stub.emailNotSent = "No email sender is configured.";
+    mount(<InvitationsRow />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Invite someone" }));
+    fireEvent.change(await screen.findByLabelText("Email"), {
+      target: { value: "grace@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create invitation" }));
+
+    expect(await screen.findByText(/Not emailed: No email sender is configured\./)).toBeTruthy();
+  });
+
+  it("says on a row whether its email went", async () => {
+    stub.invitations = [
+      {
+        id: "inv-1",
+        email: "grace@example.com",
+        role: "member",
+        expiresAt: week(),
+        acceptedAt: null,
+        revokedAt: null,
+        emailStatus: "failed",
+        emailError: "Invalid To address",
+      },
+      {
+        id: "inv-2",
+        email: "ken@example.com",
+        role: "member",
+        expiresAt: week(),
+        acceptedAt: null,
+        revokedAt: null,
+        emailStatus: "sent",
+        emailError: null,
+      },
+    ];
+    mount(<InvitationsRow />);
+
+    expect(await screen.findByText(/Email failed: Invalid To address/)).toBeTruthy();
+    expect(screen.getByText("Emailed")).toBeTruthy();
   });
 
   it("revokes an invitation from its row", async () => {

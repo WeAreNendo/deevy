@@ -6714,6 +6714,27 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "emailStatus": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "sent",
+                                  "failed"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "emailError": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -6726,7 +6747,9 @@
                           "expiresAt",
                           "acceptedAt",
                           "acceptedMemberId",
-                          "revokedAt"
+                          "revokedAt",
+                          "emailStatus",
+                          "emailError"
                         ],
                         "additionalProperties": false
                       }
@@ -6764,6 +6787,10 @@
                       "admin",
                       "member"
                     ]
+                  },
+                  "send": {
+                    "default": true,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -6843,11 +6870,38 @@
                         }
                       ]
                     },
+                    "emailStatus": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "sent",
+                            "failed"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emailError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "url": {
                       "type": "string"
                     },
                     "path": {
                       "type": "string"
+                    },
+                    "emailNotSent": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -6861,8 +6915,11 @@
                     "acceptedAt",
                     "acceptedMemberId",
                     "revokedAt",
+                    "emailStatus",
+                    "emailError",
                     "url",
-                    "path"
+                    "path",
+                    "emailNotSent"
                   ],
                   "additionalProperties": false
                 }
@@ -6965,6 +7022,27 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "emailStatus": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "sent",
+                            "failed"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emailError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -6977,7 +7055,9 @@
                     "expiresAt",
                     "acceptedAt",
                     "acceptedMemberId",
-                    "revokedAt"
+                    "revokedAt",
+                    "emailStatus",
+                    "emailError"
                   ],
                   "additionalProperties": false
                 }
