@@ -16,3 +16,10 @@ export function ago(value: Date | string, options: { short?: boolean } = {}): st
     .replace(/ months?/, "mo")
     .replace(/ years?/, "y");
 }
+
+/** How long until, the other way: "in a minute" under one, then "in 3 hours". */
+export function until(value: Date | string): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (date.getTime() - Date.now() < 60_000) return "in a minute";
+  return formatDistanceToNowStrict(date, { addSuffix: true });
+}
