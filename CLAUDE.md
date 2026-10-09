@@ -19,8 +19,11 @@ Labels, Teams, stored comments and the board are gone. What each slice found is 
 acceptance walk is a script (`vp run agent#acceptance`, `docs/sockets-acceptance.md`) that runs a record
 through both deployments on every commit with no account, App or network. Then **usage and time per Run**
 (`docs/plans/run-usage.md`): a Run's client reports each session's tokens and cost (`runs.reportUsage`), deevy
-derives how long it worked and waited, and the Run page, the feed and an Agent's page show both. What comes
-next is PLAN.md's "After Sockets" list, budgets first.
+derives how long it worked and waited, and the Run page, the feed and an Agent's page show both. Then
+**email** (`docs/plans/email-channel.md`): a port in `@deevy/core/email` with seven senders — the HTTP ones in
+`packages/email`, SMTP in `@deevy/adapters/node`, Cloudflare Email Service in `@deevy/adapters/workers` — a
+Human's Notifications at their verified address, team addresses as Channels, invitations by email, and
+Settings › Email. What comes next is PLAN.md's "After Sockets" list, budgets first.
 
 ## Commands
 
@@ -31,7 +34,7 @@ format, so pnpm 11 is required and pinned twice over: `devEngines.packageManager
 the prompt to wipe `node_modules`, so if an install hangs with no output, check `pnpm --version` first.
 `vp dev`, `vp build`, `vp test`, `vp check` are built-ins that ignore package.json scripts; `vp run <script>`
 runs scripts, `-r` recursively, `pkg#script` for one package (package names are `web`, `server`, `core`, `db`,
-`adapters`, `sockets`, `agent`, `cli`, `release`; `agent` has its own `apps/agent/README.md`, and
+`adapters`, `sockets`, `email`, `agent`, `cli`, `release`; `agent` has its own `apps/agent/README.md`, and
 `release` is `tools/release`, which holds the changelog fold and the commit-message rules).
 
 - `vp check` (root): format, lint, typecheck the whole tree; `vp check --fix` applies formatting. Run it before
@@ -96,7 +99,8 @@ delivers to `POST /hooks/:socketId`, mounted before everything else, where the m
 sealed under `DEEVY_SECRET` (`secrets.ts`). A provider module is tested against recorded payloads with an
 injected `fetch`, never the network, and one walk per provider puts the real module behind the real route.
 
-**Runtime boundary**: `packages/core`, `packages/db` and `packages/sockets` use web-standard APIs only; no
+**Runtime boundary**: `packages/core`, `packages/db`, `packages/sockets` and `packages/email` use web-standard
+APIs only; no
 `node:` imports and no `types: ["node"]` in their tsconfigs. Anything runtime-specific goes in `packages/adapters` (`./node`:
 `node:sqlite`, migrator, SPA serving; `./workers`: D1). The Workers build in CI is what catches a leak.
 The core uses no interactive transactions because D1 has none; multi-statement writes are sequential

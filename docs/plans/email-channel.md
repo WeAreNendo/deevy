@@ -11,6 +11,9 @@ where that service can run.
 
 Eight slices, in dependency order. Each is one PR on `main` and carries its own tests.
 
+**Status: done, 2026-10-09**, in eight stacked pull requests (#124, #125, #127, #128, #129, #130, #131 and
+the one this record lands in). What each slice found is under "What it found", at the end.
+
 Why this and why now. A Gate is where a Run stops until a Human rules, and today the Human hears about it in
 deevy's inbox, in a Slack room, or by Slack direct message. A Human who is in neither all day — the
 reviewer on another team, the founder on a phone, the Sponsor who checks in twice a week — finds out when
@@ -275,3 +278,72 @@ address. Editable templates. Sending as an Agent rather than as deevy.
   surfaces it as the sender's own words.
 - **A team address as a way to mail strangers.** Closed by the confirmation link; an unconfirmed address is
   sent nothing, and only an admin can add one.
+
+## What it found
+
+Before slice 0: the base image's OpenSSL had two HIGH CVEs fixed upstream the week the plan landed, and the
+image scan failed every pull request until the distroless pin moved (#122). The fixed image was checked
+before it was pinned.
+
+0. **The port, the outbox and Resend.** The outbox's claim, backoff and retirement were private to
+   `work.ts`; they moved to `outbox.ts` (its own commit) so the email arm shares them without a cycle. The
+   browser check on `seeded`, not the tests, found two things: Gates the seed had already ruled on were
+   emailed as waiting, because an email cannot be changed afterwards as a Slack message is — so an email
+   about a Gate no longer open, or a Run no longer waiting, is now not sent at all; and the Proposal was
+   quoted as raw markdown, now `prose()`. Owed emails with no sender are retired rather than kept, so a
+   sender configured later sends no backlog of stale Gates.
+1. **A Human's email.** The unsubscribe lives under `/api`, because every deployment, the dev SPA's proxy
+   included, routes `/api` to the server. `signState` gained a lifetime: a redirect's hour is no use to a
+   link read weeks later. The page first lowercased the kind's headline ("a gate is waiting for a human");
+   it now names the kind as Settings › Notifications does.
+2. **Team addresses.** The confirmation is sent inside `channels.createEmail` rather than through the
+   outbox, so the admin reads the sender's refusal at once. The request context carries the senders since.
+   `resolveSender` moved to `email/sender.ts` to keep the modules acyclic, and every email now shares
+   `renderPlain`. The Slack forms already had a field named "Name", so the email form asks for the address
+   alone. A subject read "for deevy on deevy" when the Workspace is called deevy.
+3. **Settings › Email.** It went under Agents and delivery, beside Channels and Webhooks, rather than under
+   Workspace: it is delivery configuration. The browser check found the form offering the development
+   stand-in, which was in force, as the sender to choose; it now starts on one that can be chosen here. The
+   CLI's two ratchets — operations that need a Human in a browser, arguments only JSON can carry — each
+   gained the new operations, with the reason beside them. The credential sentinel test now sets a sender
+   with a sentinel key.
+4. **Postmark, SendGrid, Mailgun, SES.** SigV4 over `crypto.subtle` reproduced AWS's published
+   `get-vanilla` signature first time. SendGrid answers 202 with the id in a header and wants text before
+   HTML; Mailgun takes a form with `h:` headers; SES names its refusal in `x-amzn-ErrorType`.
+5. **SMTP and Cloudflare.** `@deevy/adapters` cannot import the core, which dev-depends on it, so the
+   senders restate the message shape as `cron.ts` and `queue.ts` do, and the entries' compiler checks
+   them. Cloudflare refuses a `List-Unsubscribe` that is not https, and with it the whole email, so a
+   plain-http instance sends without one. CI's frozen install caught a lockfile left stale by a dependency
+   added and removed between installs. nodemailer never reaches the Worker bundle.
+6. **Invitations.** `InvitationSchema` is derived from the table, so the new `sealed_token` column would
+   have reached every read had it not been omitted beside `tokenHash`; a test now looks for it. The subject
+   doubled the name for a Workspace called deevy, as the confirmation's had.
+7. **The record.** This section, OPERATIONS.md's Email section and table rows, DEVELOPMENT.md's stub,
+   CONTEXT.md's Channel and Sender, PLAN.md and CLAUDE.md.
+
+**A review of the whole stack**, by a separate agent before anything merged, found what the slices' own
+tests and browser checks had not, and each was fixed in the pull request that introduced it, test first:
+
+- Adding a team address read only the environment's sender, so one set only in Settings › Email was refused
+  as missing (#127/#128). It now reads the sender in force, as every other door did.
+- `invitations.list` bound one parameter per invitation ever issued, which D1 refuses past a hundred (#131).
+  It now reads the Workspace's invitation emails in one two-parameter statement. Node's SQLite allows far
+  more, so the test shows the behaviour at 120 and not the limit itself.
+- A retry reused its idempotency key while its body changed — the unsubscribe link was signed from each
+  pass's clock — and Resend refuses that with a permanent 409, which would have recorded a delivered email
+  as given up on (#124/#125). The key is now the delivery and a hash of what it says, the link is signed from
+  the Event's time, and a 409 for a key still in flight is a retry.
+- A half-configured sender threw on every Worker request, sign-in included (#124). The Worker now keeps it
+  as a problem that Settings › Email shows; Node still stops at startup.
+- Team addresses were routed only for kinds some Human wanted in Slack (#127). They now hear every kind
+  their rules name.
+- Smaller: the `email.exhausted` insert is batched for D1 and a seventeen-refusal test proves it; an
+  invitation's sealed link is cleared whenever its email will never go, and says why in its own words;
+  saving Settings › Notifications sends only the email switches changed; every HTTP send times out after
+  twenty seconds; an SES region is validated and a non-ASCII From name encoded; no message names an
+  environment variable where Settings shows it; a team address's Run subject no longer says "your".
+
+Still owed, and said in OPERATIONS.md rather than hidden: none of the seven senders has sent to a real
+mailbox from deevy yet. Each is tested against its documented request and answers, SMTP against a real SMTP
+server and SigV4 against AWS's vector, and the whole flow was walked on `seeded` through the stub — but the
+first real send through each is still the operator's.

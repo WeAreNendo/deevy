@@ -122,8 +122,14 @@ _Avoid_: alert, ping, message
 
 **Channel**:
 Where Notifications are delivered: the in-app inbox, a Slack channel through its webhook, a Slack app's
-channel or a direct message, later an email address.
+channel or a direct message, or a team email address somebody there confirmed. A Human's own email is not a
+Channel, as their Slack direct messages are not: it is a column of their preferences.
 _Avoid_: destination, provider, integration
+
+**Sender**:
+The service this instance sends email through: Resend, Postmark, SendGrid, Mailgun, Amazon SES, an SMTP
+server or Cloudflare Email Service. One per instance, from the environment or from Settings › Email.
+_Avoid_: provider (sign-in's and a Socket's word), mailer, integration, ESP
 
 ### Record
 
