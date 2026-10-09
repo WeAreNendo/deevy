@@ -503,9 +503,29 @@ waits for an account: what an open stream bills, and a gradual deploy with a mig
 - **Slice 9, `apps/hosted`** (#145). workerd does not implement jurisdictions, so the smoke runs without `eu`. RPC
   types an empty tuple as `never[]`. The assets binding needs the single-page fallback even though the router
   serves the SPA, because a deep route is asked of the binding by the inner path.
+- **Slice 10, Live updates in an object** (#150). A hibernatable WebSocket that says only the newest seq;
+  the tab reads the Events under its own session, so nothing about who may see what is said twice. oRPC 2's
+  websocket adapter was set aside: its subscription is a generator held in memory, which keeps an object
+  awake. A push reaches an open tab in about 60 ms on workerd, and the object sleeps with the tab open
+  between Events. Found on the way: an alarm that fired while a Workspace was suspended set no next one, so
+  a resumed Workspace never swept again; resuming sets it now. ADR-0032.
 - **Slice 11, Every release upgrades in place** (#141). The Node migrator already tolerates migrations it does not
   know, and now names them at startup. A `-- deevy: contract` comment above drizzle's table rebuild could
   have hidden its PRAGMA from the D1 projection's refusal; the projection reads past leading comments now.
+- **Slice 12, Take your Workspace home** (#149). `dist/import.mjs` loads a dump into the image and refuses
+  any database that already holds something; `--for-d1` writes what a self-hosted Worker's D1 takes, with
+  wrangler's own journal, under `defer_foreign_keys`, every statement within D1's size limit. The only data
+  bound to a deevy's URL is OAuth's: the import drops the old resources and tokens, and says what else to
+  point at the new address, tool by tool.
+- **Slice 13, The release carries the hosted Worker** (#148). The archive is written by a small ustar writer,
+  sorted and dated by the commit, so two builds of one commit are the same bytes. wrangler uploaded the SPA's
+  `index.html` as a module until `find_additional_modules` was turned off. The acceptance walk runs a record
+  through a hosted Workspace as a fourth deployment; its sign-in follows the authorization's `redirect_uri`.
+- **Slice 14, Beta guardrails** (#147). The core's `limits` is configuration, absent on the image and the
+  Worker; past a day's invitations the next is a 429 that says when, and owed emails wait in their rows
+  rather than fail. An email an admin sends on the spot — a confirmation, a test — is not counted yet.
+- **Slice 16, The record** (#151). OPERATIONS.md says what a hosted Workspace is to the team that has one,
+  which the docs site publishes as a page.
 - **Slice 15, The docs site** (#146). Starlight on Workers static assets, generated from the repository's own
   Markdown at build time — OPERATIONS.md split at its sections, DEVELOPMENT, harnesses, the glossary, every
   ADR — and an API reference from the OpenAPI snapshot, grouped by area since it carries no tags. The link
