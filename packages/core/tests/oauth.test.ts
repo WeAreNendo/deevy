@@ -550,6 +550,79 @@ describe("resolvePrincipal with an access token", () => {
   });
 });
 
+/** A registration as MCP describes it, which never mentions `application_type`. */
+function register(app: App, redirectUris: string[], extra: Record<string, unknown> = {}) {
+  return app.request("/api/auth/oauth2/register", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: "An MCP client",
+      redirect_uris: redirectUris,
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+      ...extra,
+    }),
+  });
+}
+
+describe("a client that registers itself without saying what kind it is", () => {
+  it("is a native app when it is called back on this machine, and signs in", async () => {
+    const { db, auth, app } = testApp();
+    await humanMember(db);
+    // VS Code's pair: its own loopback listener, and a page that hands back to it.
+    const registered = await register(app, [redirectUri, "https://vscode.dev/redirect"]);
+    expect(registered.status).toBe(201);
+    const client = (await registered.json()) as { client_id: string; application_type?: string };
+    expect(client.application_type).toBe("native");
+
+    const cookie = await cookieHeaders(auth, "u1");
+    const { verifier, challenge } = await pkce();
+    const redirected = await authorize(app, cookie, {
+      clientId: client.client_id,
+      challenge,
+      resource,
+    });
+    const code = await consent(app, cookie, redirected.headers.get("location") ?? "");
+    const minted = await exchange(app, { code, clientId: client.client_id, verifier, resource });
+    expect(minted.status).toBe(200);
+  });
+
+  it("is a native app when its callback is localhost or an app's own scheme", async () => {
+    // An app's scheme must be a reverse-domain name with no authority (RFC 8252
+    // §7.1), which Better Auth enforces whatever the type: `cursor://host/…`
+    // is refused either way.
+    const { app } = testApp();
+    for (const uri of [
+      "http://localhost:6274/oauth/callback",
+      "http://[::1]:4000/cb",
+      "com.example.app:/oauth/callback",
+    ]) {
+      const registered = await register(app, [uri]);
+      expect(registered.status, uri).toBe(201);
+      expect(((await registered.json()) as { application_type?: string }).application_type).toBe(
+        "native",
+      );
+    }
+  });
+
+  it("stays a web app when it is called back over https elsewhere", async () => {
+    const { app } = testApp();
+    const registered = await register(app, ["https://app.example.com/callback"]);
+    expect(registered.status).toBe(201);
+    expect(((await registered.json()) as { application_type?: string }).application_type).toBe(
+      "web",
+    );
+  });
+
+  it("still names nobody else's server over http, and keeps a type it stated", async () => {
+    const { app } = testApp();
+    expect((await register(app, ["http://evil.example/callback"])).status).toBe(400);
+    expect((await register(app, [redirectUri, "http://evil.example/callback"])).status).toBe(400);
+    expect((await register(app, [redirectUri], { application_type: "web" })).status).toBe(400);
+  });
+});
+
 describe("Client ID Metadata Documents", () => {
   it("lets a client identify itself by URL, with no registration step at all", async () => {
     // MCP 2026-07-28 prefers this over DCR: the client_id *is* an HTTPS URL,
