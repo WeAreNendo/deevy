@@ -23,6 +23,50 @@ export const senderForms: Record<string, SenderForm> = {
     label: "Resend",
     fields: [{ key: "apiKey", label: "API key", secret: true, placeholder: "re_…" }],
   },
+  postmark: {
+    label: "Postmark",
+    fields: [
+      { key: "serverToken", label: "Server API token", secret: true },
+      {
+        key: "messageStream",
+        label: "Message stream",
+        secret: false,
+        placeholder: "outbound",
+        hint: "Leave empty for the transactional stream, outbound.",
+      },
+    ],
+  },
+  sendgrid: {
+    label: "SendGrid",
+    fields: [{ key: "apiKey", label: "API key", secret: true, placeholder: "SG.…" }],
+  },
+  mailgun: {
+    label: "Mailgun",
+    fields: [
+      { key: "apiKey", label: "API key", secret: true },
+      { key: "domain", label: "Sending domain", secret: false, placeholder: "mg.example.com" },
+      {
+        key: "region",
+        label: "Region",
+        secret: false,
+        placeholder: "us",
+        hint: "eu for a domain in Mailgun's EU region.",
+      },
+    ],
+  },
+  ses: {
+    label: "Amazon SES",
+    fields: [
+      { key: "region", label: "AWS region", secret: false, placeholder: "eu-west-1" },
+      { key: "accessKeyId", label: "Access key ID", secret: true },
+      {
+        key: "secretAccessKey",
+        label: "Secret access key",
+        secret: true,
+        hint: "An IAM key that may ses:SendEmail and nothing else.",
+      },
+    ],
+  },
 };
 
 /** Senders no form sets: the development stand-in (DEEVY_DEV_STUB_EMAIL). */

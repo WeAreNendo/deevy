@@ -7,11 +7,19 @@
  * sweep; the core holds the port and never this package.
  */
 import type { EmailSenders } from "@deevy/core/email";
+import { createMailgunSender } from "./mailgun/index.ts";
+import { createPostmarkSender } from "./postmark/index.ts";
 import { createResendSender } from "./resend/index.ts";
+import { createSendgridSender } from "./sendgrid/index.ts";
+import { createSesSender } from "./ses/index.ts";
 import { createStubSender } from "./stub/index.ts";
 
 export { emailSetupFromEnv, readEmailEnv } from "./env.ts";
+export { createMailgunSender } from "./mailgun/index.ts";
+export { createPostmarkSender } from "./postmark/index.ts";
 export { createResendSender } from "./resend/index.ts";
+export { createSendgridSender } from "./sendgrid/index.ts";
+export { createSesSender } from "./ses/index.ts";
 export { clearStubOutbox, createStubSender, stubOutbox } from "./stub/index.ts";
 
 export interface EmailSendersOptions {
@@ -22,6 +30,10 @@ export interface EmailSendersOptions {
 export function emailSenders({ devStub = false }: EmailSendersOptions = {}): EmailSenders {
   return {
     resend: createResendSender,
+    postmark: createPostmarkSender,
+    sendgrid: createSendgridSender,
+    mailgun: createMailgunSender,
+    ses: createSesSender,
     ...(devStub ? { stub: () => createStubSender() } : {}),
   };
 }
