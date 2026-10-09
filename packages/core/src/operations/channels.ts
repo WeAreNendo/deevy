@@ -7,6 +7,16 @@ import { postSlackMessage } from "../slack.ts";
 import { requireSocket, socketModuleFor } from "../sockets/registry.ts";
 import { NoInput, defineOperation, type ContextFor } from "./registry.ts";
 import { newId } from "../ids.ts";
+import { resolveSender } from "../email/sender.ts";
+import {
+  confirmToken,
+  confirmUrl,
+  emailChannelOf,
+  renderConfirmation,
+  renderTeamTest,
+  sendNow,
+} from "../email/team.ts";
+import { linkOrigin } from "./shared.ts";
 
 /**
  * Channels: where Notifications are delivered (CONTEXT.md). Only Slack is
@@ -32,8 +42,21 @@ const ChannelView = z.object({
   /** For a room in a Slack app: the Socket it is in, and the conversation's id. */
   socketId: z.string().nullable(),
   conversation: z.string().nullable(),
+  /**
+   * For a team address: where it sends, and when somebody there confirmed.
+   * Nothing is routed to one before then (docs/plans/email-channel.md).
+   */
+  address: z.string().nullable(),
+  confirmedAt: z.date().nullable(),
   createdBy: z.string().nullable(),
   createdAt: z.date(),
+});
+
+/** What a send that the caller waits for came back with. */
+const SendOutcomeView = z.object({
+  delivered: z.boolean(),
+  status: z.number().int(),
+  error: z.string().nullable(),
 });
 
 /** Slack's webhook host, or null when the URL is unset or unparseable. */
@@ -57,6 +80,8 @@ function view(row: Channel) {
     webhookHost: hostOf(row.config),
     socketId: text("socketId"),
     conversation: text("conversation"),
+    address: emailChannelOf(row)?.address ?? null,
+    confirmedAt: emailChannelOf(row)?.confirmedAt ?? null,
     createdBy: row.createdBy,
     createdAt: row.createdAt,
   };
@@ -124,6 +149,59 @@ export const channels = {
         payload: { name: input.name, channelKind: "slack", webhookHost: hostOf(row.config) },
       });
       return view(row);
+    },
+  }),
+
+  /**
+   * A team address (docs/plans/email-channel.md, slice 2). It is mailed a
+   * confirmation now, through the sender in force, and the answer is the
+   * sender's: an admin who typed an address the sender's domain cannot send
+   * from learns it here, not from a Gate that never arrived. It is routed to
+   * nothing until somebody at it confirms.
+   */
+  createEmail: defineOperation({
+    name: "channels.createEmail",
+    summary: "Add a team email address as a Channel, and mail it a confirmation",
+    method: "POST",
+    path: "/channels/email",
+    auth: "admin",
+    input: z.object({
+      /** What a Human calls it: `Approvals`. */
+      name: z.string().trim().min(1).max(120),
+      address: z.email().max(254),
+    }),
+    output: z.object({ channel: ChannelView, confirmation: SendOutcomeView }),
+    handler: async ({ input, context }) => {
+      const sender = resolveSender(context);
+      if ("reason" in sender)
+        throw new ORPCError("PRECONDITION_FAILED", { message: sender.reason });
+      if (!context.secret) {
+        throw new ORPCError("NOT_IMPLEMENTED", {
+          message:
+            "This deevy has no secret to sign a confirmation link with. Set one on the server and restart.",
+        });
+      }
+      const id = newId("channel");
+      const address = input.address.trim().toLowerCase();
+      const [row] = await context.db
+        .insert(channelTable)
+        .values({
+          id,
+          workspaceId: context.workspace.id,
+          kind: "email",
+          name: input.name,
+          config: { address, confirmedAt: null },
+          createdBy: context.member.id,
+        })
+        .returning();
+      if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
+      await appendEvent(context, {
+        kind: "channel.created",
+        subjectType: "channel",
+        subjectId: id,
+        payload: { name: input.name, channelKind: "email", address },
+      });
+      return { channel: view(row), confirmation: await sendConfirmation(context, row) };
     },
   }),
 
@@ -256,6 +334,21 @@ export const channels = {
     handler: async ({ input, context }) => {
       const found = await requireChannel(context.db, context.workspace.id, input.channelId);
       if (found.kind === "slack_app") return testInSocket(context, found);
+      // A team address waiting for its confirmation gets it again: that is
+      // what an admin wants when the first one went to spam.
+      const email = emailChannelOf(found);
+      if (email) {
+        if (!email.confirmedAt) return sendConfirmation(context, found);
+        return sendNow(
+          context,
+          email.address,
+          renderTeamTest({
+            workspaceName: context.workspace.name,
+            channelName: found.name,
+            baseUrl: linkOrigin(context),
+          }),
+        );
+      }
       const webhookUrl = found.config?.webhookUrl;
       if (typeof webhookUrl !== "string" || webhookUrl.length === 0) {
         throw new ORPCError("BAD_REQUEST", { message: "This Channel has no webhook URL" });
@@ -309,4 +402,31 @@ async function testInSocket(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/** Mails a team address the link that confirms it, now. */
+async function sendConfirmation(context: ContextFor<"admin">, row: Channel) {
+  const email = emailChannelOf(row);
+  if (!email || !context.secret) {
+    return { delivered: false, status: 0, error: "This Channel cannot be confirmed by email." };
+  }
+  const adder = row.createdBy
+    ? await context.db.query.member.findFirst({
+        where: { id: row.createdBy },
+        with: { user: { columns: { name: true } } },
+      })
+    : null;
+  return sendNow(
+    context,
+    email.address,
+    renderConfirmation({
+      workspaceName: context.workspace.name,
+      channelName: row.name,
+      addedBy: adder?.user.name ?? null,
+      url: confirmUrl(
+        linkOrigin(context),
+        await confirmToken(context.secret, row.id, email.address),
+      ),
+    }),
+  );
 }

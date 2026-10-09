@@ -10,9 +10,11 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
  * Where Notifications are delivered (CONTEXT.md). The inbox always exists.
  * `slack` is an incoming webhook: it posts a link and takes no click. `slack_app`
  * is a room in a Slack Socket's workspace, where a Gate is posted with its two
- * buttons and updated when somebody rules (ADR-0025).
+ * buttons and updated when somebody rules (ADR-0025). `email` is a team
+ * address, sent nothing until somebody at it confirmed by the link deevy
+ * mailed there (docs/plans/email-channel.md).
  */
-export const channelKinds = ["inbox", "slack", "slack_app"] as const;
+export const channelKinds = ["inbox", "slack", "slack_app", "email"] as const;
 
 export const channel = sqliteTable(
   "channel",

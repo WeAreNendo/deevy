@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { mountSpa, openDatabase } from "@deevy/adapters/node";
 import { createApp, createAuth, signInProviders, type AuthEnv } from "@deevy/core";
-import { stubOutbox } from "@deevy/email";
+import { emailSenders, stubOutbox } from "@deevy/email";
 import { socketModules } from "@deevy/sockets";
 import { fetchClientMetadataResource } from "./cimd.ts";
 
@@ -79,6 +79,10 @@ export function buildServer(env: ServerEnv) {
     // And what their credentials are sealed with. Without it a tool that holds
     // one cannot be connected at all (packages/core/src/secrets.ts).
     ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
+    // How email leaves, for what an operation sends now: a team address's
+    // confirmation, a test (docs/plans/email-channel.md).
+    emailSenders: emailSenders({ devStub: env.devStubEmail }),
+    email: env.email,
     // What the sign-in page draws its buttons from: the providers this
     // environment configured, decided where they are registered rather than in
     // the SPA (docs/plans/sign-in.md).

@@ -114,6 +114,9 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // What their credentials are sealed with. A Worker without it can serve
       // a Socket that holds none and refuses to connect one that does.
       ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
+      // How email leaves, for what an operation sends now (docs/plans/email-channel.md).
+      emailSenders: emailSenders({ devStub: env.devStubEmail }),
+      email: env.email,
       // Only when the account has Queues. Absent, `createApp` discards jobs
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).

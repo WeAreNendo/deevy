@@ -28,6 +28,13 @@ const stub = vi.hoisted(() => ({
   created: [] as unknown[],
   set: [] as unknown[],
   tested: [] as unknown[],
+  createdEmail: [] as unknown[],
+  /** What the sender said to a confirmation, as `channels.createEmail` reports it. */
+  confirmation: { delivered: true, status: 200, error: null } as {
+    delivered: boolean;
+    status: number;
+    error: string | null;
+  },
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -47,6 +54,21 @@ vi.mock("../src/lib/orpc.ts", async () => {
       createInSocket: async (input: unknown) => {
         stub.createdInSocket.push(input);
         return stub.channels[0];
+      },
+      createEmail: async (input: { name: string; address: string }) => {
+        stub.createdEmail.push(input);
+        return {
+          channel: {
+            ...stub.channels[0],
+            id: "c9",
+            kind: "email",
+            name: input.name,
+            webhookHost: null,
+            address: input.address,
+            confirmedAt: null,
+          },
+          confirmation: stub.confirmation,
+        };
       },
     },
     sockets: {
@@ -152,5 +174,64 @@ describe("the Channels settings page", () => {
       projectId: null,
       channelId: "c1",
     });
+  });
+
+  it("adds a team email address, and says a confirmation went there first", async () => {
+    stub.confirmation = { delivered: true, status: 200, error: null };
+    await mountAt("/settings/channels", { memberName: "Ada" });
+
+    const form = await screen.findByRole("form", { name: "Add an email address" });
+    fireEvent.change(within(form).getByLabelText("Team email address"), {
+      target: { value: "approvals@example.com" },
+    });
+    fireEvent.click(within(form).getByRole("button", { name: "Add address" }));
+
+    await waitFor(() =>
+      expect(stub.createdEmail).toContainEqual({
+        name: "approvals@example.com",
+        address: "approvals@example.com",
+      }),
+    );
+    expect(await screen.findByText(/sent a confirmation to approvals@example\.com/i)).toBeTruthy();
+  });
+
+  it("says what the sender said when the confirmation could not go", async () => {
+    stub.confirmation = {
+      delivered: false,
+      status: 403,
+      error: "The example.com domain is not verified.",
+    };
+    await mountAt("/settings/channels", { memberName: "Ada" });
+
+    const form = await screen.findByRole("form", { name: "Add an email address" });
+    fireEvent.change(within(form).getByLabelText("Team email address"), {
+      target: { value: "ops@example.com" },
+    });
+    fireEvent.click(within(form).getByRole("button", { name: "Add address" }));
+
+    expect(await screen.findByText(/The example\.com domain is not verified\./)).toBeTruthy();
+    stub.confirmation = { delivered: true, status: 200, error: null };
+  });
+
+  it("shows a team address waiting for its confirmation", async () => {
+    const before = stub.channels;
+    stub.channels = [
+      {
+        ...before[0],
+        id: "c9",
+        kind: "email",
+        name: "approvals@example.com",
+        webhookHost: null,
+        address: "approvals@example.com",
+        confirmedAt: null,
+      } as unknown as (typeof before)[number],
+    ];
+    await mountAt("/settings/channels", { memberName: "Ada" });
+
+    const table = await screen.findByRole("table", { name: "Channels" });
+    expect(within(table).getByText(/Waiting for confirmation/)).toBeTruthy();
+    fireEvent.click(within(table).getByRole("button", { name: "Test" }));
+    expect(await screen.findByText(/Sent the confirmation again/)).toBeTruthy();
+    stub.channels = before;
   });
 });

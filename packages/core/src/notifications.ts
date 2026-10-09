@@ -114,7 +114,7 @@ function isHumanRecipient(recipient: Recipient): recipient is HumanRecipient {
  */
 export interface SlackTarget {
   channelId: string;
-  target: "slack" | "chat";
+  target: "slack" | "chat" | "email";
   kind: Notification["kind"];
 }
 
@@ -274,6 +274,14 @@ function targetOf(channel: {
   };
   if (channel.kind === "slack" && text("webhookUrl")) return "slack";
   if (channel.kind === "slack_app" && text("socketId") && text("conversation")) return "chat";
+  // A team address only once somebody there confirmed it (email/team.ts).
+  if (
+    channel.kind === "email" &&
+    text("address") &&
+    typeof channel.config?.confirmedAt === "number"
+  ) {
+    return "email";
+  }
   return null;
 }
 

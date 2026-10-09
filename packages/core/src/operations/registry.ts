@@ -1,3 +1,4 @@
+import type { EmailSenders, EmailSetup } from "../email/port.ts";
 import type { SocketModules } from "../sockets/port.ts";
 import type { Db, Member, Workspace } from "@deevy/db";
 import type { AnySchema, InferSchemaInput, InferSchemaOutput } from "@orpc/contract";
@@ -85,6 +86,13 @@ export interface AppContext {
    * credential in plaintext.
    */
   socketSecret?: string;
+  /**
+   * The email senders this runtime can run, and the one in force
+   * (docs/plans/email-channel.md). An operation that must send now — a team
+   * address's confirmation, a test — reads them; without them it says so.
+   */
+  emailSenders?: EmailSenders;
+  email?: EmailSetup | null;
   /**
    * This instance's own secret (`BETTER_AUTH_SECRET`). Nothing is sealed with
    * it; what it signs is short-lived and public-facing — the `state` a

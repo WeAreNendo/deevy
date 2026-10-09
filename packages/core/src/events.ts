@@ -156,6 +156,8 @@ export type EventKind =
   | "channel.created"
   | "channel.updated"
   | "channel.deleted"
+  /** Somebody at a team address confirmed it, so it may be routed to (docs/plans/email-channel.md). */
+  | "channel.confirmed"
   | "routing.updated";
 
 export type EventPayload = Record<string, unknown>;
