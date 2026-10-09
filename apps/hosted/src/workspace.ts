@@ -241,7 +241,7 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       providers: this.#hosted.providers,
       adminEmail: config.adminEmail,
       workspaceName: config.name,
-      // Every Workspace signs in through the relay this Worker is, at /auth (ADR-0031).
+      // Every Workspace signs in through the relay this Worker is, at /auth (ADR-0030).
       signInRelay: { url: `${this.#hosted.origin}/auth`, secret: this.#hosted.relaySecret },
       fetchClientMetadataResource,
     };
