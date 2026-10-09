@@ -49,6 +49,7 @@ export {
   type JobKind,
   type JobQueue,
 } from "./jobs.ts";
+export { dataHeaders, pageHeaders, pagePolicy } from "./headers.ts";
 export { type LiveOptions } from "./live.ts";
 export { createDeevyMcp, type DeevyMcp, type DeevyMcpOptions } from "./mcp/server.ts";
 export { generateSpec } from "./openapi.ts";

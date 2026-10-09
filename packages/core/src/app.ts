@@ -15,6 +15,8 @@ import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
 import { COMMON_ERROR_STATUS_MAP, DEFAULT_ERROR_STATUS, ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
+import type { StandardLazyRequest } from "@orpc/client";
+import type { StandardHandlerInterceptor } from "@orpc/server/standard";
 import { CORSHandlerPlugin } from "@orpc/server/plugins";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -24,6 +26,7 @@ import { discardingJobQueue, type JobQueue } from "./jobs.ts";
 import type { LiveOptions } from "./live.ts";
 import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
+import { SCALAR_SCRIPT, securityHeaders } from "./headers.ts";
 import { betterAuthKeys } from "./keys.ts";
 import type { ResourcePath } from "./auth.ts";
 import { API_PATH } from "./auth.ts";
@@ -200,6 +203,12 @@ export function createApp({
     report(error);
   };
   const app = new Hono<{ Variables: { ctx: AppContext } }>();
+
+  // First, so every response leaves with them: the API's, the pages the server
+  // writes, and on Node the SPA `mountSpa` adds after the fact. The Worker's
+  // static assets are answered before this app runs and carry the same
+  // through `apps/web/public/_headers` (headers.ts).
+  app.use("*", securityHeaders);
 
   app.get("/healthz", (c) => c.json({ ok: true }));
 
@@ -401,9 +410,14 @@ export function createApp({
   });
 
   const corsPlugin = new CORSHandlerPlugin<AppContext>({ origin, credentials: true });
+  // The browser origins a page of deevy's may call from: the same list CORS
+  // answers, since the SPA may be served from an origin of its own. Checked
+  // once an operation has matched, so the refusal is encoded the way each
+  // surface encodes every other error, and reaches a client as one.
+  const sameOriginWrites = refuseCrossSiteWrites(originsOf(origin));
   const rpc = new RPCHandler(router, {
     plugins: [corsPlugin],
-    interceptors: [onError(reportUnexpected)],
+    interceptors: [onError(reportUnexpected), sameOriginWrites],
   });
   const api = new OpenAPIHandler(router, {
     plugins: [
@@ -412,9 +426,11 @@ export function createApp({
         docsPath: "/docs",
         specPath: "/spec.json",
         spec: () => generateSpec(version),
+        // The version the page's policy names, never jsDelivr's latest (headers.ts).
+        providerScriptUrl: SCALAR_SCRIPT,
       }),
     ],
-    interceptors: [onError(reportUnexpected)],
+    interceptors: [onError(reportUnexpected), sameOriginWrites],
   });
 
   app.use("/rpc/*", async (c, next) => {
@@ -450,6 +466,87 @@ function wellKnown(auth: Auth) {
     const headers = new Headers(response.headers);
     headers.set("access-control-allow-origin", "*");
     return new Response(response.body, { status: response.status, headers });
+  };
+}
+
+/** The methods a browser sends from any page without anything changing. */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/** A URL's origin as a browser writes it in `Origin`; null for what is not a URL. */
+function webOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** The configured browser origins, each as the browser writes it in `Origin`. */
+function originsOf(configured: string[]): ReadonlySet<string> {
+  // What is not a URL at all no browser will ever send, so it allows nothing.
+  return new Set(configured.map(webOrigin).filter((found): found is string => found !== null));
+}
+
+/**
+ * Why a change this request asks for is refused, when the session cookie is
+ * what authenticated it and a page of deevy's own is not what sent it; null
+ * when it may go on.
+ *
+ * CORS keeps another site from reading an answer, not from sending the
+ * request: a form or a no-cors fetch on any page reaches `/rpc` with the
+ * browser's cookie attached, and SameSite stops that only across sites — a
+ * sibling subdomain is the same site. So a write signed in by the cookie must
+ * say where it came from. `Sec-Fetch-Site: same-origin` is the browser's own
+ * word for a page on this origin; an `Origin` this instance was configured with
+ * (the SPA may be served from one of its own), or the context's `baseURL` —
+ * which is the request's own origin where none was configured — is the same
+ * claim from a browser too old for the first, or over plain http, where it is
+ * not sent. A request that says neither is refused: every browser sends
+ * `Origin` on a POST, and a script or a CLI holds a bearer.
+ *
+ * A bearer — an Agent's key, an MCP client's token — is untouched, since no
+ * browser attaches one by itself; so is a read, and a request no session
+ * signed in, which has nothing of anybody's to spend.
+ */
+function crossSiteWrite(
+  request: Pick<StandardLazyRequest, "method" | "headers">,
+  context: Pick<AppContext, "principal" | "baseURL">,
+  origins: ReadonlySet<string>,
+): ORPCError<"FORBIDDEN", unknown> | null {
+  if (SAFE_METHODS.has(request.method) || context.principal?.kind !== "cookie") return null;
+  const header = (name: string) => {
+    const value = request.headers[name];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  if (header("sec-fetch-site") === "same-origin") return null;
+  const from = header("origin");
+  if (from && (origins.has(from) || from === webOrigin(context.baseURL))) return null;
+  return new ORPCError("FORBIDDEN", {
+    message:
+      "deevy only takes a change signed in with your session from its own pages. Use deevy itself, or an API key or access token from a script.",
+  });
+}
+
+/**
+ * `crossSiteWrite` as an interceptor on both surfaces: it runs once an
+ * operation has matched, so what it throws is encoded as that surface's error
+ * — an RPC client reads `FORBIDDEN`, an OpenAPI caller a 403 body.
+ */
+function refuseCrossSiteWrites(
+  origins: ReadonlySet<string>,
+): StandardHandlerInterceptor<AppContext> {
+  return async (options) => {
+    const refused = crossSiteWrite(options.request, options.context, origins);
+    if (refused) {
+      // Read and dropped before the refusal goes out: a request answered with
+      // its body still unread left the connection it came on unusable under
+      // workerd on Linux, and the next request on it was "Network connection
+      // lost" (apps/web/scripts/smoke-workers.ts).
+      await options.request.resolveBody().catch(() => undefined);
+      throw refused;
+    }
+    return options.next();
   };
 }
 

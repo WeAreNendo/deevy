@@ -61,6 +61,13 @@ export default defineConfig({
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
   },
   plugins: lazyPlugins(() => [react(), tailwindcss(), ...(workers ? [cloudflare()] : [])]),
+  build: {
+    // A font is a file of its own, never a `data:` URL inside the stylesheet:
+    // a page's policy takes fonts from deevy's origin and nowhere else
+    // (packages/core/src/headers.ts), and one Inter subset is small enough
+    // that Vite would otherwise inline it, which the browser then refuses.
+    assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined),
+  },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },

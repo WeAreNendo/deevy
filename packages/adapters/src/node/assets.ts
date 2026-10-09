@@ -30,11 +30,19 @@ function cached(serve: MiddlewareHandler, cacheControl: (path: string) => string
 /**
  * Serves a built single-page app from `dir`: real files first, `index.html`
  * for everything else so client-side routes deep-link.
+ *
+ * The headers a page needs — its Content-Security-Policy above all — are not
+ * set here: `createApp` registers them on every path before this runs, so the
+ * SPA leaves with the same ones as every other page deevy serves
+ * (packages/core/src/headers.ts).
  */
 export function mountSpa<E extends Env, S extends Schema, P extends string>(
   app: Hono<E, S, P>,
   dir: string,
 ): void {
+  // The Worker's asset handler reads this file for the headers it adds; here
+  // the app adds them itself, and the file is configuration, not the SPA.
+  app.get("/_headers", (c) => c.notFound());
   app.use("*", cached(serveStatic({ root: dir }), cacheControlFor));
   app.get(
     "*",

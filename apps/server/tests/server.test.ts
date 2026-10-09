@@ -1,6 +1,8 @@
 import { fetchClientMetadataResource as shapeCheckTransport } from "@deevy/core/cimd";
-import { signInProviders } from "@deevy/core";
-import { existsSync, readFileSync } from "node:fs";
+import { pagePolicy, signInProviders } from "@deevy/core";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { readEnv } from "../src/env.ts";
 import { fetchClientMetadataResource as strictTransport } from "../src/cimd.ts";
@@ -8,14 +10,18 @@ import { buildServer } from "../src/server.ts";
 
 const migrationsFolder = new URL("../../../packages/db/drizzle", import.meta.url).pathname;
 
-function testServer() {
-  return buildServer({
+function testEnv() {
+  return {
     ...readEnv({}),
     databasePath: ":memory:",
     migrationsFolder,
     baseURL: "http://localhost:3000",
     secret: "test-secret-test-secret-test-secret-1234",
-  });
+  };
+}
+
+function testServer() {
+  return buildServer(testEnv());
 }
 
 describe("server", () => {
@@ -43,6 +49,36 @@ describe("server", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
     close();
+  });
+
+  /**
+   * The SPA is mounted after `createApp`, and its pages carry the policy all
+   * the same: the headers middleware is registered on every path before it
+   * (packages/core/src/headers.ts). A Gate's page is a client-side route, so
+   * it is the fallback `index.html` that must refuse to be framed.
+   */
+  it("serves the SPA with deevy's policy, a Gate's page and the bundle alike", async () => {
+    const webDist = mkdtempSync(join(tmpdir(), "deevy-web-"));
+    mkdirSync(join(webDist, "assets"));
+    writeFileSync(join(webDist, "index.html"), "<!doctype html><div id=root></div>");
+    writeFileSync(join(webDist, "assets", "index.js"), "export {};");
+    writeFileSync(join(webDist, "_headers"), "/*\n  X-Frame-Options: DENY\n");
+    const { app, close } = buildServer({ ...testEnv(), webDist });
+
+    const gate = await app.request("/gates/gate_abc123def456");
+    expect(gate.status).toBe(200);
+    expect(gate.headers.get("content-type")).toContain("text/html");
+    expect(gate.headers.get("content-security-policy")).toBe(pagePolicy);
+    expect(gate.headers.get("x-frame-options")).toBe("DENY");
+    const index = await app.request("/");
+    expect(index.headers.get("content-security-policy")).toBe(pagePolicy);
+    const bundle = await app.request("/assets/index.js");
+    expect(bundle.headers.get("x-content-type-options")).toBe("nosniff");
+    // The Worker's configuration rides in the build; Node sets the headers
+    // itself and serves the file to nobody.
+    expect((await app.request("/_headers")).status).toBe(404);
+    close();
+    rmSync(webDist, { recursive: true, force: true });
   });
 
   /**

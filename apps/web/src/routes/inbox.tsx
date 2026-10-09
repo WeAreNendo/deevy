@@ -32,6 +32,7 @@ import { describeNotification, type NotificationTone } from "@/lib/notification-
 import { GatePage } from "@/routes/gates/gate";
 import { WorkItemPage } from "@/routes/work/item";
 import { orpc } from "@/lib/orpc";
+import { webHref } from "@/lib/href";
 import { useShortcut } from "@/lib/shortcuts";
 import { ago } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -140,7 +141,10 @@ export function InboxPage({
   useShortcut("e", () => selected && !selected.readAt && markRead.mutate({ ids: [selected.id] }));
   useShortcut("x", () => selected && togglePicked(selected.id));
   useShortcut("shift+e", () => markAllRead.mutate({}));
-  useShortcut("o", () => selected?.issue && window.open(selected.issue.url, "_blank", "noopener"));
+  useShortcut("o", () => {
+    const href = webHref(selected?.issue?.url);
+    if (href) window.open(href, "_blank", "noopener");
+  });
 
   if (inbox.isError) {
     return <p className="text-destructive">Could not load your inbox: {inbox.error.message}</p>;
