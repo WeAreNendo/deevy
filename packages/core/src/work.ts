@@ -55,6 +55,7 @@ import {
   type Backoff,
   type Claimed,
   type DueDeliveriesQueryOptions,
+  type Targets,
 } from "./outbox.ts";
 
 /**
@@ -536,6 +537,7 @@ export async function deliverDueChannelMessages({
 
   const claimed = await claimDeliveries(
     db,
+    "slack",
     due.map((row) => row.id),
     now,
   );
@@ -672,7 +674,8 @@ export async function deliverDueChatMessages({
   const result: DeliveryResult = { scanned: 0, delivered: 0, failed: 0, gaveUp: 0, more: false };
   if (!sockets) return result;
 
-  const due = await dueDeliveries(db, ["chat", "chat_dm"], {
+  const targets: Targets = ["chat", "chat_dm"];
+  const due = await dueDeliveries(db, targets, {
     workspaceId,
     now,
     limit,
@@ -682,6 +685,7 @@ export async function deliverDueChatMessages({
   if (due.length === 0) return result;
   const claimed = await claimDeliveries(
     db,
+    targets,
     due.map((row) => row.id),
     now,
   );
@@ -896,6 +900,7 @@ export async function deliverDueSocketMirrors({
 
   const claimed = await claimDeliveries(
     db,
+    "socket",
     due.map((row) => row.id),
     now,
   );
@@ -1139,6 +1144,7 @@ export async function deliverDueWebhooks({
     db,
     claimed: await claimDeliveries(
       db,
+      "webhook",
       due.map((row) => row.id),
       now,
     ),
@@ -1166,6 +1172,11 @@ export interface DeliverWebhookOptions {
  * the sweep with the scan replaced by an id, so it claims, backs off and gives
  * up in exactly the same way: a delivery must not be sent twice because two
  * different things decided to send it.
+ *
+ * An id that names some other arm's row claims nothing and so changes nothing:
+ * a tracker's comment or a chat message is left exactly as it was for the
+ * sweep that knows how to send it, rather than retired here for having no
+ * subscription behind it.
  */
 export async function deliverWebhook({
   db,
@@ -1176,7 +1187,7 @@ export async function deliverWebhook({
 }: DeliverWebhookOptions): Promise<DeliveryResult> {
   return sendClaimedWebhooks({
     db,
-    claimed: await claimDeliveries(db, [deliveryId], now),
+    claimed: await claimDeliveries(db, "webhook", [deliveryId], now),
     now,
     maxAttempts,
     fetchImpl,

@@ -21,6 +21,7 @@ import {
   retireDeliveries,
   type Attempted,
   type Backoff,
+  type Targets,
 } from "../outbox.ts";
 import { chatGateMessage } from "../sockets/chat-out.ts";
 import { parseFrom, type EmailMessage } from "./port.ts";
@@ -94,7 +95,8 @@ export async function deliverDueEmails({
     gaveUp: 0,
     more: false,
   };
-  const due = await dueDeliveries(db, ["email_member", "email", "invitation"], {
+  const targets: Targets = ["email_member", "email", "invitation"];
+  const due = await dueDeliveries(db, targets, {
     workspaceId,
     now,
     limit,
@@ -104,6 +106,7 @@ export async function deliverDueEmails({
   if (due.length === 0) return result;
   const claimed = await claimDeliveries(
     db,
+    targets,
     due.map((row) => row.id),
     now,
   );

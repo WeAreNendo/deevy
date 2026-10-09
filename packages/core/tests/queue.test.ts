@@ -1,9 +1,11 @@
+import { project as projectTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
+import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Job, JobQueue } from "../src/jobs.ts";
 import { router } from "../src/operations/index.ts";
-import { deliverDueWebhooks } from "../src/work.ts";
-import { fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
+import { deliverDueSocketMirrors, deliverDueWebhooks, deliverWebhook } from "../src/work.ts";
+import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
 
 /**
  * The queue as the core sees it: a hint about when to look at a row that is
@@ -99,5 +101,86 @@ describe("deriving a delivery with a queue that is down", () => {
 
     expect(sent).toMatchObject({ scanned: 1, delivered: 1, failed: 0, gaveUp: 0 });
     expect(posted).toEqual(["https://runtime.example/deevy"]);
+  });
+});
+
+/**
+ * What a tracker is owed rides in the same delivery table as what a URL is,
+ * but only the webhook arm is what a queue message drives (jobs.ts). The first
+ * Worker with a Queue bound retired every mirrored comment the moment it was
+ * owed: the job named the row, `deliverWebhook` claimed it, found no
+ * subscription behind it, and gave it up as undeliverable.
+ */
+describe("a delivery owed to a tracker, on a deployment with a queue", () => {
+  async function mirroringGate(jobs: JobQueue) {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
+    await db
+      .update(projectTable)
+      .set({ mirror: "gates" })
+      .where(eq(projectTable.id, seeded.project.id));
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const fake = fakeSockets();
+    const asPlanner = createRouterClient(router, {
+      context: { ...planner, jobs, sockets: fake.sockets },
+    });
+    const run = await asPlanner.runs.start({ issue: issue.url });
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "ship", proposal: "Ship it" });
+    const owed = await db.query.delivery.findMany({ where: { target: "socket" } });
+    expect(owed).toHaveLength(1);
+    return { db, ada, fake, mirror: owed[0] as (typeof owed)[number] };
+  }
+
+  it("is not handed to the queue, which only knows how to send a webhook", async () => {
+    const queue = recordingQueue();
+    await mirroringGate(queue);
+
+    // Nothing here is subscribed to a URL, so nothing is a webhook.
+    expect(queue.jobs).toEqual([]);
+  });
+
+  it("is left for the sweep when a queue message names it anyway", async () => {
+    const { db, ada, fake, mirror } = await mirroringGate(recordingQueue());
+
+    // A message left over from a version that did enqueue these, or anything
+    // else that names the wrong row: it claims nothing and posts nothing.
+    const posted: string[] = [];
+    const named = await deliverWebhook({
+      db,
+      deliveryId: mirror.id,
+      fetch: async (url: string) => {
+        posted.push(url);
+        return new Response("", { status: 200 });
+      },
+    });
+    expect(named).toMatchObject({ scanned: 0, delivered: 0, failed: 0, gaveUp: 0 });
+    expect(posted).toEqual([]);
+    const after = await db.query.delivery.findFirst({ where: { id: mirror.id } });
+    expect(after).toMatchObject({
+      attempts: 0,
+      lockedUntil: null,
+      lastError: null,
+      deliveredAt: null,
+    });
+
+    // And the sweep that does know what a tracker is sends it as it always did.
+    const sent = await deliverDueSocketMirrors({
+      db,
+      workspaceId: ada.workspace.id,
+      sockets: fake.sockets,
+      baseUrl: "https://deevy.test",
+    });
+    expect(sent).toMatchObject({ scanned: 1, delivered: 1, gaveUp: 0 });
+    expect(fake.comments).toHaveLength(1);
+    expect(fake.comments[0]?.externalId).toBe("42");
   });
 });
