@@ -1534,6 +1534,15 @@ D1 runs a batch inside a transaction, where SQLite ignores `PRAGMA foreign_keys`
 the connection, does nothing on D1, the rebuild's `DROP TABLE` cascades the children away, and wrangler
 reports success. Better to fail while generating.
 
+`vp run db#generate:d1` also writes a third rendering, for a database kept in a Durable Object, which cannot
+read files: `packages/db/src/durable-migrations.ts`, each folder's `migration.sql` verbatim under the folder's
+name, the record drizzle's durable-sqlite migrator takes. Only `@deevy/db/durable-migrations` reaches it, so neither the
+Node nor the Workers bundle carries it. That migrator journals by name in `__drizzle_migrations` as the Node
+migrator does, so a database migrated in an object opens under the Node migrator with nothing left to apply,
+and the other way round; `packages/adapters/tests/durable-migrations.test.ts` shows both. The refusals above
+hold for it too: a local Durable Object answered each of them as D1 does. `check:migrations` diffs it like the
+D1 files.
+
 `apps/web/wrangler.jsonc` names the database and deliberately gives no `database_id`. Local D1 works from the
 name alone, and the first `wrangler deploy` provisions a database of that name and remembers which one it is,
 so there is nothing to paste back into the configuration and nothing account-specific in an open-source

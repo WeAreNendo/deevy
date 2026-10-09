@@ -6,6 +6,9 @@ export default defineConfig({
       "docs/research/**",
       "packages/db/drizzle/**",
       "packages/db/src/schema/auth.ts",
+      // Written by db#generate:d1 and diffed by db#check:migrations as text, so
+      // the emitter owns its shape (packages/db/scripts/emit-d1-migrations.ts).
+      "packages/db/src/durable-migrations.ts",
       "packages/core/openapi.json",
       // Written by snapshot:mcp-tools and diffed in CI; the generator owns its
       // shape, so the formatter must not have an opinion about it.

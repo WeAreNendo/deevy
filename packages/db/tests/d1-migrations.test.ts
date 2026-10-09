@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vite-plus/test";
 import { checkMigrations } from "../scripts/check-migrations.ts";
-import { projectMigrations } from "../scripts/emit-d1-migrations.ts";
+import {
+  projectDurableMigrations,
+  projectMigrations,
+  renderDurableMigrations,
+} from "../scripts/emit-d1-migrations.ts";
 
 const run = promisify(execFile);
 
@@ -17,6 +21,16 @@ async function drizzleFolder(migrations: Record<string, string>) {
     await writeFile(join(dir, name, "migration.sql"), sql);
   }
   return dir;
+}
+
+/**
+ * The Durable Object projection the emitter would write for `drizzleDir`, so a
+ * test about the D1 files hears about nothing else.
+ */
+async function currentDurableFile(drizzleDir: string) {
+  const file = join(await mkdtemp(join(tmpdir(), "deevy-durable-")), "durable-migrations.ts");
+  await writeFile(file, renderDurableMigrations(await projectDurableMigrations(drizzleDir)));
+  return file;
 }
 
 describe("the D1 projection of a drizzle migration", () => {
@@ -143,8 +157,11 @@ describe("check:migrations on the projection", () => {
       "20260101000000_one": "CREATE TABLE `a` (`id` text PRIMARY KEY NOT NULL);",
     });
     const empty = await mkdtemp(join(tmpdir(), "deevy-migrations-"));
+    const durableMigrationsFile = await currentDurableFile(dir);
 
-    expect(await checkMigrations({ drizzleDir: dir, migrationsDir: empty })).toEqual([
+    expect(
+      await checkMigrations({ drizzleDir: dir, migrationsDir: empty, durableMigrationsFile }),
+    ).toEqual([
       "packages/db/migrations/0001_20260101000000_one.sql is missing; run `vp run db#generate:d1`",
     ]);
   });
@@ -155,8 +172,11 @@ describe("check:migrations on the projection", () => {
     });
     const stale = await mkdtemp(join(tmpdir(), "deevy-migrations-"));
     await writeFile(join(stale, "0001_20260101000000_one.sql"), "CREATE TABLE `b` (`id` text);\n");
+    const durableMigrationsFile = await currentDurableFile(dir);
 
-    expect(await checkMigrations({ drizzleDir: dir, migrationsDir: stale })).toEqual([
+    expect(
+      await checkMigrations({ drizzleDir: dir, migrationsDir: stale, durableMigrationsFile }),
+    ).toEqual([
       "packages/db/migrations/0001_20260101000000_one.sql is stale; run `vp run db#generate:d1`",
     ]);
   });
@@ -169,8 +189,11 @@ describe("check:migrations on the projection", () => {
     const [only] = await projectMigrations(dir);
     await writeFile(join(orphaned, only!.name), only!.sql);
     await writeFile(join(orphaned, "0002_20260102000000_gone.sql"), "DROP TABLE `a`;\n");
+    const durableMigrationsFile = await currentDurableFile(dir);
 
-    expect(await checkMigrations({ drizzleDir: dir, migrationsDir: orphaned })).toEqual([
+    expect(
+      await checkMigrations({ drizzleDir: dir, migrationsDir: orphaned, durableMigrationsFile }),
+    ).toEqual([
       "packages/db/migrations/0002_20260102000000_gone.sql has no drizzle folder; run `vp run db#generate:d1`",
     ]);
   });
@@ -182,9 +205,12 @@ describe("check:migrations on the projection", () => {
     const empty = await mkdtemp(join(tmpdir(), "deevy-migrations-"));
     const script = new URL("../scripts/check-migrations.ts", import.meta.url).pathname;
 
-    const failed = await run(process.execPath, [script, dir, empty]).catch(
-      (error: { code: number; stderr: string }) => error,
-    );
+    const failed = await run(process.execPath, [
+      script,
+      dir,
+      empty,
+      await currentDurableFile(dir),
+    ]).catch((error: { code: number; stderr: string }) => error);
 
     expect(failed).toMatchObject({
       code: 1,
