@@ -122,7 +122,10 @@ describe("SMTP", () => {
   });
 
   it("refuses to be built without a URL, or with one that is not SMTP", () => {
-    expect(() => createSmtpSender({ config: {}, credentials: {} })).toThrow(/SMTP_URL/);
+    // Said without a variable's name: from Settings › Email there is none.
+    expect(() => createSmtpSender({ config: {}, credentials: {} })).toThrow(
+      "SMTP needs the server's URL.",
+    );
     expect(() =>
       createSmtpSender({ config: {}, credentials: { url: "https://example.com" } }),
     ).toThrow(/smtp:\/\/ or smtps:\/\//);

@@ -40,10 +40,10 @@ function statusOf(reply: string | undefined): number {
 
 export function createSmtpSender({ credentials }: SmtpSenderInput) {
   const url = credentials.url;
-  if (!url) throw new Error("SMTP needs a server URL (SMTP_URL).");
+  if (!url) throw new Error("SMTP needs the server's URL.");
   if (!/^smtps?:\/\//i.test(url)) {
     throw new Error(
-      "SMTP_URL must start with smtp:// or smtps://, such as smtps://user:pass@host:465.",
+      "The SMTP URL must start with smtp:// or smtps://, such as smtps://user:pass@host:465.",
     );
   }
   const transport = nodemailer.createTransport({
