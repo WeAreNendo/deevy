@@ -506,3 +506,9 @@ waits for an account: what an open stream bills, and a gradual deploy with a mig
 10. **Every release upgrades in place** (#141). The Node migrator already tolerates migrations it does not
     know, and now names them at startup. A `-- deevy: contract` comment above drizzle's table rebuild could
     have hidden its PRAGMA from the D1 projection's refusal; the projection reads past leading comments now.
+11. **The docs site** (#146). Starlight on Workers static assets, generated from the repository's own
+    Markdown at build time — OPERATIONS.md split at its sections, DEVELOPMENT, harnesses, the glossary, every
+    ADR — and an API reference from the OpenAPI snapshot, grouped by area since it carries no tags. The link
+    validator fails the build on a broken internal link. Astro is pinned below the release that needs a newer
+    Vite than the workspace's, and its own CSP is off, because it blocked the search's inline script. The
+    deploy waits for the account: it finishes green with a notice until the `docs` environment has a token.
