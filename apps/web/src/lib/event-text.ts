@@ -390,6 +390,10 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say(`changed the Channel ${str(p.name) ?? ""}`);
     case "channel.deleted":
       return say(`removed the Channel ${str(p.name) ?? ""}`, null, "destructive");
+    case "channel.confirmed":
+      return say(
+        `confirmed ${str(p.address) ?? "a team address"} for the Channel ${str(p.name) ?? ""}`,
+      );
     case "routing.updated":
       return say(
         typeof p.rules === "number"

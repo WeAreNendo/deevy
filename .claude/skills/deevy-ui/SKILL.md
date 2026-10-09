@@ -360,6 +360,10 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   checked by default for Gate awaiting and Run awaiting input only, and disabled, with the reason said
   beneath the table, when `preferences.get` answers `emailAddress: null` — deevy never emails an address the
   sign-in did not confirm. When there is one, the line beneath names it.
+- **Channels adds a team email address** (slice 2): `form "Add an email address"` with `Team email address`
+  and `Add address`. The Channel is named after the address. The confirmation goes out as it is added, and
+  what the sender said is the line under the forms. Until somebody confirms, its row reads `<address> ·
+Waiting for confirmation`, and its Test button sends the confirmation again.
 
 ## Test contracts
 

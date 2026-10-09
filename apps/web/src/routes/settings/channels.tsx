@@ -41,7 +41,8 @@ const anyValue = "__any";
 
 /**
  * Channels and routing: where Notifications leave deevy for. A Channel is a
- * Slack incoming webhook; a rule says which Notifications go to it.
+ * Slack incoming webhook, a room in a Slack app, or a team email address; a
+ * rule says which Notifications go to it.
  */
 export function ChannelsPage() {
   const queryClient = useQueryClient();
@@ -58,6 +59,7 @@ export function ChannelsPage() {
   const [conversation, setConversation] = useState("");
   const [roomSocket, setRoomSocket] = useState<string | null>(null);
 
+  const [teamAddress, setTeamAddress] = useState("");
   const [name, setName] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [draft, setDraft] = useState<Rule[]>([]);
@@ -96,6 +98,22 @@ export function ChannelsPage() {
       },
     }),
   );
+  // A team address is mailed its confirmation as it is added, and what the
+  // sender said is said here: an address that cannot be sent to is better
+  // learned now than when a Gate never arrives (docs/plans/email-channel.md).
+  const createEmail = useMutation(
+    orpc.channels.createEmail.mutationOptions({
+      onSuccess: async ({ channel, confirmation }) => {
+        setTeamAddress("");
+        setTested(
+          confirmation.delivered
+            ? `Sent a confirmation to ${channel.address ?? ""}. Nothing is routed there until somebody there confirms.`
+            : `Added ${channel.address ?? ""}, but the confirmation didn't go: ${confirmation.error ?? `the sender answered ${String(confirmation.status)}`}`,
+        );
+        await refreshChannels();
+      },
+    }),
+  );
   // Removing a Channel drops the routing rules that named it (the server cascades).
   const remove = useMutation(
     orpc.channels.delete.mutationOptions({
@@ -108,12 +126,26 @@ export function ChannelsPage() {
   );
   const test = useMutation(
     orpc.channels.test.mutationOptions({
-      onSuccess: (result) =>
+      onSuccess: (result, { channelId }) => {
+        const tried = channels.data?.channels.find((one) => one.id === channelId);
+        const refused = result.error ?? String(result.status);
+        if (tried?.kind === "email") {
+          // Waiting for its confirmation, Test sends the confirmation again.
+          setTested(
+            tried.confirmedAt
+              ? result.delivered
+                ? "The sender accepted the test email."
+                : `The sender refused the test email: ${refused}`
+              : result.delivered
+                ? "Sent the confirmation again."
+                : `The confirmation didn't go: ${refused}`,
+          );
+          return;
+        }
         setTested(
-          result.delivered
-            ? "Slack accepted the message."
-            : `Slack refused it: ${result.error ?? result.status}`,
-        ),
+          result.delivered ? "Slack accepted the message." : `Slack refused it: ${refused}`,
+        );
+      },
     }),
   );
   const save = useMutation(
@@ -123,7 +155,13 @@ export function ChannelsPage() {
   );
 
   const rows = channels.data?.channels ?? [];
-  const failed = create.error ?? createRoom.error ?? remove.error ?? test.error ?? save.error;
+  const failed =
+    create.error ??
+    createRoom.error ??
+    createEmail.error ??
+    remove.error ??
+    test.error ??
+    save.error;
   const chosenSocket = roomSocket ?? chats[0]?.id ?? null;
   const socketName = (id: string | null) => chats.find((one) => one.id === id)?.name ?? "Slack";
 
@@ -142,10 +180,14 @@ export function ChannelsPage() {
         <span className="text-muted-foreground">
           {channel.kind === "slack_app"
             ? `${socketName(channel.socketId)} · ${channel.conversation ?? ""}`
-            : channel.webhookHost}
+            : channel.kind === "email"
+              ? channel.confirmedAt
+                ? channel.address
+                : `${channel.address ?? ""} · Waiting for confirmation`
+              : channel.webhookHost}
         </span>
       ),
-      sortValue: (channel) => channel.webhookHost ?? channel.conversation,
+      sortValue: (channel) => channel.webhookHost ?? channel.conversation ?? channel.address,
       className: "w-full",
     },
     {
@@ -206,6 +248,34 @@ export function ChannelsPage() {
         </div>
         <Button type="submit" disabled={create.isPending || !name.trim() || !webhookUrl.trim()}>
           Add Channel
+        </Button>
+      </form>
+
+      <form
+        aria-label="Add an email address"
+        className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4"
+        onSubmit={(submitted) => {
+          submitted.preventDefault();
+          const address = teamAddress.trim();
+          if (address) createEmail.mutate({ name: address, address });
+        }}
+      >
+        <p className="w-full text-sm text-muted-foreground">
+          A shared mailbox, such as your team's approvals list. deevy mails it a link first, and
+          sends nothing there until somebody at the address confirms.
+        </p>
+        <div className="flex flex-1 flex-col gap-2">
+          <Label htmlFor="team-address">Team email address</Label>
+          <Input
+            id="team-address"
+            type="email"
+            value={teamAddress}
+            placeholder="approvals@example.com"
+            onChange={(changed) => setTeamAddress(changed.target.value)}
+          />
+        </div>
+        <Button type="submit" disabled={createEmail.isPending || !teamAddress.trim()}>
+          Add address
         </Button>
       </form>
 

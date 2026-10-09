@@ -16897,7 +16897,8 @@
                             "enum": [
                               "inbox",
                               "slack",
-                              "slack_app"
+                              "slack_app",
+                              "email"
                             ]
                           },
                           "name": {
@@ -16921,6 +16922,24 @@
                               "null"
                             ]
                           },
+                          "address": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "confirmedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "x-native-type": "date"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "createdBy": {
                             "type": [
                               "string",
@@ -16940,6 +16959,8 @@
                           "webhookHost",
                           "socketId",
                           "conversation",
+                          "address",
+                          "confirmedAt",
                           "createdBy",
                           "createdAt"
                         ],
@@ -17003,7 +17024,8 @@
                       "enum": [
                         "inbox",
                         "slack",
-                        "slack_app"
+                        "slack_app",
+                        "email"
                       ]
                     },
                     "name": {
@@ -17027,6 +17049,24 @@
                         "null"
                       ]
                     },
+                    "address": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdBy": {
                       "type": [
                         "string",
@@ -17046,8 +17086,167 @@
                     "webhookHost",
                     "socketId",
                     "conversation",
+                    "address",
+                    "confirmedAt",
                     "createdBy",
                     "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/email": {
+      "post": {
+        "operationId": "channels.createEmail",
+        "summary": "Add a team email address as a Channel, and mail it a confirmation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "address": {
+                    "type": "string",
+                    "maxLength": 254,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  }
+                },
+                "required": [
+                  "name",
+                  "address"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "inbox",
+                            "slack",
+                            "slack_app",
+                            "email"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "webhookHost": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "socketId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "conversation": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "address": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "confirmedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "x-native-type": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdBy": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "name",
+                        "webhookHost",
+                        "socketId",
+                        "conversation",
+                        "address",
+                        "confirmedAt",
+                        "createdBy",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "confirmation": {
+                      "type": "object",
+                      "properties": {
+                        "delivered": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "error": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "delivered",
+                        "status",
+                        "error"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "channel",
+                    "confirmation"
                   ],
                   "additionalProperties": false
                 }
@@ -17107,7 +17306,8 @@
                       "enum": [
                         "inbox",
                         "slack",
-                        "slack_app"
+                        "slack_app",
+                        "email"
                       ]
                     },
                     "name": {
@@ -17131,6 +17331,24 @@
                         "null"
                       ]
                     },
+                    "address": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdBy": {
                       "type": [
                         "string",
@@ -17150,6 +17368,8 @@
                     "webhookHost",
                     "socketId",
                     "conversation",
+                    "address",
+                    "confirmedAt",
                     "createdBy",
                     "createdAt"
                   ],
@@ -17213,7 +17433,8 @@
                       "enum": [
                         "inbox",
                         "slack",
-                        "slack_app"
+                        "slack_app",
+                        "email"
                       ]
                     },
                     "name": {
@@ -17237,6 +17458,24 @@
                         "null"
                       ]
                     },
+                    "address": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "x-native-type": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdBy": {
                       "type": [
                         "string",
@@ -17256,6 +17495,8 @@
                     "webhookHost",
                     "socketId",
                     "conversation",
+                    "address",
+                    "confirmedAt",
                     "createdBy",
                     "createdAt"
                   ],

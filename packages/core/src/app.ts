@@ -1,6 +1,9 @@
 import { projectGrant, type Db } from "@deevy/db";
 import type { SocketModules } from "./sockets/port.ts";
 import { finishAccountLink } from "./account-links.ts";
+import type { EmailSenders, EmailSetup } from "./email/port.ts";
+import { confirmChannel, emailChannelOf, readConfirmToken } from "./email/team.ts";
+import { appendEvent } from "./events.ts";
 import {
   kindLabels,
   readUnsubscribeToken,
@@ -95,6 +98,13 @@ export interface AppOptions {
    */
   socketSecret?: string;
   /**
+   * The email senders this runtime can run, and the one the environment chose
+   * (docs/plans/email-channel.md). What an operation sends now — a team
+   * address's confirmation, a test email — goes through them.
+   */
+  emailSenders?: EmailSenders;
+  email?: EmailSetup | null;
+  /**
    * Which providers this deployment offers a Human to sign in with, from
    * `signInProviders(env)` in the entry that built the identity configuration.
    * Reported on `health.ping`, so the sign-in page renders what the server
@@ -137,6 +147,19 @@ export function isDefinedRefusal(error: unknown): boolean {
  * ADR-0006): Better Auth under /api/auth, the RPC surface under /rpc, the
  * OpenAPI surface with its reference UI under /api.
  */
+/** What a confirmation link that was changed, is too old, or names a removed Channel says. */
+const expiredConfirmation = {
+  title: "This link doesn't work any more",
+  body: "It is too old, the Channel was removed, or it was changed on the way. Ask the admin who added this address to send a new one from Settings › Channels.",
+};
+
+function confirmedPage(address: string) {
+  return {
+    title: "Confirmed",
+    body: `${address} now gets the Notifications routed to it. To stop them, ask an admin to remove the Channel.`,
+  };
+}
+
 /** What a link that was changed, or is too old, says instead. */
 function expiredLink(settingsUrl: string) {
   return {
@@ -160,6 +183,8 @@ export function createApp({
   devSockets = false,
   sockets,
   socketSecret,
+  emailSenders,
+  email,
   signInProviders = [],
   webURL,
 }: AppOptions) {
@@ -277,6 +302,8 @@ export function createApp({
     devSockets,
     ...(sockets ? { sockets } : {}),
     ...(socketSecret ? { socketSecret } : {}),
+    ...(emailSenders ? { emailSenders } : {}),
+    ...(email ? { email } : {}),
     ...(secret ? { secret } : {}),
     signInProviders: await offeredProviders(),
   });
@@ -334,6 +361,39 @@ export function createApp({
         settingsUrl,
       }),
     );
+  });
+
+  // The link a team address is mailed to confirm it (email/team.ts): opening
+  // it asks, as the unsubscribe does, and only the button confirms.
+  app.get("/api/email/confirm/:token", async (c) => {
+    const found = secret ? await readConfirmToken(db, secret, c.req.param("token")) : null;
+    const email = found ? emailChannelOf(found) : null;
+    if (!found || !email) return c.html(unsubscribePage(expiredConfirmation), 400);
+    if (email.confirmedAt) return c.html(unsubscribePage(confirmedPage(email.address)));
+    return c.html(
+      unsubscribePage({
+        title: "Confirm this address?",
+        body: `${email.address} will get the Notifications routed to the Channel "${found.name}".`,
+        form: { action: c.req.path, label: "Confirm this address" },
+      }),
+    );
+  });
+  app.post("/api/email/confirm/:token", async (c) => {
+    const found = secret ? await readConfirmToken(db, secret, c.req.param("token")) : null;
+    const email = found ? emailChannelOf(found) : null;
+    if (!found || !email) return c.html(unsubscribePage(expiredConfirmation), 400);
+    if (await confirmChannel(db, found)) {
+      await appendEvent(
+        { db, workspace: { id: found.workspaceId }, member: null },
+        {
+          kind: "channel.confirmed",
+          subjectType: "channel",
+          subjectId: found.id,
+          payload: { name: found.name, address: email.address },
+        },
+      );
+    }
+    return c.html(unsubscribePage(confirmedPage(email.address)));
   });
 
   const corsPlugin = new CORSHandlerPlugin<AppContext>({ origin, credentials: true });

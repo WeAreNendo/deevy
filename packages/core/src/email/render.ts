@@ -43,6 +43,8 @@ export interface RenderInput {
   runId?: string | null;
   /** The signed link that turns this kind of email off for this Human. */
   unsubscribeUrl?: string | null;
+  /** A Human's own email, or a team address an admin routed it to. */
+  audience?: "member" | "team";
 }
 
 export interface RenderedEmail {
@@ -143,12 +145,13 @@ function bodyOf(input: RenderInput): Body {
 
   if (input.kind === "gate_awaiting" && gate) {
     const asking = gate.agentName ?? "An Agent";
+    const whom = input.audience === "team" ? "a Human" : "you";
     const count = `${String(gate.approvals)} of ${String(gate.required)} approval${gate.required === 1 ? "" : "s"} so far`;
     return {
       subject: issue
         ? `Gate waiting: ${issue.key} · ${gate.checkpoint}`
         : `Gate waiting: ${gate.checkpoint}`,
-      headline: `${asking} is waiting for you at ${gate.checkpoint}`,
+      headline: `${asking} is waiting for ${whom} at ${gate.checkpoint}`,
       lines: [
         ...(record ? [record] : []),
         `${asking} asks to pass the ${gate.checkpoint} Checkpoint. ${count}.`,
@@ -159,8 +162,18 @@ function bodyOf(input: RenderInput): Body {
   }
   if (input.kind === "run_awaiting_input") {
     return {
-      subject: issue ? `Waiting for your answer: ${issue.key}` : "A Run is waiting for your answer",
-      headline: "A Run is waiting for your answer",
+      subject:
+        input.audience === "team"
+          ? issue
+            ? `Waiting for an answer: ${issue.key}`
+            : "A Run is waiting for an answer"
+          : issue
+            ? `Waiting for your answer: ${issue.key}`
+            : "A Run is waiting for your answer",
+      headline:
+        input.audience === "team"
+          ? "A Run is waiting for an answer"
+          : "A Run is waiting for your answer",
       lines: record ? [record] : [],
       quote: input.question ? excerpt(prose(input.question)) : null,
       action: input.runId
@@ -180,58 +193,102 @@ function bodyOf(input: RenderInput): Body {
   };
 }
 
-export function renderEmail(input: RenderInput): RenderedEmail {
-  const body = bodyOf(input);
-  const origin = input.baseUrl.replace(/\/+$/, "");
-  const settings = `${origin}/settings/notifications`;
-  const why = `You get this because you are a Member of ${input.workspaceName} on deevy.`;
-  const stop = input.unsubscribeUrl
-    ? `Stop emails like this one: ${input.unsubscribeUrl}\nChange what deevy emails you: ${settings}`
-    : `Change what deevy emails you: ${settings}`;
+/** One line of a footer: words, and where they lead when they lead somewhere. */
+export interface FooterPart {
+  text: string;
+  url?: string;
+}
 
+/** Everything one email needs, whatever it is about. */
+export interface Layout {
+  workspaceName: string;
+  subject: string;
+  headline: string;
+  lines: string[];
+  quote?: string | null;
+  action: { label: string; url: string } | null;
+  /** Why it was sent, and how it stops. */
+  footer: string | FooterPart[];
+}
+
+/** The one layout every email deevy sends shares: plain text and HTML from the same parts. */
+export function renderPlain(layout: Layout): RenderedEmail {
+  const footer: FooterPart[] =
+    typeof layout.footer === "string" ? [{ text: layout.footer }] : layout.footer;
   const text = [
-    body.headline,
+    layout.headline,
     "",
-    ...body.lines.flatMap((line) => [line, ""]),
-    ...(body.quote ? [body.quote.replace(/^/gm, "> "), ""] : []),
-    ...(body.action ? [`${body.action.label}: ${body.action.url}`, ""] : []),
+    ...layout.lines.flatMap((line) => [line, ""]),
+    ...(layout.quote ? [layout.quote.replace(/^/gm, "> "), ""] : []),
+    ...(layout.action ? [`${layout.action.label}: ${layout.action.url}`, ""] : []),
     "—",
-    why,
-    stop,
+    ...footer.map((part) => (part.url ? `${part.text}: ${part.url}` : part.text)),
   ].join("\n");
-
+  const font = "font-family:Inter,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;";
   const html = `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(body.subject)}</title></head>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(layout.subject)}</title></head>
 <body style="margin:0;padding:0;background:#f4f5f9;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f9;padding:24px 12px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e2e5ee;border-radius:8px;">
-<tr><td style="padding:28px 28px 8px;font-family:Inter,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;color:#1d2433;">
-<p style="margin:0 0 20px;font-size:13px;font-weight:600;color:#4f46e5;">${input.workspaceName === "deevy" ? "deevy" : `deevy · ${escape(input.workspaceName)}`}</p>
-<h1 style="margin:0 0 16px;font-size:18px;line-height:1.35;font-weight:600;color:#1d2433;">${escape(body.headline)}</h1>
-${body.lines.map((line) => paragraph(line, "color:#4b5468;")).join("\n")}
+<tr><td style="padding:28px 28px 8px;${font}font-size:14px;line-height:1.55;color:#1d2433;">
+<p style="margin:0 0 20px;font-size:13px;font-weight:600;color:#4f46e5;">${layout.workspaceName === "deevy" ? "deevy" : `deevy · ${escape(layout.workspaceName)}`}</p>
+<h1 style="margin:0 0 16px;font-size:18px;line-height:1.35;font-weight:600;color:#1d2433;">${escape(layout.headline)}</h1>
+${layout.lines.map((line) => paragraph(line, "color:#4b5468;")).join("\n")}
 ${
-  body.quote
-    ? `<blockquote style="margin:0 0 20px;padding:12px 16px;border-left:3px solid #c7c9f4;background:#f7f7fd;color:#1d2433;white-space:pre-wrap;">${escape(body.quote)}</blockquote>`
+  layout.quote
+    ? `<blockquote style="margin:0 0 20px;padding:12px 16px;border-left:3px solid #c7c9f4;background:#f7f7fd;color:#1d2433;white-space:pre-wrap;">${escape(layout.quote)}</blockquote>`
     : ""
 }
 ${
-  body.action
-    ? `<p style="margin:0 0 24px;"><a href="${escape(body.action.url)}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600;">${escape(body.action.label)}</a></p>`
+  layout.action
+    ? `<p style="margin:0 0 24px;"><a href="${escape(layout.action.url)}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600;">${escape(layout.action.label)}</a></p>`
     : ""
 }
 </td></tr>
-<tr><td style="padding:16px 28px 24px;border-top:1px solid #eceef4;font-family:Inter,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#7a8296;">
-${escape(why)} ${
-    input.unsubscribeUrl
-      ? `<a href="${escape(input.unsubscribeUrl)}" style="color:#7a8296;">Stop emails like this one</a> or `
-      : ""
-  }<a href="${escape(settings)}" style="color:#7a8296;">${input.unsubscribeUrl ? "change" : "Change"} what deevy emails you</a>.
+<tr><td style="padding:16px 28px 24px;border-top:1px solid #eceef4;${font}font-size:12px;line-height:1.5;color:#7a8296;">
+${footer
+  .map((part) =>
+    part.url
+      ? `<a href="${escape(part.url)}" style="color:#7a8296;">${escape(part.text)}</a>.`
+      : escape(part.text),
+  )
+  .join(" ")}
 </td></tr>
 </table>
 </td></tr>
 </table>
 </body></html>`;
+  return { subject: layout.subject, text, html };
+}
 
-  return { subject: body.subject, text, html };
+export function renderEmail(input: RenderInput): RenderedEmail {
+  const body = bodyOf(input);
+  const origin = input.baseUrl.replace(/\/+$/, "");
+  // A team address is told who routed it there and where that stops; a Human
+  // is told why, and given the one click that stops this kind.
+  const footer: FooterPart[] =
+    input.audience === "team"
+      ? [
+          {
+            text: `An admin of ${input.workspaceName} routes these Notifications to this address.`,
+          },
+          { text: "Settings › Channels is where that stops", url: `${origin}/settings/channels` },
+        ]
+      : [
+          { text: `You get this because you are a Member of ${input.workspaceName} on deevy.` },
+          ...(input.unsubscribeUrl
+            ? [{ text: "Stop emails like this one", url: input.unsubscribeUrl }]
+            : []),
+          { text: "Change what deevy emails you", url: `${origin}/settings/notifications` },
+        ];
+  return renderPlain({
+    workspaceName: input.workspaceName,
+    subject: body.subject,
+    headline: body.headline,
+    lines: body.lines,
+    quote: body.quote,
+    action: body.action,
+    footer,
+  });
 }

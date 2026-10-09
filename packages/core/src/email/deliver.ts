@@ -17,13 +17,9 @@ import {
   type Backoff,
 } from "../outbox.ts";
 import { chatGateMessage } from "../sockets/chat-out.ts";
-import {
-  parseFrom,
-  type EmailMessage,
-  type EmailSender,
-  type EmailSenders,
-  type EmailSetup,
-} from "./port.ts";
+import { parseFrom, type EmailMessage } from "./port.ts";
+import { resolveSender, type ResolveSenderOptions } from "./sender.ts";
+import { emailChannelOf } from "./team.ts";
 import { renderEmail } from "./render.ts";
 import { unsubscribeToken, unsubscribeUrl } from "./unsubscribe.ts";
 
@@ -43,35 +39,6 @@ export const maxEmailAttempts = 6;
 
 /** 30s, 1m, 2m, 4m, 8m. A Gate that waits an hour for its email has waited too long. */
 const emailBackoff: Backoff = { firstMs: 30_000, ceilingMs: 60 * 60_000, jitter: true };
-
-export interface ResolveSenderOptions {
-  /** The senders this runtime can run. */
-  emailSenders?: EmailSenders;
-  /** The sender in force: Settings › Email's, else the environment's. */
-  email?: EmailSetup | null;
-  fetch?: typeof fetch;
-}
-
-/** The sender in force, or why there is none, in words an admin can act on. */
-export function resolveSender({
-  emailSenders = {},
-  email,
-  fetch: fetchImpl = fetch,
-}: ResolveSenderOptions): { sender: EmailSender; setup: EmailSetup } | { reason: string } {
-  if (!email) return { reason: "No email sender is configured." };
-  const factory = emailSenders[email.sender];
-  if (!factory) {
-    return { reason: `The ${email.sender} sender cannot run on this deployment.` };
-  }
-  try {
-    return {
-      sender: factory({ config: email.config, credentials: email.credentials, fetch: fetchImpl }),
-      setup: email,
-    };
-  } catch (failure) {
-    return { reason: failure instanceof Error ? failure.message : String(failure) };
-  }
-}
 
 export interface DeliverDueEmailsOptions extends ResolveSenderOptions {
   db: Db;
@@ -96,6 +63,8 @@ export interface EmailDeliveryResult {
   more: boolean;
 }
 
+export { resolveSender, type ResolveSenderOptions } from "./sender.ts";
+
 export async function deliverDueEmails({
   db,
   workspaceId,
@@ -113,7 +82,12 @@ export async function deliverDueEmails({
     gaveUp: 0,
     more: false,
   };
-  const due = await dueDeliveries(db, ["email_member"], { workspaceId, now, limit, maxAttempts });
+  const due = await dueDeliveries(db, ["email_member", "email"], {
+    workspaceId,
+    now,
+    limit,
+    maxAttempts,
+  });
   result.more = due.length >= limit;
   if (due.length === 0) return result;
   const claimed = await claimDeliveries(
@@ -154,6 +128,15 @@ export async function deliverDueEmails({
     with: { user: { columns: { email: true, emailVerified: true } } },
   });
   const memberById = new Map(members.map((row) => [row.id, row]));
+  // A team address is a Channel: its id names it, as a Member's names them.
+  const teams = await db.query.channel.findMany({
+    where: {
+      id: { in: [...new Set(claimed.map((row) => row.targetId))] },
+      workspaceId,
+      kind: "email",
+    },
+  });
+  const teamById = new Map(teams.map((row) => [row.id, row]));
   const gateOf = (event: Event): string | null =>
     event.subjectType === "gate" ? event.subjectId : gateRequestIdOf(event);
   const gateIds = [...new Set(events.map(gateOf).filter((id): id is string => id !== null))];
@@ -210,17 +193,19 @@ export async function deliverDueEmails({
   for (const row of claimed) {
     const event = eventBySeq.get(row.eventSeq);
     const member = memberById.get(row.targetId);
+    const team = teamById.get(row.targetId);
+    const teamAddress = team ? emailChannelOf(team) : null;
     const kind = event ? notificationKindOf(event) : null;
-    // A Member who left, was suspended, or whose address is no longer one the
-    // sign-in vouches for is sent nothing, now or later.
-    if (
-      !event ||
-      !kind ||
-      !isHumanNotificationKind(kind) ||
-      !member ||
-      member.suspendedAt ||
-      !member.user.emailVerified
-    ) {
+    // Where it goes: a Member's verified address — never one who left, was
+    // suspended, or whose sign-in no longer vouches for it — or a team
+    // address that is still confirmed and still there.
+    const to =
+      member && !member.suspendedAt && member.user.emailVerified
+        ? member.user.email
+        : teamAddress?.confirmedAt
+          ? teamAddress.address
+          : null;
+    if (!event || !kind || !isHumanNotificationKind(kind) || !to) {
       undeliverable.push(row.id);
       continue;
     }
@@ -237,13 +222,17 @@ export async function deliverDueEmails({
     }
     const shown = gate ? chatGateMessage(gate, baseUrl) : null;
     const payload = (event.payload ?? {}) as Record<string, unknown>;
-    const unsubscribe = secret
-      ? // Signed from when the Event happened, not from this pass: every attempt
-        // then carries the same link, and so is the same email to a sender.
-        unsubscribeUrl(baseUrl, await unsubscribeToken(secret, member.id, kind, event.createdAt))
-      : null;
+    // A Human's own email can be stopped in one click; a team address is
+    // stopped where it was routed, by an admin. Signed from when the Event
+    // happened, not from this pass: every attempt then carries the same link,
+    // and so is the same email to a sender.
+    const unsubscribe =
+      secret && member
+        ? unsubscribeUrl(baseUrl, await unsubscribeToken(secret, member.id, kind, event.createdAt))
+        : null;
     const rendered = renderEmail({
       unsubscribeUrl: unsubscribe,
+      audience: team ? "team" : "member",
       kind,
       baseUrl,
       workspaceName: workspace?.name ?? "deevy",
@@ -265,7 +254,7 @@ export async function deliverDueEmails({
     });
     const message: EmailMessage = {
       from,
-      to: member.user.email,
+      to,
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
@@ -321,7 +310,7 @@ export async function deliverDueEmails({
   await retireDeliveries(
     db,
     undeliverable,
-    "the Member is gone, suspended, or has no verified address",
+    "the Member is gone, suspended or unverified, or the team address is gone or unconfirmed",
     maxAttempts,
   );
 
@@ -337,7 +326,7 @@ export async function deliverDueEmails({
       return {
         workspaceId: event.workspaceId,
         kind: "email.exhausted" satisfies EventKind,
-        subjectType: "member",
+        subjectType: teamById.has(memberOf.get(id) as string) ? "channel" : "member",
         subjectId: memberOf.get(id) as string,
         projectId: event.projectId,
         payload: {
