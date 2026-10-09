@@ -19,6 +19,15 @@ export default defineConfig({
         input: [{ auto: true }, "!node_modules/.vite/**", "!../../node_modules/.modules.yaml"],
         output: [],
       },
+      // The same suites on the driver a hosted Workspace's Durable Object runs
+      // (tests/helpers.ts, ADR-0028). The variable is set in the command rather
+      // than passed through, so it is part of what the cache fingerprints and
+      // `test` above never sees it.
+      "test:durable": {
+        command: "DEEVY_TEST_DRIVER=durable vp test",
+        input: [{ auto: true }, "!node_modules/.vite/**", "!../../node_modules/.modules.yaml"],
+        output: [],
+      },
     },
   },
   test: {

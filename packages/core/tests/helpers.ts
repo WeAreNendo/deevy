@@ -1,8 +1,11 @@
 import type { Db, Issue, Member, Project, Workspace } from "@deevy/db";
 import { eq } from "drizzle-orm";
 import { agent, member, project, projectGrant, socket, user, workspace } from "@deevy/db";
+import { createDurableDb, migrateDurable } from "@deevy/adapters/durable";
 import type { OpenedDatabase } from "@deevy/adapters/node";
 import { openDatabase } from "@deevy/adapters/node";
+import { createNodeDurableStorage } from "@deevy/adapters/testing";
+import { migrations as durableMigrations } from "@deevy/db/durable-migrations";
 import type { Session } from "../src/auth.ts";
 import type { AppContext } from "../src/operations/registry.ts";
 import type { ApiKeys, ApiKeySummary } from "../src/keys.ts";
@@ -29,8 +32,38 @@ export const testSealingSecret = "a-test-sealing-secret-of-at-least-32-chars";
 
 export const migrationsFolder = new URL("../../db/drizzle", import.meta.url).pathname;
 
-export function testDb() {
-  return openDatabase({ path: ":memory:", migrationsFolder });
+/**
+ * The driver every suite runs on. By default the Node one, as the Docker image
+ * runs; with `DEEVY_TEST_DRIVER=durable` (`vp run core#test:durable`), drizzle's
+ * durable-sqlite driver on a Durable Object's storage played by node:sqlite, as
+ * a hosted Workspace runs (ADR-0028). The same suites pass on both, so a
+ * difference between the drivers is a failing test rather than a production
+ * incident.
+ */
+export const testDriver = driverNamed(process.env.DEEVY_TEST_DRIVER);
+
+function driverNamed(name: string | undefined): "node" | "durable" {
+  if (name === undefined || name === "" || name === "node") return "node";
+  if (name === "durable") return "durable";
+  throw new Error(`DEEVY_TEST_DRIVER is "${name}"; it is "node", "durable" or unset`);
+}
+
+type QueryLogger = NonNullable<Parameters<typeof openDatabase>[0]["logger"]>;
+
+/** A migrated, empty database on the driver this run is for. */
+function openTestDb(logger?: QueryLogger): OpenedDatabase {
+  if (testDriver === "node") {
+    return openDatabase({ path: ":memory:", migrationsFolder, ...(logger ? { logger } : {}) });
+  }
+  const storage = createNodeDurableStorage();
+  const db = createDurableDb(storage, logger ? { logger } : {});
+  const migrated = migrateDurable(db, durableMigrations);
+  if (migrated.error) throw new Error(`migration failed: ${JSON.stringify(migrated.error)}`);
+  return { db, close: storage.close };
+}
+
+export function testDb(): OpenedDatabase {
+  return openTestDb();
 }
 
 export interface CountingDatabase extends OpenedDatabase {
@@ -47,13 +80,9 @@ export interface CountingDatabase extends OpenedDatabase {
  */
 export function countingDb(): CountingDatabase {
   const statements: string[] = [];
-  const opened = openDatabase({
-    path: ":memory:",
-    migrationsFolder,
-    logger: {
-      logQuery: (query) => {
-        statements.push(query);
-      },
+  const opened = openTestDb({
+    logQuery: (query) => {
+      statements.push(query);
     },
   });
   statements.length = 0;
