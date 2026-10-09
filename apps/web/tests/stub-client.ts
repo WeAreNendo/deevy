@@ -178,6 +178,8 @@ export function stubClient(overrides: StubOverrides = {}): never {
         devSignIn: false,
         devSockets: false,
         providers: [{ id: "github", label: "GitHub", kind: "social" }],
+        // A screen's tests read the stream; lib/live's own say what a socket does.
+        live: "stream",
       }),
     },
     me: {

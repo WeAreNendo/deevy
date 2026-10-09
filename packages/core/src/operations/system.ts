@@ -38,11 +38,15 @@ export const health = {
         }),
       ),
       /**
-       * Whether Documents on this deployment are live (ADR-0021). A Worker
-       * without a Durable Object binding says false and every editor stays what
-       * it was, rather than a page opening a socket that answers 501 — the same
-       * reason this endpoint says which providers exist.
+       * How an open tab hears about new Events here (ADR-0032). `stream` is
+       * `events.subscribe`, which every deployment answers; `websocket` is a
+       * socket at `/api/live` that this deployment pushes each new seq to, so
+       * a tab holds nothing open on the server between Events — a hosted
+       * Workspace, whose object would otherwise be kept awake by the stream.
+       * Said here rather than discovered by trying, so a page never opens a
+       * socket that answers 501.
        */
+      live: z.enum(["stream", "websocket"]),
     }),
     handler: async ({ context }) => ({
       ok: true as const,
@@ -50,6 +54,7 @@ export const health = {
       devSignIn: context.devSignIn === true,
       devSockets: context.devSockets === true,
       providers: context.signInProviders ?? [],
+      live: context.liveSocket === true ? ("websocket" as const) : ("stream" as const),
     }),
   }),
 };

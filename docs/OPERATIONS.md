@@ -306,9 +306,12 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
   know is a 404 and never an object.
 - **A Workspace's object** reads who it is from its own storage, migrates, and runs the app; its alarm runs
   the background work every `DEEVY_HOSTED_PASS_SECONDS` (60), in place of a Cron Trigger and a Queue.
+- **An open tab** holds a WebSocket its Workspace's object pushes each new Event's seq to, and the object
+  sleeps in between ([ADR-0032](adr/0032-a-hosted-workspace-pushes-its-events.md), "Live updates" below).
 - **`Platform`** is a `WorkerEntrypoint` reached only over a service binding: `available`, `provision`,
   `status`, `configure`, `suspend`, `resume`, `dump`, `secrets`, `restore`, `destroy`, `list`. Whatever
-  provisions Workspaces — a console — calls it; nothing on the internet can.
+  provisions Workspaces — a console — calls it; nothing on the internet can. `status` also says when the
+  object last woke (`awakeSince`) and how many tabs it holds open.
 - **Each Workspace's day is limited**, because every Workspace here sends through the one sender the
   platform configured, whose quota and reputation they share. Past `DEEVY_HOSTED_INVITATIONS_PER_DAY`
   invitations in the last 24 hours, the next is refused (a 429) with when it can be made; past
@@ -373,7 +376,8 @@ release through the manifest's hashes. `vp run hosted#check:hosted` takes it
 apart with `tar`, checks every file against the manifest and dry-runs its `wrangler.json`, as CI does on every
 pull request. `vp run hosted#test:hosted` runs two Workspaces on `wrangler dev --local` with a stand-in
 console and checks provisioning, sign-in through the relay, isolation, the alarm, the counts, a limit of a
-Workspace's own, a dump, suspension and removal, and the acceptance walk runs a record through a hosted Workspace beside the other deployments.
+Workspace's own, a dump, suspension and removal; then it starts again on the same storage with the pass a
+minute apart and checks that an open tab is pushed to while its Workspace's object sleeps; and the acceptance walk runs a record through a hosted Workspace beside the other deployments.
 
 ## Taking a hosted Workspace home
 
@@ -646,6 +650,23 @@ cut off mid-message. deevy ends it first instead: the Worker polls every two sec
 clean end as an invitation rather than a failure, reconnecting at once from that cursor, so nothing is missed
 and nobody sees the seam. Raising the value raises the query count with it — one every two seconds — so a
 value much over 90 spends the whole cap on polling and leaves none for signing the request in.
+
+On every deployment, a tab hidden for 30 seconds lets go of its connection, and reconnects from its cursor
+when it is shown again: a glance at another tab costs nothing, a tab left behind all afternoon holds no
+request open, and what changed meanwhile is re-read once, where it is shown.
+
+A hosted Workspace pushes instead ([ADR-0032](adr/0032-a-hosted-workspace-pushes-its-events.md)), because
+its object is billed for every second a stream holds it awake. There `health.ping` says `live: "websocket"`
+and a tab opens a WebSocket at `/<slug>/api/live`. deevy admits it as it would admit `events.subscribe` — a
+Member's session, from the deployment's own origin — and the object accepts it through Cloudflare's
+hibernation API, sleeps between Events with it open, and on each Event appended tells it the newest seq and
+nothing else; the tab reads the Events with `events.list`, under its own session. The tab says `ping` every
+30 seconds and the runtime answers `pong` without waking the object. A socket is closed when its session
+ends, when the Workspace is suspended and when it is destroyed, and the tab opens another if it may. The
+stream is still there, ending after `DEEVY_STREAM_SECONDS` (300 in an object, where a poll costs no query
+budget), for a tab whose socket is refused — a proxy that drops upgrades — and that tab tries the socket
+again each time the stream ends. The image and the self-hosted Worker offer no socket: `health.ping` says
+`stream` and `/api/live` answers 501.
 
 ### Signing in, and the origin `BETTER_AUTH_URL` names
 

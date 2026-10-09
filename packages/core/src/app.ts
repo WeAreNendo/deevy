@@ -21,7 +21,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Auth, SignInProvider } from "./auth.ts";
 import { discardingJobQueue, type JobQueue } from "./jobs.ts";
-import type { LiveOptions } from "./live.ts";
+import { headOf, type LiveOptions, type LiveSocket } from "./live.ts";
 import type { WorkspaceLimits } from "./limits.ts";
 import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
@@ -32,7 +32,12 @@ import { basePathOf } from "./base-path.ts";
 import { relaySignInCallback, type SignInRelayServer } from "./sign-in-relay.ts";
 import { resolvePrincipal } from "./principal.ts";
 import { router } from "./operations/index.ts";
-import type { AppContext } from "./operations/registry.ts";
+import {
+  getOperationMeta,
+  refusal,
+  type AppContext,
+  type OperationMeta,
+} from "./operations/registry.ts";
 
 export interface AppOptions {
   db: Db;
@@ -72,6 +77,15 @@ export interface AppOptions {
    * the email half separately, as `runDueWork`'s `workspaceLimits`.
    */
   limits?: WorkspaceLimits;
+  /**
+   * Where this runtime keeps a browser's socket and pushes the log's new seqs
+   * to it (live.ts, ADR-0032): a hosted Workspace's object, which hibernates
+   * between Events rather than being kept awake by a stream. With it,
+   * `health.ping` says `websocket` and `/api/live` admits a reader by the rule
+   * `events.subscribe` has, then hands the upgrade over. Absent everywhere
+   * else, where the stream is the way.
+   */
+  liveSocket?: LiveSocket;
   /**
    * Where a write's tail nudges the deliveries it just owed (jobs.ts). The
    * default discards, because a queue is a latency optimisation and never a
@@ -201,6 +215,7 @@ export function createApp({
   secret,
   live,
   limits,
+  liveSocket,
   jobs = discardingJobQueue(),
   onError: report = console.error,
   devSignIn = false,
@@ -345,6 +360,7 @@ export function createApp({
     ...(await buildContext(db, auth, request.headers, originOf(request.url), API_PATH)),
     ...(live ? { live } : {}),
     ...(limits ? { limits } : {}),
+    ...(liveSocket ? { liveSocket: true } : {}),
     ...(webURL ? { webURL } : {}),
     jobs,
     devSignIn,
@@ -378,6 +394,49 @@ export function createApp({
       ...(c.req.query("error") ? { error: c.req.query("error") } : {}),
     });
     return c.redirect(location, 302);
+  });
+
+  // An open tab's socket on a runtime that pushes (live.ts, ADR-0032). A route
+  // rather than an operation, because what answers an upgrade is a 101; who
+  // may open one is exactly who may read `events.subscribe`, asked of the same
+  // rule, so the socket is that operation by another transport and never a
+  // second set of permissions. CORS does not apply to a WebSocket handshake
+  // and a browser sends its cookies with one, so a page on another origin is
+  // refused by its Origin here rather than allowed to watch this Workspace
+  // work with its visitor's session.
+  const subscribeRule = getOperationMeta(router.events.subscribe) as OperationMeta;
+  routes.get("/api/live", async (c) => {
+    if (!liveSocket) {
+      return c.json(
+        { message: "This deevy does not push its Events. Read them from events.subscribe." },
+        501,
+      );
+    }
+    if (c.req.header("upgrade")?.toLowerCase() !== "websocket") {
+      return c.json({ message: "Open this as a WebSocket." }, 426);
+    }
+    const from = c.req.header("origin");
+    const ours = [
+      ...origin,
+      new URL(c.req.url).origin,
+      ...(baseURL ? [new URL(baseURL).origin] : []),
+    ];
+    if (from && !ours.includes(from)) {
+      return c.json({ message: "A socket is opened from this deevy's own pages." }, 403);
+    }
+    const context = c.get("ctx");
+    const refused = refusal(subscribeRule, context);
+    if (refused || !context.session || !context.member || !context.workspace) {
+      const code = refused?.code ?? "UNAUTHORIZED";
+      const status = (COMMON_ERROR_STATUS_MAP as Record<string, number | undefined>)[code] ?? 401;
+      return c.json({ code, message: refused?.message ?? "Sign in first." }, status as 401);
+    }
+    return liveSocket.accept(c.req.raw, {
+      memberId: context.member.id,
+      workspaceId: context.workspace.id,
+      expiresAt: new Date(context.session.session.expiresAt).getTime(),
+      head: await headOf(db, context.workspace.id),
+    });
   });
 
   // The one-click unsubscribe every personal email carries (RFC 8058,

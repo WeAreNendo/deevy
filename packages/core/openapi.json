@@ -1980,6 +1980,13 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "live": {
+                      "type": "string",
+                      "enum": [
+                        "stream",
+                        "websocket"
+                      ]
                     }
                   },
                   "required": [
@@ -1987,7 +1994,8 @@
                     "time",
                     "devSignIn",
                     "devSockets",
-                    "providers"
+                    "providers",
+                    "live"
                   ],
                   "additionalProperties": false
                 }
