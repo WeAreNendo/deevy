@@ -321,6 +321,28 @@ before it was pinned.
 7. **The record.** This section, OPERATIONS.md's Email section and table rows, DEVELOPMENT.md's stub,
    CONTEXT.md's Channel and Sender, PLAN.md and CLAUDE.md.
 
+**A review of the whole stack**, by a separate agent before anything merged, found what the slices' own
+tests and browser checks had not, and each was fixed in the pull request that introduced it, test first:
+
+- Adding a team address read only the environment's sender, so one set only in Settings › Email was refused
+  as missing (#127/#128). It now reads the sender in force, as every other door did.
+- `invitations.list` bound one parameter per invitation ever issued, which D1 refuses past a hundred (#131).
+  It now reads the Workspace's invitation emails in one two-parameter statement. Node's SQLite allows far
+  more, so the test shows the behaviour at 120 and not the limit itself.
+- A retry reused its idempotency key while its body changed — the unsubscribe link was signed from each
+  pass's clock — and Resend refuses that with a permanent 409, which would have recorded a delivered email
+  as given up on (#124/#125). The key is now the delivery and a hash of what it says, the link is signed from
+  the Event's time, and a 409 for a key still in flight is a retry.
+- A half-configured sender threw on every Worker request, sign-in included (#124). The Worker now keeps it
+  as a problem that Settings › Email shows; Node still stops at startup.
+- Team addresses were routed only for kinds some Human wanted in Slack (#127). They now hear every kind
+  their rules name.
+- Smaller: the `email.exhausted` insert is batched for D1 and a seventeen-refusal test proves it; an
+  invitation's sealed link is cleared whenever its email will never go, and says why in its own words;
+  saving Settings › Notifications sends only the email switches changed; every HTTP send times out after
+  twenty seconds; an SES region is validated and a non-ASCII From name encoded; no message names an
+  environment variable where Settings shows it; a team address's Run subject no longer says "your".
+
 Still owed, and said in OPERATIONS.md rather than hidden: none of the seven senders has sent to a real
 mailbox from deevy yet. Each is tested against its documented request and answers, SMTP against a real SMTP
 server and SigV4 against AWS's vector, and the whole flow was walked on `seeded` through the stub — but the
