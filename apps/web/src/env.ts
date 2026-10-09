@@ -1,5 +1,5 @@
 import type { AssetFetcher } from "@deevy/adapters/workers";
-import { signInRelayFromEnv } from "@deevy/core";
+import { providersFromEnv, signInRelayFromEnv } from "@deevy/core";
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSetup } from "@deevy/core/email";
@@ -223,46 +223,7 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
       ? { socketCatchupMinutes: Number(env.DEEVY_SOCKET_CATCHUP_MINUTES) }
       : {}),
     webOrigin: env.DEEVY_WEB_ORIGIN,
-    providers: {
-      github: {
-        clientId: env.GITHUB_CLIENT_ID ?? "",
-        clientSecret: env.GITHUB_CLIENT_SECRET ?? "",
-      },
-      google: {
-        clientId: env.GOOGLE_CLIENT_ID ?? "",
-        clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",
-      },
-      gitlab: {
-        clientId: env.GITLAB_CLIENT_ID ?? "",
-        clientSecret: env.GITLAB_CLIENT_SECRET ?? "",
-        issuer: env.GITLAB_ISSUER,
-      },
-      microsoft: {
-        clientId: env.MICROSOFT_CLIENT_ID ?? "",
-        clientSecret: env.MICROSOFT_CLIENT_SECRET ?? "",
-        tenantId: env.MICROSOFT_TENANT_ID,
-      },
-      linear: {
-        clientId: env.LINEAR_CLIENT_ID ?? "",
-        clientSecret: env.LINEAR_CLIENT_SECRET ?? "",
-      },
-      slack: {
-        clientId: env.SLACK_CLIENT_ID ?? "",
-        clientSecret: env.SLACK_CLIENT_SECRET ?? "",
-      },
-      atlassian: {
-        clientId: env.ATLASSIAN_CLIENT_ID ?? "",
-        clientSecret: env.ATLASSIAN_CLIENT_SECRET ?? "",
-      },
-      // The generic OpenID Connect entry: the pair, the issuer everything else
-      // is discovered from, and what the button says (docs/plans/sign-in.md).
-      oidc: {
-        clientId: env.DEEVY_OIDC_CLIENT_ID ?? "",
-        clientSecret: env.DEEVY_OIDC_CLIENT_SECRET ?? "",
-        issuer: env.DEEVY_OIDC_ISSUER ?? "",
-        name: env.DEEVY_OIDC_NAME,
-      },
-    },
+    providers: providersFromEnv(env),
     ...(listOf(env.DEEVY_SIGN_IN_ORDER) ? { signInOrder: listOf(env.DEEVY_SIGN_IN_ORDER) } : {}),
     adminEmail: env.DEEVY_ADMIN_EMAIL,
     workspaceName: env.DEEVY_WORKSPACE_NAME,

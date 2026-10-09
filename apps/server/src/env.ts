@@ -1,4 +1,4 @@
-import { signInRelayFromEnv } from "@deevy/core";
+import { providersFromEnv, signInRelayFromEnv } from "@deevy/core";
 import type { EmailSetup } from "@deevy/core/email";
 import { emailSetupFromEnv } from "@deevy/email";
 import type { AuthProviders } from "@deevy/core";
@@ -172,51 +172,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
   if (devStubEmail && env.NODE_ENV === "production") {
     throw new Error("DEEVY_DEV_STUB_EMAIL sends email nowhere and cannot be set in production");
   }
-  const providers: AuthProviders = {
-    github: {
-      clientId: env.GITHUB_CLIENT_ID ?? "",
-      clientSecret: env.GITHUB_CLIENT_SECRET ?? "",
-    },
-    google: {
-      clientId: env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",
-    },
-    gitlab: {
-      clientId: env.GITLAB_CLIENT_ID ?? "",
-      clientSecret: env.GITLAB_CLIENT_SECRET ?? "",
-      // gitlab.com unless the deployment names its own instance; every
-      // GitLab endpoint deevy calls is built from it (docs/OPERATIONS.md).
-      issuer: env.GITLAB_ISSUER,
-    },
-    microsoft: {
-      clientId: env.MICROSOFT_CLIENT_ID ?? "",
-      clientSecret: env.MICROSOFT_CLIENT_SECRET ?? "",
-      // `common` unless the operator narrows it: `organizations`, or one
-      // tenant's id (docs/OPERATIONS.md).
-      tenantId: env.MICROSOFT_TENANT_ID,
-    },
-    linear: {
-      clientId: env.LINEAR_CLIENT_ID ?? "",
-      clientSecret: env.LINEAR_CLIENT_SECRET ?? "",
-    },
-    slack: {
-      clientId: env.SLACK_CLIENT_ID ?? "",
-      clientSecret: env.SLACK_CLIENT_SECRET ?? "",
-    },
-    atlassian: {
-      clientId: env.ATLASSIAN_CLIENT_ID ?? "",
-      clientSecret: env.ATLASSIAN_CLIENT_SECRET ?? "",
-    },
-    // One generic OpenID Connect provider, discovered from its issuer. The
-    // name is what the button says, so an operator calls their own IdP what
-    // their teammates call it (docs/plans/sign-in.md).
-    oidc: {
-      clientId: env.DEEVY_OIDC_CLIENT_ID ?? "",
-      clientSecret: env.DEEVY_OIDC_CLIENT_SECRET ?? "",
-      issuer: env.DEEVY_OIDC_ISSUER ?? "",
-      name: env.DEEVY_OIDC_NAME,
-    },
-  };
+  const providers = providersFromEnv(env);
   return {
     // DEEVY_PORT first: tooling commonly injects a generic PORT meant for something else.
     port: Number(env.DEEVY_PORT ?? env.PORT ?? 3000),

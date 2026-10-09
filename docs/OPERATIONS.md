@@ -284,6 +284,51 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
   is weaker than the Docker one. It is a workerd limitation and it is written out in full under
   [Client registration](#client-registration-and-what-is-known-to-be-weak).
 
+## The many-Workspaces Worker
+
+`apps/hosted` is a third way to run deevy, beside the image and the Worker: one Worker that serves many
+Workspaces on one host, each under its own path — `https://app.example.com/acme` — with each Workspace's
+SQLite database in a Durable Object of its own, where deevy runs ([ADR-0028](adr/0028-a-hosted-workspace-is-a-durable-object.md),
+[hosted.md](plans/hosted.md)). It is what hosted deevy runs, and it is open source like the rest: an agency or
+a company with several teams can run it too. Nothing is created per Workspace but its object, and one deploy
+upgrades them all; a Workspace applies its own migrations when it next wakes.
+
+- **The router** reads the first path segment: a Workspace's slug, the sign-in relay at `/auth`
+  ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)), discovery at `/.well-known/…/<slug>`, or anything else,
+  which goes to a `CONSOLE` service binding when one is bound. A slug the `DIRECTORY` KV namespace does not
+  know is a 404 and never an object.
+- **A Workspace's object** reads who it is from its own storage, migrates, and runs the app; its alarm runs
+  the background work every `DEEVY_HOSTED_PASS_SECONDS` (60), in place of a Cron Trigger and a Queue.
+- **`Platform`** is a `WorkerEntrypoint` reached only over a service binding: `available`, `provision`,
+  `status`, `suspend`, `resume`, `dump`, `secrets`, `restore`, `destroy`, `list`. Whatever provisions
+  Workspaces — a console — calls it; nothing on the internet can.
+- **A Workspace's two secrets** are derived from `DEEVY_HOSTED_MASTER_SECRET` and the object's key, never
+  stored. `Platform.secrets` hands them over with a `Platform.dump` when a team takes its Workspace to the
+  image or a Worker of its own.
+
+| Binding or variable             | What                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `WORKSPACES`                    | The Durable Object namespace, `WorkspaceObject`, a SQLite class.                                              |
+| `DIRECTORY`                     | A KV namespace: slug → object key and status, written by `Platform` only.                                     |
+| `ASSETS`                        | The SPA `vp run web#build:workers` builds into `apps/web/dist/client`.                                        |
+| `CONSOLE`                       | Optional: the service that answers the host's root and its own paths.                                         |
+| `DEEVY_HOSTED_ORIGIN`           | The host every Workspace lives on, `https://app.example.com`. An origin, no path.                             |
+| `DEEVY_HOSTED_MASTER_SECRET`    | 32 or more random characters; every Workspace's secrets derive from it. Secret.                               |
+| `DEEVY_HOSTED_JURISDICTION`     | Where each object is created, such as `eu`; fixed when it is. workerd does not implement jurisdictions.       |
+| `DEEVY_SIGN_IN_RELAY_SECRET`    | 32 or more random characters, signing where a sign-in's callback may go. Secret.                              |
+| `DEEVY_HOSTED_CONSOLE_AUTH_URL` | Optional: the console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to. |
+
+Sign-in providers, email senders and the timings are the variables every deevy reads. Each provider's App is
+registered once, with `${DEEVY_HOSTED_ORIGIN}/auth/callback/<provider>`. The development stubs run only when
+the origin is a loopback address.
+
+Build it after the SPA: `vp run web#build:workers`, then `vp run hosted#build:hosted`, which bundles
+`dist/hosted/worker.js`. A deployment renders its own `wrangler.json` over `apps/hosted/wrangler.jsonc` —
+its route or Custom Domain, the `DIRECTORY` namespace's id, the `CONSOLE` binding and the secrets — and runs
+`wrangler deploy`. `vp run hosted#test:hosted` runs two Workspaces on `wrangler dev --local` with a stand-in
+console and checks provisioning, sign-in through the relay, isolation, the alarm, a dump, suspension and
+removal.
+
 ## Environment
 
 One name per knob on both runtimes: an environment variable on Node, a `var` or a secret on Workers. On
