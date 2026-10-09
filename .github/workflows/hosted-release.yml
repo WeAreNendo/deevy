@@ -1,0 +1,132 @@
+name: Hosted Worker
+
+# Attaches the many-Workspaces Worker (apps/hosted, ADR-0028) to a GitHub
+# Release: `deevy-hosted-<version>.tar.gz` — the bundle, the SPA it serves, a
+# wrangler.json with the deployer's blanks marked, and a manifest saying what
+# is inside and what the deployer adds — with its `.sha256` beside it and a
+# build provenance attestation for the archive.
+#
+# Whoever deploys hosted Workspaces deploys this archive and builds nothing
+# from source (docs/plans/hosted.md, C2), so the attestation is what says it
+# came from this repository, at this commit, from this workflow. A reusable
+# workflow signs as itself, not as its caller, so the check names this file:
+#
+#   gh attestation verify deevy-hosted-<version>.tar.gz --repo WeAreNendo/deevy \
+#     --signer-workflow WeAreNendo/deevy/.github/workflows/hosted-release.yml
+#
+# Two ways in, both once the Release exists:
+#
+#  - `workflow_call`, from changesets.yml, after the images — which is after
+#    release.yml has re-run the whole of CI, so nothing is attached for a
+#    commit that does not build.
+#  - `workflow_dispatch` with a version, to attach it again: a release whose
+#    archive failed, or one made by hand outside the changesets flow. Run it on
+#    the tag, `gh workflow run hosted-release.yml --ref v<version> -f
+#    version=<version>`: an attestation names the commit its run is for, and
+#    the first step refuses to attest one commit's archive as another's.
+#
+# Never on a pull request (ci.yml builds and dry-runs the same archive there),
+# and never on a tag push: an upload needs the Release changesets.yml writes.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version being released, without a leading v.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to attach the hosted Worker to, without a leading v. Its Release must already exist.
+        required: true
+        type: string
+
+permissions:
+  # To upload to the Release.
+  contents: write
+  # A Sigstore certificate from the run's OIDC identity, and somewhere to keep
+  # what it signed (github.com/<repo>/attestations).
+  id-token: write
+  attestations: write
+
+jobs:
+  attach:
+    name: The hosted Worker, packaged, attested and attached
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The commit being released, as release.yml checks it out, and not
+      # whatever main has moved on to.
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ inputs.version }}
+
+      # The attestation's subject is the archive and its source is the commit
+      # this run is for, which on the changesets route is the commit the tag
+      # was made on. A dispatch from main after main has moved would attest the
+      # tag's archive as main's, so it stops here and says how to run it.
+      - name: The tag is the commit this run attests
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          tagged=$(git rev-parse HEAD)
+          if [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::error::v$VERSION is $tagged but this run is for $GITHUB_SHA. Run it on the tag: gh workflow run hosted-release.yml --ref v$VERSION -f version=$VERSION"
+            exit 1
+          fi
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1.19.0
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: false
+
+      - name: Install
+        run: vp install --frozen-lockfile
+
+      # The SPA first: the hosted Worker serves apps/web's build as its assets.
+      - name: Build the SPA and the hosted Worker
+        run: |
+          vp run web#build:workers
+          vp run hosted#build:hosted
+
+      # The two steps ci.yml runs on every pull request: the archive, then the
+      # archive taken apart with the system's tar, its hashes checked and its
+      # own wrangler.json dry-run by wrangler.
+      - name: Package it, and dry-run it as shipped
+        run: |
+          vp run hosted#package
+          vp run hosted#check:hosted
+
+      # The archive is named for package.json's version, which at the tag is
+      # the one being released; a mismatch is a release made from the wrong
+      # commit, and nothing is attached for it.
+      - name: The archive is the version being released
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ ! -f "apps/hosted/dist/deevy-hosted-$VERSION.tar.gz" ]; then
+            echo "::error::No deevy-hosted-$VERSION.tar.gz: package.json at v$VERSION says $(node -p "require('./package.json').version")"
+            exit 1
+          fi
+
+      # Before the upload, so an archive is never on the Release without what
+      # vouches for it. `actions/attest` rather than attest-build-provenance,
+      # which since v4 only wraps it: with no predicate given, it attests SLSA
+      # build provenance.
+      - name: Attest where it came from
+        uses: actions/attest@v4
+        with:
+          subject-path: apps/hosted/dist/deevy-hosted-${{ inputs.version }}.tar.gz
+
+      # `--clobber` so that running this again replaces what a failed run left;
+      # every run attests what it uploads, so the replacement is vouched for too.
+      - name: Attach it to the GitHub Release
+        working-directory: apps/hosted/dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
+            "deevy-hosted-$VERSION.tar.gz" "deevy-hosted-$VERSION.tar.gz.sha256"

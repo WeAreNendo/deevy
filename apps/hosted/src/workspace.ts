@@ -31,7 +31,7 @@ import { count, eq, gte } from "drizzle-orm";
 import { readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
 import { workspaceSecret } from "./secrets.ts";
 
-/** Written by the build from package.json (wrangler.jsonc `define`). */
+/** Written into the bundle by the build, from package.json (scripts/build.ts). */
 declare const __DEEVY_VERSION__: string | undefined;
 const VERSION = typeof __DEEVY_VERSION__ === "string" ? __DEEVY_VERSION__ : undefined;
 

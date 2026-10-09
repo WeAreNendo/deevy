@@ -7,9 +7,10 @@ name: Changesets
 #    and the changeset files consumed.
 #  - None are. Either that pull request just merged — in which case the version
 #    in package.json has moved and this tags it, writes the GitHub Release, and
-#    calls the image workflow, then starts the npm one — or this is an ordinary commit and the tag
-#    already exists, which is what `guard` checks and why an ordinary push to
-#    main does not release anything.
+#    calls the image workflow, then starts the npm one and attaches the hosted
+#    Worker — or this is an ordinary commit and the tag already exists, which
+#    is what `guard` checks and why an ordinary push to main does not release
+#    anything.
 on:
   push:
     branches: [main]
@@ -187,6 +188,25 @@ jobs:
     # npm-release.yml starts it and waits, so a failed publish still fails
     # this run; it is its own file so that it can be rehearsed too.
     uses: ./.github/workflows/npm-release.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
+  # The many-Workspaces Worker as an archive on the Release, attested, which is
+  # what a hosted deployment deploys instead of building deevy itself
+  # (hosted-release.yml). After the images, like npm, so nothing is attached
+  # for a commit release.yml's CI refused; beside npm rather than after it,
+  # because an asset on a Release can be replaced and an npm version cannot.
+  hosted:
+    name: The hosted Worker on the Release
+    needs: [version, publish]
+    if: needs.version.outputs.release == 'true'
+    permissions:
+      # A called workflow may ask for no more than this job grants:
+      # hosted-release.yml uploads to the Release and attests the archive.
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/hosted-release.yml
     with:
       version: ${{ needs.version.outputs.version }}
 

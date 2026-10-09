@@ -51,6 +51,16 @@ jobs:
       - name: Build and validate the hosted Worker
         run: vp run hosted#build:hosted
 
+      # What every release attaches (hosted-release.yml): the bundle, the SPA, a
+      # wrangler.json with the deployer's blanks marked, and a manifest. Then
+      # the archive taken apart with the system's tar, every file checked
+      # against the manifest, and its own wrangler.json dry-run by wrangler from
+      # that copy, so a release cannot carry a Worker wrangler would refuse.
+      - name: Package the hosted Worker, and dry-run it as shipped
+        run: |
+          vp run hosted#package
+          vp run hosted#check:hosted
+
       - name: Migration SQL guard
         run: vp run db#check:migrations
 
@@ -173,10 +183,12 @@ jobs:
       - name: Migrations build the schema on D1
         run: vp run db#check:d1
 
-      # The milestone's own walk, on both deployments, with nothing outside this
+      # The milestone's own walk, on every deployment, with nothing outside this
       # machine: a label in a stubbed tracker becomes a Run, a Proposal, a
       # ruling, a branch, a pull request and a finish (docs/sockets-acceptance.md).
-      - name: The reference runtime works a record end to end, on both deployments
+      # The image, the Worker, the image under a path, and a hosted Workspace,
+      # whose Worker the hosted smoke above has just built.
+      - name: The reference runtime works a record end to end, on every deployment
         run: vp run agent#acceptance
 
   # Both images in one job: the runtime smoke needs a deevy to talk to, and
