@@ -57,6 +57,19 @@ describe("the platform's configuration", () => {
     expect(hosted.jurisdiction).toBe("eu");
     expect(hosted.passSeconds).toBe(60);
     expect(hosted.streamSeconds).toBe(300);
+    expect(hosted.limits).toEqual({ invitationsPerDay: 50, emailsPerDay: 500 });
+  });
+
+  it("limits every Workspace's day as the platform says, nought included", () => {
+    const hosted = readHostedEnv(
+      bindings({ DEEVY_HOSTED_INVITATIONS_PER_DAY: "0", DEEVY_HOSTED_EMAILS_PER_DAY: "2000" }),
+    );
+    expect(hosted.limits).toEqual({ invitationsPerDay: 0, emailsPerDay: 2000 });
+    // What is not a whole number is not a limit, and the default stands.
+    const odd = readHostedEnv(
+      bindings({ DEEVY_HOSTED_INVITATIONS_PER_DAY: "-1", DEEVY_HOSTED_EMAILS_PER_DAY: "lots" }),
+    );
+    expect(odd.limits).toEqual({ invitationsPerDay: 50, emailsPerDay: 500 });
   });
 
   it("refuses to run without an origin, a master secret or a relay secret", () => {

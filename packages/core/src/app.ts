@@ -22,6 +22,7 @@ import { cors } from "hono/cors";
 import type { Auth, SignInProvider } from "./auth.ts";
 import { discardingJobQueue, type JobQueue } from "./jobs.ts";
 import type { LiveOptions } from "./live.ts";
+import type { WorkspaceLimits } from "./limits.ts";
 import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
 import { betterAuthKeys } from "./keys.ts";
@@ -63,6 +64,14 @@ export interface AppOptions {
    * D1 query against a per-invocation cap (docs/plans/m3.md slice 7).
    */
   live?: LiveOptions;
+  /**
+   * What this Workspace may do in a day: invitations created, emails sent
+   * (limits.ts). Omitted, nothing is limited and nothing is counted, which is
+   * what the image and the Worker pass; the many-Workspaces Worker passes each
+   * Workspace's own, from its provisioned configuration. The sweep is told
+   * the email half separately, as `runDueWork`'s `workspaceLimits`.
+   */
+  limits?: WorkspaceLimits;
   /**
    * Where a write's tail nudges the deliveries it just owed (jobs.ts). The
    * default discards, because a queue is a latency optimisation and never a
@@ -191,6 +200,7 @@ export function createApp({
   version,
   secret,
   live,
+  limits,
   jobs = discardingJobQueue(),
   onError: report = console.error,
   devSignIn = false,
@@ -334,6 +344,7 @@ export function createApp({
   const contextFor = async (request: Request) => ({
     ...(await buildContext(db, auth, request.headers, originOf(request.url), API_PATH)),
     ...(live ? { live } : {}),
+    ...(limits ? { limits } : {}),
     ...(webURL ? { webURL } : {}),
     jobs,
     devSignIn,

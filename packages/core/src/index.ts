@@ -122,6 +122,13 @@ export {
   type EmailDeliveryResult,
 } from "./email/deliver.ts";
 export { renderEmail, type RenderInput, type RenderedEmail } from "./email/render.ts";
+export {
+  emailsSince,
+  invitationsSince,
+  limitWindowMs,
+  limitWindowStart,
+  type WorkspaceLimits,
+} from "./limits.ts";
 export { idPrefixes, isId, newId, type IdKind } from "./ids.ts";
 /**
  * Sealing, for the entries and for a provider package's own tests: what goes

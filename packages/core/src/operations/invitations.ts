@@ -13,6 +13,7 @@ import { appendEvent } from "../events.ts";
 import { InvitationSchema, MemberSchema } from "../schemas.ts";
 import { newId } from "../ids.ts";
 import { maxEmailAttempts } from "../email/deliver.ts";
+import { nextInvitationAt } from "../limits.ts";
 import { resolveSender } from "../email/sender.ts";
 import { senderOptionsFor } from "../email/settings.ts";
 import { sealSecret } from "../secrets.ts";
@@ -214,6 +215,7 @@ export const invitations = {
           message: "That address already has an invitation: revoke it to send another",
         });
       }
+      await requireInvitationRoom(context);
 
       const token = mintToken();
       const [row] = await context.db
@@ -374,6 +376,39 @@ export const invitations = {
     },
   }),
 };
+
+/**
+ * Refuses an invitation past the Workspace's limit for the day, when it has
+ * one (limits.ts), saying when the next one may be made. Every invitation made
+ * counts, revoked or accepted, emailed or not: each is a stranger admitted,
+ * and most are a stranger mailed through a sender other Workspaces share.
+ */
+async function requireInvitationRoom(context: ContextFor<"admin">): Promise<void> {
+  const perDay = context.limits?.invitationsPerDay;
+  if (perDay === undefined) return;
+  if (perDay < 1) {
+    throw new ORPCError("TOO_MANY_REQUESTS", {
+      message: "Invitations are turned off for this Workspace.",
+      data: { retryAt: null },
+    });
+  }
+  const now = new Date();
+  const opensAt = await nextInvitationAt(context.db, context.workspace.id, perDay, now);
+  if (!opensAt) return;
+  throw new ORPCError("TOO_MANY_REQUESTS", {
+    message: `This Workspace can make ${String(perDay)} ${perDay === 1 ? "invitation" : "invitations"} a day, and has. You can invite somebody again ${inAbout(opensAt.getTime() - now.getTime())}.`,
+    data: { retryAt: opensAt.toISOString() },
+  });
+}
+
+/** A wait in words, rounded the way a person would say it. */
+function inAbout(ms: number): string {
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes <= 1) return "in a minute";
+  if (minutes < 60) return `in ${String(minutes)} minutes`;
+  const hours = Math.round(minutes / 60);
+  return hours <= 1 ? "in about an hour" : `in about ${String(hours)} hours`;
+}
 
 /**
  * Owes an invitation's email: the token sealed on the row, and a delivery the

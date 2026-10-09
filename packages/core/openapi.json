@@ -18173,6 +18173,52 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "limit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "perDay": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "sent": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "waiting": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "nextAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "perDay",
+                            "sent",
+                            "waiting",
+                            "nextAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -18182,7 +18228,8 @@
                     "runnable",
                     "problem",
                     "available",
-                    "config"
+                    "config",
+                    "limit"
                   ],
                   "additionalProperties": false
                 }
@@ -18330,6 +18377,52 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "limit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "perDay": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "sent": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "waiting": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "nextAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "perDay",
+                            "sent",
+                            "waiting",
+                            "nextAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -18339,7 +18432,8 @@
                     "runnable",
                     "problem",
                     "available",
-                    "config"
+                    "config",
+                    "limit"
                   ],
                   "additionalProperties": false
                 }
@@ -18442,6 +18536,52 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "limit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "perDay": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "sent": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "waiting": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "nextAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "x-native-type": "date"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "perDay",
+                            "sent",
+                            "waiting",
+                            "nextAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -18451,7 +18591,8 @@
                     "runnable",
                     "problem",
                     "available",
-                    "config"
+                    "config",
+                    "limit"
                   ],
                   "additionalProperties": false
                 }

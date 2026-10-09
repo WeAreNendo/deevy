@@ -9,7 +9,8 @@
  * apps/web/scripts/stub-oauth.js prepended to the bundle, as the Worker smoke
  * does. Two Workspaces are provisioned through `Platform`, and the rest is what
  * a team would do: sign in through the relay, read their Workspace, invite
- * somebody, and never see the other team's.
+ * somebody, and never see the other team's — and what the console would: read
+ * a Workspace's counts and give it a limit of its own.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -305,14 +306,64 @@ async function phases(origin: string): Promise<void> {
   }, 20_000);
   check("the Workspace's alarm sends what a write owed", sent);
 
-  const status = await platform<{
-    counts: { humans: number } | null;
+  type Status = {
+    limits: { invitationsPerDay: number; emailsPerDay: number } | null;
+    counts: {
+      humans: number;
+      invitationsToday: number;
+      emailsToday: number;
+      runsThisMonth: number;
+    } | null;
     migrations: { error: unknown };
-  }>(origin, "status", "acme");
+  };
+  const status = await platform<Status>(origin, "status", "acme");
   check(
     "a Workspace reports itself to the platform",
     status.counts?.humans === 1 && status.migrations.error === null,
     JSON.stringify(status),
+  );
+  check(
+    "and what it did today and this month, under the platform's limits",
+    status.counts?.invitationsToday === 1 &&
+      status.counts.emailsToday === 1 &&
+      status.counts.runsThisMonth === 0 &&
+      status.limits?.invitationsPerDay === 50,
+    JSON.stringify(status),
+  );
+
+  // A Workspace's own limit, set over the platform's, holds at its next request.
+  const limited = await platform<Status>(origin, "configure", "acme", {
+    limits: { invitationsPerDay: 1 },
+  });
+  check(
+    "Platform.configure gives a Workspace a limit of its own",
+    limited.limits?.invitationsPerDay === 1 && limited.limits.emailsPerDay === 500,
+    JSON.stringify(limited.limits),
+  );
+  const refused = await rpc(
+    acme.url,
+    "invitations/create",
+    { email: "max@example.com", role: "member", send: false },
+    ada.cookie,
+  );
+  check(
+    "past its limit, the next invitation is refused, saying when it may be made",
+    refused.status === 429 && refused.text.includes("You can invite somebody again"),
+    `${String(refused.status)} ${refused.text.slice(0, 300)}`,
+  );
+  const givenBack = await platform<Status>(origin, "configure", "acme", {
+    limits: { invitationsPerDay: null },
+  });
+  const allowed = await rpc(
+    acme.url,
+    "invitations/create",
+    { email: "max@example.com", role: "member", send: false },
+    ada.cookie,
+  );
+  check(
+    "and given back to the platform's, it may invite again",
+    givenBack.limits?.invitationsPerDay === 50 && allowed.status === 200,
+    `${String(allowed.status)} ${allowed.text.slice(0, 200)}`,
   );
 
   const dump = await platform<string>(origin, "dump", "acme");

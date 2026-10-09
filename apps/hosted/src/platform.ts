@@ -3,7 +3,7 @@ import { forget, isSlug, lookup, record, RESERVED_SLUGS, slugs } from "./directo
 import { readHostedEnv, type HostedBindings } from "./env.ts";
 import { workspaceStub } from "./router.ts";
 import { workspaceSecret } from "./secrets.ts";
-import type { WorkspaceStatus } from "./workspace.ts";
+import type { WorkspacePatch, WorkspaceStatus } from "./workspace.ts";
 
 /**
  * What the console may ask of the hosted Worker, and the only way it may ask
@@ -58,12 +58,28 @@ export class Platform extends WorkerEntrypoint<HostedBindings> {
     return { key, url: `${this.#env.origin}/${input.slug}` };
   }
 
-  /** What a Workspace says about itself: version, migrations, counts. */
+  /** What a Workspace says about itself: version, migrations, limits, counts. */
   async status(slug: string): Promise<WorkspaceStatus | null> {
     const entry = await lookup(this.env.DIRECTORY, slug);
     if (!entry) return null;
     // RPC types a returned empty tuple as `never[]`; the value is the same.
     return (await workspaceStub(this.env, this.#env, entry.key).status()) as WorkspaceStatus;
+  }
+
+  /**
+   * Changes what a Workspace was provisioned with: its name, or its limits
+   * over the platform's (`{ limits: { invitationsPerDay: 5 } }`; null gives a
+   * limit back to the platform). A plan, once there are plans, is limits set
+   * here. Suspending is `suspend`, which the directory has to know about too.
+   */
+  async configure(slug: string, patch: Omit<WorkspacePatch, "status">): Promise<WorkspaceStatus> {
+    const stub = await this.#stub(slug);
+    const name = patch.name?.trim();
+    await stub.configure({
+      ...(name ? { name } : {}),
+      ...(patch.limits ? { limits: patch.limits } : {}),
+    });
+    return (await stub.status()) as WorkspaceStatus;
   }
 
   async suspend(slug: string): Promise<void> {
