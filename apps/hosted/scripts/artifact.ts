@@ -241,6 +241,27 @@ export const settings: Setting[] = [
     description:
       "Where each Workspace's object is created, eu in wrangler.json; fixed for an object once it is.",
   },
+  {
+    name: "DEEVY_HOSTED_CONSOLE_AUTH_URL",
+    kind: "var",
+    required: false,
+    description:
+      "The console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to.",
+  },
+  {
+    name: "DEEVY_HOSTED_INVITATIONS_PER_DAY",
+    kind: "var",
+    required: false,
+    description:
+      "Invitations each Workspace may make in any 24 hours, unless its own limit says otherwise; 50.",
+  },
+  {
+    name: "DEEVY_HOSTED_EMAILS_PER_DAY",
+    kind: "var",
+    required: false,
+    description:
+      "Emails each Workspace may send in any 24 hours, unless its own limit says otherwise; 500.",
+  },
   ...providers.flatMap(([prefix, name, id, extra]): Setting[] => [
     {
       name: `${prefix}_CLIENT_ID`,
@@ -252,7 +273,7 @@ export const settings: Setting[] = [
       name: `${prefix}_CLIENT_SECRET`,
       kind: "secret",
       required: false,
-      description: `The secret of that ${name} App, held by the relay.`,
+      description: `The secret of that ${name} App; every Workspace exchanges its own codes with it (ADR-0030).`,
     },
     ...extra,
   ]),
