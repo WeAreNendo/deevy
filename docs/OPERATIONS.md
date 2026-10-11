@@ -300,23 +300,38 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
 - **A Workspace's object** reads who it is from its own storage, migrates, and runs the app; its alarm runs
   the background work every `DEEVY_HOSTED_PASS_SECONDS` (60), in place of a Cron Trigger and a Queue.
 - **`Platform`** is a `WorkerEntrypoint` reached only over a service binding: `available`, `provision`,
-  `status`, `suspend`, `resume`, `dump`, `secrets`, `restore`, `destroy`, `list`. Whatever provisions
-  Workspaces — a console — calls it; nothing on the internet can.
+  `status`, `configure`, `suspend`, `resume`, `dump`, `secrets`, `restore`, `destroy`, `list`. Whatever
+  provisions Workspaces — a console — calls it; nothing on the internet can.
+- **Each Workspace's day is limited**, because every Workspace here sends through the one sender the
+  platform configured, whose quota and reputation they share. Past `DEEVY_HOSTED_INVITATIONS_PER_DAY`
+  invitations in the last 24 hours, the next is refused (a 429) with when it can be made; past
+  `DEEVY_HOSTED_EMAILS_PER_DAY` emails, what is owed waits in its row, neither failed nor given up on, and
+  goes as the window opens, and Settings › Email says how many wait and when. A Workspace's own limit,
+  over the platform's, is `Platform.configure(slug, { limits: { invitationsPerDay: 5 } })`; `null` gives
+  it back, and `{ name }` renames the Workspace. `Platform.status` reports the limits in force and the
+  counts a console shows: Humans, Agents, Sockets, `invitationsToday` and `emailsToday` (the last 24
+  hours, the window the limits count) and `runsThisMonth` (the calendar month in UTC). These are the
+  core's `limits` option, which the image and the Worker never pass, so a self-hosted deevy is limited by
+  nothing. They are a beta's guardrails, not a plan: a plan's limits come with billing, set through the
+  same `Platform.configure`. An email sent the moment an admin asks — a team address's confirmation, a
+  test — is not counted.
 - **A Workspace's two secrets** are derived from `DEEVY_HOSTED_MASTER_SECRET` and the object's key, never
   stored. `Platform.secrets` hands them over with a `Platform.dump` when a team takes its Workspace to the
   image or a Worker of its own.
 
-| Binding or variable             | What                                                                                                          |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `WORKSPACES`                    | The Durable Object namespace, `WorkspaceObject`, a SQLite class.                                              |
-| `DIRECTORY`                     | A KV namespace: slug → object key and status, written by `Platform` only.                                     |
-| `ASSETS`                        | The SPA `vp run web#build:workers` builds into `apps/web/dist/client`.                                        |
-| `CONSOLE`                       | Optional: the service that answers the host's root and its own paths.                                         |
-| `DEEVY_HOSTED_ORIGIN`           | The host every Workspace lives on, `https://app.example.com`. An origin, no path.                             |
-| `DEEVY_HOSTED_MASTER_SECRET`    | 32 or more random characters; every Workspace's secrets derive from it. Secret.                               |
-| `DEEVY_HOSTED_JURISDICTION`     | Where each object is created, such as `eu`; fixed when it is. workerd does not implement jurisdictions.       |
-| `DEEVY_SIGN_IN_RELAY_SECRET`    | 32 or more random characters, signing where a sign-in's callback may go. Secret.                              |
-| `DEEVY_HOSTED_CONSOLE_AUTH_URL` | Optional: the console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to. |
+| Binding or variable                | What                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `WORKSPACES`                       | The Durable Object namespace, `WorkspaceObject`, a SQLite class.                                              |
+| `DIRECTORY`                        | A KV namespace: slug → object key and status, written by `Platform` only.                                     |
+| `ASSETS`                           | The SPA `vp run web#build:workers` builds into `apps/web/dist/client`.                                        |
+| `CONSOLE`                          | Optional: the service that answers the host's root and its own paths.                                         |
+| `DEEVY_HOSTED_ORIGIN`              | The host every Workspace lives on, `https://app.example.com`. An origin, no path.                             |
+| `DEEVY_HOSTED_MASTER_SECRET`       | 32 or more random characters; every Workspace's secrets derive from it. Secret.                               |
+| `DEEVY_HOSTED_JURISDICTION`        | Where each object is created, such as `eu`; fixed when it is. workerd does not implement jurisdictions.       |
+| `DEEVY_SIGN_IN_RELAY_SECRET`       | 32 or more random characters, signing where a sign-in's callback may go. Secret.                              |
+| `DEEVY_HOSTED_CONSOLE_AUTH_URL`    | Optional: the console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to. |
+| `DEEVY_HOSTED_INVITATIONS_PER_DAY` | Invitations each Workspace may make in any 24 hours (50). `0` turns invitations off.                          |
+| `DEEVY_HOSTED_EMAILS_PER_DAY`      | Emails each Workspace may send in any 24 hours (500); the rest wait. `0` sends none.                          |
 
 Sign-in providers, email senders and the timings are the variables every deevy reads. Each provider's App is
 registered once, with `${DEEVY_HOSTED_ORIGIN}/auth/callback/<provider>`. The development stubs run only when
@@ -326,8 +341,8 @@ Build it after the SPA: `vp run web#build:workers`, then `vp run hosted#build:ho
 `dist/hosted/worker.js`. A deployment renders its own `wrangler.json` over `apps/hosted/wrangler.jsonc` —
 its route or Custom Domain, the `DIRECTORY` namespace's id, the `CONSOLE` binding and the secrets — and runs
 `wrangler deploy`. `vp run hosted#test:hosted` runs two Workspaces on `wrangler dev --local` with a stand-in
-console and checks provisioning, sign-in through the relay, isolation, the alarm, a dump, suspension and
-removal.
+console and checks provisioning, sign-in through the relay, isolation, the alarm, the counts, a limit of a
+Workspace's own, a dump, suspension and removal.
 
 ## Environment
 

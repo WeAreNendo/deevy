@@ -11,19 +11,23 @@ import {
 import {
   createApp,
   createAuth,
+  emailsSince,
+  invitationsSince,
+  limitWindowStart,
   runDueWork,
   signInProviders,
   type App,
   type AuthEnv,
   type DueWorkLimits,
+  type WorkspaceLimits,
 } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSenders } from "@deevy/core/email";
-import { member, socket } from "@deevy/db";
+import { member, run, socket } from "@deevy/db";
 import { migrations } from "@deevy/db/durable-migrations";
 import { emailSenders } from "@deevy/email";
 import { socketModules } from "@deevy/sockets";
-import { count, eq } from "drizzle-orm";
+import { count, eq, gte } from "drizzle-orm";
 import { readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
 import { workspaceSecret } from "./secrets.ts";
 
@@ -39,6 +43,22 @@ export interface WorkspaceConfig {
   adminEmail: string;
   status: "active" | "suspended";
   createdAt: number;
+  /**
+   * Its own limits, where `Platform.configure` set them over the platform's
+   * (`DEEVY_HOSTED_*_PER_DAY`). Absent from a Workspace provisioned before
+   * there were any, which takes the platform's.
+   */
+  limits?: WorkspaceLimits;
+}
+
+/**
+ * What `Platform.configure` may change. A limit set to null is forgotten, so
+ * the Workspace takes the platform's again.
+ */
+export interface WorkspacePatch {
+  name?: string;
+  status?: WorkspaceConfig["status"];
+  limits?: { [K in keyof WorkspaceLimits]?: number | null };
 }
 
 /** What a Workspace says about itself to the platform. */
@@ -47,7 +67,21 @@ export interface WorkspaceStatus {
   slug: string | null;
   status: WorkspaceConfig["status"] | "unprovisioned";
   migrations: DurableMigrationResult;
-  counts: { humans: number; agents: number; sockets: number } | null;
+  /** The limits in force: its own where it has them, the platform's otherwise. */
+  limits: Required<WorkspaceLimits> | null;
+  /**
+   * What it holds and what it did, for a console to show and later to meter.
+   * Today is the last 24 hours, the window the limits count; a month is the
+   * calendar month so far, in UTC.
+   */
+  counts: {
+    humans: number;
+    agents: number;
+    sockets: number;
+    invitationsToday: number;
+    emailsToday: number;
+    runsThisMonth: number;
+  } | null;
 }
 
 /**
@@ -129,6 +163,7 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
         emailSenders: this.#senders(),
         email: this.#hosted.email,
         secret: await workspaceSecret(this.#hosted.masterSecret, config.key, "auth"),
+        workspaceLimits: this.#limits(config),
       });
     } finally {
       await this.ctx.storage.setAlarm(Date.now() + this.#hosted.passSeconds * 1_000);
@@ -154,15 +189,28 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       slug: config?.slug ?? null,
       status: config?.status ?? "unprovisioned",
       migrations: this.#migrations,
+      limits: config ? this.#limits(config) : null,
       counts: config && !this.#migrations.error ? await this.#counts() : null,
     };
   }
 
-  async configure(patch: Partial<Pick<WorkspaceConfig, "status" | "name">>): Promise<void> {
+  async configure(patch: WorkspacePatch): Promise<void> {
     if (!this.#config) throw new Error("This Workspace was never provisioned");
-    this.#config = { ...this.#config, ...patch };
+    const { limits: changed = {}, ...rest } = patch;
+    for (const [name, value] of Object.entries(changed)) {
+      if (!(name in this.#hosted.limits)) throw new Error(`There is no limit called ${name}`);
+      if (value !== null && value !== undefined && !(Number.isInteger(value) && value >= 0)) {
+        throw new Error(`${name} must be a whole number, nought or more`);
+      }
+    }
+    const limits = Object.fromEntries(
+      Object.entries({ ...this.#config.limits, ...changed }).filter(
+        ([, value]) => value !== null && value !== undefined,
+      ),
+    ) as WorkspaceLimits;
+    this.#config = { ...this.#config, ...rest, limits };
     this.ctx.storage.kv.put(CONFIG, this.#config);
-    // The app was built with the old name; the next request builds it again.
+    // The app was built with the old name and limits; the next request builds it again.
     this.#app = null;
   }
 
@@ -194,6 +242,11 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
 
   #urlOf(config: WorkspaceConfig): string {
     return `${this.#hosted.origin}/${config.slug}`;
+  }
+
+  /** The platform's limits, with whatever this Workspace was given over them. */
+  #limits(config: WorkspaceConfig): Required<WorkspaceLimits> {
+    return { ...this.#hosted.limits, ...config.limits };
   }
 
   #sockets() {
@@ -228,7 +281,21 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       .from(member)
       .where(eq(member.kind, "agent"));
     const [sockets] = await this.#db.select({ n: count() }).from(socket);
-    return { humans: humans?.n ?? 0, agents: agents?.n ?? 0, sockets: sockets?.n ?? 0 };
+    // Each a range on an index of its own (limits.ts, `run_createdAt_idx`).
+    const now = new Date();
+    const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const [runs] = await this.#db.select({ n: count() }).from(run).where(gte(run.createdAt, month));
+    // Nobody has signed in yet, so there is no Workspace row to have done anything.
+    const workspace = await this.#db.query.workspace.findFirst({ columns: { id: true } });
+    const since = limitWindowStart(now);
+    return {
+      humans: humans?.n ?? 0,
+      agents: agents?.n ?? 0,
+      sockets: sockets?.n ?? 0,
+      invitationsToday: workspace ? await invitationsSince(this.#db, workspace.id, since) : 0,
+      emailsToday: workspace ? await emailsSince(this.#db, workspace.id, since) : 0,
+      runsThisMonth: runs?.n ?? 0,
+    };
   }
 
   async #build(config: WorkspaceConfig): Promise<App> {
@@ -257,6 +324,9 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       // A stream reads this object's own SQLite, which costs no query budget,
       // and ends after minutes so a forgotten tab does not keep it awake.
       live: { pollMs: 1_000, maxDurationMs: this.#hosted.streamSeconds * 1_000 },
+      // Every Workspace here mails through one sender whose quota and
+      // reputation are all of theirs, so each is held to its day's share.
+      limits: this.#limits(config),
       signInProviders: signInProviders(identity),
       sockets: this.#sockets(),
       socketSecret: await workspaceSecret(this.#hosted.masterSecret, config.key, "seal"),

@@ -15,6 +15,35 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { senderForms, senderLabel } from "@/lib/email-senders";
 import { orpc } from "@/lib/orpc";
+import { until } from "@/lib/time";
+
+/** How many emails a day this deployment lets the Workspace send, and where it stands. */
+function EmailLimit({
+  limit,
+}: {
+  limit: { perDay: number; sent: number; waiting: number; nextAt: Date | null };
+}) {
+  const emails = (n: number) => `${String(n)} ${n === 1 ? "email" : "emails"}`;
+  if (limit.sent < limit.perDay) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        You can send {emails(limit.perDay)} a day; {String(limit.sent)} went in the last 24 hours.
+      </p>
+    );
+  }
+  if (limit.perDay === 0) {
+    return <p className="text-sm">Email is turned off for this Workspace.</p>;
+  }
+  const when = limit.nextAt ? until(limit.nextAt) : "when there's room";
+  return (
+    <p className="text-sm">
+      You've sent the {emails(limit.perDay)} you can send in a day.{" "}
+      {limit.waiting > 0
+        ? `${emails(limit.waiting)} ${limit.waiting === 1 ? "waits" : "wait"} and will go out ${when}.`
+        : `More can go out ${when}.`}
+    </p>
+  );
+}
 
 /**
  * Settings › Email (docs/plans/email-channel.md, slice 3): which sender this
@@ -77,6 +106,7 @@ export function EmailPage() {
             </p>
           ) : null}
           {data.problem ? <p className="text-sm text-destructive">{data.problem}</p> : null}
+          {data.limit ? <EmailLimit limit={data.limit} /> : null}
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"

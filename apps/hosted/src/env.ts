@@ -1,5 +1,10 @@
 import type { CloudflareEmailBinding } from "@deevy/adapters/workers";
-import { providersFromEnv, type AuthProviders, type ProviderVariables } from "@deevy/core";
+import {
+  providersFromEnv,
+  type AuthProviders,
+  type ProviderVariables,
+  type WorkspaceLimits,
+} from "@deevy/core";
 import type { EmailSetup } from "@deevy/core/email";
 import { readEmailEnv } from "@deevy/email";
 
@@ -40,6 +45,12 @@ export interface HostedBindings extends ProviderVariables {
   DEEVY_STREAM_SECONDS?: string;
   /** How often a Workspace's alarm runs its background work when nothing asks sooner. */
   DEEVY_HOSTED_PASS_SECONDS?: string;
+  /**
+   * What every Workspace may do in a day unless `Platform.configure` set its
+   * own: invitations made, and emails sent through the sender they share.
+   */
+  DEEVY_HOSTED_INVITATIONS_PER_DAY?: string;
+  DEEVY_HOSTED_EMAILS_PER_DAY?: string;
   DEEVY_RUN_STALE_MINUTES?: string;
   DEEVY_GATE_REMINDER_HOURS?: string;
   DEEVY_SOCKET_CATCHUP_MINUTES?: string;
@@ -68,6 +79,21 @@ export interface HostedEnv {
   devStubSockets: boolean;
   devStubContainers: string | undefined;
   devStubEmail: boolean;
+  /** Every Workspace's limits, before its own configuration says otherwise. */
+  limits: Required<WorkspaceLimits>;
+}
+
+/** The limits a platform that says nothing gets: room for a team, not for a mailing list. */
+export const defaultHostedLimits: Required<WorkspaceLimits> = {
+  invitationsPerDay: 50,
+  emailsPerDay: 500,
+};
+
+/** A whole number, nought included: a limit of nought turns the thing off. */
+function whole(value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim() === "") return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function positive(value: string | undefined, fallback: number): number {
@@ -138,5 +164,12 @@ export function readHostedEnv(bindings: HostedBindings): HostedEnv {
     devStubSockets,
     devStubContainers: bindings.DEEVY_DEV_STUB_CONTAINERS,
     devStubEmail,
+    limits: {
+      invitationsPerDay: whole(
+        bindings.DEEVY_HOSTED_INVITATIONS_PER_DAY,
+        defaultHostedLimits.invitationsPerDay,
+      ),
+      emailsPerDay: whole(bindings.DEEVY_HOSTED_EMAILS_PER_DAY, defaultHostedLimits.emailsPerDay),
+    },
   };
 }

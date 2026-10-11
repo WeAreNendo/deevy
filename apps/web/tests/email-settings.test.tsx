@@ -15,6 +15,7 @@ const stub = vi.hoisted(() => ({
     problem: null as string | null,
     available: ["resend"],
     config: {} as Record<string, string>,
+    limit: null as { perDay: number; sent: number; waiting: number; nextAt: Date | null } | null,
   },
   configured: [] as unknown[],
   cleared: 0,
@@ -121,6 +122,36 @@ describe("Settings › Email", () => {
 
     expect(await screen.findByText("Sender: Resend")).toBeTruthy();
     expect(screen.getByLabelText("API key")).toBeTruthy();
+    stub.status = before;
+  });
+
+  it("says how many emails a day this Workspace may send, when the deployment limits it", async () => {
+    const before = stub.status;
+    stub.status = { ...before, limit: { perDay: 500, sent: 12, waiting: 0, nextAt: null } };
+    await mountAt("/settings/email", { memberName: "Ada" });
+    expect(
+      await screen.findByText("You can send 500 emails a day; 12 went in the last 24 hours."),
+    ).toBeTruthy();
+    stub.status = before;
+  });
+
+  it("says how many emails wait once the day's are sent, and when they go", async () => {
+    const before = stub.status;
+    stub.status = {
+      ...before,
+      limit: {
+        perDay: 500,
+        sent: 500,
+        waiting: 3,
+        nextAt: new Date(Date.now() + 3 * 60 * 60_000 + 60_000),
+      },
+    };
+    await mountAt("/settings/email", { memberName: "Ada" });
+    expect(
+      await screen.findByText(
+        "You've sent the 500 emails you can send in a day. 3 emails wait and will go out in 3 hours.",
+      ),
+    ).toBeTruthy();
     stub.status = before;
   });
 });
