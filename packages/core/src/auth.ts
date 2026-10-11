@@ -5,7 +5,8 @@ import { mcp } from "@better-auth/mcp";
 import { allowlistRule, invitation, member, workspace, type Db } from "@deevy/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { allocateHandle, slugify } from "./handles.ts";
-import { betterAuth } from "better-auth";
+import { betterAuth, type AuthContext } from "better-auth";
+import { symmetricDecrypt } from "better-auth/crypto";
 import { genericOAuth, jwt, lastLoginMethod } from "better-auth/plugins";
 import { fetchClientMetadataResource, type MetadataResourceFetch } from "./cimd.ts";
 import { appendEvent } from "./events.ts";
@@ -177,7 +178,16 @@ export function createAuth({ db, env }: CreateAuthOptions) {
       lastLoginMethod(),
     ],
     socialProviders: socialProvidersOf(env.providers ?? {}),
-    account: { accountLinking: accountLinkingOf(env) },
+    account: {
+      accountLinking: accountLinkingOf(env),
+      // A provider's access and refresh tokens are sealed under the instance
+      // secret as Better Auth writes them, so a database dump or a table
+      // viewer never shows one in the clear. The id token is not a credential
+      // and stays as it came (identities.ts reads a claim off it). A row
+      // written before this was on stays readable (`plainOAuthToken`) and is
+      // sealed the next time its Human signs in with that provider.
+      encryptOAuthTokens: true,
+    },
     user: {
       additionalFields: {
         kind: {
@@ -192,7 +202,7 @@ export function createAuth({ db, env }: CreateAuthOptions) {
       user: {
         create: {
           after: async (user) => {
-            await admit(db, env, {
+            await admit(db, env, readToken, {
               userId: user.id,
               email: user.email,
               name: user.name,
@@ -208,7 +218,7 @@ export function createAuth({ db, env }: CreateAuthOptions) {
           after: async (session) => {
             const user = await db.query.user.findFirst({ where: { id: session.userId } });
             if (user) {
-              await admit(db, env, {
+              await admit(db, env, readToken, {
                 userId: user.id,
                 email: user.email,
                 name: user.name,
@@ -220,6 +230,11 @@ export function createAuth({ db, env }: CreateAuthOptions) {
       },
     },
   });
+  // What a join asks a forge with: the token as the provider issued it, read
+  // through the same context Better Auth sealed it with. The hooks above run
+  // inside a request, long after `$context` settled.
+  const readToken = async (stored: string) =>
+    plainOAuthToken(stored, (await auth.$context).secretConfig);
   // Better Auth starts initialising the moment it is constructed, and the
   // OAuth provider seeds its resource rows there, so the context is a promise
   // that touches the database before anyone has awaited it. This handler only
@@ -594,9 +609,41 @@ export function bearerApiKey(headers: Headers | undefined): string | null {
  * bootstraps the Workspace, anyone else joins when an allowlist rule matches.
  * Both are idempotent, so the two Better Auth hooks may run either or both.
  */
-async function admit(db: Db, env: AuthEnv, user: JoiningUser): Promise<void> {
+async function admit(
+  db: Db,
+  env: AuthEnv,
+  readToken: ReadOAuthToken,
+  user: JoiningUser,
+): Promise<void> {
   await bootstrapWorkspace(db, user, env);
-  await joinWorkspace(db, user, joinPorts(db, env, user.userId));
+  await joinWorkspace(db, user, joinPorts(db, env, user.userId, readToken));
+}
+
+/** Turns an access token as the `account` table holds it into the one the provider issued. */
+export type ReadOAuthToken = (stored: string) => Promise<string>;
+
+/**
+ * An access or refresh token as the provider issued it, from the `account`
+ * row Better Auth wrote (`encryptOAuthTokens`), opened with the secret Better
+ * Auth sealed it with (its context's `secretConfig`).
+ *
+ * Better Auth's own reader, `decryptOAuthToken`, takes a value that is not hex
+ * for one written in the clear, which covers GitHub's and Google's tokens —
+ * but a GitLab token is sixty-four hex characters, reads to it as sealed, and
+ * throws. A sealed value is authenticated, so one that does not open was never
+ * sealed: it is a row from before the option was on, and it is the token
+ * itself. That is also why this opens the value directly rather than asking
+ * whether the option is on: a row sealed while it was stays readable.
+ */
+export async function plainOAuthToken(
+  stored: string,
+  secretConfig: AuthContext["secretConfig"],
+): Promise<string> {
+  try {
+    return await symmetricDecrypt({ key: secretConfig, data: stored });
+  } catch {
+    return stored;
+  }
 }
 
 /**
@@ -612,10 +659,15 @@ async function admit(db: Db, env: AuthEnv, user: JoiningUser): Promise<void> {
 /** How long a forge has to answer a question about a sign-in's memberships. */
 const FORGE_TIMEOUT_MS = 5_000;
 
-export function joinPorts(db: Db, env: AuthEnv, userId: string): JoinOptions {
+export function joinPorts(
+  db: Db,
+  env: AuthEnv,
+  userId: string,
+  readToken: ReadOAuthToken,
+): JoinOptions {
   const token = async (providerId: string) => {
     const account = await db.query.account.findFirst({ where: { userId, providerId } });
-    return account?.accessToken ?? null;
+    return account?.accessToken ? await readToken(account.accessToken) : null;
   };
   const get = async <T>(providerId: string, url: string, accept: string): Promise<T | null> => {
     const accessToken = await token(providerId);

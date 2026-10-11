@@ -10,6 +10,7 @@ import { ItemEvents } from "@/components/item-events";
 import { Badge } from "@/components/ui/badge";
 import { NotFoundPage, isNotFound } from "@/routes/not-found";
 import { orpc } from "@/lib/orpc";
+import { webHref } from "@/lib/href";
 import { ago } from "@/lib/time";
 import { providerLabel } from "@/lib/providers";
 
@@ -45,7 +46,7 @@ export function WorkItemPage({ issueId }: { issueId: string }) {
         description={
           <span className="flex flex-wrap items-center gap-2">
             <a
-              href={record.url}
+              href={webHref(record.url)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
@@ -77,7 +78,7 @@ export function WorkItemPage({ issueId }: { issueId: string }) {
           {/* Where the composer used to be. The conversation is the tracker's,
               and two places to say one thing is one too many. */}
           <a
-            href={record.url}
+            href={webHref(record.url)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
@@ -143,7 +144,7 @@ export function WorkItemPage({ issueId }: { issueId: string }) {
                 {(links.data?.links ?? []).map((link) => (
                   <li key={link.id}>
                     <a
-                      href={link.url}
+                      href={webHref(link.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-sm hover:underline"

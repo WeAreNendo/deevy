@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { WorkFilters, workListInput, type WorkSearch } from "@/components/work-filters";
 import { Badge } from "@/components/ui/badge";
 import { orpc } from "@/lib/orpc";
+import { webHref } from "@/lib/href";
 import { ago } from "@/lib/time";
 
 interface WorkRow {
@@ -45,7 +46,7 @@ export function WorkPage({
       header: "Key",
       cell: (row) => (
         <a
-          href={row.url}
+          href={webHref(row.url)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(clicked) => clicked.stopPropagation()}

@@ -125,8 +125,13 @@ export function createDeevyMcp({
         ...(socketSecret ? { socketSecret } : {}),
       };
       // No credential at all is an authentication answer, not a tool error:
-      // the challenge is what starts the OAuth dance.
-      if (!context.session) return challenge(request, baseURL);
+      // the challenge is what starts the OAuth dance. Nor is a browser's
+      // session cookie one: an MCP client holds a bearer, and a cookie here
+      // would let any page a signed-in Human opens call the tools as them,
+      // since this endpoint answers no CORS question before it acts.
+      if (!context.session || context.principal?.kind === "cookie") {
+        return challenge(request, baseURL);
+      }
       return handler.fetch(request, {
         authInfo: {
           // The SDK's AuthInfo is a pass-through envelope; deevy's own answer

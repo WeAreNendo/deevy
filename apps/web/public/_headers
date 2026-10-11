@@ -1,0 +1,10 @@
+# What the Worker's asset handler adds to the SPA it serves, index.html and the
+# fallback that answers every client-side route included: the asset handler
+# answers before any code of deevy's runs, so createApp's own headers never
+# reach these (packages/core/src/headers.ts). packages/core/tests/headers.test.ts
+# holds this block to `pageHeaders`, so change both together.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self' https://github.com; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

@@ -11,6 +11,7 @@
 import { afterAll, describe, expect, it } from "vite-plus/test";
 import { account, allowlistRule, user } from "@deevy/db";
 import { newId, signInProviders } from "@deevy/core";
+import { joinPorts, plainOAuthToken } from "@deevy/core/auth";
 import { readEnv } from "../src/env.ts";
 import { buildServer } from "../src/server.ts";
 
@@ -108,6 +109,33 @@ async function callbackFor(
     { headers: { cookie: cookiesOf(started) }, redirect: "manual" },
   );
 }
+
+describe("a provider's access token", () => {
+  /**
+   * Better Auth seals the token as it writes the row (`encryptOAuthTokens`),
+   * so a dump of the database never shows one in the clear; and a join, which
+   * asks GitHub who this is with that token, still asks with the one GitHub
+   * issued. The stub answers `/user` for whoever the bearer names, so a
+   * sealed token sent as it is would come back as nobody.
+   */
+  it("is sealed at rest, and a join still asks the forge with the one it issued", async () => {
+    const email = "ada@example.com";
+    const { app, db, auth, close } = stubbedServer({ adminEmail: email });
+    await signIn(app, "github", email);
+
+    const [row] = await db.query.account.findMany({ where: { providerId: "github" } });
+    expect(row?.accessToken).toBeTruthy();
+    expect(row?.accessToken).not.toContain(email);
+    const { secretConfig } = await auth.$context;
+    expect(await plainOAuthToken(row?.accessToken ?? "", secretConfig)).toBe(`stub_${email}`);
+
+    const ports = joinPorts(db, {}, row?.userId ?? "", async (stored) =>
+      plainOAuthToken(stored, secretConfig),
+    );
+    expect(await ports.login?.()).toBe("ada");
+    close();
+  });
+});
 
 describe("a sign-in through the stub", () => {
   it("ends with a session, for every provider the environment configures", async () => {

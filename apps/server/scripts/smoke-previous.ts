@@ -227,7 +227,14 @@ async function rpc<T>(
 ): Promise<{ status: number; output: T | null; body: string }> {
   const response = await fetch(`${origin}/rpc/${procedure}`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    // From one of deevy's own pages, as the browser says: a write with a
+    // session cookie and nothing to say where it came from is refused.
+    headers: {
+      "content-type": "application/json",
+      cookie,
+      origin,
+      "sec-fetch-site": "same-origin",
+    },
     body: JSON.stringify({ json: input }),
   });
   const body = await response.text();
