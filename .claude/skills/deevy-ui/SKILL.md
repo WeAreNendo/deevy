@@ -225,7 +225,10 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
   screen scrolls inside the window** (`max-h-[calc(100dvh-2rem)] overflow-y-auto`, as the connect dialogs do).
 - **Live updates.** `lib/live.ts` maps an Event's `subjectType` to the query keys it may have changed
   (`keysFor`) and coalesces invalidations per 16ms; mutations invalidate by key, never
-  `invalidateQueries()` bare. `QueryClient` has `staleTime: 5_000`.
+  `invalidateQueries()` bare. `QueryClient` has `staleTime: 5_000`. A tab hidden for 30s lets go and
+  resumes from its cursor when shown; where `health.ping` says `live: "websocket"` (a hosted Workspace) it
+  holds a socket at `/api/live` that is told each new seq and reads the Events with `events.list`, and
+  otherwise it reads `events.subscribe` (ADR-0032). `tests/live.test.tsx` drives both with a fake socket.
 - **Search values are strings, both ways.** `router.tsx` gives the router a `parseSearch`/`stringifySearch`
   pair on `URLSearchParams`; every `parse*Search` still tolerates a number. **Filters live in the URL**, so a
   view is a link and Back undoes a filter, and every filter is the server's.

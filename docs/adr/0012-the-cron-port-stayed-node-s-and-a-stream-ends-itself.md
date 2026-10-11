@@ -1,5 +1,10 @@
 # The Cron port stayed Node's, and a stream ends itself
 
+> Amended by [ADR-0032](./0032-a-hosted-workspace-pushes-its-events.md): the "real bus" deferred below is a
+> hosted Workspace's object pushing each new seq to its tabs' hibernatable WebSockets, and on every
+> deployment a hidden tab lets go of its stream and resumes from its cursor (OPERATIONS.md, "Live updates").
+> The cursor stays the protocol.
+
 Amends [ADR-0006](./0006-runtime-agnostic-core-node-first.md), which sketched the second runtime before
 anything had run on it. The core is runtime-agnostic and the Docker image and the Worker are one codebase,
 exactly as it said. Two of its three consequences turned out to describe the wrong seam once M3 built the
