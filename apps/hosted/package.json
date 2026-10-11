@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:hosted": "wrangler deploy --dry-run --config wrangler.jsonc --outdir dist/hosted",
+    "build:hosted": "node scripts/build.ts",
+    "package": "node scripts/package.ts",
+    "check:hosted": "node scripts/check-package.ts",
     "test:hosted": "node scripts/smoke-hosted.ts"
   },
   "dependencies": {

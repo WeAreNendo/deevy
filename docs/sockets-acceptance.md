@@ -14,8 +14,11 @@ Cloudflare account, no GitHub OAuth App, no GitHub App, no tunnel and no reposit
 vp run agent#acceptance
 ```
 
-Sixty-three checks, thirty-one against each deployment plus one comparing them. CI runs it after the Workers
-smoke.
+A hundred and thirty-one checks: thirty-two against each of four deployments, and three comparing each Event
+log with Node's. The four are the image, the Worker, the image again under a path (`/deevy`), and a hosted
+Workspace at `/acme` behind the many-Workspaces Worker, provisioned through `Platform` and signed in through
+the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes, which
+leave both Workers built.
 
 ## Why it needs nothing outside this machine
 
@@ -112,7 +115,7 @@ run.usage_reported`, with the Agent as actor throughout and the
     Human exactly one hop away at the Events that are theirs — the label that routed the work, the two
     rulings, and each ruling reaching the Run — and the tracker's own at the two refusals and the account it
     came to know.
-11. **The same walk on the other deployment**, and the two Event logs are compared to each other.
+11. **The same walk on the other deployments**, and each Event log is compared with Node's.
 
 ## Whose account is whose
 

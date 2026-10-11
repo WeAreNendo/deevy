@@ -3,7 +3,9 @@ name: Release
 # Publishes two images and nothing else: deevy, and the reference agent runtime
 # beside it. The Cloudflare Worker built from the same commit is deployed by hand
 # (docs/OPERATIONS.md), because uploading one needs an account credential this
-# repository does not hold.
+# repository does not hold; the many-Workspaces Worker goes on the GitHub
+# Release as an attested archive instead (hosted-release.yml), for the same
+# reason.
 #
 # Three ways in, and the first is the normal one:
 #
