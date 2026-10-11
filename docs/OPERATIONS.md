@@ -101,11 +101,20 @@ version bump and the folded `CHANGELOG.md`. Merging that pull request is the rel
 
 1. `changesets.yml` runs again, finds no changesets waiting, and sees a version in `package.json` whose tag
    does not exist yet.
-2. It pushes `vX.Y.Z` and writes the GitHub Release from that version's `CHANGELOG.md` section.
+2. It pushes `vX.Y.Z` and writes the GitHub Release from that version's `CHANGELOG.md` section, **as a
+   draft**.
 3. It calls `release.yml`, which re-runs the whole of CI and then pushes both images.
 4. Once the images are out it starts the npm workflow (below) and calls `hosted-release.yml`, which builds the
    many-Workspaces Worker at the tag and attaches `deevy-hosted-X.Y.Z.tar.gz`, its `.sha256` and a build
-   provenance attestation to the Release ("The many-Workspaces Worker").
+   provenance attestation to the draft ("The many-Workspaces Worker").
+5. With all of that done, it publishes the Release, and then tells a hosted deployment that it is out when
+   `DEEVY_CLOUD_DISPATCH_TOKEN` is set.
+
+The Release is a draft until the end because this repository's releases are **immutable**: a published one
+takes no new asset, so everything is attached before it is published. v0.11.0 went out before this, published
+first and its hosted Worker refused afterwards, so its Release has no archive; 0.11.1 is the first that does.
+A release that fails partway stays a draft: finish the step that failed (below), then publish it with
+`gh release edit vX.Y.Z --draft=false`.
 
 The tag is pushed for the record and for the image tags; it does **not** drive step 3, because a tag pushed
 with `GITHUB_TOKEN` triggers no workflow. Nothing about an ordinary commit on `main` releases anything — the
@@ -136,9 +145,10 @@ the GitHub Release already exist — which is what the `workflow_dispatch` input
 To release outside this flow, push a `v*` tag by hand; `release.yml` still publishes on one. That skips the
 changelog and the GitHub Release, so it is for recovering a botched release rather than for making one.
 
-**If the hosted Worker is missing from a Release**, attach it again from the tag, so the attestation names
-the commit the archive was built from: `gh workflow run hosted-release.yml --ref vX.Y.Z -f version=X.Y.Z`. A
-run started anywhere else stops before it attests anything.
+**If the hosted Worker is missing from a draft Release**, attach it again from the tag, so the attestation
+names the commit the archive was built from: `gh workflow run hosted-release.yml --ref vX.Y.Z -f
+version=X.Y.Z`. A run started anywhere else stops before it attests anything. A published Release cannot be
+given it; the next version carries it.
 
 **The CLI goes to npm last**, after the images and so after CI has re-run, because an image can be pushed
 again and an npm version cannot — seventy-two hours and the number is burned. The release starts the npm
