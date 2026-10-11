@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "sync": "node scripts/sync.ts",
-    "serve": "node scripts/sync.ts && astro dev",
-    "build": "node scripts/sync.ts && astro build",
-    "preview": "astro preview",
+    "serve": "node scripts/sync.ts && ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "node scripts/sync.ts && ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "check:workers": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy"
   },
