@@ -46,6 +46,11 @@ jobs:
       - name: Validate the Worker bundle
         run: vp run web#check:workers
 
+      # The many-Workspaces Worker (ADR-0028), bundled and validated by wrangler
+      # against the SPA the step above built.
+      - name: Build and validate the hosted Worker
+        run: vp run hosted#build:hosted
+
       - name: Migration SQL guard
         run: vp run db#check:migrations
 
@@ -77,7 +82,7 @@ jobs:
           - name: core
             filters: -F core -F db -F adapters -F sockets -F email -F release -F cli
           - name: runtime and server
-            filters: -F agent -F server
+            filters: -F agent -F server -F hosted
     steps:
       - uses: actions/checkout@v7
 
@@ -156,6 +161,12 @@ jobs:
       # which no test of createApp can see. `--local` needs no account.
       - name: The Worker serves deevy
         run: vp run web#test:workers
+
+      # Two hosted Workspaces in one Worker on workerd: provisioned through
+      # Platform, signed in through the relay, isolated, swept by their alarms,
+      # dumped, suspended and destroyed (docs/plans/hosted.md slice 9).
+      - name: The hosted Worker serves its Workspaces
+        run: vp run hosted#test:hosted
 
       # drizzle generates and wrangler applies (ADR-0008), so the projection is
       # only proven by wrangler applying it: an empty local D1, no account.

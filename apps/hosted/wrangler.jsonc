@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The many-Workspaces Worker (ADR-0028). This is the open-source half: what
+  // it runs and what it is bound to. Where it is routed, its secrets, and the
+  // console it hands the root of the host to are the platform's, rendered over
+  // this file by whoever deploys it (docs/plans/hosted.md, "C2 Deploys").
+  "name": "deevy-hosted",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["new_module_registry"],
+  "define": { "__DEEVY_VERSION__": "\"0.10.0\"" },
+  "assets": {
+    // The SPA apps/web builds; every Workspace serves the same files under its
+    // own path (@deevy/adapters/spa). Build apps/web first.
+    "directory": "../web/dist/client",
+    "binding": "ASSETS",
+    // A route the SPA owns, asked of the binding, is its index.
+    "not_found_handling": "single-page-application",
+    // Every request is the router's: a Workspace's index says where it lives,
+    // and a slug the directory does not know is a 404 rather than the SPA.
+    "run_worker_first": true,
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "WORKSPACES", "class_name": "WorkspaceObject" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceObject"] }],
+  // Slug → object key, written by Platform. A deploy names its own namespace id.
+  "kv_namespaces": [{ "binding": "DIRECTORY" }],
+  "vars": {
+    // Overridden by every real deployment; loopback is the only origin on which
+    // the development stubs may run (src/env.ts).
+    "DEEVY_HOSTED_ORIGIN": "http://localhost:8788",
+    "DEEVY_HOSTED_JURISDICTION": "eu",
+  },
+  "observability": { "enabled": true },
+}
