@@ -183,6 +183,13 @@ jobs:
       - name: Migrations build the schema on D1
         run: vp run db#check:d1
 
+      # A hosted Workspace's dump, converted by `import.mjs --for-d1`, applied
+      # to an empty local D1: wrangler then has nothing to apply, or exactly
+      # what the dump's release did not have (docs/OPERATIONS.md, "Taking a
+      # hosted Workspace home").
+      - name: A hosted Workspace's dump goes into D1
+        run: vp run server#check:d1-import
+
       # The milestone's own walk, on every deployment, with nothing outside this
       # machine: a label in a stubbed tracker becomes a Run, a Proposal, a
       # ruling, a branch, a pull request and a finish (docs/sockets-acceptance.md).
