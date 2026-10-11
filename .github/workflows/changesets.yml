@@ -6,11 +6,17 @@ name: Changesets
 #    Packages" pull request: the version bumps, the folded root CHANGELOG.md,
 #    and the changeset files consumed.
 #  - None are. Either that pull request just merged — in which case the version
-#    in package.json has moved and this tags it, writes the GitHub Release, and
-#    calls the image workflow, then starts the npm one and attaches the hosted
-#    Worker — or this is an ordinary commit and the tag already exists, which
-#    is what `guard` checks and why an ordinary push to main does not release
-#    anything.
+#    in package.json has moved and this tags it, writes the GitHub Release as a
+#    draft, calls the image workflow, starts the npm one, attaches the hosted
+#    Worker, and only then publishes the Release — or this is an ordinary commit
+#    and the tag already exists, which is what `guard` checks and why an
+#    ordinary push to main does not release anything.
+#
+# A draft first because this repository's releases are immutable: once
+# published, a Release takes no new asset, which is how v0.11.0 went out without
+# its hosted Worker (the upload was refused with a 422). Everything is attached
+# to the draft, and publishing is the last step, after the one thing that cannot
+# be taken back (npm). A release that failed halfway stays a draft, visibly.
 on:
   push:
     branches: [main]
@@ -155,7 +161,7 @@ jobs:
             *-*) prerelease=--prerelease ;;
             *) prerelease= ;;
           esac
-          gh release create "v$VERSION" --title "v$VERSION" --notes-file /tmp/release-notes.md $prerelease
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file /tmp/release-notes.md $prerelease --draft
 
   # The one package deevy publishes, in its own file so that it can also be
   # rehearsed — a real runner, the real credential, everything but the upload —
@@ -209,9 +215,39 @@ jobs:
     uses: ./.github/workflows/hosted-release.yml
     with:
       version: ${{ needs.version.outputs.version }}
-    # Only the one secret, to tell deevy Cloud the archive is there.
-    secrets:
-      DEEVY_CLOUD_DISPATCH_TOKEN: ${{ secrets.DEEVY_CLOUD_DISPATCH_TOKEN }}
+
+  # Last, once everything that belongs to the Release is on it: the images, npm,
+  # and the hosted Worker with its attestation. Publishing makes the Release
+  # immutable, so nothing can be attached after this; a failed job above leaves
+  # the draft for somebody to finish (docs/OPERATIONS.md, "Cutting a release").
+  release:
+    name: The Release, published
+    needs: [version, publish, npm, hosted]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Publish it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      # A hosted deployment deploys each release through its own Version PR;
+      # this is what tells it one is out (deevy-cloud's docs/SETUP.md,
+      # "Deploying on every release"). After publishing, because a draft is
+      # invisible to anybody else's token. The token may dispatch to that
+      # repository and nothing else; without it, as in a fork, nobody is told.
+      - name: Tell deevy Cloud
+        env:
+          GH_TOKEN: ${{ secrets.DEEVY_CLOUD_DISPATCH_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "No DEEVY_CLOUD_DISPATCH_TOKEN: deevy Cloud is not told."; exit 0; fi
+          gh api repos/WeAreNendo/deevy-cloud/dispatches \
+            -f event_type=deevy-released -f "client_payload[version]=$VERSION"
 
   # Called rather than left to the tag push above, which GITHUB_TOKEN cannot
   # trigger. This re-runs the whole of CI before either image is pushed.

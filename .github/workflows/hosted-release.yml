@@ -14,16 +14,17 @@ name: Hosted Worker
 #   gh attestation verify deevy-hosted-<version>.tar.gz --repo WeAreNendo/deevy \
 #     --signer-workflow WeAreNendo/deevy/.github/workflows/hosted-release.yml
 #
-# Two ways in, both once the Release exists:
+# Two ways in, both while the Release is still a draft — releases here are
+# immutable, so a published one takes no new asset:
 #
 #  - `workflow_call`, from changesets.yml, after the images — which is after
 #    release.yml has re-run the whole of CI, so nothing is attached for a
-#    commit that does not build.
-#  - `workflow_dispatch` with a version, to attach it again: a release whose
-#    archive failed, or one made by hand outside the changesets flow. Run it on
-#    the tag, `gh workflow run hosted-release.yml --ref v<version> -f
-#    version=<version>`: an attestation names the commit its run is for, and
-#    the first step refuses to attest one commit's archive as another's.
+#    commit that does not build. changesets.yml publishes the Release after it.
+#  - `workflow_dispatch` with a version, to attach it again to a draft whose
+#    archive failed. Run it on the tag, `gh workflow run hosted-release.yml
+#    --ref v<version> -f version=<version>`: an attestation names the commit its
+#    run is for, and the first step refuses to attest one commit's archive as
+#    another's. Then publish the draft by hand.
 #
 # Never on a pull request (ci.yml builds and dry-runs the same archive there),
 # and never on a tag push: an upload needs the Release changesets.yml writes.
@@ -34,14 +35,10 @@ on:
         description: The version being released, without a leading v.
         required: true
         type: string
-    secrets:
-      DEEVY_CLOUD_DISPATCH_TOKEN:
-        description: May send a repository_dispatch to WeAreNendo/deevy-cloud. Without it nobody is told.
-        required: false
   workflow_dispatch:
     inputs:
       version:
-        description: The version to attach the hosted Worker to, without a leading v. Its Release must already exist.
+        description: The version to attach the hosted Worker to, without a leading v. Its Release must still be a draft.
         required: true
         type: string
 
@@ -134,17 +131,3 @@ jobs:
         run: |
           gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
             "deevy-hosted-$VERSION.tar.gz" "deevy-hosted-$VERSION.tar.gz.sha256"
-
-      # The hosted deployment deploys each release once its archive and
-      # attestation are here, waiting there for a reviewer as every deploy does;
-      # this is what tells it one is (deevy-cloud's docs/SETUP.md, "Deploying on
-      # every release"). The token may dispatch to that repository and nothing
-      # else. Without it, as in a fork, the release is simply not announced.
-      - name: Tell deevy Cloud
-        env:
-          GH_TOKEN: ${{ secrets.DEEVY_CLOUD_DISPATCH_TOKEN }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then echo "No DEEVY_CLOUD_DISPATCH_TOKEN: deevy Cloud is not told."; exit 0; fi
-          gh api repos/WeAreNendo/deevy-cloud/dispatches \
-            -f event_type=deevy-released -f "client_payload[version]=$VERSION"
