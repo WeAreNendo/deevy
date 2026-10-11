@@ -170,7 +170,14 @@ async function platform<T>(origin: string, method: string, ...args: unknown[]): 
 async function rpc(url: string, procedure: string, input: unknown, cookie: string) {
   const response = await fetch(`${url}/rpc/${procedure}`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    // From the Workspace's own page, as the browser says: a write with a
+    // session cookie and nothing to say where it came from is refused.
+    headers: {
+      "content-type": "application/json",
+      cookie,
+      origin: new URL(url).origin,
+      "sec-fetch-site": "same-origin",
+    },
     body: JSON.stringify({ json: input }),
   });
   const text = await response.text();
