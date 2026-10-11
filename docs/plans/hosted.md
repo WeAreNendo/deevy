@@ -565,3 +565,10 @@ Event; what an open stream bills, and a gradual deploy with a migration, wait fo
   the deevy.dev site with its waitlist, which works without JavaScript too.
 - **Metering** (#153). One Workers Analytics Engine data point per request, by Workspace, with nothing
   personal in it; what a console shows and a plan will be billed by.
+- **Landing it** (2026-10-11). Two smokes written before #142 wrote with a session cookie and no `Origin`: the
+  previous-release smoke (#141) and the hosted one, and both now send what deevy's own page would; nothing else
+  in the tree did. GitHub's free plan offers neither required reviewers on a private repository's environment
+  nor branch protection, so deevy-cloud's deploys are gated the way deevy's releases are: every change carries a
+  changeset, a deevy release becomes one on its dispatch, and merging the Version PR is the deploy. GitHub also
+  refuses a configuration variable named `GITHUB_*`, so the GitHub sign-in's client id is `GH_OAUTH_CLIENT_ID`
+  there. The account's KV namespace, D1 database and R2 bucket exist, the last two in the EU.
