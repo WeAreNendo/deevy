@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth.ts";
+import { authorizationInProgress } from "@/lib/authorization.ts";
 import {
   dropInvitation,
   heldInvitation,
@@ -201,7 +202,13 @@ export function DevSignIn({
             method: "POST",
             headers: { "content-type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ provider, callbackURL: home() }),
+            // The authorization this sign-in interrupts, if any, so the server
+            // resumes it at the callback (lib/auth.ts).
+            body: JSON.stringify({
+              provider,
+              callbackURL: home(),
+              oauth_query: authorizationInProgress(),
+            }),
           });
           const { url } = (await started.json()) as { url?: string };
           const authorization = url ? new URL(url) : null;
