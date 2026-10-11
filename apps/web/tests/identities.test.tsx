@@ -166,7 +166,13 @@ describe("Settings › Identities", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Link GitHub" }));
 
     await waitFor(() =>
-      expect(stub.linked).toEqual([{ provider: "github", callbackURL: "/settings/identities" }]),
+      expect(stub.linked).toEqual([
+        {
+          provider: "github",
+          callbackURL: `${window.location.origin}/settings/identities`,
+          errorCallbackURL: `${window.location.origin}/settings/identities`,
+        },
+      ]),
     );
     // Google is how Carol signs in, and nothing is ruled from Google.
     expect(screen.queryByRole("button", { name: "Link Google" })).toBeNull();

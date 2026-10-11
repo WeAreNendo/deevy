@@ -1,3 +1,4 @@
+import { signInRelayFromEnv } from "@deevy/core";
 import type { EmailSetup } from "@deevy/core/email";
 import { emailSetupFromEnv } from "@deevy/email";
 import type { AuthProviders } from "@deevy/core";
@@ -8,6 +9,8 @@ export interface ServerEnv {
   migrationsFolder: string;
   baseURL?: string;
   secret?: string;
+  /** The relay this deployment signs in through, and the one it is (sign-in-relay.ts). */
+  signInRelay: ReturnType<typeof signInRelayFromEnv>;
   /**
    * What a Socket's credentials are sealed with (`DEEVY_SECRET`, secrets.ts).
    * Separate from Better Auth's on purpose: rotating that one signs everybody
@@ -221,6 +224,9 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     migrationsFolder: env.DEEVY_MIGRATIONS_DIR ?? new URL("./drizzle", import.meta.url).pathname,
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
+    // Signing in through a relay, or being one (docs/OPERATIONS.md, "Signing
+    // in through a relay").
+    signInRelay: signInRelayFromEnv(env),
     socketSecret: env.DEEVY_SECRET,
     socketCatchupMinutes: positive(env.DEEVY_SOCKET_CATCHUP_MINUTES, 30),
     githubApi: env.DEEVY_GITHUB_API,

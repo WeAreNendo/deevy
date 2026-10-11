@@ -22,7 +22,7 @@ export function withBaseHref(html: string, base: string): string {
  * list as the Worker's `run_worker_first`, which `worker-routes.test.ts` holds
  * against the routes `createApp` mounts.
  */
-export const APP_PREFIXES = ["/api/", "/rpc/", "/hooks/", "/.well-known/"] as const;
+export const APP_PREFIXES = ["/api/", "/rpc/", "/hooks/", "/.well-known/", "/relay/"] as const;
 export const APP_PATHS = ["/healthz", "/mcp"] as const;
 
 /** Whether a path under the base is one of the app's own. */
