@@ -54,8 +54,13 @@ function statementsIn(sql: string): Statement[] {
   const statements: Statement[] = [];
   let line = 1;
   for (const chunk of sql.split(/-->[ \t]*statement-breakpoint/)) {
-    const leading = chunk.length - chunk.trimStart().length;
-    const body = chunk.trim();
+    // A comment above a statement is not part of it. What D1 will not take is
+    // recognised by how a statement starts, and a `-- deevy: contract` line on
+    // top of drizzle's table rebuild would otherwise hide the PRAGMA under it
+    // (ADR-0031).
+    const code = chunk.replace(/^(?:\s*--[^\n]*(?:\n|$))+/, "");
+    const leading = chunk.length - code.trimStart().length;
+    const body = code.trim();
     if (body.length > 0) {
       statements.push({
         sql: body.endsWith(";") ? body : `${body};`,

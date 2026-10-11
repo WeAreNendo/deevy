@@ -1,9 +1,9 @@
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { workspace } from "@deevy/db";
 import { Hono } from "hono";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { mountSpa, openDatabase } from "../src/node/index.ts";
 
 const migrationsFolder = new URL("../../db/drizzle", import.meta.url).pathname;
@@ -52,6 +52,41 @@ describe("node adapters", () => {
       );
     } finally {
       await chmod(dir, 0o755);
+    }
+  });
+
+  /**
+   * A rollback: the release before runs on what the newer one migrated
+   * (ADR-0031). drizzle picks what to apply by name and passes over a name it
+   * has no folder for, so this must start rather than refuse — and say so,
+   * because only one release back is promised.
+   */
+  it("opens a database a newer release migrated, and says that it did", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "deevy-rollback-"));
+    const newer = join(dir, "drizzle");
+    await cp(migrationsFolder, newer, { recursive: true });
+    await mkdir(join(newer, "29991231000000_from_the_future"));
+    await writeFile(
+      join(newer, "29991231000000_from_the_future", "migration.sql"),
+      "CREATE TABLE `later` (`id` text PRIMARY KEY NOT NULL);",
+    );
+    const path = join(dir, "deevy.sqlite");
+    openDatabase({ path, migrationsFolder: newer }).close();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const { db, close } = openDatabase({ path, migrationsFolder });
+      await db.insert(workspace).values({ id: "w1", name: "deevy", slug: "deevy" });
+      expect((await db.query.workspace.findMany()).map((w) => w.slug)).toEqual(["deevy"]);
+      close();
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0]?.[0]).toContain("(29991231000000_from_the_future)");
+
+      warn.mockClear();
+      openDatabase({ path: join(dir, "fresh.sqlite"), migrationsFolder }).close();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
     }
   });
 

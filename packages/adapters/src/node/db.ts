@@ -58,7 +58,35 @@ export function openDatabase({
   const failure = migrate(db, { migrationsFolder });
   if (failure) throw new Error(`migration failed: ${JSON.stringify(failure)}`);
   client.exec("PRAGMA foreign_keys = ON");
+  const newer = migrationsFromANewerRelease(client, migrationsFolder);
+  if (newer.length > 0) {
+    console.warn(
+      `this database has ${String(newer.length)} migration(s) this release does not know ` +
+        `(${newer.join(", ")}): a newer deevy has run on it. A release runs on the schema of ` +
+        "the one after it and no further, so if that was more than one release ahead, restore " +
+        "the backup taken before it instead (docs/OPERATIONS.md, Upgrading).",
+    );
+  }
   return { db, close: () => client.close() };
+}
+
+/**
+ * Migrations the database has and this build does not: a newer release ran
+ * here, and this is the one before it, rolled back to. drizzle decides what is
+ * pending by name alone and passes over the rest without a word, which is what
+ * lets a release run on the next one's schema (ADR-0031). The operator is told
+ * anyway, because only one release back is promised.
+ */
+function migrationsFromANewerRelease(client: DatabaseSync, migrationsFolder: string): string[] {
+  const known = new Set(
+    readdirSync(migrationsFolder, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name),
+  );
+  const applied = client
+    .prepare("SELECT name FROM __drizzle_migrations WHERE name IS NOT NULL ORDER BY id")
+    .all() as Array<{ name: string }>;
+  return applied.map(({ name }) => name).filter((name) => !known.has(name));
 }
 
 /**
