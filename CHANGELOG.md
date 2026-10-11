@@ -7,6 +7,12 @@ A release is two Docker images and one `vX.Y.Z` tag — see [docs/OPERATIONS.md]
 
 <!-- Entries are inserted below this line by `vp run version`. -->
 
+## 0.11.1
+
+### Patch Changes
+
+- **hosted** — [#158](https://github.com/WeAreNendo/deevy/pull/158) [`8c8a7a5`](https://github.com/WeAreNendo/deevy/commit/8c8a7a58daba48743209eef35d5be36a1e43196f) Thanks [@mattallty](https://github.com/mattallty)! - The hosted Worker's archive, `deevy-hosted-<version>.tar.gz` with its checksum and attestation, is on the GitHub Release again. 0.11.0's Release went out without it, so 0.11.1 is the first release a hosted deployment can deploy.
+
 ## 0.11.0
 
 ### Minor Changes
