@@ -33,6 +33,16 @@ export interface Backoff {
  */
 export const deliveryLockMs = 60_000;
 
+/** The kind of destination one arm sends to, or the kinds when it sends to several. */
+export type Targets = (typeof deliveryTargets)[number] | Array<(typeof deliveryTargets)[number]>;
+
+/** Whether a delivery is headed for one of an arm's destinations. */
+function isFor(target: Targets) {
+  return Array.isArray(target)
+    ? inArray(deliveryTable.target, target)
+    : eq(deliveryTable.target, target);
+}
+
 export interface DueDeliveriesQueryOptions {
   workspaceId: string;
   /** The clock this pass reads. */
@@ -50,7 +60,7 @@ export interface DueDeliveriesQueryOptions {
  */
 export function dueDeliveries(
   db: Db,
-  target: (typeof deliveryTargets)[number] | Array<(typeof deliveryTargets)[number]>,
+  target: Targets,
   { workspaceId, now, limit, maxAttempts }: Required<DueDeliveriesQueryOptions>,
 ) {
   return db
@@ -61,9 +71,7 @@ export function dueDeliveries(
         isNull(deliveryTable.deliveredAt),
         lte(deliveryTable.nextAttemptAt, now),
         eq(deliveryTable.workspaceId, workspaceId),
-        Array.isArray(target)
-          ? inArray(deliveryTable.target, target)
-          : eq(deliveryTable.target, target),
+        isFor(target),
         // Out of attempts is given up on, not retried forever.
         lt(deliveryTable.attempts, maxAttempts),
         // Somebody else may be sending it right now.
@@ -94,14 +102,27 @@ export interface Claimed {
  * scan happens to filter it out (docs/plans/m3.md): a caller that names a row
  * directly — a queue message delivered twice, a Redeliver that raced a tick —
  * gets nothing back and so makes no request.
+ *
+ * And it refuses one headed for a kind of destination this arm does not send
+ * to. Every arm shares the table, so an arm that took another's row would find
+ * no destination of its own behind it and retire it as undeliverable. A due
+ * scan only finds its own arm's rows, but a caller that names a row directly
+ * is trusting an id it was handed: when a queue message named a tracker's
+ * comment, the webhook arm gave it up unsent.
  */
-export async function claimDeliveries(db: Db, ids: string[], now: Date): Promise<Claimed[]> {
+export async function claimDeliveries(
+  db: Db,
+  target: Targets,
+  ids: string[],
+  now: Date,
+): Promise<Claimed[]> {
   return db
     .update(deliveryTable)
     .set({ lockedUntil: new Date(now.getTime() + deliveryLockMs) })
     .where(
       and(
         inArray(deliveryTable.id, ids),
+        isFor(target),
         isNull(deliveryTable.deliveredAt),
         or(isNull(deliveryTable.lockedUntil), lt(deliveryTable.lockedUntil, now)),
       ),

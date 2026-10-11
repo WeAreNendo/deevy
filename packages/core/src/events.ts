@@ -211,15 +211,15 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
   // And so do the deliveries owed to a subscribed URL, in the same tail and
   // for the same reason: the durable row is what makes a trigger reliable
   // whether or not anything is running to send it (ADR-0003).
-  const owed = await deriveWebhookDeliveries(source.db, row);
+  const webhooks = await deriveWebhookDeliveries(source.db, row);
   // And what the tracker is owed, which is deevy saying back where the work
   // lives (ADR-0024). Same shape, same row, same sweep: a Project that mirrors
   // nothing pays one pure check and no query at all (sockets/mirror.ts).
-  owed.push(...(await deriveSocketMirrors(source.db, row)));
+  await deriveSocketMirrors(source.db, row);
   // And the messages a chat tool holds about a Gate this Event changes: the
   // buttons on a Slack message stop being true the moment anybody rules,
   // wherever they ruled (sockets/chat-out.ts).
-  owed.push(...(await deriveChatUpdates(source.db, row)));
+  await deriveChatUpdates(source.db, row);
 
   // Then, and only then, the nudge: a job names a row that is already durable,
   // so a deployment with a queue sends it now instead of at the next sweep and
@@ -227,7 +227,12 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
   // may not throw or reject; this does not depend on the port being kept,
   // because a queue that is down must not turn a write that succeeded into a
   // request that failed (docs/plans/m3.md slice 9).
-  for (const id of owed) {
+  //
+  // Only a webhook is nudged, because a webhook is the only job a consumer
+  // knows how to run. A tracker's comment and a chat message wait for their
+  // own sweeps, which is no loss: the row is durable either way, and the
+  // queue is a latency optimisation rather than where anything is kept.
+  for (const id of webhooks) {
     try {
       await source.jobs?.enqueue({ kind: "webhook.delivery", id });
     } catch {
