@@ -102,7 +102,14 @@ describe("the manifest", () => {
         new RegExp(`interface ${name}[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(source)?.[1] ?? "";
       return [...body.matchAll(/^ {2}([A-Z][A-Z0-9_]+)\??:/gm)].map((match) => match[1] ?? "");
     };
-    const bindings = new Set(["WORKSPACES", "DIRECTORY", "ASSETS", "CONSOLE", "EMAIL"]);
+    const bindings = new Set([
+      "WORKSPACES",
+      "DIRECTORY",
+      "ASSETS",
+      "CONSOLE",
+      "EMAIL",
+      "ANALYTICS",
+    ]);
     const reads = [
       ...declared("src/env.ts", "HostedBindings"),
       ...declared("../../packages/core/src/provider-env.ts", "ProviderVariables"),

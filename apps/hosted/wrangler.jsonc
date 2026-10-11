@@ -36,5 +36,8 @@
     "DEEVY_HOSTED_ORIGIN": "http://localhost:8788",
     "DEEVY_HOSTED_JURISDICTION": "eu",
   },
+  // A data point per request, by Workspace (src/meter.ts): what a console shows of a
+  // Workspace's use and what a plan is billed by later. Nothing personal goes in it.
+  "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "deevy_hosted_requests" }],
   "observability": { "enabled": true },
 }

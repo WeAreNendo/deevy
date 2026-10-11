@@ -7,6 +7,7 @@ import {
 } from "@deevy/core";
 import type { EmailSetup } from "@deevy/core/email";
 import { readEmailEnv } from "@deevy/email";
+import type { Meter } from "./meter.ts";
 
 /**
  * What the many-Workspaces Worker is bound to (wrangler.jsonc). The platform's
@@ -25,6 +26,8 @@ export interface HostedBindings extends ProviderVariables {
   CONSOLE?: Fetcher;
   /** Cloudflare Email Service, the platform's sender (docs/plans/email-channel.md). */
   EMAIL?: CloudflareEmailBinding;
+  /** Workers Analytics Engine: a data point per request, by Workspace (meter.ts). Optional. */
+  ANALYTICS?: Meter;
   /** Where every Workspace lives: `https://app.deevy.dev`, each under `/<slug>`. */
   DEEVY_HOSTED_ORIGIN?: string;
   /** What every Workspace's secrets are derived from (secrets.ts). Never a Workspace's. */

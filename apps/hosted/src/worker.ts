@@ -1,4 +1,5 @@
 import { readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
+import { meter } from "./meter.ts";
 import { route } from "./router.ts";
 
 export { Platform } from "./platform.ts";
@@ -19,6 +20,9 @@ export default {
       hosted = readHostedEnv(bindings);
       read.set(bindings, hosted);
     }
-    return route(request, bindings, hosted);
+    const started = Date.now();
+    const response = await route(request, bindings, hosted);
+    meter(bindings.ANALYTICS, request, response, Date.now() - started);
+    return response;
   },
 } satisfies ExportedHandler<HostedBindings>;
