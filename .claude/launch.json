@@ -54,7 +54,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "cd apps/docs && node scripts/sync.ts && exec ./node_modules/.bin/astro dev --ignore-lock --port \"${PORT:-4321}\""
+        "cd apps/docs && node scripts/sync.ts && ASTRO_TELEMETRY_DISABLED=1 exec ./node_modules/.bin/astro dev --ignore-lock --port \"${PORT:-4321}\""
       ],
       "port": 4321,
       "autoPort": true
