@@ -26,6 +26,17 @@ async function members(): Promise<{ name: string; dir: string; version: string }
   return found.sort((a, b) => a.dir.localeCompare(b.dir));
 }
 
+/**
+ * The members that are released: every one but those `.changeset/config.json`
+ * names in `ignore`. apps/docs is the one, a site deployed from main rather than
+ * a part of any version, and leaving it out takes a line in that file — as
+ * deliberate as adding a package to the lists below, so an omission still fails.
+ */
+async function released(): Promise<{ name: string; dir: string; version: string }[]> {
+  const { ignore = [] } = JSON.parse(await read(".changeset/config.json")) as { ignore?: string[] };
+  return (await members()).filter((m) => !ignore.includes(m.name));
+}
+
 /** The quoted strings of a named array literal in a TypeScript source file. */
 const arrayLiteral = (source: string, name: string): string[] => {
   const body = new RegExp(`const ${name} = \\[([\\s\\S]*?)\\];`).exec(source)?.[1] ?? "";
@@ -50,12 +61,12 @@ describe("every package in the workspace", () => {
   it("is in the fixed group, so it carries deevy's version", async () => {
     const { fixed } = JSON.parse(await read(".changeset/config.json")) as { fixed: string[][] };
     const group = fixed[0] ?? [];
-    const missing = (await members()).filter((m) => !group.includes(m.name)).map((m) => m.name);
+    const missing = (await released()).filter((m) => !group.includes(m.name)).map((m) => m.name);
     expect(missing).toEqual([]);
   });
 
   it("actually carries it, rather than only being promised it", async () => {
-    const all = await members();
+    const all = await released();
     const versions = [...new Set(all.map((m) => m.version))];
     // One number across the group is the claim ADR-0017 makes; a package added
     // to the group late keeps its old number until the next release, and this
@@ -71,7 +82,7 @@ describe("every package in the workspace", () => {
       read("tools/release/scripts/fold-changelog.ts"),
       read("tools/release/tests/fold-changelog.test.ts"),
     ]);
-    const dirs = (await members()).map((m) => m.dir);
+    const dirs = (await released()).map((m) => m.dir);
     for (const [name, list] of [
       ["the fold script", arrayLiteral(script, "packageDirs")],
       ["its fixture", arrayLiteral(fixture, "packages")],
