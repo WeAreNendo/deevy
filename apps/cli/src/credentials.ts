@@ -3,18 +3,20 @@
  *
  * One file per instance under `~/.config/deevy`, because somebody works in more
  * than one and a single file would make signing into the second sign the first
- * out. The file holds a bearer token, so it is written at 0600 and the
- * directory at 0700: the same care a shell gives an SSH key, for the same
- * reason.
+ * out. An instance is its whole URL, path included: two Workspaces under one
+ * host are two deevys, and a token minted for one is refused by the other.
+ * The file holds a bearer token, so it is written at 0600 and the directory at
+ * 0700: the same care a shell gives an SSH key, for the same reason.
  */
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { basePathOf } from "@deevy/core";
 
 /** What the CLI is acting as, which is the first line of `deevy whoami`. */
 export type Credential =
-  | { kind: "key"; token: string; origin: string }
-  | { kind: "token"; token: string; origin: string; expiresAt: number | null };
+  | { kind: "key"; token: string; baseURL: string }
+  | { kind: "token"; token: string; baseURL: string; expiresAt: number | null };
 
 export interface StoredToken {
   accessToken: string;
@@ -24,15 +26,26 @@ export interface StoredToken {
   resource: string;
 }
 
-/** `https://deevy.example.com:8443` becomes `https_deevy.example.com_8443`. */
-export function fileNameFor(origin: string): string {
-  const url = new URL(origin);
+/**
+ * `https://deevy.example.com:8443` becomes `https_deevy.example.com_8443.json`,
+ * and `https://app.deevy.dev/acme` becomes `https_app.deevy.dev%2Facme.json`.
+ *
+ * A URL with no path is named exactly as it was before a deevy could live under
+ * one, so a token an older CLI stored is the token this one reads.
+ */
+export function fileNameFor(baseURL: string): string {
+  const url = new URL(baseURL);
   // The scheme is part of which instance this is. Without it `http://host` and
   // `https://host` shared one file, which is the local-development shape
   // exactly — a direct port and the same port behind a TLS proxy — and it
   // would have handed a token minted for one origin to the other.
   const scheme = url.protocol.replace(":", "");
-  return `${scheme}_${url.host.replace(/:/g, "_")}.json`;
+  // The path is escaped rather than given underscores like the port: a host
+  // has no `%` in it, so where the path starts is never in doubt, and
+  // `https://host/8443` cannot share a file with `https://host:8443`. `*` is
+  // the one character a file name on Windows refuses that the escaping keeps.
+  const path = encodeURIComponent(basePathOf(url.href)).replace(/\*/g, "%2A");
+  return `${scheme}_${url.host.replace(/:/g, "_")}${path}.json`;
 }
 
 export function configDirectory(): string {
@@ -42,10 +55,10 @@ export function configDirectory(): string {
 }
 
 export async function readToken(
-  origin: string,
+  baseURL: string,
   dir = configDirectory(),
 ): Promise<StoredToken | null> {
-  const raw = await readFile(join(dir, fileNameFor(origin)), "utf8").catch(() => null);
+  const raw = await readFile(join(dir, fileNameFor(baseURL)), "utf8").catch(() => null);
   if (raw === null) return null;
   try {
     return JSON.parse(raw) as StoredToken;
@@ -56,7 +69,7 @@ export async function readToken(
 }
 
 export async function writeToken(
-  origin: string,
+  baseURL: string,
   token: StoredToken,
   dir: string = configDirectory(),
 ): Promise<string> {
@@ -66,7 +79,7 @@ export async function writeToken(
   // directory this user cannot lock down is one a token should not go into.
   await chmod(dir, 0o700);
 
-  const path = join(dir, fileNameFor(origin));
+  const path = join(dir, fileNameFor(baseURL));
   // Written to a fresh file and renamed over the target, which does three
   // things at once. `wx` refuses to follow a symlink somebody left in the way,
   // the mode applies because the file is new — `writeFile`'s mode is ignored
@@ -88,10 +101,10 @@ export async function writeToken(
 }
 
 export async function forgetToken(
-  origin: string,
+  baseURL: string,
   dir: string = configDirectory(),
 ): Promise<boolean> {
-  const path = join(dir, fileNameFor(origin));
+  const path = join(dir, fileNameFor(baseURL));
   const existed = (await readFile(path, "utf8").catch(() => null)) !== null;
   await rm(path, { force: true });
   return existed;
@@ -107,13 +120,13 @@ export async function forgetToken(
  * guessed (ADR-0016).
  */
 export async function credentialFor(
-  origin: string,
+  baseURL: string,
   environment: NodeJS.ProcessEnv = process.env,
   dir: string = configDirectory(),
 ): Promise<Credential | null> {
   const key = environment.DEEVY_API_KEY?.trim();
-  if (key) return { kind: "key", token: key, origin };
-  const stored = await readToken(origin, dir);
+  if (key) return { kind: "key", token: key, baseURL };
+  const stored = await readToken(baseURL, dir);
   if (!stored) return null;
-  return { kind: "token", token: stored.accessToken, origin, expiresAt: stored.expiresAt };
+  return { kind: "token", token: stored.accessToken, baseURL, expiresAt: stored.expiresAt };
 }

@@ -13,6 +13,7 @@ import { realpathSync } from "node:fs";
 import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { basePathOf } from "@deevy/core";
 import { addGeneratedCommands } from "./generate.ts";
 import { inkFor } from "./render.ts";
 import { openGate } from "./gates.ts";
@@ -42,8 +43,17 @@ function isEntry(): boolean {
   }
 }
 
-/** Where this invocation is pointed, and how it was told. */
-export function originFrom(
+/**
+ * Where this invocation is pointed, and how it was told: the whole URL of the
+ * deevy, path included, with no trailing slash.
+ *
+ * A deployment may live under a path — a hosted Workspace at
+ * `https://app.deevy.dev/acme`, or a deevy an operator serves at
+ * `company.com/deevy` — and everything it answers is under that path (ADR-0029).
+ * Reducing what was typed to its origin would point every command at the root
+ * of the host, which is somebody else's deevy or nobody's.
+ */
+export function baseURLFrom(
   argument: string | undefined,
   environment: NodeJS.ProcessEnv = process.env,
 ): string {
@@ -57,11 +67,12 @@ export function originFrom(
   // A bare host gets https, except on loopback: deevy's own dev instance is
   // http://localhost:3000, so the most likely first thing anybody types would
   // otherwise fail with a TLS error.
-  const loopback = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(given);
+  const loopback = /^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(given);
   const url = new URL(given.includes("://") ? given : `${loopback ? "http" : "https"}://${given}`);
-  // A trailing slash makes `${origin}/rpc` into `${origin}//rpc`, which some
-  // proxies answer and some do not.
-  return url.origin;
+  // A trailing slash makes `${base}/rpc` into `${base}//rpc`, which some
+  // proxies answer and some do not. A query or a fragment is not part of where
+  // a deevy lives, so neither survives either.
+  return `${url.origin}${basePathOf(url.href)}`;
 }
 
 /**
@@ -72,12 +83,12 @@ export function originFrom(
  * "404s" in the dev loop, where the API is on 3000 and the SPA on 5173. A Gate
  * link that opens a 404 is worse than one that is not offered.
  */
-export function webOriginFrom(
+export function webURLFrom(
   given: string | undefined,
-  apiUrl: string | undefined,
+  apiURL: string | undefined,
   environment: NodeJS.ProcessEnv = process.env,
 ): string {
-  return originFrom(given ?? environment.DEEVY_WEB_URL ?? apiUrl, environment);
+  return baseURLFrom(given ?? environment.DEEVY_WEB_URL ?? apiURL, environment);
 }
 
 export function program(): Command {
@@ -93,11 +104,14 @@ export function program(): Command {
 
   cli
     .command("login")
-    .argument("[url]", "the deevy to sign in to; defaults to DEEVY_URL")
+    .argument(
+      "[url]",
+      "the deevy to sign in to, with its path if it has one (https://app.deevy.dev/acme); defaults to DEEVY_URL",
+    )
     .description("Sign in as yourself, through a browser")
     .option("--no-browser", "print the URL instead of opening it")
     .action(async (url: string | undefined, options: { browser: boolean }) => {
-      await signIn(originFrom(url), { openBrowser: options.browser });
+      await signIn(baseURLFrom(url), { openBrowser: options.browser });
     });
 
   cli
@@ -105,7 +119,7 @@ export function program(): Command {
     .argument("[url]", "the deevy to forget; defaults to DEEVY_URL")
     .description("Forget the token stored for an instance")
     .action(async (url: string | undefined) => {
-      await signOut(originFrom(url));
+      await signOut(baseURLFrom(url));
     });
 
   cli
@@ -114,7 +128,7 @@ export function program(): Command {
     .description("Say who this terminal is, and how it is authenticated")
     .option("--json", "print the answer as JSON")
     .action(async (url: string | undefined, options: { json?: boolean }) => {
-      await whoAmI(originFrom(url), { json: options.json === true });
+      await whoAmI(baseURLFrom(url), { json: options.json === true });
     });
 
   // Ruling happens in deevy's own browser and nowhere else (ADR-0004,
@@ -129,11 +143,13 @@ export function program(): Command {
     .description("Open a Gate's ruling screen in a browser")
     .option("--no-browser", "print the URL instead of opening it")
     .action(async (gate: string, url: string | undefined, options: { browser?: boolean }) => {
-      const origin = originFrom(url);
-      const credential = await credentialFor(origin);
-      if (!credential) throw new Error(`Not signed in to ${origin}. Run \`deevy login\` first.`);
-      await openGate(origin, gate, {
+      const baseURL = baseURLFrom(url);
+      const credential = await credentialFor(baseURL);
+      if (!credential) throw new Error(`Not signed in to ${baseURL}. Run \`deevy login\` first.`);
+      await openGate(baseURL, gate, {
         client: clientFor(credential),
+        // DEEVY_WEB_URL, when the SPA is not where the API is.
+        webURL: webURLFrom(undefined, baseURL),
         openBrowser: options.browser,
       });
     });
@@ -152,7 +168,7 @@ export function program(): Command {
         url: string | undefined,
         options: { after?: string; projectId?: string; json?: boolean },
       ) => {
-        const origin = originFrom(url);
+        const baseURL = baseURLFrom(url);
         // Checked here rather than sent: NaN reaches the server as a validation
         // failure, and a validation failure used to be retried forever.
         const after = options.after === undefined ? undefined : Number(options.after);
@@ -161,8 +177,8 @@ export function program(): Command {
             `--after wants an Event's number, and "${options.after ?? ""}" is not one.`,
           );
         }
-        const credential = await credentialFor(origin);
-        if (!credential) throw new Error(`Not signed in to ${origin}. Run \`deevy login\` first.`);
+        const credential = await credentialFor(baseURL);
+        if (!credential) throw new Error(`Not signed in to ${baseURL}. Run \`deevy login\` first.`);
         // Ctrl-C ends the watch rather than the process mid-write.
         const stopping = new AbortController();
         // `once`, so a second Ctrl-C gets Node's default behaviour back rather
@@ -185,7 +201,7 @@ export function program(): Command {
 
   // Everything else: one command per operation, from the registry.
   addGeneratedCommands(cli, (url) => ({
-    origin: originFrom(url),
+    baseURL: baseURLFrom(url),
     cliVersion: CLI_VERSION,
     ink: inkFor(),
   }));

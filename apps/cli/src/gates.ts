@@ -20,8 +20,9 @@ function isRequestId(ref: string): boolean {
   return /^gate_[0-9a-z]{12}$/.test(ref.trim());
 }
 
-export function gateUrl(webOrigin: string, requestId: string): string {
-  return `${webOrigin.replace(/\/+$/, "")}/gates/${encodeURIComponent(requestId)}`;
+/** The SPA's ruling screen, under whatever path the deevy lives at. */
+export function gateUrl(webURL: string, requestId: string): string {
+  return `${webURL.replace(/\/+$/, "")}/gates/${encodeURIComponent(requestId)}`;
 }
 
 /**
@@ -52,17 +53,17 @@ const console_: Reporter = {
 };
 
 export async function openGate(
-  origin: string,
+  baseURL: string,
   ref: string,
   options: {
     client: DeevyClient;
-    webOrigin?: string;
+    webURL?: string;
     openBrowser?: boolean;
     report?: Reporter;
   },
 ): Promise<string> {
   const report = options.report ?? console_;
-  const url = gateUrl(options.webOrigin ?? origin, await resolveGateRef(options.client, ref));
+  const url = gateUrl(options.webURL ?? baseURL, await resolveGateRef(options.client, ref));
   report.err("A Gate is ruled in deevy, by a Human, in a browser.");
   report.out(url);
   if (options.openBrowser !== false) openInBrowser(url);

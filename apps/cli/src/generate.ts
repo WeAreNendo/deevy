@@ -23,8 +23,11 @@ import { capabilitiesFor, missingFrom } from "./capabilities.ts";
 import { plain, render, type Ink } from "./render.ts";
 
 export interface Surroundings {
-  /** Resolved per invocation, so `--deevy-url` can override the environment. */
-  origin: string;
+  /**
+   * The deevy to talk to, path included. Resolved per invocation, so
+   * `--deevy-url` can override the environment.
+   */
+  baseURL: string;
   /** This CLI's own version, for the message when the two disagree. */
   cliVersion?: string;
   /** Where tokens are kept; a test points it somewhere disposable. */
@@ -162,7 +165,7 @@ export function addGeneratedCommands(
       // Every generated command can be pointed somewhere, because the error a
       // command gives without one used to tell people to pass a URL it had no
       // way to accept.
-      .addOption(new Option("--deevy-url <origin>", "the deevy to talk to; defaults to DEEVY_URL"))
+      .addOption(new Option("--deevy-url <url>", "the deevy to talk to; defaults to DEEVY_URL"))
       // Every command takes it, and today every command answers with it either
       // way: a shape worth reading is the slice after this one, and the flag is
       // the contract a script writes against in the meantime.
@@ -202,9 +205,13 @@ async function run(
     ((line: string) => {
       console.log(line);
     });
-  const credential = await credentialFor(where.origin, where.environment ?? process.env, where.dir);
+  const credential = await credentialFor(
+    where.baseURL,
+    where.environment ?? process.env,
+    where.dir,
+  );
   if (!credential) {
-    throw new Error(`Not signed in to ${where.origin}. Run \`deevy login\` first.`);
+    throw new Error(`Not signed in to ${where.baseURL}. Run \`deevy login\` first.`);
   }
   refuseEarly(command, credential);
 
@@ -220,12 +227,12 @@ async function run(
   // Not reachable, not a deevy, too slow: let the command through and let the
   // real call fail with its own error. Failing closed on a question nobody
   // asked would make this feature the thing that breaks the CLI.
-  let capabilities = await capabilitiesFor(where.origin, asking).catch(() => null);
+  let capabilities = await capabilitiesFor(where.baseURL, asking).catch(() => null);
   if (capabilities && !capabilities.operations.includes(command.operation)) {
     // The cached answer is up to a day old, so the first thing to rule out is
     // that the instance gained the operation since. Otherwise upgrading an
     // instance would be met by a CLI telling you to upgrade the instance.
-    capabilities = await capabilitiesFor(where.origin, { ...asking, refresh: true }).catch(
+    capabilities = await capabilitiesFor(where.baseURL, { ...asking, refresh: true }).catch(
       () => capabilities,
     );
   }
@@ -234,7 +241,7 @@ async function run(
       missingFrom(
         command.operation,
         command.words,
-        where.origin,
+        where.baseURL,
         capabilities,
         where.cliVersion ?? "this build",
       ),

@@ -11,10 +11,18 @@ import {
   writeToken,
 } from "../src/credentials.ts";
 import { authorizeUrl, discover, exchange, listen, pkce, register } from "../src/login.ts";
-import { signIn, signOut, whoAmI, type Reporter } from "../src/identity.ts";
+import { signIn, signOut, whoAmI } from "../src/identity.ts";
 import { explain } from "../src/client.ts";
-import { originFrom } from "../src/main.ts";
-import { baseURL, consent, cookieHeaders, humanMember, testDeevy } from "./helpers.ts";
+import { baseURLFrom } from "../src/main.ts";
+import {
+  approveInBrowser,
+  baseURL,
+  collect,
+  consent,
+  cookieHeaders,
+  humanMember,
+  testDeevy,
+} from "./helpers.ts";
 
 const scratch: string[] = [];
 const closers: (() => void)[] = [];
@@ -27,16 +35,6 @@ async function tempDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "deevy-cli-"));
   scratch.push(dir);
   return dir;
-}
-
-/** Everything the CLI said, so a test reads what a person would see. */
-function collect(): Reporter & { lines: { out: string[]; err: string[] } } {
-  const lines = { out: [] as string[], err: [] as string[] };
-  return {
-    lines,
-    out: (line: string) => lines.out.push(line),
-    err: (line: string) => lines.err.push(line),
-  };
 }
 
 describe("where a token is kept", () => {
@@ -191,15 +189,7 @@ describe("signing in, as the command does it", () => {
     });
 
     // The Human's half, driven from the URL the CLI printed.
-    const url = await waitFor(
-      () => /https?:\/\/\S+oauth2\/authorize\S*/.exec(said.lines.err.join("\n"))?.[0],
-    );
-    const cookie = await cookieHeaders(deevy.auth, "u1");
-    const redirected = await deevy.fetch(url, { headers: cookie, redirect: "manual" });
-    const code = await consent(deevy, cookie, redirected.headers.get("location") ?? "");
-    await fetch(
-      `${new URL(url).searchParams.get("redirect_uri") ?? ""}?code=${code}&state=${new URL(url).searchParams.get("state") ?? ""}`,
-    );
+    await approveInBrowser(deevy, () => said.lines.err.join("\n"), "u1");
 
     await signingIn;
     const stored = await readToken(baseURL, dir);
@@ -241,7 +231,7 @@ describe("signing out", () => {
 
 describe("what a refusal is explained as", () => {
   it("names the key when a key is what is being refused", () => {
-    const asAgent = { kind: "key", token: "k", origin: baseURL } as const;
+    const asAgent = { kind: "key", token: "k", baseURL } as const;
     expect(explain({ code: "FORBIDDEN", message: "An Agent cannot do that" }, asAgent)).toContain(
       "DEEVY_API_KEY",
     );
@@ -249,12 +239,12 @@ describe("what a refusal is explained as", () => {
   });
 
   it("tells a signed-in Human to sign in again", () => {
-    const asHuman = { kind: "token", token: "t", origin: baseURL, expiresAt: null } as const;
+    const asHuman = { kind: "token", token: "t", baseURL, expiresAt: null } as const;
     expect(explain({ code: "UNAUTHORIZED" }, asHuman)).toContain("deevy login");
   });
 
   it("never puts the credential in the message", () => {
-    const asAgent = { kind: "key", token: "deevy_sk_secret", origin: baseURL } as const;
+    const asAgent = { kind: "key", token: "deevy_sk_secret", baseURL } as const;
     for (const code of ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"]) {
       expect(explain({ code, message: "no" }, asAgent)).not.toContain("deevy_sk_secret");
     }
@@ -263,30 +253,39 @@ describe("what a refusal is explained as", () => {
 
 describe("which instance was named", () => {
   it("takes the argument, then DEEVY_URL", () => {
-    expect(originFrom("https://a.example.com", {})).toBe("https://a.example.com");
-    expect(originFrom(undefined, { DEEVY_URL: "https://b.example.com" })).toBe(
+    expect(baseURLFrom("https://a.example.com", {})).toBe("https://a.example.com");
+    expect(baseURLFrom(undefined, { DEEVY_URL: "https://b.example.com" })).toBe(
       "https://b.example.com",
     );
-    expect(() => originFrom(undefined, {})).toThrow(/No deevy named/);
+    expect(() => baseURLFrom(undefined, {})).toThrow(/No deevy named/);
   });
 
   it("assumes https, except on loopback, where deevy's own dev instance is http", () => {
-    expect(originFrom("deevy.example.com", {})).toBe("https://deevy.example.com");
-    expect(originFrom("localhost:3000", {})).toBe("http://localhost:3000");
-    expect(originFrom("127.0.0.1:3000", {})).toBe("http://127.0.0.1:3000");
+    expect(baseURLFrom("deevy.example.com", {})).toBe("https://deevy.example.com");
+    expect(baseURLFrom("localhost:3000", {})).toBe("http://localhost:3000");
+    expect(baseURLFrom("127.0.0.1:3000", {})).toBe("http://127.0.0.1:3000");
   });
 
   it("drops a trailing slash, which would double the one in /rpc", () => {
-    expect(originFrom("https://deevy.example.com/", {})).toBe("https://deevy.example.com");
+    expect(baseURLFrom("https://deevy.example.com/", {})).toBe("https://deevy.example.com");
+    expect(baseURLFrom("https://app.deevy.dev/acme/", {})).toBe("https://app.deevy.dev/acme");
+  });
+
+  it("keeps the path, because a deevy may live under one", () => {
+    // A hosted Workspace, or a deevy an operator serves behind a proxy: the
+    // root of the host is somebody else's deevy, or nobody's (ADR-0029).
+    expect(baseURLFrom("https://app.deevy.dev/acme", {})).toBe("https://app.deevy.dev/acme");
+    expect(baseURLFrom(undefined, { DEEVY_URL: "https://company.example.com/tools/deevy" })).toBe(
+      "https://company.example.com/tools/deevy",
+    );
+    expect(baseURLFrom("app.deevy.dev/acme", {})).toBe("https://app.deevy.dev/acme");
+    expect(baseURLFrom("localhost:3000/acme", {})).toBe("http://localhost:3000/acme");
+    expect(baseURLFrom("localhost/acme", {})).toBe("http://localhost/acme");
+  });
+
+  it("drops a query and a fragment, which are not where a deevy lives", () => {
+    expect(baseURLFrom("https://app.deevy.dev/acme?tab=runs#top", {})).toBe(
+      "https://app.deevy.dev/acme",
+    );
   });
 });
-
-/** Polls until the CLI has printed what the Human's browser would have opened. */
-async function waitFor(look: () => string | undefined): Promise<string> {
-  for (let i = 0; i < 100; i += 1) {
-    const found = look();
-    if (found) return found;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error("the CLI never printed an authorize URL");
-}

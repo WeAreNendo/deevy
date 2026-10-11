@@ -22,7 +22,7 @@ afterEach(async () => {
 
 function built(): Command {
   const root = new Command().name("deevy").exitOverride();
-  return addGeneratedCommands(root, () => ({ origin: "http://localhost:3000" }));
+  return addGeneratedCommands(root, () => ({ baseURL: "http://localhost:3000" }));
 }
 
 describe("what the registry turns into", () => {
@@ -213,7 +213,7 @@ describe("a generated command against a real deevy", () => {
     const said: string[] = [];
     const root = new Command().name("deevy").exitOverride();
     addGeneratedCommands(root, () => ({
-      origin: baseURL,
+      baseURL,
       dir,
       environment: {},
       fetchImpl: deevy.fetch,
@@ -271,7 +271,7 @@ describe("a generated command against a real deevy", () => {
 
     const root = new Command().name("deevy").exitOverride();
     addGeneratedCommands(root, () => ({
-      origin: baseURL,
+      baseURL,
       dir,
       environment: {},
       fetchImpl: deevy.fetch,
@@ -302,7 +302,7 @@ describe("a generated command against a real deevy", () => {
     const said: string[] = [];
     const root = new Command().name("deevy").exitOverride();
     addGeneratedCommands(root, () => ({
-      origin: baseURL,
+      baseURL,
       dir: "/nonexistent",
       // An Agent's key, which `agents.keys.issue` is a Sponsor's business.
       environment: { DEEVY_API_KEY: "deevy_sk_whatever" },
@@ -327,7 +327,7 @@ describe("what a person sees by default", () => {
     const said: string[] = [];
     const root = new Command().name("deevy").exitOverride();
     addGeneratedCommands(root, () => ({
-      origin: baseURL,
+      baseURL,
       dir,
       environment: {},
       fetchImpl: deevy.fetch,
