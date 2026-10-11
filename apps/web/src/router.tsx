@@ -341,21 +341,36 @@ const routeTree = rootRoute.addChildren([
   tokensRoute,
 ]);
 
-/** `?a=b&c=d` to `{ a: "b", c: "d" }`: strings, whatever they look like. */
-function parseSearch(searchStr: string): Record<string, string> {
-  return Object.fromEntries(new URLSearchParams(searchStr));
+/**
+ * `?a=b&c=d` to `{ a: "b", c: "d" }`: strings, whatever they look like — and a
+ * key given more than once keeps every value, in order, as a list. The router
+ * writes the URL back from what this returns, so a value dropped here is gone
+ * from the address bar: Better Auth signs the consent page's query with a
+ * repeated `ba_param`, and keeping the last one alone made every consent fail
+ * its own signature (`invalid_signature`), for an MCP client and `deevy login`.
+ */
+export function parseSearch(searchStr: string): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {};
+  for (const [key, value] of new URLSearchParams(searchStr)) {
+    const seen = out[key];
+    out[key] = seen === undefined ? value : Array.isArray(seen) ? [...seen, value] : [seen, value];
+  }
+  return out;
 }
 
 /**
  * The reverse; a key whose value is undefined is left out, which is how a
- * filter is cleared. A number or a boolean is written as its text; an object
+ * filter is cleared, and a list is written once per value. A number or a boolean is written as its text; an object
  * would be a bug in the caller, so it is written as JSON rather than "[object Object]".
  */
-function stringifySearch(search: Record<string, unknown>): string {
+export function stringifySearch(search: Record<string, unknown>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(search)) {
     if (value === undefined || value === null) continue;
-    params.set(key, typeof value === "object" ? JSON.stringify(value) : String(value as string));
+    // A list is the key given once per value, as `parseSearch` read it.
+    for (const one of Array.isArray(value) ? (value as unknown[]) : [value]) {
+      params.append(key, typeof one === "object" ? JSON.stringify(one) : String(one as string));
+    }
   }
   const out = params.toString();
   return out ? `?${out}` : "";
