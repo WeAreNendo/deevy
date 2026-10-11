@@ -50,6 +50,12 @@ export interface StartOptions {
    * outside it can say what the tracker contains (packages/sockets/src/stub).
    */
   containers: string;
+  /**
+   * The path the deployment lives under, when it lives under one: a hosted
+   * Workspace's `/acme`, an operator's `/deevy` (docs/plans/hosted.md). Its
+   * URL is the origin and this, and everything the walk calls is under it.
+   */
+  basePath?: string;
 }
 
 /** A port nothing is on, taken and released, so a sign-in origin can be named up front. */
@@ -93,11 +99,11 @@ async function stubbed(bundle: string, into: string): Promise<string> {
 }
 
 /** deevy as the Docker image runs it: one Node process, SQLite on disk. */
-export async function startNode({ containers }: StartOptions): Promise<Deployment> {
+export async function startNode({ containers, basePath = "" }: StartOptions): Promise<Deployment> {
   const dist = join(root, "apps/server/dist");
   const entry = await stubbed(join(dist, "index.mjs"), join(dist, "index.acceptance.mjs"));
   const port = await freePort();
-  const origin = `http://localhost:${String(port)}`;
+  const origin = `http://localhost:${String(port)}${basePath}`;
   const data = await mkdtemp(join(tmpdir(), "deevy-acceptance-node-"));
 
   const child = spawn("node", [entry], {
@@ -122,7 +128,7 @@ export async function startNode({ containers }: StartOptions): Promise<Deploymen
   });
   await waitForReady(child, "the Node server", /deevy listening on/);
   return {
-    name: "node",
+    name: basePath ? "node under a path" : "node",
     origin,
     // Nothing: the runner's own timer is the tick here.
     tick: () => Promise.resolve(),

@@ -1,3 +1,4 @@
+import type { AssetFetcher } from "@deevy/adapters/workers";
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSetup } from "@deevy/core/email";
@@ -35,6 +36,13 @@ type DurableObjectId = { toString(): string };
 
 export interface WorkerBindings {
   DB: Parameters<typeof createDb>[0];
+  /**
+   * The SPA's built files (`assets.binding` in `wrangler.jsonc`). At the root
+   * of a host the platform serves them before the Worker runs; under a path,
+   * the Worker serves them itself, so the index can say where it lives
+   * (@deevy/adapters/spa, docs/OPERATIONS.md).
+   */
+  ASSETS?: AssetFetcher;
   /**
    * The Queue a delivery is nudged on, when this account has Queues. Optional
    * on purpose and absent from the committed `wrangler.jsonc`: Queues are a
