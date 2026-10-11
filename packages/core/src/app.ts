@@ -42,7 +42,9 @@ export interface AppOptions {
   /**
    * What this deevy is, as a version string. It reaches the OpenAPI document a
    * client discovers the instance through, so a CLI built from a newer tree can
-   * say which two versions disagree rather than only that they do.
+   * say which two versions disagree rather than only that they do. `/healthz`
+   * and `health.ping` say it too: deevy is AGPL-3.0 (ADR-0002), and the SPA
+   * links whoever uses it to the source of the version they are using.
    */
   version?: string;
   /**
@@ -201,7 +203,9 @@ export function createApp({
   };
   const app = new Hono<{ Variables: { ctx: AppContext } }>();
 
-  app.get("/healthz", (c) => c.json({ ok: true }));
+  // The version beside the liveness, so a probe or an operator can tell which
+  // deevy answered without a session; null when the build did not say.
+  app.get("/healthz", (c) => c.json({ ok: true, version: version ?? null }));
 
   // Before everything else, and outside every middleware that builds a
   // session: the caller here is a tool with a signature over the raw body, and
@@ -309,6 +313,7 @@ export function createApp({
     ...(email ? { email } : {}),
     ...(emailProblem ? { emailProblem } : {}),
     ...(secret ? { secret } : {}),
+    ...(version ? { version } : {}),
     signInProviders: await offeredProviders(),
   });
   app.use("/rpc/*", async (c, next) => {

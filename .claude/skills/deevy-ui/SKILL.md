@@ -249,6 +249,10 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
   Saved · error + Retry; a Project's binding saves each choice as it is made). The Checkpoint policy is the
   exception — a policy about who may approve what saves whole, with **Save policy**, because "I was still
   typing" must not become the rule.
+- **The foot of every Settings page says which deevy runs and links to its source** (`RunningVersion` in
+  `routes/settings/layout.tsx`, `lib/source.ts`): `deevy <version> · Source code`, the link to that release's
+  tag (`v<version>`), or to the repository when the build did not say. deevy is AGPL-3.0 (ADR-0002), and
+  whoever uses an instance is offered the source of the version they use. The version is `health.ping`'s.
 - **Settings.** `SettingsPage` (the h1, a description, the page's action) and `SettingsSection` (a card with
   an optional title and description, `aria-label` for a landmark, `tone="danger"` for what disconnects,
   suspends, revokes or archives). `SettingsRow` is one setting. **A Settings page lays itself out by its
@@ -416,7 +420,8 @@ repositories`, `Pause`, `Mint a webhook secret`, `region "Verifying the webhook"
 - **Identities.** `heading "Identities"`, `table "Identities"`, `Unlink @<login>`, `Link @<login> again`;
   `Code from Slack`, `Check the code`, `Link @<login> to me`; `region "Link an account"` with `Link
 <provider>`.
-- **Settings elsewhere.** The settings h1s (`Workspace`, `Members`, `Event log`, …); `navigation "Settings"`
+- **Settings elsewhere.** The settings h1s (`Workspace`, `Members`, `Event log`, …); link `Source code` at the
+  foot of each; `navigation "Settings"`
   and, below `lg`, `combobox "Settings page"` (whose classes the shell test asserts as `lg:hidden` /
   `lg:flex`); `Who may join`, `Add rule`, `Stop allowing <value>`; `Invite someone`, `Create invitation`,
   `Revoke the invitation for <address>`; `New Agent`, `region "Projects"`, `region "API keys"`, `region

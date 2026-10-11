@@ -1980,6 +1980,12 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -1987,7 +1993,8 @@
                     "time",
                     "devSignIn",
                     "devSockets",
-                    "providers"
+                    "providers",
+                    "version"
                   ],
                   "additionalProperties": false
                 }

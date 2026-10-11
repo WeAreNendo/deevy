@@ -23,7 +23,8 @@ describe("server", () => {
     const { app, close } = testServer();
     const res = await app.request("/healthz");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+    // `vp pack` names the version; a test builds from source, where nothing does.
+    expect(await res.json()).toEqual({ ok: true, version: null });
     close();
   });
 

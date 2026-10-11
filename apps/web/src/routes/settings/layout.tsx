@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Select,
@@ -8,6 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { orpc } from "@/lib/orpc";
+import { sourceOf } from "@/lib/source";
 import { cn } from "@/lib/utils";
 
 export interface SettingsNavPage {
@@ -150,7 +153,36 @@ export function SettingsLayout() {
         <div className="@container mx-auto flex w-full max-w-[1100px] flex-1 flex-col">
           <Outlet />
         </div>
+        <RunningVersion />
       </div>
     </div>
+  );
+}
+
+/**
+ * Which deevy this is, and where its source is. deevy is AGPL-3.0 (ADR-0002),
+ * which asks that whoever uses an instance over a network be offered the
+ * source of the version they use: so a quiet line at the foot of every
+ * Settings page, at every width, rather than a page of its own. It waits for
+ * the server to say which version runs, so the link never points at the wrong
+ * source while that loads.
+ */
+function RunningVersion() {
+  const health = useQuery(orpc.health.ping.queryOptions());
+  if (!health.isSuccess) return null;
+  const { version } = health.data;
+  return (
+    <footer className="mx-auto mt-10 w-full max-w-[1100px] text-xs text-muted-foreground">
+      {version ? `deevy ${version}` : "deevy"}
+      {" · "}
+      <a
+        href={sourceOf(version)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline-offset-4 hover:text-foreground hover:underline"
+      >
+        Source code
+      </a>
+    </footer>
   );
 }

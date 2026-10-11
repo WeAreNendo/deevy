@@ -289,7 +289,7 @@ export function render(answer: unknown, ink: Ink = plain): string {
   // `{ issues: [...], nextCursor }` — the shape every list answers with.
   //
   // A wrapper is only a wrapper: one array and a little else. Requiring that
-  // keeps `health.ping` — five facts about an instance, one of them a list of
+  // keeps `health.ping` — six facts about an instance, one of them a list of
   // sign-in providers — from answering a liveness check with a table of
   // providers, or with the word "None."
   const listKey = keys.find((key) => Array.isArray(row[key]));
