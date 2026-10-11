@@ -572,3 +572,10 @@ Event; what an open stream bills, and a gradual deploy with a migration, wait fo
   changeset, a deevy release becomes one on its dispatch, and merging the Version PR is the deploy. GitHub also
   refuses a configuration variable named `GITHUB_*`, so the GitHub sign-in's client id is `GH_OAUTH_CLIENT_ID`
   there. The account's KV namespace, D1 database and R2 bucket exist, the last two in the EU.
+- **The first release** (0.11.0 and 0.11.1, 2026-10-11). This repository's releases are immutable, and
+  `changesets.yml` published the Release before attaching the hosted Worker, so 0.11.0's upload was refused
+  and its Release has no archive. The Release is now a draft until the images, npm and the archive with its
+  attestation are on it, and published last, which is also when deevy Cloud is told (#158). 0.11.1 carries
+  `deevy-hosted-0.11.1.tar.gz`; `gh attestation verify` passes for it, signed by `hosted-release.yml` on a
+  GitHub-hosted runner for the tag's commit, and deevy-cloud's deploy rehearsed against it end to end:
+  fetched, verified, rendered with production's overlay and dry-run by wrangler.
