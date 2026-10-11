@@ -209,6 +209,9 @@ jobs:
     uses: ./.github/workflows/hosted-release.yml
     with:
       version: ${{ needs.version.outputs.version }}
+    # Only the one secret, to tell deevy Cloud the archive is there.
+    secrets:
+      DEEVY_CLOUD_DISPATCH_TOKEN: ${{ secrets.DEEVY_CLOUD_DISPATCH_TOKEN }}
 
   # Called rather than left to the tag push above, which GITHUB_TOKEN cannot
   # trigger. This re-runs the whole of CI before either image is pushed.

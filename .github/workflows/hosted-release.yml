@@ -34,6 +34,10 @@ on:
         description: The version being released, without a leading v.
         required: true
         type: string
+    secrets:
+      DEEVY_CLOUD_DISPATCH_TOKEN:
+        description: May send a repository_dispatch to WeAreNendo/deevy-cloud. Without it nobody is told.
+        required: false
   workflow_dispatch:
     inputs:
       version:
@@ -130,3 +134,17 @@ jobs:
         run: |
           gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
             "deevy-hosted-$VERSION.tar.gz" "deevy-hosted-$VERSION.tar.gz.sha256"
+
+      # The hosted deployment deploys each release once its archive and
+      # attestation are here, waiting there for a reviewer as every deploy does;
+      # this is what tells it one is (deevy-cloud's docs/SETUP.md, "Deploying on
+      # every release"). The token may dispatch to that repository and nothing
+      # else. Without it, as in a fork, the release is simply not announced.
+      - name: Tell deevy Cloud
+        env:
+          GH_TOKEN: ${{ secrets.DEEVY_CLOUD_DISPATCH_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "No DEEVY_CLOUD_DISPATCH_TOKEN: deevy Cloud is not told."; exit 0; fi
+          gh api repos/WeAreNendo/deevy-cloud/dispatches \
+            -f event_type=deevy-released -f "client_payload[version]=$VERSION"
