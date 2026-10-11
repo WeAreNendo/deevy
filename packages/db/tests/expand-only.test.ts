@@ -222,7 +222,12 @@ describe("check:migrations", () => {
     const dir = await drizzleFolder({ ...before, "20261011000000_next": rebuild });
     const empty = await mkdtemp(join(tmpdir(), "deevy-migrations-"));
 
-    const problems = await checkMigrations({ drizzleDir: dir, migrationsDir: empty });
+    const problems = await checkMigrations({
+      drizzleDir: dir,
+      migrationsDir: empty,
+      // Never read: a removal is said first and alone.
+      durableMigrationsFile: join(empty, "durable-migrations.ts"),
+    });
 
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("rebuilds `issue`");
