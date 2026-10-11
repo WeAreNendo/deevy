@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createGithubSocket, resetGithubTokens } from "../src/github/index.ts";
 import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" };
@@ -15,11 +15,29 @@ afterEach(() => {
   resetGithubTokens();
 });
 
-const { privateKey } = generateKeyPairSync("rsa", {
-  modulusLength: 2048,
-  privateKeyEncoding: { type: "pkcs1", format: "pem" },
-  publicKeyEncoding: { type: "spki", format: "pem" },
-});
+function keyPair() {
+  return generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs1", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+}
+
+const { privateKey, publicKey } = keyPair();
+
+/** Whether a JWT was signed by the key whose public half this is, as GitHub checks. */
+function signedBy(publicKeyPem: string, jwt: string): boolean {
+  const [header = "", payload = "", signature = ""] = jwt.split(".");
+  const bytes = Uint8Array.from(atob(signature.replace(/-/g, "+").replace(/_/g, "/")), (one) =>
+    one.charCodeAt(0),
+  );
+  return verify(
+    "RSA-SHA256",
+    new TextEncoder().encode(`${header}.${payload}`),
+    publicKeyPem,
+    bytes,
+  );
+}
 
 interface Asked {
   method: string;
@@ -29,18 +47,35 @@ interface Asked {
 }
 
 /** A GitHub that answers what each path is recorded to answer. */
-function githubReturning(answers: Record<string, unknown>, options: { apiBase?: string } = {}) {
+function githubReturning(
+  answers: Record<string, unknown>,
+  options: {
+    apiBase?: string;
+    /** The public half of the one key GitHub takes a JWT from; any, when unsaid. */
+    publicKey?: string;
+  } = {},
+) {
   const asked: Asked[] = [];
   const fetchImpl = ((input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const headers = new Headers(init?.headers);
+    const authorization = headers.get("authorization") ?? "";
     asked.push({
       method: init?.method ?? "GET",
       url,
-      authorization: headers.get("authorization") ?? "",
+      authorization,
       body: typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined,
     });
-    const key = `${init?.method ?? "GET"} ${url.replace(options.apiBase ?? "https://api.github.com", "")}`;
+    const jwt = /^Bearer (eyJ\S+)$/.exec(authorization)?.[1];
+    if (jwt && options.publicKey && !signedBy(options.publicKey, jwt)) {
+      // As GitHub answers a JWT signed by a key the App does not have.
+      return Promise.resolve(
+        Response.json({ message: "A JSON web token could not be decoded" }, { status: 401 }),
+      );
+    }
+    // Every host this fake stands for answers the same paths.
+    const path = url.replace(/^https:\/\/[^/]+(?:\/api\/v3)?/, "");
+    const key = `${init?.method ?? "GET"} ${path}`;
     const answer = answers[key] ?? answers[key.split("?")[0] ?? ""];
     if (answer === undefined) {
       return Promise.resolve(
@@ -50,19 +85,25 @@ function githubReturning(answers: Record<string, unknown>, options: { apiBase?: 
     return Promise.resolve(new Response(JSON.stringify(answer), { status: 200 }));
   }) as typeof fetch;
 
-  const module = createGithubSocket({
-    config: {
-      appId: "1284461",
-      slug: "deevy",
-      ...(options.apiBase ? { apiBase: options.apiBase } : {}),
-      installations: [{ id: "61892041", account: "acme" }],
-    },
-    credentials: { privateKey },
-    fetch: fetchImpl,
-    now: () => new Date("2026-09-21T10:00:00Z"),
-  });
-  if (!module.tracker) throw new Error("a GitHub Socket is a tracker");
-  return { module, tracker: module.tracker, asked };
+  /** Another Socket for the same App id, on this same GitHub, in this same isolate. */
+  const connect = (other: { privateKey: string; apiBase?: string }) => {
+    const apiBase = other.apiBase ?? options.apiBase;
+    const module = createGithubSocket({
+      config: {
+        appId: "1284461",
+        slug: "deevy",
+        ...(apiBase ? { apiBase } : {}),
+        installations: [{ id: "61892041", account: "acme" }],
+      },
+      credentials: { privateKey: other.privateKey },
+      fetch: fetchImpl,
+      now: () => new Date("2026-09-21T10:00:00Z"),
+    });
+    if (!module.tracker) throw new Error("a GitHub Socket is a tracker");
+    return { module, tracker: module.tracker };
+  };
+
+  return { ...connect({ privateKey }), asked, connect };
 }
 
 /** What every repository call needs first: which installation, and a token for it. */
@@ -132,6 +173,44 @@ describe("how deevy authenticates", () => {
 
     expect(asked.filter((one) => one.url.includes("access_tokens"))).toHaveLength(1);
     expect(asked.filter((one) => one.url.endsWith("/installation"))).toHaveLength(1);
+  });
+
+  it("keeps a token for the key that minted it, not for whoever shares its App id", async () => {
+    // An App id is public, and when deevy is hosted one isolate serves many
+    // Workspaces: a token cached by the id alone would answer anyone who
+    // pasted it, before their key ever signed anything.
+    const { tracker, asked, connect } = githubReturning(
+      { ...credentials, "GET /repos/acme/deevy/issues/42": labeled.issue },
+      { publicKey },
+    );
+    await tracker.getIssue(scope, ref);
+
+    const impostor = connect({ privateKey: keyPair().privateKey });
+
+    await expect(impostor.tracker.getIssue(scope, ref)).rejects.toThrow(/GitHub answered 401/);
+    expect(asked.filter((one) => one.url.endsWith("/issues/42"))).toHaveLength(1);
+    expect(asked.filter((one) => one.url.endsWith("/installation"))).toHaveLength(2);
+  });
+
+  it("mints for each key, and for each host, rather than sharing one App id's token", async () => {
+    const { tracker, asked, connect } = githubReturning({
+      ...credentials,
+      "GET /repos/acme/deevy/issues/42": labeled.issue,
+    });
+
+    await tracker.getIssue(scope, ref);
+    await connect({ privateKey: keyPair().privateKey }).tracker.getIssue(scope, ref);
+    await connect({ privateKey, apiBase: "https://github.acme.test/api/v3" }).tracker.getIssue(
+      scope,
+      ref,
+    );
+
+    const minted = asked.filter((one) => one.url.includes("access_tokens"));
+    expect(minted.map((one) => new URL(one.url).host)).toEqual([
+      "api.github.com",
+      "api.github.com",
+      "github.acme.test",
+    ]);
   });
 
   it("says who deevy is there, which is the App's own bot account", async () => {

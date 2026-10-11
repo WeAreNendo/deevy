@@ -19,7 +19,7 @@ import type {
   SocketModule,
   SocketModuleInput,
 } from "@deevy/core/sockets";
-import { hmacHex, sameText } from "../signing.ts";
+import { credentialTag, hmacHex, sameText } from "../signing.ts";
 import { appJwt, importAppKey } from "./keys.ts";
 import { commentOf, isPullRequest, issueOf, normalizeGithub } from "./payloads.ts";
 
@@ -73,6 +73,13 @@ interface Minted {
  * every call. GitHub's tokens live an hour, and minting one costs a round trip
  * and a signature — this is the difference between one request per delivery
  * and three.
+ *
+ * Both maps are filed under the API, the App's id and a tag of its private
+ * key. The cache is read before the key ever signs anything, and an App id is
+ * public, so one keyed by the id alone would hand a Socket connected with
+ * somebody else's App id and any key the tokens that App's real owner minted —
+ * across Workspaces, once one isolate serves several. The API is in it because
+ * two GitHub Enterprise Servers number their Apps independently.
  */
 const tokens = new Map<string, Minted>();
 
@@ -127,14 +134,25 @@ export function createGithubSocket({
   const api = (settings.apiBase ?? DEFAULT_API).replace(/\/+$/, "");
   const secrets = credentials as unknown as GithubCredentials;
   let key: Promise<CryptoKey> | null = null;
+  let filed: Promise<string> | null = null;
 
-  /** The App's own credential, imported once per module. */
-  function appKey(): Promise<CryptoKey> {
+  function privateKey(): string {
     if (!secrets.privateKey) {
       throw new Error("This GitHub Socket has no private key; connect the App again.");
     }
-    key ??= importAppKey(secrets.privateKey);
+    return secrets.privateKey;
+  }
+
+  /** The App's own credential, imported once per module. */
+  function appKey(): Promise<CryptoKey> {
+    key ??= importAppKey(privateKey());
     return key;
+  }
+
+  /** What this App's tokens and installations are cached under: see `tokens`. */
+  function cachePrefix(): Promise<string> {
+    filed ??= (async () => `${api}:${settings.appId}:${await credentialTag(privateKey())}`)();
+    return filed;
   }
 
   async function call<T>(path: string, init: RequestInit & { token: string }): Promise<T> {
@@ -174,18 +192,19 @@ export function createGithubSocket({
   }
 
   async function installationIdFor(scopeKey: string): Promise<string> {
-    const known = installations.get(`${settings.appId}:${scopeKey}`);
+    const cacheKey = `${await cachePrefix()}:${scopeKey}`;
+    const known = installations.get(cacheKey);
     if (known) return known;
     const { owner, repo } = repositoryOf({ scopeKey });
     const found = await asApp<{ id: number }>(`/repos/${owner}/${repo}/installation`);
     const id = String(found.id);
-    installations.set(`${settings.appId}:${scopeKey}`, id);
+    installations.set(cacheKey, id);
     return id;
   }
 
   /** A token for an installation deevy already knows the id of. */
   async function mintedFor(id: string): Promise<Minted> {
-    const cacheKey = `${settings.appId}:${id}`;
+    const cacheKey = `${await cachePrefix()}:${id}`;
     const held = tokens.get(cacheKey);
     if (held && held.expiresAt - TOKEN_SLACK_MS > now().getTime()) return held;
     const minted = await asApp<{ token: string; expires_at: string }>(

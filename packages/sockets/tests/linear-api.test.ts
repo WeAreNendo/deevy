@@ -61,6 +61,8 @@ function linearReturning(
     refuse?: (asked: Asked) => boolean;
     /** Linear does not know the client id and secret. */
     unknownClient?: boolean;
+    /** The one secret Linear takes for a client id; any, when unsaid. */
+    secrets?: Record<string, string>;
   } = {},
 ) {
   const asked: Asked[] = [];
@@ -86,7 +88,8 @@ function linearReturning(
 
     if (url.endsWith("/oauth/token")) {
       // As Linear answered a made-up client on 2026-09-25.
-      if (options.unknownClient) {
+      const known = options.secrets?.[form.client_id ?? ""];
+      if (options.unknownClient || (known !== undefined && known !== form.client_secret)) {
         return Response.json(
           { error: "invalid_client", error_description: "Invalid client: client is invalid" },
           { status: 400 },
@@ -139,14 +142,18 @@ function linearReturning(
     return Response.json({ data });
   }) as typeof fetch;
 
-  const module = createLinearSocket({
-    config: { organizationId: ORG, urlKey: "acme" },
-    credentials: { clientId: "lin_client_id_1", clientSecret: "lin_client_secret_1" },
-    fetch: fetchImpl,
-    now: () => new Date("2026-09-24T10:00:00Z"),
-  });
+  /** Another Socket on this same Linear, in this same isolate. */
+  const connect = (credentials: { clientId: string; clientSecret: string }) =>
+    createLinearSocket({
+      config: { organizationId: ORG, urlKey: "acme" },
+      credentials,
+      fetch: fetchImpl,
+      now: () => new Date("2026-09-24T10:00:00Z"),
+    });
+
+  const module = connect({ clientId: "lin_client_id_1", clientSecret: "lin_client_secret_1" });
   if (!module.tracker) throw new Error("a Linear Socket is a tracker");
-  return { module, tracker: module.tracker, asked };
+  return { module, tracker: module.tracker, asked, connect };
 }
 
 const who = {
@@ -190,6 +197,39 @@ describe("how deevy authenticates", () => {
 
     expect(asked.filter((one) => one.operation === "client_credentials")).toHaveLength(2);
     expect(asked.at(-1)?.authorization).toBe("Bearer lin_oauth_app_token_2");
+  });
+
+  it("keeps a token for the secret that minted it, not for whoever shares its client id", async () => {
+    const { module, asked, connect } = linearReturning({ DeevyWho: who });
+    const other = connect({ clientId: "lin_client_id_1", clientSecret: "lin_client_secret_2" });
+
+    await module.identity();
+    await other.identity();
+
+    expect(asked.filter((one) => one.operation === "client_credentials")).toHaveLength(2);
+    const calls = asked.filter((one) => one.url === "https://api.linear.app/graphql");
+    expect(calls.map((one) => one.authorization)).toEqual([
+      "Bearer lin_oauth_app_token_1",
+      "Bearer lin_oauth_app_token_2",
+    ]);
+  });
+
+  it("hands nobody a token for another Socket's client id and a wrong secret", async () => {
+    // A client id is public, and when deevy is hosted one isolate serves many
+    // Workspaces: a token cached by the id alone would answer anyone who
+    // pasted it, before the secret ever reached Linear.
+    const { module, asked, connect } = linearReturning(
+      { DeevyWho: who },
+      { secrets: { lin_client_id_1: "lin_client_secret_1" } },
+    );
+    await module.identity();
+
+    const impostor = connect({ clientId: "lin_client_id_1", clientSecret: "a guess" });
+
+    await expect(impostor.identity()).rejects.toThrow(/invalid_client/);
+    expect(asked.at(-1)?.form).toMatchObject({ client_secret: "a guess" });
+    const calls = asked.filter((one) => one.url === "https://api.linear.app/graphql");
+    expect(calls).toHaveLength(1);
   });
 
   it("says in Linear's words when it does not know the client id and secret", async () => {
