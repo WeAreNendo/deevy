@@ -18,9 +18,14 @@ def _ttfont(name):
 
 
 @lru_cache(None)
-def _hbfont(name):
+def _hbfont(name, axes):
+    """One HarfBuzz font per set of axis values: `set_variations` changes the
+    font it is called on, so a shared one would keep whatever the last call set."""
     blob = hb.Blob.from_file_path(str(FONTS / f"{name}.ttf"))
-    return hb.Font(hb.Face(blob))
+    font = hb.Font(hb.Face(blob))
+    if axes:
+        font.set_variations(dict(axes))
+    return font
 
 
 def _fmt(v):
@@ -40,9 +45,7 @@ def shape(font, text, size, axes=None, tracking=0.0, features=None):
     """
     tt = _ttfont(font)
     upem = tt["head"].unitsPerEm
-    f = _hbfont(font)
-    if axes:
-        f.set_variations(axes)
+    f = _hbfont(font, tuple(sorted((axes or {}).items())))
     buf = hb.Buffer()
     buf.add_str(text)
     buf.guess_segment_properties()
@@ -63,9 +66,3 @@ def shape(font, text, size, axes=None, tracking=0.0, features=None):
     x -= tracking * upem
     return pen.getCommands(), x * scale, bp.bounds
 
-
-def metrics(font, size, axes=None):
-    """x-height and cap-height in px (positive numbers) for vertical alignment."""
-    _, _, bx = shape(font, "x", size, axes)
-    _, _, bh = shape(font, "H", size, axes)
-    return -bx[1], -bh[1]

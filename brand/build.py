@@ -130,12 +130,7 @@ const word =
 /** The mark alone. Decoration: whatever it sits in says "deevy". */
 export function DeevyMark({{ className, ...props }}: React.ComponentProps<"svg">) {{
   return (
-    <svg
-      viewBox="{mx0} {my0} {mx1 - mx0} {my1 - my0}"
-      aria-hidden
-      className={{cn("h-6 w-auto", className)}}
-      {{...props}}
-    >
+    <svg viewBox="{mx0} {my0} {mx1 - mx0} {my1 - my0}" aria-hidden className={{cn("h-6 w-auto", className)}} {{...props}}>
       <path d={{disc}} className="fill-human" />
       <path d={{bar}} className="fill-agent" />
     </svg>

@@ -116,9 +116,10 @@ through the catalog.
 
 - **Logo and titles.** The logo is `components/deevy-logo.tsx` (`DeevyLogo`, `DeevyMark`), written by
   `brand/build.py` with the favicons; never edit it by hand (`brand/README.md`). Its word is Outfit
-  (`@fontsource-variable/outfit`), and so is every page's h1 and `DialogTitle`, through `font-display`
-  (Matt, 2026-10-14): titles only, never body, rows, section headings or markdown. `ui/dialog.tsx`'s
-  `font-display` is a deevy edit; re-apply it after a `shadcn add --overwrite`.
+  (`@fontsource-variable/outfit`), and so is every page's h1 and the title of a dialog, an alert dialog
+  and a sheet, through `font-display` (Matt, 2026-10-14): titles only, never body, rows, section headings
+  or markdown. The `font-display` in `ui/dialog.tsx`, `ui/alert-dialog.tsx` and `ui/sheet.tsx` is a
+  deevy edit; re-apply it after a `shadcn add --overwrite`.
 - **Type.** Inter (variable, `@fontsource-variable/inter`) for UI; JetBrains Mono
   (`@fontsource-variable/jetbrains-mono`) for record keys, `@handles`, Event kinds, run ids, API keys,
   addresses and secrets shown once, seqs, shortcut hints. Self-hosted; no Google Fonts. Scale 12 / 13 / 14 /

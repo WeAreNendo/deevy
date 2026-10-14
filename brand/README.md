@@ -19,7 +19,8 @@ In a 100-unit box, the half-disc is centred at (58, 58) with radius 34, its flat
 wide (x 62 to 84), 4 units from it, from y 8 to the shared baseline at 92, round on top and square at its foot.
 
 The word's "d" is as tall as the half-disc, stem top to baseline, and sits 8 units higher than the mark's
-baseline, so it is centred on the mark's height. It starts 20 units after the bar, tracked at −2%.
+baseline, so it is centred on the mark's height. The word is set 20 units after the bar (the "d"'s own
+side bearing makes the visible gap about 22.6), tracked at −2%.
 
 ## Where it is used
 
