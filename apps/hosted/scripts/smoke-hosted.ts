@@ -20,6 +20,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { pagePolicy } from "../../../packages/core/src/headers.ts";
 import { app, buildHosted, localConfigs, platform, run, startLocal, version } from "./local.ts";
 
 const failures: string[] = [];
@@ -182,8 +183,16 @@ async function phases(origin: string): Promise<string> {
   check("a slug in use is not available again", taken.ok === false);
   check("a slug nobody holds is a 404", (await fetch(`${origin}/nobody/`)).status === 404);
 
-  const page = await (await fetch(`${acme.url}/gates/gate_1`)).text();
+  const gate = await fetch(`${acme.url}/gates/gate_1`);
+  const page = await gate.text();
   check("the SPA under a Workspace says where it lives", page.includes('<base href="/acme/" />'));
+  // The policy is what keeps one Workspace's page from acting in another's on
+  // this origin, and it rides on the asset binding's `_headers`.
+  check(
+    "and it carries deevy's page policy",
+    gate.headers.get("content-security-policy") === pagePolicy,
+    gate.headers.get("content-security-policy") ?? "no policy",
+  );
   const script = /src="\.\/(assets\/[^"]+\.js)"/.exec(page)?.[1];
   const asset = script ? await fetch(`${acme.url}/${script}`) : null;
   check("its assets are served under the path", asset?.status === 200, String(asset?.status));

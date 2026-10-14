@@ -51,10 +51,10 @@ describe("a page's policy", () => {
   /**
    * The SPA loads `./assets/…` and every call relative to its `<base href>`,
    * which the server writes for where the deployment lives. `base-uri 'none'`
-   * made a browser drop it, so reloading any page but the first one resolved
-   * the bundle against that page's own path and got the index back instead.
+   * made a browser drop it, so a page two levels deep resolved the bundle
+   * against its own path and got the index back instead.
    */
-  it("lets a page keep its own <base>, and refuses one on another origin", () => {
+  it("lets a page keep a <base> on deevy's own origin", () => {
     expect(directive(pagePolicy, "base-uri")).toEqual(["'self'"]);
   });
 

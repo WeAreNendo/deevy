@@ -25,8 +25,9 @@ import type { MiddlewareHandler } from "hono";
  * `base-uri 'self'`, not `'none'`: the SPA's `<base href>` is how it finds its
  * bundle and its API wherever the deployment lives (apps/web/index.html), and a
  * browser that drops it resolves `./assets/…` against the page's own path, so
- * every page but the first one loaded blank. A base on deevy's origin points
- * at nothing `script-src 'self'` did not already allow.
+ * a page two levels deep (`/runs/<id>`), or a deployment's own address with no
+ * trailing slash (`/acme`), loaded blank. A base on deevy's origin points at
+ * nothing `script-src 'self'` did not already allow.
  */
 export const pagePolicy = [
   "default-src 'self'",
