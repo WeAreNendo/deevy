@@ -7,6 +7,14 @@ A release is two Docker images and one `vX.Y.Z` tag — see [docs/OPERATIONS.md]
 
 <!-- Entries are inserted below this line by `vp run version`. -->
 
+## 0.11.2
+
+### Patch Changes
+
+- **core** — [#164](https://github.com/WeAreNendo/deevy/pull/164) [`4796865`](https://github.com/WeAreNendo/deevy/commit/4796865ff0313f29e602de562656095d3f9608fb) Thanks [@mattallty](https://github.com/mattallty)! - The API reference at `/api/docs` works again for a deevy served under a path and for every hosted Workspace (`/acme/api/docs`). Since 0.11.0 it was sent the policy every other page carries, which refuses the reference viewer's script, so the page stayed blank; at the root of a host it was unaffected.
+- **core, web** — [#163](https://github.com/WeAreNendo/deevy/pull/163) [`288dbe6`](https://github.com/WeAreNendo/deevy/commit/288dbe68d67bfee67b5265f8960bfc241d9f9258) Thanks [@mattallty](https://github.com/mattallty)! - Opening or reloading a Gate, a Run, a record, a Project, a Settings page or an invitation link no longer shows a blank page, and neither does a deployment's own address under a path when it has no trailing slash (`/acme`). Since 0.11.0 the security policy every page carries refused the page's own `<base href>`, so the browser looked for deevy's scripts under that page's path. It now allows a base on deevy's own origin. Every deployment was affected: the image, the Worker, and hosted Workspaces.
+- **web** — [#162](https://github.com/WeAreNendo/deevy/pull/162) [`7526cb2`](https://github.com/WeAreNendo/deevy/commit/7526cb257ff3a21b92dce1b18191a3c4335a6fe0) Thanks [@mattallty](https://github.com/mattallty)! - deevy has a logo: a "d" made of a Human's half-disc and an Agent's bar, beside the word in Outfit. It is the favicon and stands on the sign-in page, and page and dialog titles are set in Outfit to match. Two new files are served beside the app, at the root of its address or under its path: `favicon.ico` and `apple-touch-icon.png`. A proxy that lets only known paths through needs to allow them, the way it allows `favicon.svg`.
+
 ## 0.11.1
 
 ### Patch Changes
