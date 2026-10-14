@@ -581,3 +581,16 @@ href>`, so from 0.11.0 a page two levels deep, or a Workspace's address without 
   `deevy-hosted-0.11.1.tar.gz`; `gh attestation verify` passes for it, signed by `hosted-release.yml` on a
   GitHub-hosted runner for the tag's commit, and deevy-cloud's deploy rehearsed against it end to end:
   fetched, verified, rendered with production's overlay and dry-run by wrangler.
+- **The first deploy** (2026-10-14). The account was set up from deevy-cloud's SETUP.md, and 0.11.1 went out
+  in its bootstrap order, then 0.11.2 the way every release will: deevy's release dispatches to deevy Cloud,
+  which writes a changeset asking for it, and merging deevy Cloud's Version PR deploys it, the console and the
+  site together. Two things only a real account showed: the third bootstrap step rolled back, because its
+  touch went through the 10% split to the bootstrap version, which has no console, so the touch now names the
+  version it checks with Cloudflare's `Cloudflare-Workers-Version-Overrides` header (deevy-cloud #5); and the
+  dispatch handler took `vp`'s `--` for the version (deevy-cloud #8). Measured from Paris against the first
+  Workspace: the router alone answers in 52 ms at the median, a warm Workspace in 98 ms (its Durable Object
+  in the EU adds about 45 ms), and the first request after two to five idle minutes in 155 to 181 ms, the
+  next one back to around 100 ms. What a Workspace costs while idle is still to be read: an idle object is
+  billed for duration only when it is eligible for hibernation, and the alarm wakes each one every minute, so
+  Cloudflare's own duration metric for `WorkspaceObject` over a day says whether that is a few GB-s or the
+  10,800 GB-s of an object that never sleeps (about $4 a Workspace a month past the plan's allowance).
