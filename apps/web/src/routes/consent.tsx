@@ -66,7 +66,7 @@ export function ConsentPage({ search }: ConsentPageProps = {}) {
   if (!clientId) {
     return (
       <section className="mx-auto flex max-w-md flex-col gap-3 py-16">
-        <h1 className="text-xl font-semibold">Nothing to consent to</h1>
+        <h1 className="font-display text-xl font-semibold">Nothing to consent to</h1>
         <p className="text-sm text-muted-foreground">
           This is where a connected tool asks for permission to act as you. There&apos;s no request
           waiting right now.
@@ -80,7 +80,9 @@ export function ConsentPage({ search }: ConsentPageProps = {}) {
   return (
     <section className="mx-auto flex max-w-md flex-col gap-6 py-16">
       <header className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold tracking-tight">Let {name} act as you?</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight">
+          Let {name} act as you?
+        </h1>
         <p className="text-sm text-muted-foreground">
           It will work as you, with access to the same Projects and Issues you can see. It can never
           rule on a Gate for you — that only happens here in deevy.

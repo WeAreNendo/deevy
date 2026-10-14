@@ -27,7 +27,7 @@ export function NotFoundPage({
         <EmptyMedia variant="icon" className="size-14 [&_svg]:size-7">
           <CompassIcon aria-hidden />
         </EmptyMedia>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
           {what ? `There is no ${what}` : "There is nothing here"}
         </h1>
         <EmptyDescription className="text-base">

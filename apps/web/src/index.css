@@ -6,6 +6,7 @@
 /* Self-hosted: a self-hosted AGPL app does not phone Google for its typeface. */
 @import "@fontsource-variable/inter/wght.css";
 @import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/outfit/wght.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -25,6 +26,9 @@
  * from the System/Light/Dark toggle), so the toggle wins in both directions
  * and the OS setting is the default.
  *
+ * Titles are Outfit, the face of the logo's word (brand/README.md): a page's
+ * h1 and a dialog's title, through `font-display`. Everything else stays Inter.
+ *
  * Type, radius and density are variables (--face-*, --radius, --density,
  * --tracking) that @theme inline hands to the utilities, so a future review
  * can retune them the way this one did, from one block.
@@ -32,6 +36,7 @@
 :root {
   --face-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --face-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --face-display: "Outfit Variable", var(--face-sans);
   --radius: 0.5rem;
   --density: 0.2625rem;
   --tracking: 0em;
@@ -156,6 +161,7 @@
 @theme inline {
   --font-sans: var(--face-sans);
   --font-mono: var(--face-mono);
+  --font-display: var(--face-display);
   /* Every spacing utility is calc(var(--density) * n), so one variable sets the scale. */
   --spacing: var(--density);
 

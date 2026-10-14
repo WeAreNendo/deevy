@@ -2,6 +2,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { DeevyLogo } from "@/components/deevy-logo";
 import { MemberChip } from "@/components/member-chip";
 import { SignInButton } from "@/components/sign-in-button";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -91,7 +92,7 @@ export function SignedOut({ invitation = null }: { invitation?: string | null })
   return (
     <SignInFrame>
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight">Sign in</h1>
         {/* An invitation is a bearer: there is nothing to read without the
             token, so the line says one is waiting and no more than that. */}
         <p className="text-sm text-muted-foreground">
@@ -351,7 +352,9 @@ export function NotAMember({
   return (
     <SignInFrame>
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Signed in, not yet a Member</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight">
+          Signed in, not yet a Member
+        </h1>
         {addressConfirmed ? (
           <p className="text-sm text-muted-foreground">
             {email} isn&apos;t a Member of this Workspace yet. Ask an admin to invite you, or to
@@ -411,7 +414,9 @@ function AcceptingInvitation({
     return (
       <SignInFrame>
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold tracking-tight">That invitation is not yours yet</h1>
+          <h1 className="font-display text-xl font-semibold tracking-tight">
+            That invitation is not yours yet
+          </h1>
           <p className="text-sm text-muted-foreground">
             {accept.error.message}. You are signed in as {email}.
           </p>
@@ -429,7 +434,9 @@ function AcceptingInvitation({
   return (
     <SignInFrame>
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Joining this Workspace</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight">
+          Joining this Workspace
+        </h1>
         <p className="text-sm text-muted-foreground">
           Accepting the invitation you were sent, as {email}…
         </p>
@@ -442,7 +449,9 @@ export function Suspended({ email }: { email: string }) {
   return (
     <SignInFrame>
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Your membership is suspended</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight">
+          Your membership is suspended
+        </h1>
         <p className="text-sm text-muted-foreground">
           Your access to this Workspace is paused. An admin can reinstate {email} at any time.
         </p>
@@ -522,17 +531,7 @@ function SignInFrame({ children }: { children: React.ReactNode }) {
 }
 
 function Brand() {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span
-        aria-hidden
-        className="grid size-7 place-items-center rounded-md bg-primary font-mono text-sm font-semibold text-primary-foreground"
-      >
-        d
-      </span>
-      <span className="text-lg font-semibold tracking-tight">deevy</span>
-    </div>
-  );
+  return <DeevyLogo className="h-8 self-start" />;
 }
 
 function LegendRow({ term, children }: { term: React.ReactNode; children: React.ReactNode }) {

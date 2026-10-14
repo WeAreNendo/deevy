@@ -44,8 +44,12 @@ function Sheet({ theme }: { theme: "light" | "dark" }) {
       </ul>
 
       <div className="flex flex-col gap-1">
-        <p className="text-[28px] font-semibold tracking-tight">Ship the Event log view</p>
-        <p className="text-xl font-semibold tracking-tight">Twenty for a page title</p>
+        <p className="font-display text-[28px] font-semibold tracking-tight">
+          Ship the Event log view
+        </p>
+        <p className="font-display text-xl font-semibold tracking-tight">
+          Twenty for a page title, in the logo's face
+        </p>
         <p className="text-base">Sixteen for prose a person reads for a while.</p>
         <p className="text-sm">Fourteen is the interface: labels, rows, buttons.</p>
         <p className="text-[13px]">Thirteen in dense lists.</p>
@@ -86,7 +90,7 @@ export function TokensPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Tokens</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight">Tokens</h1>
         <p className="text-sm text-muted-foreground">
           The palette and the type scale, as the browser draws them. Human, Agent and Gate are the
           only saturated colours on a screen besides the primary.
