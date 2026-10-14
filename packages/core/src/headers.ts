@@ -21,6 +21,13 @@ import type { MiddlewareHandler } from "hono";
  * names GitHub because creating a GitHub App is a form the browser posts to
  * github.com with the manifest (components/connect-github.tsx). Nothing frames
  * deevy: a Gate's Approve is the button a frame would want to steal.
+ *
+ * `base-uri 'self'`, not `'none'`: the SPA's `<base href>` is how it finds its
+ * bundle and its API wherever the deployment lives (apps/web/index.html), and a
+ * browser that drops it resolves `./assets/…` against the page's own path, so
+ * a page two levels deep (`/runs/<id>`), or a deployment's own address with no
+ * trailing slash (`/acme`), loaded blank. A base on deevy's origin points at
+ * nothing `script-src 'self'` did not already allow.
  */
 export const pagePolicy = [
   "default-src 'self'",
@@ -30,7 +37,7 @@ export const pagePolicy = [
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",
-  "base-uri 'none'",
+  "base-uri 'self'",
   "form-action 'self' https://github.com",
   "frame-ancestors 'none'",
 ].join("; ");

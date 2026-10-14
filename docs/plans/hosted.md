@@ -499,7 +499,9 @@ Event; what an open stream bills, and a gradual deploy with a migration, wait fo
   token, so deevy's own reads accept both until a row is written again. `/api/docs` still loads its reference
   UI from a CDN, now pinned to a version (`@scalar/api-reference@1.72.0`). CI then found that a refused
   cross-site write answered before its body was read broke the next request on that connection under
-  workerd on Linux; the refusal reads the body first.
+  workerd on Linux; the refusal reads the body first. Its `base-uri 'none'` also refused the SPA's own `<base
+href>`, so from 0.11.0 a page two levels deep, or a Workspace's address without its trailing slash, loaded
+  blank; #163 made it `'self'`, and the smoke tests now check the policy under a path as well.
 - **Slice 3, The source of the running version** (#136). `health.ping` and `/healthz` say the version; Settings
   links to `v<version>` on GitHub.
 - **Slice 4, deevy under a path** (#138). Better Auth routes on the path of its own URL and keeps a URL that has one

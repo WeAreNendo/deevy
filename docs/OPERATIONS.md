@@ -877,7 +877,8 @@ for an origin nobody is on.
 
 Every page deevy serves runs only the scripts it shipped. The SPA and the few pages the server writes itself
 leave with a `Content-Security-Policy` of `script-src 'self'` — no inline script, no `eval`, nothing from
-another host — with `frame-ancestors 'none'`, `object-src 'none'` and `base-uri 'none'`, beside
+another host — with `frame-ancestors 'none'`, `object-src 'none'` and `base-uri 'self'` (the SPA's own
+`<base href>` is how it finds its bundle wherever it lives), beside
 `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy:
 strict-origin-when-cross-origin`; everything that is not a page is sent as something never to render
 (`packages/core/src/headers.ts`). The image sets them in the app. On the Worker the asset handler answers the

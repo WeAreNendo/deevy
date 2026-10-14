@@ -1048,6 +1048,13 @@ async function deevyUnderAPath(origin: string): Promise<void> {
       page.status === 200 && html.includes('<base href="/deevy/" />'),
       `status ${String(page.status)}`,
     );
+    // The asset binding answers these through the Worker, which copies its
+    // headers: `_headers` must reach a deevy under a path too.
+    check(
+      `and /deevy${path} carries deevy's page policy`,
+      page.headers.get("content-security-policy") === pagePolicy,
+      `content-security-policy ${page.headers.get("content-security-policy") ?? "absent"}`,
+    );
   }
   const index = await (await fetch(`${here}/`)).text();
   const script = /src="\.\/(assets\/[^"]+\.js)"/.exec(index)?.[1];
