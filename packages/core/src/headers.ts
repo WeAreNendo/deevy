@@ -109,23 +109,34 @@ async function sha256(text: string): Promise<string> {
 }
 
 /**
+ * The reference page's policy, set on its own route (app.ts), which carries
+ * the deployment's path: matching the request's path against `/api/docs` here
+ * missed `/acme/api/docs`, and a page policy that refuses Scalar left it blank.
+ * `securityHeaders` then adds the rest and leaves this one as it is.
+ */
+export const docsHeaders: MiddlewareHandler = async (c, next) => {
+  await next();
+  if (!(c.res.headers.get("content-type") ?? "").startsWith("text/html")) return;
+  const policy = await docsPolicy(await c.res.clone().text());
+  try {
+    c.res.headers.set("Content-Security-Policy", policy);
+  } catch {
+    c.res = new Response(c.res.body, c.res);
+    c.res.headers.set("Content-Security-Policy", policy);
+  }
+};
+
+/**
  * The headers every response from `createApp` leaves with, chosen by what it
- * is: a page gets `pageHeaders` (the reference page its own policy), anything
- * else `dataHeaders`. Registered on every path before anything else, so on
- * Node it covers the SPA that `mountSpa` adds after the fact too. A header a
- * handler set on purpose is left as it is.
+ * is: a page gets `pageHeaders` (the reference page its own policy, from
+ * `docsHeaders`), anything else `dataHeaders`. Registered on every path before
+ * anything else, so on Node it covers the SPA that `mountSpa` adds after the
+ * fact too. A header a handler set on purpose is left as it is.
  */
 export const securityHeaders: MiddlewareHandler = async (c, next) => {
   await next();
   const page = (c.res.headers.get("content-type") ?? "").startsWith("text/html");
-  const headers = !page
-    ? dataHeaders
-    : c.req.path === DOCS_PATH
-      ? {
-          ...pageHeaders,
-          "Content-Security-Policy": await docsPolicy(await c.res.clone().text()),
-        }
-      : pageHeaders;
+  const headers = page ? pageHeaders : dataHeaders;
   const missing = Object.entries(headers).filter(([name]) => !c.res.headers.has(name));
   if (missing.length === 0) return;
   // A response somebody else built — a fetch passed straight through — may

@@ -5,6 +5,7 @@ import type { App } from "../src/app.ts";
 import { createAuth } from "../src/auth.ts";
 import type { Auth } from "../src/auth.ts";
 import { basePathOf, wellKnownURL } from "../src/base-path.ts";
+import { SCALAR_SCRIPT, docsPolicy } from "../src/headers.ts";
 import { testDb } from "./helpers.ts";
 
 /**
@@ -187,6 +188,21 @@ describe("a deployment under a path", () => {
       servers: Array<{ url: string }>;
     };
     expect(spec.servers).toEqual([{ url: "/acme/api" }]);
+  });
+
+  /**
+   * The reference page is the one page that runs Scalar from jsDelivr, so it
+   * has a policy of its own. Under a path the request's path carries the
+   * base, and matching `/api/docs` alone gave it the page policy, which
+   * refused Scalar and left the page blank.
+   */
+  it("serves its API reference with the policy that lets Scalar run", async () => {
+    const { app } = testApp();
+    const res = await app.request("/acme/api/docs");
+    const html = await res.text();
+
+    expect(html).toContain(`<script src="${SCALAR_SCRIPT}">`);
+    expect(res.headers.get("content-security-policy")).toBe(await docsPolicy(html));
   });
 
   it("is its own OAuth issuer, discovered with the path inserted after the host", async () => {

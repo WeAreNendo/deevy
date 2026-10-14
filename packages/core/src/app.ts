@@ -27,7 +27,7 @@ import { headOf, type LiveOptions, type LiveSocket } from "./live.ts";
 import type { WorkspaceLimits } from "./limits.ts";
 import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
-import { SCALAR_SCRIPT, securityHeaders } from "./headers.ts";
+import { DOCS_PATH, SCALAR_SCRIPT, docsHeaders, securityHeaders } from "./headers.ts";
 import { betterAuthKeys } from "./keys.ts";
 import type { ResourcePath } from "./auth.ts";
 import { API_PATH, AUTH_BASE_PATH } from "./auth.ts";
@@ -552,6 +552,8 @@ export function createApp({
     if (matched) return c.newResponse(response.body, response);
     await next();
   });
+  // Before the handler, so its policy is on the page when `securityHeaders` looks.
+  routes.use(DOCS_PATH, docsHeaders);
   routes.use("/api/*", async (c, next) => {
     const { matched, response } = await api.handle(c.req.raw, {
       prefix: `${base}/api`,
