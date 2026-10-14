@@ -46,7 +46,16 @@ describe("a page's policy", () => {
     expect(directive(pagePolicy, "script-src")).toEqual(["'self'"]);
     expect(directive(pagePolicy, "default-src")).toEqual(["'self'"]);
     expect(directive(pagePolicy, "object-src")).toEqual(["'none'"]);
-    expect(directive(pagePolicy, "base-uri")).toEqual(["'none'"]);
+  });
+
+  /**
+   * The SPA loads `./assets/…` and every call relative to its `<base href>`,
+   * which the server writes for where the deployment lives. `base-uri 'none'`
+   * made a browser drop it, so reloading any page but the first one resolved
+   * the bundle against that page's own path and got the index back instead.
+   */
+  it("lets a page keep its own <base>, and refuses one on another origin", () => {
+    expect(directive(pagePolicy, "base-uri")).toEqual(["'self'"]);
   });
 
   it("lets nothing frame a page, so a Gate's Approve cannot be clicked through one", () => {
