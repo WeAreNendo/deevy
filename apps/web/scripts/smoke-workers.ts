@@ -30,7 +30,7 @@
  * (docs/plans/m3.md slice 10).
  */
 import type { AppRouter } from "@deevy/core";
-import { pagePolicy } from "../../../packages/core/src/headers.ts";
+import { SCALAR_SCRIPT, pagePolicy } from "../../../packages/core/src/headers.ts";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { RouterClient } from "@orpc/server";
@@ -1065,6 +1065,17 @@ async function deevyUnderAPath(origin: string): Promise<void> {
     script ? `status ${String(asset?.status)}` : "the index names no script",
   );
   check("/deevy/healthz answers", (await fetch(`${here}/healthz`)).status === 200);
+  // The one page that runs a script from elsewhere has its own policy, which
+  // must reach it under the path as well as at the root.
+  const reference = await fetch(`${here}/api/docs`);
+  check(
+    "/deevy/api/docs carries the policy that lets its reference viewer run",
+    reference.status === 200 &&
+      (reference.headers.get("content-security-policy") ?? "").includes(
+        `script-src ${SCALAR_SCRIPT}`,
+      ),
+    `status ${String(reference.status)}, ${reference.headers.get("content-security-policy") ?? "no policy"}`,
+  );
 
   const discovered = await fetch(`${origin}/.well-known/oauth-authorization-server/deevy`);
   const metadata = (await discovered.json().catch(() => ({}))) as { issuer?: string };
