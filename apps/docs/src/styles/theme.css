@@ -1,6 +1,7 @@
 /*
  * The app's indigo and its typefaces (apps/web/src/index.css) on Starlight's
  * tokens: the accent is the SPA's --primary, and Starlight derives the rest.
+ * Headings are Outfit, the face of the logo's word, as the app's titles are.
  */
 :root {
   --sl-font: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
@@ -16,4 +17,10 @@
   --sl-color-accent-low: oklch(0.92 0.04 277);
   --sl-color-accent: oklch(0.5854 0.2041 277.12);
   --sl-color-accent-high: oklch(0.36 0.14 277);
+}
+
+h1,
+.sl-markdown-content :is(h2, h3) {
+  font-family: "Outfit Variable", var(--sl-font);
+  letter-spacing: -0.01em;
 }

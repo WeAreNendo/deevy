@@ -86,7 +86,7 @@ export function TokensPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Tokens</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight">Tokens</h1>
         <p className="text-sm text-muted-foreground">
           The palette and the type scale, as the browser draws them. Human, Agent and Gate are the
           only saturated colours on a screen besides the primary.

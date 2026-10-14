@@ -27,6 +27,12 @@ export default defineConfig({
       description:
         "The glue between a team's tools and its Agents: the work stays in GitHub, Linear, GitLab or Notion, and deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on.",
       favicon: "/favicon.svg",
+      // Written by brand/build.py. The title stays, for screen readers.
+      logo: {
+        light: "./src/assets/deevy-logo.svg",
+        dark: "./src/assets/deevy-logo-dark.svg",
+        replacesTitle: true,
+      },
       social: [
         { icon: "github", label: "deevy on GitHub", href: "https://github.com/WeAreNendo/deevy" },
       ],
@@ -35,6 +41,7 @@ export default defineConfig({
       customCss: [
         "@fontsource-variable/inter/wght.css",
         "@fontsource-variable/jetbrains-mono/wght.css",
+        "@fontsource-variable/outfit/wght.css",
         "./src/styles/theme.css",
       ],
       plugins: [

@@ -15,6 +15,7 @@
     "@astrojs/starlight": "catalog:",
     "@fontsource-variable/inter": "catalog:",
     "@fontsource-variable/jetbrains-mono": "catalog:",
+    "@fontsource-variable/outfit": "catalog:",
     "@types/node": "catalog:",
     "astro": "catalog:",
     "github-slugger": "catalog:",
