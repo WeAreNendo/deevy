@@ -590,7 +590,14 @@ href>`, so from 0.11.0 a page two levels deep, or a Workspace's address without 
   dispatch handler took `vp`'s `--` for the version (deevy-cloud #8). Measured from Paris against the first
   Workspace: the router alone answers in 52 ms at the median, a warm Workspace in 98 ms (its Durable Object
   in the EU adds about 45 ms), and the first request after two to five idle minutes in 155 to 181 ms, the
-  next one back to around 100 ms. What a Workspace costs while idle is still to be read: an idle object is
-  billed for duration only when it is eligible for hibernation, and the alarm wakes each one every minute, so
-  Cloudflare's own duration metric for `WorkspaceObject` over a day says whether that is a few GB-s or the
-  10,800 GB-s of an object that never sleeps (about $4 a Workspace a month past the plan's allowance).
+  next one back to around 100 ms. What a Workspace costs while idle, read from Cloudflare's own metric the
+  next day: 3.78 GB-s of `WorkspaceObject` duration in 24 hours for one Workspace, against the 10,800 GB-s of
+  an object that never sleeps. An idle object is billed only while it is not eligible for hibernation, and a
+  Workspace's object is eligible between its minute alarms, as it was evicted between them on workerd. So
+  idle duration is about 113 GB-s a Workspace a month, and the 400,000 GB-s the plan includes cover some
+  3,500 idle Workspaces; what the alarm costs is requests, 43,200 a Workspace a month, which is $0.0065 past
+  the included million, and as many rows written, inside the included 50 million up to about 1,150
+  Workspaces. Sign-in through the relay works for real: the console, and the first Workspace's admin,
+  signed in with the platform's provider Apps through `app.deevy.dev/auth`. Still owed at scale: how many
+  Workspaces' apps one isolate holds under its 128 MB, which only many real Workspaces will show; workerd's
+  upper bound was 0.4 MB an awake app.
