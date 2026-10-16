@@ -56,7 +56,14 @@ export const InvitationSchema = createSelectSchema(invitation)
  * handed to the provider module (ADR-0024). `secrets.test.ts` holds the line.
  */
 export const SocketSchema = createSelectSchema(socket)
-  .omit({ credentials: true, webhookSecret: true })
+  // Every sealed column, and when the webhook secret last changed, which no
+  // screen reads and which only matters to the delivery that checks it.
+  .omit({
+    credentials: true,
+    webhookSecret: true,
+    previousWebhookSecret: true,
+    webhookSecretChangedAt: true,
+  })
   .extend({
     identity: z.object({ login: z.string(), id: z.string(), mentionHandle: z.string() }),
     capabilities: z.array(z.enum(["tracker", "forge", "docs", "chat"])),

@@ -33,6 +33,8 @@ const state = vi.hoisted(() => ({
   lastInboundAt: null as Date | null,
   /** Holds the providers' answer back, as a slow first load does. */
   providersPending: false,
+  /** What the stub provider says of its webhook secret, for the page to follow. */
+  stubSecretFrom: "either" as "either" | "tool" | "handshake",
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -44,13 +46,40 @@ vi.mock("../src/lib/orpc.ts", async () => {
         state.providersPending
           ? new Promise<never>(() => undefined)
           : {
+              // Who makes each one's webhook secret is the module's word, and
+              // what the Socket's page offers to change it follows it.
               providers: [
-                { id: "github", label: "GitHub", capabilities: ["tracker", "forge"] },
-                { id: "gitlab", label: "GitLab", capabilities: ["tracker", "forge"] },
-                { id: "linear", label: "Linear", capabilities: ["tracker"] },
-                { id: "notion", label: "Notion", capabilities: ["tracker", "docs"] },
-                { id: "slack", label: "Slack", capabilities: ["chat"] },
-                { id: "stub", label: "the stub tracker", capabilities: ["tracker"] },
+                {
+                  id: "github",
+                  label: "GitHub",
+                  capabilities: ["tracker", "forge"],
+                  webhookSecretFrom: "either",
+                },
+                {
+                  id: "gitlab",
+                  label: "GitLab",
+                  capabilities: ["tracker", "forge"],
+                  webhookSecretFrom: "either",
+                },
+                {
+                  id: "linear",
+                  label: "Linear",
+                  capabilities: ["tracker"],
+                  webhookSecretFrom: "tool",
+                },
+                {
+                  id: "notion",
+                  label: "Notion",
+                  capabilities: ["tracker", "docs"],
+                  webhookSecretFrom: "handshake",
+                },
+                { id: "slack", label: "Slack", capabilities: ["chat"], webhookSecretFrom: "tool" },
+                {
+                  id: "stub",
+                  label: "the stub tracker",
+                  capabilities: ["tracker"],
+                  webhookSecretFrom: state.stubSecretFrom,
+                },
               ],
             },
       list: async () => ({ sockets: state.sockets }),
@@ -151,6 +180,7 @@ const { stubSocket } = await import("./stub-client.ts");
 
 afterEach(() => {
   state.providersPending = false;
+  state.stubSecretFrom = "either";
 });
 
 describe("the tools this Workspace is connected to", () => {
@@ -763,12 +793,38 @@ describe("one Socket's own page", () => {
       fireEvent.click(within(signs).getByRole("button", { name: "Mint a webhook secret" }));
       await waitFor(() => expect(calls.rotate).toHaveBeenCalledTimes(1));
       expect(await within(signs).findByText("whsec_said_exactly_once")).toBeTruthy();
-      // A minted one replaces the old at once, unlike a pasted one.
+      // A minted one leaves the old good for a day too, as a pasted one does.
       expect(
-        within(signs).getByText(new RegExp(`paste it into ${tool} straight away`)),
+        within(signs).getByText(new RegExp(`Paste it into ${tool}: deevy takes the old one`)),
       ).toBeTruthy();
     },
   );
+
+  it("offers what the tool says of its secret, not what the page assumes of its name", async () => {
+    calls.rotate.mockClear();
+    // The stub, saying it makes its own: the page has no sentence for it, and
+    // follows the server's word rather than a list of its own.
+    state.stubSecretFrom = "tool";
+    state.sockets = [{ ...stubSocket, name: "Example tracker", hasWebhookSecret: true }];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const signs = await screen.findByRole("region", { name: "What it signs with" });
+
+    expect(within(signs).getByText(/the stub tracker makes it/)).toBeTruthy();
+    expect(within(signs).getByLabelText("New secret from the stub tracker")).toBeTruthy();
+    expect(within(signs).queryByRole("button", { name: "Mint a webhook secret" })).toBeNull();
+  });
+
+  it("offers nothing to change the secret until the server has said who makes it", async () => {
+    state.providersPending = true;
+    state.sockets = [{ ...stubSocket, name: "Example tracker", hasWebhookSecret: true }];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    expect(await screen.findByRole("heading", { name: "Example tracker" })).toBeTruthy();
+
+    expect(screen.queryByRole("region", { name: "What it signs with" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mint a webhook secret" })).toBeNull();
+  });
 
   it("offers a Notion Socket no secret of deevy's, since Notion signs with its verification token", async () => {
     state.sockets = [

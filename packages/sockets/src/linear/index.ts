@@ -309,6 +309,9 @@ export function createLinearSocket({
   return {
     provider: "linear",
     capabilities: new Set(["tracker"] as const),
+    // The webhook's signing secret is Linear's, shown on the application and
+    // never typed in.
+    webhookSecretFrom: "tool",
     // A Linear user's id is its workspace's, and it is the id Sign in with
     // Linear keeps, so a Human who signed in to deevy with this workspace's
     // account rules here with no linking step. Anybody else links through

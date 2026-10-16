@@ -17,7 +17,11 @@ import {
   socketModuleFor,
   type SocketFor,
 } from "../sockets/registry.ts";
-import type { SocketModule } from "../sockets/port.ts";
+import {
+  webhookSecretOrigins,
+  type SocketModule,
+  type WebhookSecretFrom,
+} from "../sockets/port.ts";
 import { appendEvent } from "../events.ts";
 import { newId } from "../ids.ts";
 import { defineOperation } from "./registry.ts";
@@ -36,9 +40,20 @@ import type { AppContext } from "./registry.ts";
  * one. `secrets.test.ts` holds the read surface to that.
  */
 
-/** Everything a caller may see, plus the two facts about the sealed columns. */
+/**
+ * Everything a caller may see, plus the two facts about the sealed columns.
+ * Every sealed column is taken out by name, the replaced secret and when it
+ * was replaced included, so a column added later is a decision here rather
+ * than a leak (`secrets.test.ts` holds every answer to it).
+ */
 function socketOut(row: Socket) {
-  const { credentials, webhookSecret, ...rest } = row;
+  const {
+    credentials,
+    webhookSecret,
+    previousWebhookSecret: _replaced,
+    webhookSecretChangedAt: _replacedAt,
+    ...rest
+  } = row;
   return {
     ...rest,
     hasCredentials: credentials !== null,
@@ -57,20 +72,42 @@ function inboundUrl(context: Pick<AppContext, "baseURL">, socketId: string): str
 }
 
 /**
- * What a provider can do, asked of a module built with nothing in it: a module
- * says its own capabilities, and no Socket row is touched.
+ * A provider's module built with nothing in it, to ask what it says of itself:
+ * its capabilities, who makes its webhook secret. No Socket row is touched.
  */
-function capabilitiesOf(
+function bareModuleOf(
   context: Pick<AppContext, "sockets">,
   provider: (typeof socketProviders)[number],
-): ("tracker" | "forge" | "docs" | "chat")[] {
-  const module = context.sockets?.[provider]?.({
+): SocketModule | undefined {
+  return context.sockets?.[provider]?.({
     config: {},
     credentials: {},
     fetch: globalThis.fetch,
     now: () => new Date(),
   });
-  return [...(module?.capabilities ?? [])];
+}
+
+/** What a provider can do, in the order a screen lists it. */
+function capabilitiesOf(
+  context: Pick<AppContext, "sockets">,
+  provider: (typeof socketProviders)[number],
+): ("tracker" | "forge" | "docs" | "chat")[] {
+  return [...(bareModuleOf(context, provider)?.capabilities ?? [])];
+}
+
+/**
+ * Why deevy will not mint a secret for this tool, or null where it may: a
+ * tool that makes its own takes none typed in, and one that sends its own to
+ * establish the webhook would lose it (`WebhookSecretFrom`).
+ */
+function mintRefusal(from: WebhookSecretFrom, tool: string): string | null {
+  if (from === "tool") {
+    return `${tool} makes its own signing secret and takes none typed in, so a secret deevy minted would refuse every delivery. Regenerate it in ${tool} and paste the new one on the Socket's page, under What it signs with (sockets.update with webhookSecret).`;
+  }
+  if (from === "handshake") {
+    return `${tool} signs with the token it sends to verify its webhook, and a secret deevy minted would replace it and break the webhook. Follow Verifying the webhook on the Socket's page instead.`;
+  }
+  return null;
 }
 
 /**
@@ -157,17 +194,28 @@ export const sockets = {
           id: z.enum(socketProviders),
           label: z.string(),
           capabilities: z.array(z.enum(["tracker", "forge", "docs", "chat"])),
+          /**
+           * Who makes what its deliveries are signed with: `either` (deevy may
+           * mint one, or take the tool's), `tool` (only the tool's), or
+           * `handshake` (the tool sends it to verify its webhook). It is what
+           * decides whether `sockets.rotate` will mint one.
+           */
+          webhookSecretFrom: z.enum(webhookSecretOrigins),
         }),
       ),
     }),
     handler: ({ context }) => {
       const built = Object.keys(context.sockets ?? {}) as (typeof socketProviders)[number][];
       return Promise.resolve({
-        providers: built.sort().map((id) => ({
-          id,
-          label: providerLabels[id] ?? id,
-          capabilities: capabilitiesOf(context, id),
-        })),
+        providers: built.sort().map((id) => {
+          const module = bareModuleOf(context, id);
+          return {
+            id,
+            label: providerLabels[id] ?? id,
+            capabilities: [...(module?.capabilities ?? [])],
+            webhookSecretFrom: module?.webhookSecretFrom ?? "either",
+          };
+        }),
       });
     },
   }),
@@ -536,7 +584,9 @@ export const sockets = {
 
   rotate: defineOperation({
     name: "sockets.rotate",
-    summary: "Mint a new webhook secret for a tool, and say it once",
+    // Refused for a tool that makes its own secret or sends one to verify its
+    // webhook; the one it replaces is still taken for a day, as `update`'s is.
+    summary: "Mint a new webhook secret for a tool whose settings take one, and say it once",
     method: "POST",
     path: "/sockets/{socketId}/rotate",
     auth: "admin",
@@ -549,10 +599,24 @@ export const sockets = {
     }),
     handler: async ({ input, context }) => {
       const found = await requireSocket(context, input.socketId);
+      // Only where the tool can take what deevy makes: the module says who
+      // makes its secret, and the refusal says what to do instead.
+      const from = bareModuleOf(context, found.provider)?.webhookSecretFrom ?? "either";
+      const refusal = mintRefusal(from, providerLabels[found.provider] ?? found.provider);
+      if (refusal) throw new ORPCError("BAD_REQUEST", { message: refusal });
+
       const minted = mintWebhookSecret();
       const [row] = await context.db
         .update(socketTable)
-        .set({ webhookSecret: await seal(context, minted), updatedAt: new Date() })
+        .set({
+          webhookSecret: await seal(context, minted),
+          // Still taken for as long as one pasted with `sockets.update` is
+          // (PREVIOUS_SECRET_MS), so what the tool signs while the new one is
+          // being pasted into it still counts.
+          previousWebhookSecret: found.webhookSecret,
+          webhookSecretChangedAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(socketTable.id, found.id))
         .returning();
       if (!row) throw new Error("sockets.rotate: the update returned no row");

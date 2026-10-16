@@ -227,6 +227,9 @@ export function createGithubSocket({
   return {
     provider: "github",
     capabilities: new Set(["tracker", "forge"] as const),
+    // The manifest conversion hands GitHub's own back, and the App's settings
+    // take any typed in, so deevy may mint one too.
+    webhookSecretFrom: "either",
     identityScope: githubIdentityScope(api),
 
     /**

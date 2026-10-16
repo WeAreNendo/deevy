@@ -212,6 +212,9 @@ export function createGitlabSocket(
   return {
     provider: "gitlab",
     capabilities: new Set(["tracker", "forge"] as const),
+    // A webhook's secret token is typed into GitLab, so deevy may mint it; its
+    // signing token is GitLab's, pasted back.
+    webhookSecretFrom: "either",
     identityScope: gitlabIdentityScope(base, options.signInIssuer),
 
     /**

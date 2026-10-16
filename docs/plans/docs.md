@@ -91,6 +91,12 @@ stacked on this one, and settling some found more, which are here too:
   repository could install. Settled: **Connect GitHub** takes an optional **Organization**, checked as GitHub
   checks a login, and posts the manifest to `github.com/organizations/<org>/settings/apps/new`, so the App
   is the organization's; the pages and OPERATIONS.md say so and who on GitHub may make and install it.
+- **Three things fixing the Socket page found on the server**, all settled: every Socket answer, and
+  `openapi.json`, carried the sealed previous webhook secret and when it changed, which `SocketSchema` and
+  `socketOut` now leave out and `secrets.test.ts` checks across every `sockets.*` answer and the document; a
+  mint dropped the old secret at once, and now keeps it for the day a pasted one is kept; and
+  `sockets.rotate` minted for Slack, Linear and Notion, whose modules now declare `webhookSecretFrom` on the
+  Socket module port, so the server refuses them and the page follows the same word.
 - **The Human the work is for, excluded from a Checkpoint, could neither approve nor reject**, where
   ADR-0020 says they may still reject. Settled as ADR-0020 has it, after Matt chose it: `rulingRefusal`
   refuses them only an approval, at every door through `recordRuling`, and the Gate's view gains

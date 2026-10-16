@@ -56,8 +56,8 @@ with**, either:
   token there, paste the same value into **New secret from GitLab**, and choose **Use the new secret**.
   deevy keeps accepting the old one for a day, so you can change the two in either order.
 - **Mint one in deevy.** Choose **Mint a webhook secret**, which is also the way back if you lose the secret
-  token. deevy shows it once and stops accepting the old one straight away, so paste it into each webhook
-  as its secret token at once.
+  token. deevy shows it once; paste it into each webhook as its secret token. deevy keeps accepting the old
+  one for a day, so a webhook you have not changed yet still gets through.
 
 ## Bind a Project to a GitLab project
 

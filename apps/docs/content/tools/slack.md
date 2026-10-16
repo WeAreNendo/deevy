@@ -83,7 +83,8 @@ and there is nothing to click in Slack.
 
 ## Rotate the signing secret
 
-Slack makes the signing secret, so you rotate it in Slack and give deevy the new one:
+Slack makes the signing secret, and takes none that deevy could make, so you rotate it in Slack and give
+deevy the new one:
 
 1. In the app's settings in Slack, under **Basic Information**, regenerate the **Signing Secret** and copy
    it.

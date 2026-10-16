@@ -137,6 +137,40 @@ describe("a delivery arriving at a Socket's hook", () => {
     expect(await db.query.issue.findFirst({})).toBeUndefined();
   });
 
+  it("still takes what the old secret signed after a mint, for a day and not after", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { app, seeded, ada } = await workspace(db);
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, {
+      context: { ...ada, sockets, socketSecret: testSealingSecret },
+    });
+
+    // Minted in deevy; the tool goes on signing with the old one until the new
+    // one is pasted into it. Until 2026-10-16 a mint dropped the old one at
+    // once, so everything in between was refused.
+    const minted = await asAda.sockets.rotate({ socketId: seeded.socketId });
+    const old = await app.request(`/hooks/${seeded.socketId}`, delivery(labelled));
+    expect(old.status).toBe(200);
+    expect(await old.json()).toMatchObject({ status: "applied" });
+    const fresh = await app.request(
+      `/hooks/${seeded.socketId}`,
+      delivery(labelled, { id: "delivery-2", secret: minted.webhookSecret }),
+    );
+    expect(fresh.status).toBe(200);
+
+    // A day on, only the new one counts.
+    await db
+      .update(socketTable)
+      .set({ webhookSecretChangedAt: new Date(Date.now() - 25 * 3_600_000) })
+      .where(eq(socketTable.id, seeded.socketId));
+    const stale = await app.request(
+      `/hooks/${seeded.socketId}`,
+      delivery(labelled, { id: "delivery-3" }),
+    );
+    expect(stale.status).toBe(401);
+  });
+
   it("is a 404 for a Socket nobody connected, and a 404 once one is removed", async () => {
     const { db, close } = testDb();
     closers.push(close);

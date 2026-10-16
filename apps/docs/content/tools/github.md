@@ -147,8 +147,9 @@ under **What it signs with**, either:
 - **Type a new one on GitHub.** Set a new webhook secret in the App's settings on GitHub, paste the same
   value into **New secret from GitHub**, and choose **Use the new secret**. deevy keeps accepting the old
   one for a day, so you can change the two in either order.
-- **Mint one in deevy.** Choose **Mint a webhook secret**. deevy shows the new one once and stops accepting
-  the old one straight away, so paste it into the App's settings on GitHub at once.
+- **Mint one in deevy.** Choose **Mint a webhook secret**. deevy shows the new one once; paste it into the
+  App's settings on GitHub. deevy keeps accepting the old one for a day, so nothing GitHub sends in between
+  is refused.
 
 ## When your deevy's address changes
 

@@ -216,6 +216,87 @@ describe("a connected tool", () => {
     expect(listed?.hasWebhookSecret).toBe(true);
   });
 
+  it("keeps the secret a mint replaced, for as long as a pasted one's", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda } = await admin(db);
+    const connected = await asAda.sockets.connect({
+      provider: "stub",
+      name: "Example tracker",
+      webhookSecret: "whsec_the_one_the_tool_signs_with_now",
+    });
+    const before = await db.query.socket.findFirst({ where: { id: connected.id } });
+
+    await asAda.sockets.rotate({ socketId: connected.id });
+
+    // What `update` does with a pasted one, so the tool can go on signing with
+    // the old one until the new one is pasted into it (PREVIOUS_SECRET_MS).
+    const row = await db.query.socket.findFirst({ where: { id: connected.id } });
+    expect(row?.previousWebhookSecret).toBe(before?.webhookSecret);
+    expect(row?.webhookSecretChangedAt).toBeInstanceOf(Date);
+  });
+
+  it("mints nothing for a tool that makes its own secret or sends one to verify its webhook", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    const like = (
+      provider: "slack" | "notion" | "github",
+      from: "tool" | "handshake" | "either",
+    ): SocketModules[typeof provider] => {
+      return (options) => {
+        const module = sockets.stub?.(options);
+        if (!module) throw new Error("the fake is a module");
+        return { ...module, provider, webhookSecretFrom: from };
+      };
+    };
+    const asAda = createRouterClient(router, {
+      context: {
+        ...ada,
+        sockets: {
+          ...sockets,
+          slack: like("slack", "tool"),
+          notion: like("notion", "handshake"),
+          github: like("github", "either"),
+        },
+        socketSecret: testSealingSecret,
+      },
+    });
+
+    // What a screen reads to decide what to offer: the module's own word.
+    const { providers } = await asAda.sockets.providers({});
+    expect(Object.fromEntries(providers.map((one) => [one.id, one.webhookSecretFrom]))).toEqual({
+      github: "either",
+      notion: "handshake",
+      slack: "tool",
+      stub: "either",
+    });
+
+    const slack = await asAda.sockets.connect({ provider: "slack", name: "Acme Slack" });
+    await expect(asAda.sockets.rotate({ socketId: slack.id })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(
+        /^Slack makes its own signing secret.*paste the new one on the Socket's page/,
+      ) as unknown,
+    });
+    const notion = await asAda.sockets.connect({ provider: "notion", name: "Acme's Notion" });
+    await expect(asAda.sockets.rotate({ socketId: notion.id })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(
+        /^Notion signs with the token it sends.*Verifying the webhook/,
+      ) as unknown,
+    });
+    // Neither was touched.
+    for (const id of [slack.id, notion.id]) {
+      const row = await db.query.socket.findFirst({ where: { id } });
+      expect(row?.webhookSecret).toBeNull();
+    }
+
+    const github = await asAda.sockets.connect({ provider: "github", name: "acme on GitHub" });
+    expect((await asAda.sockets.rotate({ socketId: github.id })).webhookSecret).toMatch(/^whsec_/);
+  });
+
   it("offers the containers a Project can be bound to, and re-asks who deevy is", async () => {
     const { db, close } = testDb();
     closers.push(close);
@@ -347,7 +428,12 @@ describe("what this deevy can speak", () => {
     // (ADR-0024). A settings page that offered one anyway would be a button
     // whose only outcome is a refusal.
     expect(offered.providers).toEqual([
-      { id: "stub", label: "the stub tracker", capabilities: ["tracker", "forge", "docs"] },
+      {
+        id: "stub",
+        label: "the stub tracker",
+        capabilities: ["tracker", "forge", "docs"],
+        webhookSecretFrom: "either",
+      },
     ]);
   });
 });

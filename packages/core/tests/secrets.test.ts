@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createAuth } from "../src/auth.ts";
 import { openSecret, requireSealingSecret, sealSecret } from "../src/secrets.ts";
 import { betterAuthKeys } from "../src/keys.ts";
+import { generateSpec } from "../src/openapi.ts";
 import { router } from "../src/operations/index.ts";
 import { agentContext, fakeSockets, memberContext, testDb, testSealingSecret } from "./helpers.ts";
 
@@ -165,7 +166,159 @@ describe("the read surface", () => {
     // the grep being broken.
     expect(JSON.stringify(issued).includes(issued.key)).toBe(true);
   });
+
+  it("never answers with a Socket's sealed columns, from any sockets operation", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    const asAda = createRouterClient(router, {
+      context: {
+        ...ada,
+        sockets,
+        socketSecret: testSealingSecret,
+        // What `begin` signs its redirect's state with.
+        secret: "test-secret-that-is-at-least-32-characters",
+      },
+    });
+    const first = "whsec_SENTINEL_the_first_secret_pasted";
+    const second = "whsec_SENTINEL_the_second_secret_pasted";
+
+    const answers: Record<string, unknown> = {};
+    answers["sockets.providers"] = await asAda.sockets.providers({});
+    answers["sockets.begin"] = await asAda.sockets.begin({ provider: "stub", name: "Later" });
+    const socket = await asAda.sockets.connect({
+      provider: "stub",
+      name: "Example tracker",
+      credentials: { token: sentinels.socketCredential },
+      webhookSecret: first,
+    });
+    answers["sockets.connect"] = socket;
+    // A secret replaced twice, the second time by a mint, so the replaced one
+    // and when it was replaced are both in the row: the sealed previous secret
+    // was in every Socket answer and in openapi.json until 2026-10-16.
+    answers["sockets.update"] = await asAda.sockets.update({
+      socketId: socket.id,
+      webhookSecret: second,
+    });
+    const afterUpdate = await db.query.socket.findFirst({ where: { id: socket.id } });
+    const rotated = await asAda.sockets.rotate({ socketId: socket.id });
+    // The minted one is the rotate answer's to say, once; nothing else is.
+    answers["sockets.rotate"] = { ...rotated, webhookSecret: "(said once)" };
+    const sealed = await db.query.socket.findFirst({ where: { id: socket.id } });
+    expect(sealed?.previousWebhookSecret).toBeTruthy();
+    expect(sealed?.webhookSecretChangedAt).toBeInstanceOf(Date);
+
+    answers["sockets.list"] = await asAda.sockets.list({});
+    answers["sockets.test"] = await asAda.sockets.test({ socketId: socket.id });
+    answers["sockets.inbound"] = await asAda.sockets.inbound({ socketId: socket.id });
+    answers["sockets.containers"] = await asAda.sockets.containers({ socketId: socket.id });
+    answers["sockets.handshake"] = await asAda.sockets.handshake({ socketId: socket.id });
+    answers["sockets.rewire"] = await asAda.sockets.rewire({ socketId: socket.id });
+    answers["sockets.remove"] = await asAda.sockets.remove({ socketId: socket.id });
+
+    const secret = [
+      first,
+      second,
+      rotated.webhookSecret,
+      sentinels.socketCredential,
+      afterUpdate?.previousWebhookSecret ?? "",
+      afterUpdate?.webhookSecret ?? "",
+      sealed?.credentials ?? "",
+      sealed?.webhookSecret ?? "",
+      sealed?.previousWebhookSecret ?? "",
+    ].filter((value) => value.length > 0);
+    const leaks: string[] = [];
+    for (const [name, answer] of Object.entries(answers)) {
+      const serialised = JSON.stringify(answer);
+      for (const value of secret) {
+        if (serialised.includes(value)) leaks.push(`${name} carries ${value.slice(0, 24)}…`);
+      }
+      for (const column of socketColumnsNeverAnswered) {
+        if (serialised.includes(`"${column}"`)) leaks.push(`${name} answers ${column}`);
+      }
+    }
+    expect(leaks).toEqual([]);
+    // Every sockets operation was asked, so one added later is asked too.
+    expect(Object.keys(answers).sort()).toEqual(
+      Object.keys(router.sockets)
+        .map((name) => `sockets.${name}`)
+        .filter((name) => name !== "sockets.install")
+        .sort(),
+    );
+  });
+
+  it("documents no answer that carries a sealed column or a stored secret", async () => {
+    const spec = (await generateSpec()) as unknown as {
+      paths: Record<string, Record<string, { operationId?: string; responses?: unknown }>>;
+    };
+    // The minted webhook secret is said once, by the three answers that mint
+    // or would: `begin` and `connect` always say null.
+    const sayOnce = new Set(["sockets.begin", "sockets.connect", "sockets.rotate"]);
+    const found: string[] = [];
+    let properties = 0;
+    // Through everything under `responses` — status, content type, schema and
+    // its nesting — reading names only where a schema lists its properties.
+    const walk = (node: unknown, operation: string): void => {
+      if (!node || typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        for (const one of node) walk(one, operation);
+        return;
+      }
+      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+        if (key === "properties" && value && typeof value === "object") {
+          for (const [name, child] of Object.entries(value as Record<string, unknown>)) {
+            properties += 1;
+            if (neverAnswered.has(name)) found.push(`${operation} answers ${name}`);
+            if (name === "webhookSecret" && !sayOnce.has(operation)) {
+              found.push(`${operation} answers webhookSecret`);
+            }
+            walk(child, operation);
+          }
+        } else {
+          walk(value, operation);
+        }
+      }
+    };
+    for (const [path, methods] of Object.entries(spec.paths)) {
+      for (const operation of Object.values(methods)) {
+        walk(operation.responses, operation.operationId ?? path);
+      }
+    }
+    expect(found).toEqual([]);
+    // The walk reached the schemas: an empty list above is the document being
+    // clean, not a walk that never got past `responses`.
+    expect(properties).toBeGreaterThan(500);
+  });
 });
+
+/**
+ * A Socket row's columns no answer names: the sealed ones, and when its secret
+ * changed, which no screen reads. The current `webhookSecret` is caught by its
+ * value instead, since a mint's answer carries the new one under that name.
+ */
+const socketColumnsNeverAnswered = [
+  "credentials",
+  "previousWebhookSecret",
+  "webhookSecretChangedAt",
+];
+
+/**
+ * What no answer anywhere may carry, by name: every sealed column (a Socket's,
+ * an email sender's `credentials`, an invitation's `sealedToken`), what is
+ * stored to check a secret against (`tokenHash`), and a webhook
+ * subscription's `secret`, which goes in and never comes out.
+ */
+const neverAnswered = new Set([
+  "credentials",
+  "previousWebhookSecret",
+  "webhookSecretChangedAt",
+  "sealedToken",
+  "tokenHash",
+  "secret",
+  "clientSecret",
+  "privateKey",
+]);
 
 /**
  * What a Socket's credentials are wrapped in at rest (ADR-0024).

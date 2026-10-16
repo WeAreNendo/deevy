@@ -256,6 +256,8 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
   return {
     provider: "stub",
     capabilities: new Set(["tracker", "forge"] as const),
+    // In the process, so it signs with whatever it is given.
+    webhookSecretFrom: "either",
     // Its own accounts, unless its configuration says they are the ones deevy
     // signs people in with: that is how the acceptance walk and the seed play a
     // Human who signed in with GitHub and rules from the tracker with no
