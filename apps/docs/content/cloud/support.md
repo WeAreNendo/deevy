@@ -7,6 +7,9 @@ sidebar:
 
 ## Reaching us
 
+- **Anything about your Workspace or your account**: write to
+  [support@deevy.dev](mailto:support@deevy.dev). A Workspace that won't open, an upgrade that didn't
+  finish, a suspension you didn't expect, a question about your invitation: this is where it goes.
 - **Your data and your privacy**: write to [privacy@deevy.dev](mailto:privacy@deevy.dev), to ask what we
   hold about you, to come off the waitlist, or to have your deevy Cloud account removed. We answer within
   30 days.
@@ -44,7 +47,7 @@ Cloudflare account has a role that cannot see Workspace data.
   plainly what is happening.
 - **A Workspace we suspend.** We may suspend a Workspace for abuse, at its team's request, or when what
   it does is hurting other Workspaces, such as the email they share. Nothing in it is touched. The
-  console then says **This Workspace is suspended: nobody can use it until it is resumed. Write to us if
-  you didn't expect this.**
+  console then says **This Workspace is suspended: nobody can use it until it is resumed. Write to
+  support@deevy.dev if you didn't expect this.**
 - **An incident.** If something goes wrong that affects your Workspace, we tell you plainly, as soon as
   we have something true to say.
