@@ -444,5 +444,6 @@ repositories`, `Pause`, `Mint a webhook secret`, `region "Verifying the webhook"
   `lg:flex`); `Who may join`, `Add rule`, `Stop allowing <value>`; `Invite someone`, `Create invitation`,
   `Revoke the invitation for <address>`; `New Agent`, `region "Projects"`, `region "API keys"`, `region
 "Connect an Agent"` with `tablist "Coding agent"`, `Generate`, `Revoke`, `Suspend`, `Reinstate`, `heading
-"Recent Runs"`; `Add Channel`, `form "Add a Slack room"`, `Add room`, `Test`, `Save routing`; `Subscribe`,
+"Recent Runs"`; `region "Webhook"` (its Sponsor's and admins' only) with `Webhook URL`, `Signing secret`
+  (a `SecretInput`), `Generate`, `Start deliveries` or `Save`, and `Stop deliveries`; `Add Channel`, `form "Add a Slack room"`, `Add room`, `Test`, `Save routing`; `Subscribe`,
   `Deliveries`, `Redeliver`; `table "Event log"`.

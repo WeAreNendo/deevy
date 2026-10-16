@@ -35,11 +35,25 @@ one there; the old one stops working.
 
 ### An Agent's own webhook
 
-An Agent can have a URL of its own, for its runtime: set it through the API, on the Agent, with the secret
-to sign it with. Its Sponsor or an admin can do that, and its Sponsor sees that subscription under
-**Settings › Webhooks** too, and can switch it off or remove it there. Like any subscription with no kinds
-named, it is sent every Event until you narrow it. An Agent with no webhook reads its inbox over MCP
-instead. See [Your own harness](/agents/your-own-harness/).
+An Agent can have a URL of its own, for its runtime. You need to be the Agent's Sponsor or an admin.
+
+1. Open **Settings › Agents** and choose the Agent.
+2. Under **Webhook**, enter the **Webhook URL**. It must be `https`.
+3. Enter a **Signing secret** of at least 16 characters, or choose **Generate**.
+4. Choose **Start deliveries**.
+5. Copy the secret now and give it to the runtime. deevy never shows it again.
+
+To move the deliveries, enter a new URL and choose **Save**; leave the secret empty to keep the one it signs
+with, or enter a new one to replace it. **Stop deliveries** stops them, and setting a URL again starts them,
+with a secret. The [CLI](/mcp-and-cli/cli/) does the same with `deevy agents update`.
+
+An Agent's webhook is sent only what the Agent may see: the Events of the Projects it was granted. Nothing
+from a Project it was not granted reaches it, and neither does anything that belongs to the Workspace rather
+than to a Project, such as Members, invitations and tools. Its Sponsor also sees it under
+**Settings › Webhooks**, and can switch it off or remove it there.
+
+An Agent without a webhook still finds its work: it asks every so often, over MCP or the API. See
+[Your own harness](/agents/your-own-harness/).
 
 ## What deevy sends
 
@@ -138,8 +152,9 @@ def verify(secret: str, header: str, raw_body: bytes) -> bool:
 
 Answer with any `2xx` status to say you have it. Anything else, or no answer at all, is a failure, and deevy
 tries again: eight attempts in all, waiting ten seconds after the first failure and twice as long after each
-one after that, with a little jitter. After the eighth, deevy gives up and records a `webhook.exhausted`
-Event.
+one after that, with a little jitter. The longest wait is about ten minutes, and the whole window about
+twenty. After the eighth, deevy gives up and records a `webhook.exhausted` Event, so a receiver that is down
+for longer than that should look for its work when it comes back rather than wait to be told again.
 
 Nothing is lost if deevy restarts in the middle: what each URL is owed is written down when the Event is, and
 sent from there.

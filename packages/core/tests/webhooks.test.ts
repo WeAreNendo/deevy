@@ -1,5 +1,5 @@
 import type { Db } from "@deevy/db";
-import { agent as agentTable, webhookSubscription } from "@deevy/db";
+import { agent as agentTable, event as eventTable, webhookSubscription } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,7 +7,7 @@ import { appendEvent } from "../src/events.ts";
 import { deliverDueWebhooks, deliverWebhook, sweepSchedules } from "../src/work.ts";
 import { router } from "../src/operations/index.ts";
 import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
-import { signPayload, verifySignature } from "../src/webhooks.ts";
+import { deriveWebhookDeliveriesForMany, signPayload, verifySignature } from "../src/webhooks.ts";
 import { newId } from "../src/ids.ts";
 
 /**
@@ -171,6 +171,179 @@ describe("what an Event owes a subscriber", () => {
     await asAdmin.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
 
     expect(await webhookDeliveries(db)).toHaveLength(0);
+  });
+});
+
+/** What one subscription was owed, as the Events themselves: their kind and their Project. */
+async function owedTo(db: Db, subscriptionId: string) {
+  const rows = (await webhookDeliveries(db)).filter((row) => row.targetId === subscriptionId);
+  const events = await db.query.event.findMany({
+    where: { seq: { in: rows.map((row) => row.eventSeq) } },
+    orderBy: { seq: "asc" },
+  });
+  return events.map((row) => ({ kind: row.kind, projectId: row.projectId }));
+}
+
+describe("what an Agent's own webhook is owed", () => {
+  /**
+   * An Agent sees only the Projects it was granted, and an ungranted one does
+   * not exist to it (ADR-0004). Its webhook is one more way of seeing, so it is
+   * owed what those Projects say and nothing else: not another Project's
+   * Events, and not the Workspace's own, which belong to no Project at all.
+   * Until this held, an Agent's webhook was sent every Event in the Workspace.
+   */
+  it("is what happens in the Projects it was granted, and nothing of the Workspace's own", async () => {
+    const { db, admin, asAdmin, project, subscribe, workspaceId } = await workspace();
+    const website = await seedProject(db, workspaceId, {
+      slug: "website",
+      scopeKey: "acme/website",
+    });
+    const agent = await agentContext(db, { sponsor: admin.member, grants: [project.id] });
+    // The Workspace's own subscriber, which an admin set up and which is owed everything.
+    const everything = await subscribe();
+    // The Agent's, set the way its page sets it: a URL, a secret, no filter.
+    await asAdmin.agents.update({
+      memberId: agent.member.id,
+      webhookUrl: "https://planner.example/deevy",
+      webhookSecret: secret,
+    });
+    const own = await db.query.webhookSubscription.findFirst({
+      where: { memberId: agent.member.id },
+    });
+
+    await asAdmin.issues.create({ projectSlug: "deevy", title: "Granted" });
+    await asAdmin.issues.create({ projectSlug: "website", title: "Not granted" });
+
+    expect(await owedTo(db, own?.id ?? "")).toEqual([
+      { kind: "issue.created", projectId: project.id },
+    ]);
+    // The same Events did happen, and the Workspace's subscriber heard all of
+    // them: setting the Agent's webhook, which is the Workspace's business,
+    // and the Project the Agent was never granted.
+    expect(await owedTo(db, everything)).toEqual([
+      { kind: "agent.updated", projectId: null },
+      { kind: "issue.created", projectId: project.id },
+      { kind: "issue.created", projectId: website.project.id },
+    ]);
+  });
+
+  it("still hears its Run start, its Gate asked, and the ruling on it", async () => {
+    const { db, admin, asAdmin, project, workspaceId } = await workspace();
+    await seedProject(db, workspaceId, { slug: "website", scopeKey: "acme/website" });
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    const agent = await agentContext(db, { sponsor: admin.member, grants: [project.id] });
+    const asAgent = createRouterClient(router, { context: agent });
+    await asAdmin.agents.update({
+      memberId: agent.member.id,
+      webhookUrl: "https://planner.example/deevy",
+      webhookSecret: secret,
+    });
+    const own = await db.query.webhookSubscription.findFirst({
+      where: { memberId: agent.member.id },
+    });
+
+    // What the reference runtime wakes for: work handed to it, and an answer
+    // to the question it stopped on (apps/agent, receiver.ts).
+    const issue = await asAdmin.issues.create({
+      projectSlug: "deevy",
+      title: "Checkout rewrite",
+      assignAgent: agent.member.id,
+    });
+    const run = (await asAgent.runs.list({ issue: issue.externalKey })).runs[0];
+    const asked = await asAgent.gates.request({
+      runId: run?.id ?? "",
+      checkpoint: "plan",
+      proposal: "## Plan\n\nRewrite checkout.",
+    });
+    await createRouterClient(router, { context: bob }).gates.approve({ requestId: asked.id });
+    // Somebody else's work in a Project it was never granted is not its business.
+    await asAdmin.issues.create({ projectSlug: "website", title: "Not granted" });
+
+    const owed = await owedTo(db, own?.id ?? "");
+    expect(owed.map((row) => row.kind)).toEqual(
+      expect.arrayContaining([
+        "issue.assigned",
+        "run.started",
+        "gate.requested",
+        "gate.approved",
+        "run.answered",
+      ]),
+    );
+    expect(owed.every((row) => row.projectId === project.id)).toBe(true);
+  });
+
+  /**
+   * A sweep derives for every Event it wrote in one call (work.ts), so the
+   * scoping has to hold Agent by Agent inside one batch, and cost one read of
+   * the grants whatever the batch holds. A subscription can only be made for
+   * an Agent (webhooks.create, setAgentWebhook), but the rule is what its
+   * Member may see, so one that named a Human would be owed what a Human
+   * sees: every Project, because a Human is not scoped.
+   */
+  it("is worked out Agent by Agent for a batch of Events a sweep wrote", async () => {
+    const { db, admin, project, subscribe, workspaceId } = await workspace();
+    const website = await seedProject(db, workspaceId, {
+      slug: "website",
+      scopeKey: "acme/website",
+    });
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: admin.member,
+      grants: [project.id],
+    });
+    const writer = await agentContext(db, {
+      name: "Writer",
+      handle: "writer",
+      email: "writer@example.com",
+      sponsor: admin.member,
+      grants: [website.project.id],
+    });
+    const idle = await agentContext(db, {
+      name: "Idle",
+      handle: "idle",
+      email: "idle@example.com",
+      sponsor: admin.member,
+    });
+    const forPlanner = await subscribe({ memberId: planner.member.id });
+    const forWriter = await subscribe({ memberId: writer.member.id });
+    const forIdle = await subscribe({ memberId: idle.member.id });
+    const forHuman = await subscribe({ memberId: admin.member.id });
+
+    // Straight into the log, the way a sweep writes, with no appendEvent tail.
+    const written = await db
+      .insert(eventTable)
+      .values(
+        [project.id, website.project.id, null].map((projectId) => ({
+          workspaceId,
+          kind: "run.went_stale",
+          subjectType: "run",
+          subjectId: newId("run"),
+          projectId,
+          payload: {},
+        })),
+      )
+      .returning({ seq: eventTable.seq, kind: eventTable.kind, projectId: eventTable.projectId });
+    await deriveWebhookDeliveriesForMany(
+      db,
+      workspaceId,
+      written.map((row) => ({ ...row, workspaceId })),
+    );
+
+    expect(await owedTo(db, forPlanner)).toEqual([
+      { kind: "run.went_stale", projectId: project.id },
+    ]);
+    expect(await owedTo(db, forWriter)).toEqual([
+      { kind: "run.went_stale", projectId: website.project.id },
+    ]);
+    // Granted nothing, it sees nothing.
+    expect(await owedTo(db, forIdle)).toEqual([]);
+    expect((await owedTo(db, forHuman)).map((row) => row.projectId)).toEqual([
+      project.id,
+      website.project.id,
+      null,
+    ]);
   });
 });
 

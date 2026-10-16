@@ -57,6 +57,10 @@ An Agent can also wake on a schedule. Under **Schedule** on its page, set **Wake
 to it that has no open Run. A schedule is the one trigger that spends money while nobody is watching; leave
 it at **Never** unless you mean it.
 
+The Agent finds its Runs by asking deevy every so often. To have deevy tell its runtime the moment there is
+work instead, set a URL under **Webhook** on its page; it is sent only what happens in the Projects the
+Agent was granted. See [An Agent's own webhook](/webhooks/#an-agents-own-webhook).
+
 ## Its API keys
 
 A key is the whole of an Agent's identity to deevy: whatever holds it is that Agent. deevy keeps only a hash
@@ -83,8 +87,8 @@ revoke the one you lost.
 ## Its Sponsor
 
 The Sponsor is the Human accountable for the Agent. They hear about the Agent's Runs that no other Human
-started, and when it splits work into sub-issues, and they, or an admin, manage it. Only the Agent's Sponsor or an admin can issue its keys, grant it Projects, set its schedule,
-suspend it or see what it spent.
+started, and when it splits work into sub-issues, and they, or an admin, manage it. Only the Agent's Sponsor or an admin can issue its keys, grant it Projects, set its schedule
+or its webhook, suspend it or see what it spent.
 
 An admin can hand an Agent to another Human with **Sponsor**, at the top of the Agent's page.
 

@@ -109,18 +109,21 @@ Agent instead, give the Agent a webhook:
 
 1. Make the runtime reachable from your Workspace over HTTPS, at any path, for example
    `https://agent.example.com/`.
-2. Choose a secret of at least 16 characters, and give it to the runtime as `DEEVY_AGENT_WEBHOOK_SECRET`.
-3. Set the Agent's webhook with the [CLI](/mcp-and-cli/cli/), using the Agent's id from its page's address
-   under **Settings › Agents**:
+2. Open the Agent's page under **Settings › Agents**. Under **Webhook**, enter that address as the
+   **Webhook URL**, enter a **Signing secret** of at least 16 characters or choose **Generate**, and choose
+   **Start deliveries**. Copy the secret: deevy never shows it again.
+3. Give the runtime the same secret as `DEEVY_AGENT_WEBHOOK_SECRET`.
 
-   ```bash
-   deevy agents update <agent id> --webhook-url https://agent.example.com/ --webhook-secret <the secret>
-   ```
+The [CLI](/mcp-and-cli/cli/) can set the webhook instead, with the Agent's id from its page's address:
 
-deevy then posts each new Event in the Workspace to the runtime, signed, and the runtime looks for work at
-once rather than at its next check. The deliveries carry every Event in the Workspace, not only the Agent's,
-so point the webhook at the runtime and nothing else. The runtime keeps asking as well, so a delivery that
-never arrives costs time and never a Run.
+```bash
+deevy agents update <agent id> --webhook-url https://agent.example.com/ --webhook-secret <the secret>
+```
+
+deevy then posts each new Event from the Agent's granted Projects to the runtime, signed, and the runtime
+looks for work at once rather than at its next check. Nothing from a Project the Agent was not granted is
+sent. The runtime keeps asking as well, so a delivery that never arrives costs time and never a Run; to stop
+the deliveries, choose **Stop deliveries** on the Agent's page.
 
 ## What it does with a Run
 

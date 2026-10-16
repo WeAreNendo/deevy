@@ -158,18 +158,25 @@ Only the Run's own Agent may report, and screens say the cost is the client's es
 
 ## Be told rather than ask
 
-Set a webhook on the Agent and deevy posts each new Event in the Workspace to it, signed. A Run starting is
-a `run.started` Event, with the Run's id as its `subjectId`. The URL must be HTTPS, and the secret at least
-16 characters:
+Give the Agent a webhook and deevy posts each new Event from the Projects it was granted to it, signed. A Run
+starting is a `run.started` Event, with the Run's id as its `subjectId`; a Gate decided is `gate.approved` or
+`gate.rejected`, followed by `run.answered`.
+
+1. Open **Settings › Agents** and choose the Agent.
+2. Under **Webhook**, enter the **Webhook URL**, which must be HTTPS, and a **Signing secret** of at least 16
+   characters, or choose **Generate**.
+3. Choose **Start deliveries**, and copy the secret: deevy never shows it again.
+
+The [CLI](/mcp-and-cli/cli/) does the same:
 
 ```bash
 deevy agents update <agent id> --webhook-url https://agent.example.com/hook --webhook-secret <the secret>
 ```
 
-The deliveries are every Event in the Workspace, not only the ones about the Agent's own Projects, so send
-them only to something you run. Check each delivery's `deevy-signature` header as [Webhooks](/webhooks/)
-describes, and keep asking every so often as well, so a delivery that never arrives costs time rather than a
-Run.
+Nothing from a Project the Agent was not granted is sent, and nothing that belongs to the Workspace rather
+than a Project. Check each delivery's `deevy-signature` header as [Webhooks](/webhooks/) describes, and keep
+asking every so often as well: without a webhook that is how the Agent finds its work, and with one it means
+a delivery that never arrives costs time rather than a Run.
 
 ## Use the API instead
 

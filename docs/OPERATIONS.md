@@ -1179,6 +1179,17 @@ sponsor. The URL must be `https`. The kind filter takes exact kinds (`issue.assi
 (`run.*`, every kind an Event about a Run carries); no filter means every kind, and no Project means every
 Project.
 
+An Agent's own webhook is the subscription its page sets (Settings, Agents, the Agent, **Webhook**, or
+`agents.update` with `webhookUrl` and `webhookSecret`; `deevy agents update --webhook-url --webhook-secret`
+from the CLI): it belongs to the Agent, and its Sponsor or an admin sets, moves and stops it there. What
+belongs to an Agent is owed only what that Agent may see, whatever the filter says: Events whose Project is
+one it was granted, and none from a Project it was not, nor any Event that has no Project (Members,
+invitations, Sockets, the Agent's own settings). That is the same wall `projectVisible` puts round every
+read an Agent makes, applied once per derivation with one read of the grants of the Agents among the
+subscriptions. Everything the reference runtime wakes for has a Project: `issue.assigned` and `run.started`
+for work handed to it, `gate.requested`, `gate.approved`/`gate.rejected` and `run.answered` for its Gates. A
+grant withdrawn stops the deliveries from that Project at once, `agent.project_revoked` included.
+
 The secret goes in and never comes out — not from the API, not from the Event log, not from `openapi.json` —
 so choose it yourself when you create the subscription and keep it where the receiver can read it. The same
 holds on the Agent's own page: setting an Agent's webhook URL for the first time asks for a secret too, and
@@ -1198,8 +1209,11 @@ The body is the Event row and nothing else: `seq`, `kind`, `workspaceId`, `proje
 `subjectId`, `actorMemberId`, `payload`, `createdAt`.
 
 A delivery that is refused is attempted eight times in all, waiting ten seconds after the first failure and
-doubling from there with a little jitter, capped at six hours. After the eighth, deevy gives up and appends a
-`webhook.exhausted` Event.
+doubling from there with a little jitter (0.9 to 1.2 times): 10, 20, 40, 80, 160, 320 and 640 seconds, so the
+longest wait is about ten minutes and the whole window about twenty, plus however long the background pass
+takes to come round. The backoff's six-hour ceiling is never reached at eight attempts. After the eighth,
+deevy gives up and appends a `webhook.exhausted` Event; an Agent that was down for longer finds its work by
+polling, which is what ADR-0003 pairs the retries with.
 Settings, Webhooks lists the recent attempts for a subscription with the status and the error each came back
 with, and can owe one again from the beginning.
 
@@ -1714,10 +1728,11 @@ to. Point it at a Docker instance or at a `workers.dev` origin and the only thin
 docker build -f apps/agent/Dockerfile --build-arg HARNESS=claude-code -t deevy-agent:claude-code .
 ```
 
-5. **Optionally, tell it rather than let it ask.** Set the Agent's webhook URL to the runtime's listener and
-   choose a secret; give the runtime the same secret as `DEEVY_AGENT_WEBHOOK_SECRET`. A delivery then starts a
-   Run when it is assigned instead of at the next poll. Polling stays on either way, so a missed delivery
-   costs latency and never a Run.
+5. **Optionally, tell it rather than let it ask.** On the Agent's page, under **Webhook**, set the URL to the
+   runtime's listener and choose or generate a secret (the CLI's `deevy agents update` does the same); give
+   the runtime the same secret as `DEEVY_AGENT_WEBHOOK_SECRET`. A delivery then
+   starts a Run when it is assigned instead of at the next poll, and only Events from the Agent's granted
+   Projects arrive. Polling stays on either way, so a missed delivery costs latency and never a Run.
 
 ### What it does with a Run
 

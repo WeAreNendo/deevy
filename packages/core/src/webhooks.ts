@@ -8,7 +8,14 @@
  *
  * Web-standard only (ADR-0006): `crypto.subtle`, never `node:crypto`.
  */
-import { delivery, webhookSubscription, type Db, type Event } from "@deevy/db";
+import {
+  delivery,
+  member,
+  projectGrant,
+  webhookSubscription,
+  type Db,
+  type Event,
+} from "@deevy/db";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FetchLike } from "./slack.ts";
 import { newId } from "./ids.ts";
@@ -106,9 +113,10 @@ function equal(left: string, right: string): boolean {
  * copied out of the Event, because the Event is the source (ADR-0003) and a
  * copy is a second one that can disagree with it.
  *
- * Two statements whatever the Workspace holds: the enabled subscriptions,
- * which `webhook_subscription_workspace_idx` answers and of which a Workspace
- * has a handful, and one multi-row insert.
+ * Three statements at most whatever the Workspace holds: the enabled
+ * subscriptions, which `webhook_subscription_workspace_idx` answers and of
+ * which a Workspace has a handful; the grants of the Agents among them, when
+ * there are any; and one multi-row insert.
  */
 export async function deriveWebhookDeliveries(db: Db, event: Event): Promise<string[]> {
   return deriveWebhookDeliveriesForMany(db, event.workspaceId, [event]);
@@ -126,8 +134,8 @@ const deliveryRowsPerInsert = 16;
  * writes undeliverable until this existed, which is the kind of thing that
  * only shows up when one slice adds a step to a tail another slice skips.
  *
- * Bounded the same way the sweeps are: one read of the subscriptions, then
- * chunked inserts.
+ * Bounded the same way the sweeps are: one read of the subscriptions, one of
+ * the grants when an Agent holds one of them, then chunked inserts.
  */
 export async function deriveWebhookDeliveriesForMany(
   db: Db,
@@ -140,16 +148,21 @@ export async function deriveWebhookDeliveriesForMany(
       id: webhookSubscription.id,
       kinds: webhookSubscription.kinds,
       projectId: webhookSubscription.projectId,
+      memberId: webhookSubscription.memberId,
+      memberKind: member.kind,
     })
     .from(webhookSubscription)
+    .leftJoin(member, eq(member.id, webhookSubscription.memberId))
     .where(
       and(eq(webhookSubscription.workspaceId, workspaceId), isNull(webhookSubscription.disabledAt)),
     );
   if (subscriptions.length === 0) return [];
+  const grants = await agentGrants(db, workspaceId, subscriptions);
 
   const rows = events.flatMap((event) =>
     subscriptions
       .filter((subscription) => wants(subscription, event))
+      .filter((subscription) => sees(grants, subscription, event))
       .map((subscription) => ({
         id: newId("delivery"),
         workspaceId,
@@ -176,6 +189,60 @@ export async function deriveWebhookDeliveriesForMany(
   // that ran a second time hands back nothing, so nothing is enqueued for a
   // delivery something else is already carrying (events.ts).
   return written;
+}
+
+/**
+ * The Projects each Agent among the subscriptions was granted, in one read
+ * whatever the batch holds. Joined through the subscriptions rather than
+ * listing the Agents' ids, so the statement binds the Workspace and nothing
+ * that grows with it (D1 caps bound parameters at 100).
+ *
+ * Every Agent that holds a subscription has an entry, an empty one when it was
+ * granted nothing, so that "no grants" reads as "sees nothing" and never as
+ * "not scoped".
+ */
+async function agentGrants(
+  db: Db,
+  workspaceId: string,
+  subscriptions: Array<{ memberId: string | null; memberKind: string | null }>,
+): Promise<Map<string, Set<string>>> {
+  const grants = new Map<string, Set<string>>();
+  for (const subscription of subscriptions) {
+    if (subscription.memberKind === "agent" && subscription.memberId) {
+      grants.set(subscription.memberId, new Set());
+    }
+  }
+  if (grants.size === 0) return grants;
+  const rows = await db
+    .selectDistinct({ memberId: projectGrant.memberId, projectId: projectGrant.projectId })
+    .from(projectGrant)
+    .innerJoin(webhookSubscription, eq(webhookSubscription.memberId, projectGrant.memberId))
+    .where(
+      and(eq(webhookSubscription.workspaceId, workspaceId), isNull(webhookSubscription.disabledAt)),
+    );
+  for (const row of rows) grants.get(row.memberId)?.add(row.projectId);
+  return grants;
+}
+
+/**
+ * Whether the Member a subscription belongs to may see this Event at all,
+ * which is a wall where `wants` is a filter. An Agent sees only the Projects
+ * it was granted, and an ungranted Project does not exist to it
+ * (`projectVisible`, ADR-0004), so its webhook is owed nothing from one — and
+ * nothing that belongs to no Project, because a Workspace's own Events
+ * (Members, invitations, Sockets) are administration, which an Agent never
+ * reads. A generic subscriber is the Workspace's; a subscription can only be
+ * made for an Agent, and one naming a Human would see what a Human sees,
+ * which is every Project.
+ */
+function sees(
+  grants: Map<string, Set<string>>,
+  subscription: { memberId: string | null },
+  event: Pick<Event, "projectId">,
+): boolean {
+  const granted = subscription.memberId ? grants.get(subscription.memberId) : undefined;
+  if (!granted) return true;
+  return event.projectId !== null && granted.has(event.projectId);
 }
 
 /**
