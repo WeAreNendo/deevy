@@ -1,6 +1,6 @@
 import { member, user, workspace } from "@deevy/db";
 import { ORPCError, call, createRouterClient } from "@orpc/server";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createApp, isDefinedRefusal } from "../src/app.ts";
 import {
   bootstrapWorkspace,
@@ -188,36 +188,72 @@ describe("createApp", () => {
    * throwing — so a configured provider is not always a registered one, and
    * only the registered half is a button (docs/plans/sign-in.md).
    */
-  it("offers no button for a provider Better Auth could not register", async () => {
-    const context = anonymous();
+  describe("when the identity provider's discovery document", () => {
     const baseURL = "https://deevy.example.com";
     const pair = { clientId: "id", clientSecret: "secret" };
-    // An issuer in the reserved .example TLD: its discovery document is
-    // unreachable whether or not the machine running this has a network.
-    const providers: AuthProviders = {
-      github: pair,
-      oidc: { ...pair, issuer: "https://idp.example" },
-    };
-    expect(signInProviders({ providers }).map((provider) => provider.id)).toEqual([
-      "github",
-      "oidc",
-    ]);
+    const issuer = "https://idp.example";
+    const providers: AuthProviders = { github: pair, oidc: { ...pair, issuer } };
 
-    const auth = createAuth({
-      db: context.db,
-      env: { baseURL, secret: "test-secret-that-is-at-least-32-characters", providers },
-    });
-    const app = createApp({
-      db: context.db,
-      auth,
-      baseURL,
-      signInProviders: signInProviders({ providers }),
-    });
-    const body = (await (await app.request(`${baseURL}/api/health/ping`)).json()) as {
-      providers: Array<{ id: string }>;
+    /**
+     * The buttons a fresh instance offers, with the discovery document
+     * answered by `discover` instead of the network: Better Auth fetches it
+     * through the global `fetch` while it initialises, and this test must
+     * not depend on a resolver, a connection or a timeout.
+     */
+    const offered = async (discover: () => Promise<Response>) => {
+      const asked: string[] = [];
+      const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+        asked.push(input instanceof Request ? input.url : String(input));
+        return discover();
+      });
+      try {
+        const context = anonymous();
+        const auth = createAuth({
+          db: context.db,
+          env: { baseURL, secret: "test-secret-that-is-at-least-32-characters", providers },
+        });
+        const app = createApp({
+          db: context.db,
+          auth,
+          baseURL,
+          signInProviders: signInProviders({ providers }),
+        });
+        const body = (await (await app.request(`${baseURL}/api/health/ping`)).json()) as {
+          providers: Array<{ id: string }>;
+        };
+        return { ids: body.providers.map((provider) => provider.id), asked };
+      } finally {
+        fetch.mockRestore();
+      }
     };
 
-    expect(body.providers.map((provider) => provider.id)).toEqual(["github"]);
+    it("cannot be fetched, offers no button for the provider Better Auth skipped", async () => {
+      // Configured, so the list built from the environment alone has it.
+      expect(signInProviders({ providers }).map((provider) => provider.id)).toEqual([
+        "github",
+        "oidc",
+      ]);
+
+      const { ids, asked } = await offered(() => Promise.reject(new TypeError("fetch failed")));
+
+      expect(asked).toEqual([`${issuer}/.well-known/openid-configuration`]);
+      expect(ids).toEqual(["github"]);
+    });
+
+    it("answers, offers its button beside the others", async () => {
+      const document = {
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        userinfo_endpoint: `${issuer}/userinfo`,
+        jwks_uri: `${issuer}/jwks`,
+        id_token_signing_alg_values_supported: ["RS256"],
+      };
+
+      const { ids } = await offered(async () => Response.json(document));
+
+      expect(ids).toEqual(["github", "oidc"]);
+    });
   });
 
   it("sends a browser that comes back from linking an account while signed out to say so", async () => {

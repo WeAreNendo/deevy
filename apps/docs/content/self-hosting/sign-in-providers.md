@@ -38,7 +38,9 @@ the sign-in, or deevy signs you in on an address nobody visits.
 ## How the sign-in page offers them
 
 The sign-in page shows a **Continue with …** button for each provider you configured, in this order:
-GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian, then your own identity provider.
+GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian, then your own identity provider. A provider
+deevy couldn't set up gets no button, so every button on the page is one that can start a sign-in; see
+[Your own identity provider](#your-own-identity-provider) for the one way that happens.
 
 - To change the order, set `DEEVY_SIGN_IN_ORDER` to the providers to put first, comma-separated, such as
   `oidc,github`. The rest follow in the usual order.
@@ -157,9 +159,9 @@ deevy asks for `openid`, `profile` and `email` only, uses PKCE, and verifies the
 document must name an issuer and a `jwks_uri`.
 
 deevy reads the discovery document **once, when it starts**. If your provider can't be reached at that
-moment, deevy skips it with a line in its log, and signing in with it fails until deevy restarts. Because
-the first sign-in of any kind waits for that read, an issuer that hangs delays every provider's first sign-in
-too. Point `DEEVY_OIDC_ISSUER` at something reachable, or leave it unset.
+moment, deevy skips it with a line in its log, and the sign-in page offers the other providers without it.
+Its button comes back when deevy starts again: restart deevy, or, on Cloudflare Workers, deploy it again. Because the sign-in page waits for that read, an issuer that hangs delays every button on it, not
+only its own. Point `DEEVY_OIDC_ISSUER` at something reachable, or leave it unset.
 
 ## Which addresses count
 
@@ -201,6 +203,12 @@ then what to match on:
 - **Email domain**, such as `example.com`: anyone whose verified address is at that domain.
 - **GitHub organization**, by its login, such as `acme`: anyone who signs in with GitHub and belongs to it.
 - **GitLab group**, by its path, such as `acme/platform`: anyone who signs in with GitLab and belongs to it.
+
+deevy asks GitHub or GitLab itself who belongs, through the account somebody signed in with, so
+**GitHub organization** is offered only when GitHub is one of your sign-in providers, and **GitLab group**
+only when GitLab is. If you take a provider away later, its rules stay listed, each with a line saying it
+lets nobody in until people can sign in here with that provider again. Remove them, or bring the provider
+back.
 
 Until there is a rule, the admin is the only one who can get in, apart from those they invite.
 

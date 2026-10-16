@@ -3,7 +3,7 @@ import { pagePolicy, signInProviders } from "@deevy/core";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { readEnv } from "../src/env.ts";
 import { fetchClientMetadataResource as strictTransport } from "../src/cimd.ts";
 import { buildServer } from "../src/server.ts";
@@ -96,6 +96,37 @@ describe("server", () => {
     expect(authEnv.fetchClientMetadataResource).toBe(strictTransport);
     expect(authEnv.fetchClientMetadataResource).not.toBe(shapeCheckTransport);
     close();
+  });
+
+  /**
+   * The entry's half of what `packages/core/tests/app.test.ts` decides: the
+   * sign-in page draws what `health.ping` reports, which is what Better Auth
+   * registered, so an identity provider that could not be reached when the
+   * server started leaves no button that can only fail. Asserted here because
+   * that answer depends on the entry handing `createApp` its auth instance.
+   */
+  it("offers no button for an identity provider it could not reach at startup", async () => {
+    // The discovery fetch is answered here, so nothing leaves the machine.
+    const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    try {
+      const env = readEnv({
+        GITHUB_CLIENT_ID: "gh",
+        GITHUB_CLIENT_SECRET: "gh-secret",
+        DEEVY_OIDC_ISSUER: "https://idp.example",
+        DEEVY_OIDC_CLIENT_ID: "oidc",
+        DEEVY_OIDC_CLIENT_SECRET: "oidc-secret",
+      });
+      const { app, close } = buildServer({ ...testEnv(), providers: env.providers });
+      const body = (await (await app.request("/api/health/ping")).json()) as {
+        providers: Array<{ id: string }>;
+      };
+      close();
+
+      expect(fetch).toHaveBeenCalled();
+      expect(body.providers.map((provider) => provider.id)).toEqual(["github"]);
+    } finally {
+      fetch.mockRestore();
+    }
   });
 });
 

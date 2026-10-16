@@ -29,7 +29,7 @@ and on a Worker; where one only applies to one of them, it says so.
 ## Sign-in providers
 
 A provider is offered when both its client ID and secret are set; your own identity provider also needs
-its issuer. Every callback is `${BETTER_AUTH_URL}/api/auth/callback/<provider>`. The client secrets are
+its issuer, and is offered only if deevy could read its discovery document as it started. Every callback is `${BETTER_AUTH_URL}/api/auth/callback/<provider>`. The client secrets are
 credentials. See [Sign-in providers](/self-hosting/sign-in-providers/).
 
 | Variable                   | Default              | What it does                                                                                                                                                                                |

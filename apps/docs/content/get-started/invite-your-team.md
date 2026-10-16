@@ -59,8 +59,9 @@ until one of its owners approves deevy, once, in the organization's settings on 
 **Third-party access**. Until then the rule lets nobody in; invitations still work.
 :::
 
-**GitLab group** is offered too, but it matches only people who sign in with GitLab, which deevy Cloud
-doesn't offer. Use an email domain or invitations instead.
+There is no GitLab group rule on deevy Cloud: it would match only people who sign in with GitLab, and
+deevy Cloud doesn't offer GitLab sign-in. For a team that works in GitLab, use an email domain or
+invitations.
 
 ## What a new Member sees
 

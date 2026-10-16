@@ -5,7 +5,7 @@ import { AllowlistRuleSchema } from "../schemas.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import { NoInput, defineOperation } from "./registry.ts";
-import { AllowlistRuleInput } from "./shared.ts";
+import { AllowlistRuleInput, allowlistRuleSignIn } from "./shared.ts";
 import { newId } from "../ids.ts";
 
 export const allowlist = {
@@ -36,6 +36,16 @@ export const allowlist = {
     input: AllowlistRuleInput,
     output: AllowlistRuleSchema,
     handler: async ({ input, context }) => {
+      // A rule decided by a provider's account is a rule that admits nobody
+      // where nobody signs in with that provider, which an admin could not
+      // tell from the saved chip. What this deployment offers is what
+      // `health.ping` reports: configured, and registered (app.ts).
+      const needs = allowlistRuleSignIn[input.kind];
+      if (needs && !context.signInProviders?.some((offered) => offered.id === needs.id)) {
+        throw new ORPCError("PRECONDITION_FAILED", {
+          message: `Nobody can sign in here with ${needs.label}, so a ${needs.rule} rule would let nobody in. Add an email domain rule or invite people instead.`,
+        });
+      }
       const existing = await context.db.query.allowlistRule.findFirst({
         where: { workspaceId: context.workspace.id, kind: input.kind, value: input.value },
       });
