@@ -17,11 +17,14 @@ You need to be an admin in deevy, signed in to GitHub in the same browser.
 1. In deevy, go to **Settings › Sockets** and choose **Connect GitHub**.
 2. Give it a **Name**, such as `acme on GitHub`. GitHub names the App with it, and deevy names the Socket.
    GitHub App names are unique across GitHub, so pick one that is yours.
-3. Choose **Create the App on GitHub**, then **Continue on GitHub**.
-4. GitHub shows the App it is about to make, with its webhook already pointed at your Workspace and the
+3. If the repositories belong to an organization, put its login on GitHub in **Organization**, such as
+   `acme`. Leave it empty for repositories on your own account. See
+   [For an organization's repositories](#for-an-organizations-repositories).
+4. Choose **Create the App on GitHub**, then **Continue on GitHub**.
+5. GitHub shows the App it is about to make, with its webhook already pointed at your Workspace and the
    permissions below. Create it.
-5. GitHub sends you straight on to install it. Choose the repositories deevy should work, and install.
-6. GitHub sends you back to the Socket's page in deevy, which lists where the App is installed under
+6. GitHub sends you straight on to install it. Choose the repositories deevy should work, and install.
+7. GitHub sends you back to the Socket's page in deevy, which lists where the App is installed under
    **Where it is installed**.
 
 Create the App within an hour of choosing **Create the App on GitHub**. deevy refuses a return from GitHub
@@ -39,17 +42,25 @@ An App installed nowhere sees no repository, so nothing can be bound to it. To a
 | Pull requests | Read and write | So deevy can open the pull request for a Run.                     |
 | Metadata      | Read           | GitHub requires it.                                               |
 
-It listens for issues, issue comments, sub-issues, labels and repositories, and is private to the account
-that made it.
+It listens for issues, issue comments, sub-issues, labels and repositories. It is private, so only the
+account that owns it can install it: your own, or the organization you named.
 
 ## For an organization's repositories
 
-**Create the App on GitHub** always makes the App on your own GitHub account, and makes it private. GitHub
-installs a private App only on the account that owns it, so for an organization's repositories that path
-stops at the install step: the organization is not offered.
+GitHub installs a private App only on the account that owns it. An App made on your own account can never
+be installed on an organization's repositories, so for those the App has to belong to the organization:
+put the organization's login in **Organization** when you create it.
 
-For an organization, the App has to belong to the organization. An owner of the organization makes it
-there, and you paste it into deevy:
+- **Making the App there** takes an owner of the organization, or one of its GitHub App managers.
+- **Installing it** on the organization's repositories takes an owner of the organization, or a repository
+  admin for the repositories they administer, unless the organization's owners have turned that off.
+
+The App then belongs to the organization, in its settings on GitHub under **Developer settings › GitHub
+Apps**, where its owners and App managers can change it.
+
+### An App the organization already has
+
+An organization that makes its Apps centrally can make one by hand and paste it into deevy:
 
 1. In the organization's settings on GitHub, under **Developer settings › GitHub Apps**, create a GitHub App
    with the permissions in the table above, subscribed to the **Issues**, **Issue comment**, **Sub issues**,
@@ -64,8 +75,7 @@ there, and you paste it into deevy:
 5. Install the App on the organization's repositories from the App's own page on GitHub. GitHub tells deevy,
    and the Socket's page lists the organization under **Where it is installed**.
 
-The same path suits an organization that makes its Apps centrally. An App has one webhook address, so use
-one App for one Socket.
+An App has one webhook address, so use one App for one Socket.
 
 ## Bind a Project to a repository
 
@@ -128,6 +138,17 @@ The app to approve is deevy's own sign-in app, which every Workspace on deevy Cl
 The app to approve is the GitHub OAuth App you set your deevy up with, which asks for the `read:org` scope
 for exactly this. See [Sign-in providers](/self-hosting/sign-in-providers/).
 :::
+
+## Change the webhook secret
+
+deevy checks every delivery against the App's webhook secret. To change it, go to the Socket's page and,
+under **What it signs with**, either:
+
+- **Type a new one on GitHub.** Set a new webhook secret in the App's settings on GitHub, paste the same
+  value into **New secret from GitHub**, and choose **Use the new secret**. deevy keeps accepting the old
+  one for a day, so you can change the two in either order.
+- **Mint one in deevy.** Choose **Mint a webhook secret**. deevy shows the new one once and stops accepting
+  the old one straight away, so paste it into the App's settings on GitHub at once.
 
 ## When your deevy's address changes
 

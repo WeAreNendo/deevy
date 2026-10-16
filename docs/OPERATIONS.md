@@ -28,9 +28,10 @@ about running deevy applies to a hosted Workspace too; what differs is this.
   sign-in: being in one signs you in to no other. A GitHub organization that restricts OAuth App access has to
   approve the deevy App before a `github_org` allowlist rule can see that you belong to it; until then the
   rule admits nobody, and an invitation still works.
-- **Your tools connect as they would to your own deevy.** A GitHub Socket is a GitHub App created in your
-  organization by the manifest flow, pointed at your Workspace's address; Linear, GitLab, Notion and Slack
-  are set up as in "Connecting your tools", with your Workspace's URLs.
+- **Your tools connect as they would to your own deevy.** A GitHub Socket is a GitHub App created by the
+  manifest flow, pointed at your Workspace's address — in your organization when **Connect GitHub** is given
+  its login, on your own account otherwise; Linear, GitLab, Notion and Slack are set up as in "Connecting your
+  tools", with your Workspace's URLs.
 - **Where your data is.** Your Workspace's database is created in the European Union and stays there, and so
   do its nightly backups, kept 30 days; its last 30 days can also be restored to any point. The edge that
   terminates TLS and routes a request is Cloudflare's global network. Your Sockets' credentials are sealed
@@ -1459,6 +1460,20 @@ laptop with no tunnel still sees records arrive, change and close, and routes th
 What polling cannot bring is what only a delivery carries: a comment, and so a `/approve` in one, and a
 click on a Slack button. Those need the public address.
 
+### What a tool signs with
+
+Every delivery is checked against the Socket's webhook secret, and the Socket's page changes it under **What
+it signs with**, in the way the tool allows. **Where the tool makes the secret** — Slack's signing secret,
+the signing secret on a Linear application's webhook, or a GitHub App's or a GitLab webhook's secret when
+you change it there — paste the new one into **New secret from** the tool and choose **Use the new secret**
+(`sockets.update` with `webhookSecret`). deevy keeps taking the old one for a day (`PREVIOUS_SECRET_MS`), so
+the two sides can change in either order. **Where deevy can mint one** — GitHub and GitLab, whose settings
+take a secret typed in — **Mint a webhook secret** (`sockets.rotate`) shows a new one once and replaces the
+old at once, so it goes into the tool straight away. Slack and Linear are offered no Mint, because nothing
+deevy minted can be pasted into them. A Notion Socket has no such section: Notion signs with the
+verification token it sent, which **Verifying the webhook** shows, and a minted secret would replace it and
+break the webhook.
+
 ### Working in GitHub
 
 A GitHub App is a Socket, for a Project's issues and its code at once: connect it under **Settings › Sockets ›
@@ -1468,9 +1483,19 @@ metadata (read) — so GitHub makes the App and hands its credentials back witho
 out of a browser. Once GitHub has made it, you are sent straight on to its install page: install it on the
 repositories deevy should work, and GitHub sends you back. An App installed nowhere sees no repository, so
 nothing can be bound to it; the Socket's page says where it is installed, under **Where it is installed**,
-with a link to install it on more. **Paste an App you already have** is the other way in, for an organisation
-that makes its Apps centrally: its id, its private key (PKCS#1 as GitHub gives it, or PKCS#8) and its webhook
-secret.
+with a link to install it on more.
+
+**Whose App it is.** The manifest says `public: false`, and GitHub installs a private App only on the account
+that owns it. With **Organization** empty the manifest goes to `github.com/settings/apps/new` and the App is
+the person's own, which no organization's repository can install. With an organization's login there — checked
+as GitHub checks one: letters, digits and single hyphens, neither first nor last, at most 39 — it goes to
+`github.com/organizations/<org>/settings/apps/new` and the App is the organization's, which only an owner of the
+organization or one of its GitHub App managers may make; installing it takes an owner, or a repository admin
+for the repositories they administer. Nothing after the redirect differs: the conversion answers the App's page
+as `github.com/apps/<slug>` whoever owns it, and its install page offers the account that does.
+
+**Paste an App you already have** is the other way in, for an organisation that makes its Apps centrally: its
+id, its private key (PKCS#1 as GitHub gives it, or PKCS#8) and its webhook secret.
 
 Bind a Project to a repository under **Settings › Projects › Bind a Project**. A tool that holds code binds
 the repository as both — where the Project's issues come from, and where its Agents push — unless you untick
@@ -1671,7 +1696,8 @@ because a code handed over by somebody else would link _their_ account. Codes ar
 
 Slack signs every request with a timestamp, and one more than five minutes from deevy's clock, either way, is
 refused however it is signed, as Slack's docs say.
-Slack's signing secret is rotated in Slack; paste the new one with `sockets.update` (`webhookSecret`) and
+Slack's signing secret is rotated in Slack; paste the new one on the Socket's page, under **What it signs
+with** ([What a tool signs with](#what-a-tool-signs-with)), or with `sockets.update` (`webhookSecret`), and
 deevy keeps taking the old one for a day, so the two can be changed in either order.
 
 When Slack refuses something, deevy says it in words with Slack's code: "deevy is not in that channel:

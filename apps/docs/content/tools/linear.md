@@ -93,6 +93,13 @@ own page. An account in a different Linear workspace is refused. See
 Rotating the application's client secret in Linear ends every token deevy made with the old one. Connect
 the Socket again with the new secret.
 
+## Change the webhook signing secret
+
+Linear makes the webhook's signing secret, and deevy cannot make one for it. When it changes in Linear,
+open the Socket's page under **Settings › Sockets** and, under **What it signs with**, paste the new one
+into **New secret from Linear** and choose **Use the new secret**. deevy keeps accepting the old one for a
+day, so you can change the two in either order.
+
 :::note[deevy Cloud]
 The addresses deevy shows are under your Workspace's own address, `https://app.deevy.dev/<address>/…`. The
 OAuth application is yours, in your Linear workspace, and nobody else's Workspace uses it.

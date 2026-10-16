@@ -83,14 +83,20 @@ and there is nothing to click in Slack.
 
 ## Rotate the signing secret
 
-The signing secret is rotated in Slack. Give deevy the new one with the [CLI](/mcp-and-cli/cli/):
+Slack makes the signing secret, so you rotate it in Slack and give deevy the new one:
+
+1. In the app's settings in Slack, under **Basic Information**, regenerate the **Signing Secret** and copy
+   it.
+2. In deevy, open the Socket's page under **Settings › Sockets**. Under **What it signs with**, paste it
+   into **New secret from Slack** and choose **Use the new secret**.
+
+deevy keeps accepting the old secret for a day, so you can change the two in either order.
+
+The [CLI](/mcp-and-cli/cli/) does the same, with the Socket's id from its page's address:
 
 ```bash
 deevy sockets update <socket id> --webhook-secret <the new signing secret>
 ```
-
-The Socket's id is in its page's address under **Settings › Sockets**. deevy keeps accepting the old secret
-for a day, so you can change the two in either order.
 
 Slack signs every request with a timestamp, and deevy refuses one more than five minutes from its own clock.
 

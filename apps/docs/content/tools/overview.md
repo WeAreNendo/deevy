@@ -127,8 +127,13 @@ Choose a Socket under **Settings › Sockets** to see how it is doing:
   still works. **Pause** stops deevy acting on what the tool says while keeping everything; **Resume**
   starts it again.
 - **Where it delivers** is the address the tool sends what happens to. It is not a secret.
-- **What it signs with** says whether deevy holds the secret the tool signs its deliveries with. **Mint a
-  webhook secret** makes a new one and shows it once, for you to paste into the tool.
+- **What it signs with** says whether deevy holds the secret the tool signs its deliveries with, and
+  changes it. Where the tool makes the secret, or you change it there, paste the new one into **New
+  secret from** the tool and choose **Use the new secret**: deevy keeps accepting the old one for a day,
+  so you can change the two in either order. For GitHub and GitLab, **Mint a webhook secret** makes one
+  instead and shows it once, and deevy stops accepting the old one straight away. Slack and Linear make
+  their own, so deevy mints none for them, and a Notion Socket has no such section: Notion signs with the
+  token under **Verifying the webhook**.
 - **What it has said lately** lists each delivery and what deevy made of it.
 - **Disconnect** is at the bottom.
 

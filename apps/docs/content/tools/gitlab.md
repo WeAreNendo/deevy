@@ -49,8 +49,15 @@ If you would rather GitLab signed each delivery than sent the secret with it, le
 generate a signing token on the webhook in GitLab, paste it into **Signing token** in deevy, and choose
 **Use the signing token**. deevy then refuses a signed delivery more than five minutes old.
 
-If you lose the secret token, choose **Mint a webhook secret** on the Socket's page and paste the new one
-into each webhook.
+To change the secret token or the signing token later, go to the Socket's page and, under **What it signs
+with**, either:
+
+- **Paste one from GitLab.** Generate a new signing token on the webhook in GitLab, or type a new secret
+  token there, paste the same value into **New secret from GitLab**, and choose **Use the new secret**.
+  deevy keeps accepting the old one for a day, so you can change the two in either order.
+- **Mint one in deevy.** Choose **Mint a webhook secret**, which is also the way back if you lose the secret
+  token. deevy shows it once and stops accepting the old one straight away, so paste it into each webhook
+  as its secret token at once.
 
 ## Bind a Project to a GitLab project
 

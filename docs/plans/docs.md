@@ -86,11 +86,10 @@ these are the disagreements, each still to be settled on the code's side or OPER
 - **An Agent's own webhook was sent every Event of the Workspace**, Projects it was not granted included.
   Settled on the code's side: `deriveWebhookDeliveriesForMany` now owes a subscription that belongs
   to an Agent only the Events of its granted Projects, with one read of the grants, and webhooks.md says so.
-- **The GitHub App deevy creates is the person's own**: the manifest goes to `github.com/settings/apps/new`
-  with `public: false`, and a private App installs only on its owner's account, so the guided path
-  dead-ends for an organization's repositories. tools/github.md and get-started/connect-a-tool.md give the
-  way that works (an organization owner makes the App, **Paste an App you already have**); OPERATIONS.md
-  says the flow makes the App "in your organization", which it does not. Proposed as its own change.
+- **The GitHub App deevy created was always the person's own**, so a private App no organization's
+  repository could install. Settled: **Connect GitHub** takes an optional **Organization**, checked as GitHub
+  checks a login, and posts the manifest to `github.com/organizations/<org>/settings/apps/new`, so the App
+  is the organization's; the pages and OPERATIONS.md say so and who on GitHub may make and install it.
 - **The Human the work is for, excluded from a Checkpoint, could neither approve nor reject**, where
   ADR-0020 says they may still reject. Settled as ADR-0020 has it, after Matt chose it: `rulingRefusal`
   refuses them only an approval, at every door through `recordRuling`, and the Gate's view gains
@@ -129,7 +128,9 @@ these are the disagreements, each still to be settled on the code's side or OPER
   commands the CLI cannot run; fixed here.
 - Setting an Agent's webhook had no screen; it is now the **Webhook** section of the Agent's page, and the
   pages say so, with the CLI as the other way.
-- Rotating a Slack Socket's signing secret has no screen and is done from the CLI on the pages.
+- Rotating a Slack Socket's signing secret had no screen and was done from the CLI on the pages. Settled:
+  the Socket's page takes a tool's new secret under **What it signs with** wherever the tool makes it,
+  offers **Mint** only for GitHub and GitLab and nothing for Notion, and tools/slack.md does it there.
 - deevy Cloud had no support address beyond `privacy@deevy.dev`. Settled: `support@deevy.dev`, forwarded
   by Email Routing beside it, is on cloud/support.md, the console's suspended notice and the site's
   footer (WeAreNendo/deevy-cloud#13).

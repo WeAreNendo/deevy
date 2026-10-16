@@ -94,6 +94,39 @@ describe("the App an operator just made", () => {
     expect(result.redirectTo).toBe("https://github.com/apps/deevy-acme/installations/new");
   });
 
+  it("finishes an App an organization owns exactly as one a person owns", async () => {
+    // Made from `github.com/organizations/acme-inc/settings/apps/new`, which is
+    // what Connect GitHub posts to when it is given an organization. The App's
+    // page is `/apps/<slug>` whoever owns it, and its install page offers the
+    // account that owns it, so nothing here may read the owner's own address.
+    const { setup } = githubReturning({
+      "POST /app-manifests/org123/conversions": {
+        id: 2390117,
+        slug: "acme-inc-on-github",
+        name: "acme-inc on GitHub",
+        pem: privateKey,
+        webhook_secret: "whsec_github_made_this_one",
+        client_id: "Iv23li9f8e7d6c5b4a",
+        client_secret: "0123456789abcdef0123456789abcdef01234567",
+        owner: {
+          login: "acme-inc",
+          type: "Organization",
+          html_url: "https://github.com/acme-inc",
+        },
+        html_url: "https://github.com/apps/acme-inc-on-github",
+      },
+    });
+
+    const result = await setup({ params: { code: "org123" } });
+
+    expect(result.config).toMatchObject({
+      appId: "2390117",
+      htmlUrl: "https://github.com/apps/acme-inc-on-github",
+    });
+    expect(result.identity?.login).toBe("acme-inc-on-github[bot]");
+    expect(result.redirectTo).toBe("https://github.com/apps/acme-inc-on-github/installations/new");
+  });
+
   it("refuses a code GitHub will not take, rather than half-connecting", async () => {
     const { setup } = githubReturning({});
 

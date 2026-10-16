@@ -344,7 +344,9 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   a secret is shown once, in mono, and said to be shown once.
 - **A Socket's page** (`routes/settings/socket.tsx`) answers what an operator actually asks: is the tool
   talking to deevy or is deevy asking it (`How it is doing`), where it delivers (`region "Where it delivers"`,
-  with **Point GitHub at this address** for an App), what it signs with, and what it has said lately
+  with **Point GitHub at this address** for an App), what it signs with (`signingOf`: a field for the tool's
+  new secret where the tool makes one, **Mint** where deevy may, and no section for Notion, whose
+  verification token is its secret), and what it has said lately
   (`table "Deliveries"`). A section that only one tool has — Notion's `region "Verifying the webhook"` and
   "Who commented", Linear's "Assigning issues to deevy", GitHub's "Where it is installed" with a link to
   install the App on more repositories — keys off `socket.provider`; what a tool _can_ do is the server's to
@@ -425,13 +427,16 @@ awaiting your answer"`, `region "Your Agents' Runs"`.
 - **Inbox.** `heading "Inbox"`, `list "Notifications"`, `checkbox "Select <what it says>"`, `toolbar
 "Selection"`, `Mark read`, `Mark all read`, the All / Unread toggles.
 - **Sockets.** `heading "Sockets"`, `list "Sockets"`, `group "Connect a tool"` with `Connect <tool>`;
-  GitHub's `form "Create the App on GitHub"` and `Paste an App you already have`; Slack's `Show the app
+  GitHub's `Organization` (an organization's login, or empty for the person's own account), `form "Create
+the App on GitHub"` and `Paste an App you already have`; Slack's `Show the app
 manifest` and `App manifest`; Linear's `Show the addresses`, `Callback URLs`, `Client ID`, `Client secret`,
   `Webhook signing secret`, `Install deevy as an agent`; GitLab's `GitLab URL`, `Access token`, `Signing
 token`, `Use the signing token`; Notion's `Installation access token`, link `Notion's Developer portal` and link `Open the Socket's page`;
   `Connect`, `Done`; every secret field is `type="password"` with `autocomplete="off"`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
 at this address`, `region "Where it is installed"` with link `Install it` or `Install it on more
-repositories`, `Pause`, `Mint a webhook secret`, `region "Verifying the webhook"` with `Show the token`,
+repositories`, `Pause`, `region "What it signs with"` with `New secret from <tool>` and `Use the new secret`
+  (not for Notion) and `Mint a webhook secret` (GitHub, GitLab and the stub only), `region "Verifying the
+webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox
 "Container"`, `checkbox "Its code is here too…"`, `Name`, `Bind it`; `region "Binding"` with `combobox

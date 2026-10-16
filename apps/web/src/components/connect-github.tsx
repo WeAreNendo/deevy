@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { SecretInput } from "@/components/secret-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,13 @@ import { appURL } from "@/lib/base";
  * The manifest is posted to GitHub by the browser, so this is a real form with
  * a real action: deevy never sees the round trip, and the `state` is what
  * proves the redirect that lands afterwards started here (secrets.ts).
+ *
+ * The App is private, and GitHub installs a private App only on the account
+ * that owns it. Posted to `settings/apps/new` it is the person's own, which no
+ * organization's repository can install, so naming an organization posts it to
+ * that organization's settings instead and the App is the organization's.
+ * Nothing after the redirect cares which: the conversion answers the App's own
+ * page either way, and its install page offers whichever account owns it.
  */
 export interface GithubManifest {
   name: string;
@@ -60,16 +67,41 @@ export function githubManifest(input: {
   };
 }
 
+/**
+ * Whether GitHub would take this as an account's login: letters, digits and
+ * single hyphens, neither first nor last, and at most 39 of them — GitHub's
+ * own rule, the same for a user and an organization.
+ */
+export function isGithubLogin(value: string): boolean {
+  return /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i.test(value);
+}
+
+/**
+ * Where the manifest is posted: the person's own settings, or an
+ * organization's, which GitHub opens only to its owners and its App managers.
+ */
+export function manifestAction(state: string, organization?: string): string {
+  const settings = organization
+    ? `organizations/${encodeURIComponent(organization)}/settings`
+    : "settings";
+  return `https://github.com/${settings}/apps/new?state=${encodeURIComponent(state)}`;
+}
+
 export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
   const [paste, setPaste] = useState(false);
   const [name, setName] = useState("");
+  const [organization, setOrganization] = useState("");
   const [appId, setAppId] = useState("");
   const [privateKey, setPrivateKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [begun, setBegun] = useState<{
     manifest: GithubManifest;
     state: string;
+    /** The organization the App is made on; undefined for the person's own account. */
+    organization: string | undefined;
   } | null>(null);
+  const owner = organization.trim();
+  const ownerInvalid = owner !== "" && !isGithubLogin(owner);
 
   const begin = useMutation(
     orpc.sockets.begin.mutationOptions({
@@ -82,6 +114,7 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
             setupUrl: socket.setupUrl,
           }),
           state: socket.state,
+          organization: owner || undefined,
         });
       },
     }),
@@ -174,6 +207,31 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
           GitHub uses it to name the App, and deevy to name this connection.
         </FieldDescription>
       </Field>
+      <Field>
+        <FieldLabel htmlFor="github-organization">Organization</FieldLabel>
+        <Input
+          id="github-organization"
+          value={organization}
+          placeholder="acme"
+          autoComplete="off"
+          spellCheck={false}
+          readOnly={begun !== null}
+          aria-invalid={ownerInvalid ? true : undefined}
+          onChange={(changed) => setOrganization(changed.target.value)}
+        />
+        <FieldDescription>
+          For an organization&apos;s repositories, its login on GitHub: the App is then the
+          organization&apos;s, the only kind its repositories can install. Only an owner of the
+          organization or one of its GitHub App managers can make it there. Leave it empty for your
+          own account.
+        </FieldDescription>
+        {ownerInvalid ? (
+          <FieldError>
+            GitHub gives out no such login: letters, digits and single hyphens, with no hyphen first
+            or last, and no more than 39 of them.
+          </FieldError>
+        ) : null}
+      </Field>
 
       {begun ? (
         // A real form, posted by the browser: GitHub takes the manifest, makes
@@ -181,7 +239,7 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
         <form
           aria-label="Create the App on GitHub"
           method="post"
-          action={`https://github.com/settings/apps/new?state=${encodeURIComponent(begun.state)}`}
+          action={manifestAction(begun.state, begun.organization)}
           className="flex flex-col gap-2"
         >
           <input
@@ -191,7 +249,9 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
             value={JSON.stringify(begun.manifest)}
           />
           <p className="text-sm text-muted-foreground">
-            deevy has the name. GitHub makes the App and sends you straight back.
+            {begun.organization
+              ? `deevy has the name. GitHub makes the App in ${begun.organization} and sends you straight back.`
+              : "deevy has the name. GitHub makes the App and sends you straight back."}
           </p>
           <Button type="submit" className="w-fit">
             Continue on GitHub
@@ -200,7 +260,7 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
       ) : (
         <div className="flex items-center gap-2">
           <Button
-            disabled={!name.trim() || begin.isPending}
+            disabled={!name.trim() || ownerInvalid || begin.isPending}
             onClick={() => begin.mutate({ provider: "github", name: name.trim() })}
           >
             Create the App on GitHub
