@@ -108,6 +108,11 @@ these are the disagreements, each still to be settled on the code's side or OPER
   generated both secrets inline, so a new container signed everybody out and lost every Socket's
   credentials. Settled: the compose file asks for `DEEVY_SECRET` the way it asks for
   `BETTER_AUTH_SECRET`, and OPERATIONS.md generates both once, as self-hosting/docker.md does.
+- **A Run could be started for an Agent in a Project it was not granted**, found while scoping its
+  webhook: an assignment from `issues.create`, a mention in a comment, or a Default Agent whose grant was
+  taken back each made one, and `runs.list` hides an ungranted Project, so the Run waited for good. Settled:
+  the triggers start Runs only for Agents granted the Event's Project, `issues.create` refuses to assign an
+  Agent there, and taking a Project back from its Default Agent leaves the Project with no default.
 - **apps/cli/README.md** named a flag that does not exist (`--project-key`) and four of the eleven
   commands the CLI cannot run; fixed here.
 - Two jobs have no screen and are done from the CLI on the pages: setting an Agent's webhook, and rotating

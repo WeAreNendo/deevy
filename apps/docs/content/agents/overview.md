@@ -36,7 +36,7 @@ answers "No such Project", not a refusal.
 2. Repeat for each Project it should work in.
 
 To take a Project back, choose **×** beside it. Choosing an Agent as a Project's **Default Agent** grants it
-that Project as well.
+that Project as well, and taking the Project back from its Default Agent leaves the Project with no default.
 
 ## Give it work
 
@@ -48,7 +48,8 @@ With a Project granted, a record reaches the Agent when:
 - the Agent is the Project's **Default Agent**, and nothing else named anybody;
 - in Linear, somebody assigns the issue to deevy and the Agent is the Project's default.
 
-Each of these opens a Run for the Agent, waiting for it to start. An Agent has at most one open Run on a
+Each of these opens a Run for the Agent, waiting for it to start. In a Project the Agent wasn't granted,
+none of them does: a label or a mention naming it there starts nothing. An Agent has at most one open Run on a
 record at a time. See [Connecting your tools](/tools/overview/#how-a-record-reaches-an-agent).
 
 An Agent can also wake on a schedule. Under **Schedule** on its page, set **Wake** to an interval, from

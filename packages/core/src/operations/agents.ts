@@ -1,6 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { agent as agentTable, member as memberTable, user as userTable } from "@deevy/db";
+import {
+  agent as agentTable,
+  member as memberTable,
+  project as projectTable,
+  user as userTable,
+} from "@deevy/db";
 import { projectGrant as projectGrantTable } from "@deevy/db";
 import {
   AgentSchema,
@@ -425,6 +430,29 @@ export const agents = {
             subjectId: found.id,
             projectId: input.projectId,
           });
+          // A default that cannot see its Project would be handed every record
+          // nobody named and start no Run on any of them (triggers.ts), so
+          // taking the Project back from its default leaves it with none, and
+          // says so the way choosing one does.
+          const [cleared] = await context.db
+            .update(projectTable)
+            .set({ defaultAgentMemberId: null })
+            .where(
+              and(
+                eq(projectTable.id, input.projectId),
+                eq(projectTable.defaultAgentMemberId, found.id),
+              ),
+            )
+            .returning({ id: projectTable.id });
+          if (cleared) {
+            await appendEvent(context, {
+              kind: "project.updated",
+              subjectType: "project",
+              subjectId: cleared.id,
+              projectId: cleared.id,
+              payload: { defaultAgentMemberId: { from: found.id, to: null } },
+            });
+          }
         }
         return grantedProjects(context, found.id);
       },

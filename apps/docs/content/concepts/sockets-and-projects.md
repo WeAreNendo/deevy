@@ -80,7 +80,7 @@ nobody. The Agent a record went to is its assignee in deevy; the tool's own assi
 is not what puts an Agent to work.
 
 Mentioning an Agent through deevy's own account in a comment, such as `@deevy builder, try again` where deevy
-is called `deevy` in that tool, starts a Run for that Agent too.
+is called `deevy` in that tool, starts a Run for that Agent too, if it has been granted the Project.
 
 Whichever way it is named, an Agent has at most one Run open on a record at a time, so a record labelled
 twice, or mentioned while the Agent is already working, starts nothing new.

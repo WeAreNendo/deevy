@@ -1,4 +1,12 @@
-import { run as runTable, type Db, type Event, type Run } from "@deevy/db";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import {
+  member as memberTable,
+  projectGrant,
+  run as runTable,
+  type Db,
+  type Event,
+  type Run,
+} from "@deevy/db";
 import type { EventInput } from "./events.ts";
 import { openRunFor } from "./runs.ts";
 import { newId } from "./ids.ts";
@@ -105,9 +113,8 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
    * parent is visibly a Human's rather than silently nobody's.
    */
   if (!delegator) return [closed];
-  const [working] = await workingAgents(db, [delegator], event.workspaceId);
+  const [working] = await workingAgents(db, [delegator], event.workspaceId, parent.projectId);
   if (!working) return [closed];
-  if (!(await grantedProject(db, working, parent.projectId))) return [closed];
 
   const started = await startRun(db, {
     issueId: parent.id,
@@ -127,16 +134,6 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
 }
 
 /**
- * Whether this Agent may still see the Project it is about to be given work in.
- * A grant withdrawn between delegating and the last child finishing is a case
- * that will happen, and the answer is to start nothing.
- */
-async function grantedProject(db: Db, memberId: string, projectId: string): Promise<boolean> {
-  const found = await db.query.projectGrant.findFirst({ where: { memberId, projectId } });
-  return Boolean(found);
-}
-
-/**
  * Starts one Run per Agent among the candidates and hands back the Events they
  * deserve. Candidates are whoever the rule named; which of them is an Agent
  * that can still work is this function's business, in one query rather than
@@ -149,7 +146,9 @@ async function startRuns(
   trigger: Run["trigger"],
 ): Promise<EventInput[]> {
   const events: EventInput[] = [];
-  for (const agentMemberId of await workingAgents(db, candidates, event.workspaceId)) {
+  if (!event.projectId) return events;
+  const working = await workingAgents(db, candidates, event.workspaceId, event.projectId);
+  for (const agentMemberId of working) {
     const started = await startRun(db, {
       issueId: event.subjectId,
       agentMemberId,
@@ -172,21 +171,36 @@ async function agentsAmong(db: Db, memberIds: string[], workspaceId: string): Pr
 }
 
 /**
- * Of the Members named, those a Run is work for: a Human is not triggered, and
- * a suspended Member does nothing (docs/PLAN.md's Sponsor cascade). One query,
- * because a mention can name a whole Team.
+ * Of the Members named, those a Run in this Project is work for: a Human is not
+ * triggered, a suspended Member does nothing (docs/PLAN.md's Sponsor cascade),
+ * and an Agent sees only the Projects it was granted. Without that last rule a
+ * mention, an assignment, or a default Agent whose grant was taken back made a
+ * Run the Agent could never see: `runs.list` leaves an ungranted Project out,
+ * so it waited, pending, for good. One query, because a mention can name a
+ * whole Team.
  */
-async function workingAgents(db: Db, memberIds: string[], workspaceId: string): Promise<string[]> {
+async function workingAgents(
+  db: Db,
+  memberIds: string[],
+  workspaceId: string,
+  projectId: string,
+): Promise<string[]> {
   if (memberIds.length === 0) return [];
-  const rows = await db.query.member.findMany({
-    where: {
-      id: { in: memberIds },
-      workspaceId,
-      kind: "agent",
-      suspendedAt: { isNull: true },
-    },
-    columns: { id: true },
-  });
+  const rows = await db
+    .select({ id: memberTable.id })
+    .from(memberTable)
+    .innerJoin(
+      projectGrant,
+      and(eq(projectGrant.memberId, memberTable.id), eq(projectGrant.projectId, projectId)),
+    )
+    .where(
+      and(
+        inArray(memberTable.id, memberIds),
+        eq(memberTable.workspaceId, workspaceId),
+        eq(memberTable.kind, "agent"),
+        isNull(memberTable.suspendedAt),
+      ),
+    );
   return rows.map((row) => row.id);
 }
 
