@@ -586,14 +586,16 @@ describe(`the Runs feed: ${String(listingRuns)} statements a page`, () => {
 });
 
 /**
- * Saving a Project's Checkpoints reads the Project and what it replaces, the
- * active Humans it checks the policy against, replaces the rows, appends its
- * Event, and — where a save lowers Approvals — reads the open Gates of the
+ * Saving a Project's Checkpoints reads the Project, the active Humans it checks
+ * the policy against and the rows it changes, changes each in place, appends
+ * its Event, and — where a save lowers Approvals — reads the open Gates of the
  * lowered Checkpoints once, with their Rulings and Runs, then the list it
- * answers with. A Gate that passes then pays for its own writes; one that does
- * not costs nothing more, so many of them waiting is the same save as one.
+ * answers with. Removing a row, clearing who may rule, naming Humans and
+ * adding a Checkpoint cost a statement each only where a save does them. A
+ * Gate that passes then pays for its own writes; one that does not costs
+ * nothing more, so many of them waiting is the same save as one.
  */
-const savingCheckpoints = 9;
+const savingCheckpoints = 8;
 
 describe(`saving Checkpoints: ${String(savingCheckpoints)} statements, however many Gates are open`, () => {
   async function lowering(gates: number) {

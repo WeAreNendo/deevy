@@ -560,11 +560,12 @@ export const checkpoints = {
       // What it asked before, because a threshold lowered to what an open Gate
       // already has passes that Gate (ADR-0020), and only the old list says
       // what was lowered.
-      const before = await context.db.query.checkpoint.findMany({
-        where: { projectId: project.id },
-        columns: { name: true, approvalsRequired: true },
-      });
-      await setCheckpoints(context.db, project.id, context.workspace.id, input.checkpoints);
+      const before = await setCheckpoints(
+        context.db,
+        project.id,
+        context.workspace.id,
+        input.checkpoints,
+      );
 
       await appendEvent(context, {
         kind: "project.updated",

@@ -383,6 +383,107 @@ describe("what a Checkpoint may be set to", () => {
   });
 });
 
+/**
+ * A Gate links the Checkpoint row it was asked under, and the Slack message
+ * and the email read its threshold through that link. Saving replaced every
+ * row until 2026-10-16, so any save cut every open Gate loose and both said
+ * one approval whatever the Checkpoint wanted. A save now changes the rows it
+ * keeps in place.
+ */
+describe("saving a Project's Checkpoints", () => {
+  it("keeps every open Gate linked to its Checkpoint, lowered or not", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asPlanner, bob, carol, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 3 },
+        { name: "ship", approvalsRequired: 1, approverMemberIds: [bob.member.id] },
+      ],
+    });
+    const [plan, ship] = (await asAda.checkpoints.list({ projectSlug: seeded.project.slug }))
+      .checkpoints;
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Plan it",
+    });
+
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 1, approverMemberIds: [carol.member.id] },
+      ],
+    });
+
+    const listed = (await asAda.checkpoints.list({ projectSlug: seeded.project.slug })).checkpoints;
+    expect(listed).toMatchObject([
+      { id: plan?.id, name: "plan", approvalsRequired: 2, approverMemberIds: [] },
+      { id: ship?.id, name: "ship", approvalsRequired: 1, approverMemberIds: [carol.member.id] },
+    ]);
+    const row = await db.query.gateRequest.findFirst({
+      where: { id: asked.id },
+      with: { checkpointPolicy: true },
+    });
+    expect(row?.checkpointId).toBe(plan?.id);
+    expect(row?.checkpointPolicy?.approvalsRequired).toBe(2);
+  });
+
+  it("cuts loose only the Gates of a Checkpoint it removes, which then want the default's one", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asPlanner, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 2 },
+      ],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Plan it",
+    });
+
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2 }],
+    });
+
+    const row = await db.query.gateRequest.findFirst({ where: { id: asked.id } });
+    expect(row).toMatchObject({ status: "open", checkpointId: null });
+    expect((await asAda.gates.get({ requestId: asked.id })).policy).toMatchObject({
+      id: null,
+      approvalsRequired: 1,
+    });
+  });
+
+  it("links an open Gate to a Checkpoint added after it was asked at that name", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asPlanner, run, seeded } = await workspace(db);
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "security-review",
+      proposal: "Nothing touches auth",
+    });
+
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "security-review", approvalsRequired: 2 }],
+    });
+
+    const [added] = (await asAda.checkpoints.list({ projectSlug: seeded.project.slug }))
+      .checkpoints;
+    const row = await db.query.gateRequest.findFirst({ where: { id: asked.id } });
+    expect(row?.checkpointId).toBe(added?.id);
+    expect((await asAda.gates.get({ requestId: asked.id })).policy.approvalsRequired).toBe(2);
+  });
+});
+
 describe("what the Gates list answers", () => {
   it("shows a Human what is waiting on them, and an Agent what it asked", async () => {
     const { db, close } = testDb();

@@ -59,7 +59,7 @@ async function waitingOnBob({ verified = true } = {}) {
   const planner = await agentContext(db, { sponsor: bob.member, grants: [project.id] });
   const asPlanner = createRouterClient(router, { context: { ...planner, sockets } });
   const run = await asPlanner.runs.start({ issue: issue.url });
-  return { db, ada, bob, issue, asPlanner, run, workspaceId: ada.workspace.id };
+  return { db, ada, bob, issue, project, asPlanner, run, workspaceId: ada.workspace.id };
 }
 
 async function emailsOwed(db: Db) {
@@ -211,6 +211,36 @@ describe("delivering what is owed by email", () => {
 
     const [row] = await emailsOwed(db);
     expect(row?.lastError).toMatch(/smtp/i);
+  });
+});
+
+describe("an email about a Gate whose Project's Checkpoints were saved since it asked", () => {
+  it("names the approvals its Checkpoint wants, not the default's one", async () => {
+    const { db, ada, asPlanner, project, run, workspaceId } = await waitingOnBob();
+    const asAda = createRouterClient(router, { context: ada });
+    const slug = project.slug;
+    await asAda.checkpoints.set({
+      projectSlug: slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 2 },
+      ],
+    });
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
+
+    // Another Checkpoint lowered, this one kept: the Gate's link survives.
+    await asAda.checkpoints.set({
+      projectSlug: slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 1 },
+      ],
+    });
+    const { sent, emailSenders } = fakeSender();
+    await deliverDueEmails({ db, workspaceId, baseUrl, emailSenders, email: setup });
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.text).toContain("0 of 2 approvals so far");
   });
 });
 

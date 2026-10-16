@@ -80,8 +80,9 @@ change that alters what a team or a self-hoster sees updates the public page tha
 ## What it found
 
 Written on 2026-10-16, 53 pages by four writers in parallel from the shared rules above, each checking
-its facts in the code. Where OPERATIONS.md and the code disagreed, the pages say what the code does, and
-these are the disagreements, each still to be settled on the code's side or OPERATIONS.md's:
+its facts in the code. Where OPERATIONS.md and the code disagreed, the pages said what the code did, and
+Matt asked for every disagreement to be settled before the pages landed. Each was, in its own pull request
+stacked on this one, and settling some found more, which are here too:
 
 - **An Agent's own webhook was sent every Event of the Workspace**, Projects it was not granted included.
   Settled on the code's side: `deriveWebhookDeliveriesForMany` now owes a subscription that belongs
@@ -100,6 +101,10 @@ these are the disagreements, each still to be settled on the code's side or OPER
   approval waited for ever; saving a lower threshold now passes every open Gate that already meets it
   (`passLoweredGates`, through the same `settleGate` tail as the last approval), as the admin, with
   `loweredFrom` on its Events.
+- **Saving a Project's Checkpoints cut every open Gate loose from its Checkpoint**, found while letting a
+  lower threshold pass a Gate: `setCheckpoints` deleted and re-inserted the rows, the link is
+  `ON DELETE SET NULL`, and the Slack message and the Gate email, which read the threshold through it, then
+  asked for one approval. Settled: Checkpoints that stay are changed in place, so their ids survive.
 - **A webhook's retries never reached OPERATIONS.md's six-hour cap**: eight attempts from ten seconds,
   doubling, wait at most 640 seconds. Settled on OPERATIONS.md's side: it and webhooks.md now give the
   longest wait as about ten minutes and the whole window as about twenty, and the code is unchanged.
