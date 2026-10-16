@@ -598,6 +598,11 @@ href>`, so from 0.11.0 a page two levels deep, or a Workspace's address without 
   3,500 idle Workspaces; what the alarm costs is requests, 43,200 a Workspace a month, which is $0.0065 past
   the included million, and as many rows written, inside the included 50 million up to about 1,150
   Workspaces. Sign-in through the relay works for real: the console, and the first Workspace's admin,
-  signed in with the platform's provider Apps through `app.deevy.dev/auth`. Still owed at scale: how many
-  Workspaces' apps one isolate holds under its 128 MB, which only many real Workspaces will show; workerd's
-  upper bound was 0.4 MB an awake app.
+  signed in with the platform's provider Apps through `app.deevy.dev/auth`. And how many awake Workspaces
+  Cloudflare's 128 MB isolates hold, which one Workspace could not show: deevy-cloud's Measure workflow made
+  200 throwaway Workspaces through the console's ops endpoint and woke every one at once, three times, from
+  a GitHub runner with a hundred requests in flight, each wake building that Workspace's app. All 600
+  answered 200, with no isolate reset and no error, at a median of about 2 seconds under that concurrency
+  from the US to the EU; the workerd upper bound had been 0.4 MB an awake app. Removing them found the
+  directory's listing lagging a deletion by up to a minute (Workers KV), which the console's removal now
+  allows for (deevy-cloud #11).
