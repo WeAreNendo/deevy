@@ -1,5 +1,9 @@
 # Running deevy
 
+This is the internal, complete account of how deevy runs, which the code's comments point into. Teams on
+deevy Cloud and people hosting deevy read [docs.deevy.dev](https://docs.deevy.dev) instead, written for
+them from the same facts (`apps/docs/content`); a change that alters what they see updates both.
+
 deevy is one container and one volume, or one Cloudflare Worker and one D1 database. Either serves one
 Workspace (CONTEXT.md), so there is nothing to partition: the first sign-in with `DEEVY_ADMIN_EMAIL` creates
 the Workspace and becomes its admin, and everyone else joins through the allowlist or an invitation. A third

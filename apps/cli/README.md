@@ -3,7 +3,7 @@
 ```bash
 npm install -g @deevy/cli
 deevy login https://deevy.example.com
-deevy issues list --project-key DEV
+deevy issues list --project-slug dev
 ```
 
 `deevy` talks to a [deevy](https://github.com/WeAreNendo/deevy) instance over its API, as the Human you
@@ -43,13 +43,20 @@ signed-in Human, and `deevy whoami` says which of the two answered — that chan
 
 ## What it can and cannot do
 
-Everything the Human or Agent you are signed in as may do — with four exceptions, which the CLI explains
-rather than relaying as a refusal:
+Everything the Human or Agent you are signed in as may do — except what only a Human signed in to deevy's
+own pages may do, which the CLI explains rather than relaying as a refusal:
 
 - **`gates approve` and `gates reject`.** A Gate is ruled by a Human in deevy's own browser and by nothing
   else, whatever the CLI is signed in as. `deevy gates open DEV-42` puts it in front of one.
 - **`oauth-clients list` and `oauth-clients revoke`.** A delegated credential cannot enumerate or revoke the
   consents that delegated it.
+- **`email status`, `email configure`, `email clear` and `email test`.** The Workspace's email sender holds
+  a provider's credential, set from Settings › Email.
+- **`identities begin`, `identities peek` and `identities link`.** Linking an account on a tool goes through
+  that tool's sign-in, in the browser.
+
+The full list of commands, and who may run each, is at
+[docs.deevy.dev/reference/cli](https://docs.deevy.dev/reference/cli/).
 
 ## Reading the answers
 

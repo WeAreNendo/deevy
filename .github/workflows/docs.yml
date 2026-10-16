@@ -1,8 +1,9 @@
 name: Docs
 
 # docs.deevy.dev, deployed from main whenever something it is written from
-# changes: the Markdown in docs/, the glossary, the README paragraph the landing
-# opens with, the OpenAPI snapshot, the site itself, or what it is built with.
+# changes: its pages (apps/docs/content), the OpenAPI snapshot the API
+# reference is generated from, the version it states, the site itself, or what
+# it is built with. Nothing in docs/ is published (docs/plans/docs.md).
 # CI builds the same site on every pull request (ci.yml), where a broken link
 # fails; this file only ever deploys what main already has.
 #
@@ -17,16 +18,13 @@ name: Docs
 #  - protection: deployments from main only, which keeps the token away from any
 #    other branch's code, and a reviewer if a deploy should wait for one.
 #
-# Until the account exists (docs/plans/hosted.md, C1) neither is set, and every
-# run says so in a notice and stops after that one step, green: a deploy
-# nobody can do yet is not a failure of the commit that triggered it.
+# Without them every run says so in a notice and stops after that one step,
+# green: a deploy nobody can do yet is not a failure of the commit that
+# triggered it.
 on:
   push:
     branches: [main]
     paths:
-      - "docs/**"
-      - CONTEXT.md
-      - README.md
       - package.json
       - "apps/docs/**"
       - packages/core/openapi.json

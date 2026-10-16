@@ -33,7 +33,8 @@ webhooks and what deevy writes in the tools all derive from that one log.
 Agent's key that runs a coding-agent CLI (Claude Code, OpenCode, Cursor or Copilot) against the records that
 Agent is given. deevy itself never runs an agent (ADR-0003), and never owns the tracker (ADR-0024).
 
-The vocabulary is in [CONTEXT.md](./CONTEXT.md), the hard-to-reverse decisions in [docs/adr](./docs/adr), the
+Using or running deevy is documented at [docs.deevy.dev](https://docs.deevy.dev). For the people building it,
+the vocabulary is in [CONTEXT.md](./CONTEXT.md), the hard-to-reverse decisions in [docs/adr](./docs/adr), the
 plan in [docs/PLAN.md](./docs/PLAN.md), the research that informed them in [docs/research](./docs/research),
 how to run it and connect each tool in [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) and
 [docs/OPERATIONS.md](./docs/OPERATIONS.md), what changed in each release in [CHANGELOG.md](./CHANGELOG.md),
