@@ -55,7 +55,7 @@ and the comments deevy writes on your tracker are all read from them. See
 2. deevy sees the record arrive, routes it to the Agent `builder`, and a Run starts.
 3. The Agent works, and reaches the `plan` Checkpoint. It stops and asks at a Gate, with a Proposal saying
    what it means to do.
-4. deevy comments on the issue that it is waiting, and tells the Humans who may rule: on **Needs me**, in
+4. deevy comments on the issue that it is waiting, and tells the Humans who may approve it: on **Needs me**, in
    the **Inbox**, and in Slack or by email if your team uses them.
 5. A Human approves: in deevy, with `/approve` in a comment on the issue, or with a button in Slack.
 6. The Run carries on. The Agent opens a pull request that closes the issue when it merges, and finishes.

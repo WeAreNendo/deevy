@@ -285,8 +285,20 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
         byActor,
       );
     }
-    case "gate.approved":
-      return say(`let it past ${str(p.checkpoint) ?? "the Checkpoint"}`, str(p.note), byActor);
+    case "gate.approved": {
+      const checkpoint = str(p.checkpoint) ?? "the Checkpoint";
+      // Passed by an admin lowering Approvals to what it had, not by a Ruling:
+      // the actor is who saved the policy, and the sentence says what they did.
+      if (typeof p.loweredFrom === "number" && typeof p.required === "number") {
+        const had = typeof p.approvals === "number" ? p.approvals : p.required;
+        return say(
+          `lowered Approvals on ${checkpoint} from ${String(p.loweredFrom)} to ${String(p.required)}, which let it past with the ${String(had)} approval${had === 1 ? "" : "s"} it had`,
+          null,
+          byActor,
+        );
+      }
+      return say(`let it past ${checkpoint}`, str(p.note), byActor);
+    }
     case "gate.rejected":
       return say(
         `sent it back from ${str(p.checkpoint) ?? "the Checkpoint"}`,

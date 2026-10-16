@@ -253,6 +253,26 @@ describe("the Events a Socket causes", () => {
  * fails rather than printing its dotted name at somebody in the Event log.
  */
 describe("a Ruling made in the tracker", () => {
+  it("says a Gate passed because an admin lowered Approvals, not that they approved it", () => {
+    expect(
+      describeEvent({
+        kind: "gate.approved",
+        payload: { checkpoint: "ship", approvals: 2, required: 2, via: "web" },
+        actorKind: "human",
+      })?.text,
+    ).toBe("let it past ship");
+    expect(
+      describeEvent({
+        kind: "gate.approved",
+        payload: { checkpoint: "ship", approvals: 1, required: 1, loweredFrom: 2, via: "web" },
+        actorKind: "human",
+      }),
+    ).toMatchObject({
+      text: "lowered Approvals on ship from 2 to 1, which let it past with the 1 approval it had",
+      tone: "human",
+    });
+  });
+
   it("says why one counted for nothing, as the reply in the tracker did", () => {
     expect(
       describeEvent({

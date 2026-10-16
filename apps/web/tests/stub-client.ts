@@ -127,7 +127,14 @@ export function stubGate(extra: Record<string, unknown> = {}) {
     decisions: [] as Array<Record<string, unknown>>,
     approvals: 0,
     run: { id: "run_stub000000", issueKey: emptyIssue.externalKey },
-    you: { mayRule: true, hasRuled: false, why: null as string | null },
+    you: {
+      mayRule: true,
+      mayApprove: true,
+      hasRuled: false,
+      why: null as string | null,
+      whyNotApprove: null as string | null,
+    },
+    shortfall: null as { wanted: number; couldApprove: number; why: string } | null,
     ...extra,
   };
 }

@@ -241,6 +241,13 @@ export function mirrorFor(
     const note = text("note");
     const approvals = number("approvals");
     const required = number("required");
+    // A Gate an admin passed by lowering Approvals says so, rather than
+    // reading as though the last approval had met the count.
+    const loweredFrom = number("loweredFrom");
+    const lowered =
+      loweredFrom !== null && required !== null
+        ? `, once Approvals was lowered from ${String(loweredFrom)} to ${String(required)}`
+        : "";
     return {
       comment: paragraphs(
         approved
@@ -248,7 +255,7 @@ export function mirrorFor(
               approvals !== null && required !== null
                 ? ` — ${String(approvals)} of ${String(required)}`
                 : ""
-            }.`
+            }${lowered}.`
           : `**Rejected** at the \`${text("checkpoint")}\` Checkpoint.`,
         note ? quoted(note) : "",
         signature(subject),

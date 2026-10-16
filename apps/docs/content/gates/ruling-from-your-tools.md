@@ -28,6 +28,8 @@ or
   below it, is your note. On a rejection, it is what the Agent reads to know what to change.
 - A comment that only mentions `/approve` somewhere else is just a comment.
 - It rules on the newest Gate waiting on that record.
+- The Checkpoint's rules are the same as in deevy. Where it wants somebody other than the Human the work is
+  for, and that is you, `/reject` counts and `/approve` gets a reply saying you may still reject it.
 
 You can rule this way even where the Project's **Mirror** is set to **Nothing**, but then deevy says nothing
 back. Otherwise it answers on the record either way. A Ruling that counts is followed by deevy's comment
@@ -40,7 +42,9 @@ automated accounts, deevy's own included, rule nothing and get no reply.
 ## With the buttons in Slack
 
 A Gate posted to a room in your team's Slack app, or sent to you as a direct message, comes with
-**Approve** and **Reject**. **Reject** asks you why before it sends. The message changes when anybody rules,
+**Approve** and **Reject**. **Reject** asks you why before it sends. The buttons follow the Checkpoint's
+rules, so the Human the work is for, where the Checkpoint leaves them out, can reject with them but not
+approve. The message changes when anybody rules,
 in Slack, in deevy or on the tracker, so the room always shows where the Gate stands. See
 [Channels and routing](/notifications/channels/) for sending Gates to a room.
 
