@@ -103,9 +103,10 @@ these are the disagreements, each still to be settled on the code's side or OPER
 - **deevy Cloud's export tells people to load the dump with `sqlite3`**, skipping `import.mjs`, which drops
   the sign-in tokens tied to the hosted address and checks `DEEVY_SECRET`. self-hosting/from-deevy-cloud.md
   uses the import script; the console's text should too (WeAreNendo/deevy-cloud).
-- **The repository's `docker-compose.yml` has no `DEEVY_SECRET`**, and OPERATIONS.md's `docker run`
-  generates both secrets inline, so a new container signs everybody out and loses every Socket's
-  credentials. self-hosting/docker.md generates them once.
+- **The repository's `docker-compose.yml` had no `DEEVY_SECRET`**, and OPERATIONS.md's `docker run`
+  generated both secrets inline, so a new container signed everybody out and lost every Socket's
+  credentials. Settled: the compose file asks for `DEEVY_SECRET` the way it asks for
+  `BETTER_AUTH_SECRET`, and OPERATIONS.md generates both once, as self-hosting/docker.md does.
 - **apps/cli/README.md** named a flag that does not exist (`--project-key`) and four of the eleven
   commands the CLI cannot run; fixed here.
 - Two jobs have no screen and are done from the CLI on the pages: setting an Agent's webhook, and rotating

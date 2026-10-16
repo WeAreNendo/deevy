@@ -83,13 +83,22 @@ exactly this command:
 docker build -f apps/server/Dockerfile -t deevy:local .
 ```
 
-Then, with either image:
+Then, with either image, generate the two secrets once and keep them with the volume:
+
+```bash
+openssl rand -base64 32   # BETTER_AUTH_SECRET
+openssl rand -base64 32   # DEEVY_SECRET, a different value
+```
+
+A `$(openssl rand …)` written into the `docker run` itself would hand every new container new ones, and a new
+container is every upgrade: a new `BETTER_AUTH_SECRET` signs everybody out, and a new `DEEVY_SECRET` leaves
+every Socket's credentials, and the email sender's, sealed under a value nobody has.
 
 ```bash
 docker run -d --name deevy -p 3000:3000 -v deevy-data:/data \
   -e BETTER_AUTH_URL=https://deevy.example.com \
-  -e BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
-  -e DEEVY_SECRET="$(openssl rand -base64 32)" \
+  -e BETTER_AUTH_SECRET='<the first value>' \
+  -e DEEVY_SECRET='<the second value>' \
   -e GITHUB_CLIENT_ID=... -e GITHUB_CLIENT_SECRET=... \
   -e GITLAB_CLIENT_ID=... -e GITLAB_CLIENT_SECRET=... \
   -e GOOGLE_CLIENT_ID=... -e GOOGLE_CLIENT_SECRET=... \

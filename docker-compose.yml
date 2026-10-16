@@ -11,6 +11,11 @@ services:
     environment:
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set a secret of at least 32 characters}
+      # What every tool's credentials are sealed under. A second value, not the
+      # first one again, generated once (`openssl rand -base64 32`) and kept with
+      # the volume: without it no tool can be connected, and a new one leaves
+      # every connected tool's credentials unreadable.
+      DEEVY_SECRET: ${DEEVY_SECRET:?set a second secret, not the same as BETTER_AUTH_SECRET}
       # Sign-in providers: set the pairs this instance offers, and leave the
       # rest empty. A pair with only one half is not registered and not offered,
       # and an instance with no pair at all says so on its sign-in page.
