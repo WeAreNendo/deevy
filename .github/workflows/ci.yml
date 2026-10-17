@@ -3,32 +3,31 @@ name: CI
 # Not for a change that is only prose. Markdown builds nothing and no suite
 # reads it, so a pull request (or a push to main) that touches nothing else runs
 # none of the jobs below: about a dozen runner-minutes saved each time. The
-# exceptions are the Markdown something does read: docs/OPERATIONS.md, whose
-# tables apps/agent, apps/server and tools/release check against the code, and
-# Markdown under a package's src/, such as the Agent's instructions the image
-# ships. prose.yml checks a Markdown change instead, formatting and the docs
-# site's build and tests, in one job. Order matters in `paths`: a later pattern wins, so the
-# exceptions come after the exclusions. The two lists are the same; keep them so.
+# exceptions are the Markdown something does read: docs/OPERATIONS.md and
+# docs/m3-acceptance.md, which tests in apps/agent, apps/server and
+# tools/release check against the code, and Markdown under a package's src/,
+# such as the Agent's instructions the image ships. prose.yml checks a Markdown
+# change instead, formatting and the docs site's build and tests, in one job.
+# Order matters in `paths`: a later pattern wins, so the exceptions come after
+# the exclusions; the list is written once and named.
+#
+# A workflow that `paths` skips leaves its checks pending rather than passed, so
+# none of these may become a required check on main without a gate job that
+# always runs: a Markdown-only pull request would never merge.
 on:
   push:
     branches: [main]
-    paths:
+    paths: &code
       - "**"
       - "!**/*.md"
       - "!**/*.mdx"
       - "!apps/docs/content/**"
       - docs/OPERATIONS.md
+      - docs/m3-acceptance.md
       - "apps/*/src/**/*.md"
       - "packages/*/src/**/*.md"
   pull_request:
-    paths:
-      - "**"
-      - "!**/*.md"
-      - "!**/*.mdx"
-      - "!apps/docs/content/**"
-      - docs/OPERATIONS.md
-      - "apps/*/src/**/*.md"
-      - "packages/*/src/**/*.md"
+    paths: *code
   # Called by release.yml, so a tag cannot publish something that does not build.
   # A call always runs, whatever changed.
   workflow_call:
@@ -102,7 +101,7 @@ jobs:
           vp run core#snapshot:mcp-tools
           git diff --exit-code -- packages/core/mcp-tools.json
 
-      # docs.deevy.dev, built from docs/, CONTEXT.md and the snapshot above: a
+      # docs.deevy.dev, built from apps/docs/content and the snapshot above: a
       # link to a file, a page or a heading that does not exist fails the build,
       # so a pull request that breaks one is red here (apps/docs). Deployed from
       # main by docs.yml, never from here.

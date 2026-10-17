@@ -4,8 +4,8 @@ name: Prose
 # Markdown alone: that every file is formatted, and that the docs site still
 # builds from its pages, every link landing, and passes its own tests
 # (apps/docs/tests: frontmatter, and no environment variable on a page for a
-# deevy Cloud team). One job, about a minute and a half, where the full CI is a
-# dozen runner-minutes. A pull request that also changes code runs CI as well,
+# deevy Cloud team). One job, about half a minute, where the full CI is a dozen
+# runner-minutes. A pull request that also changes code runs CI as well,
 # which checks the same among the rest.
 on:
   pull_request:
