@@ -170,6 +170,24 @@ const allowlistValueShapes = {
 } satisfies Record<(typeof allowlistRuleKinds)[number], { pattern: RegExp; message: string }>;
 
 /**
+ * The sign-in each kind of rule is decided by, or null for the kind the address
+ * alone decides. A `github_org` rule asks the sign-in's GitHub account which
+ * organizations it is in, and a `gitlab_group` rule its GitLab account
+ * (auth.ts, `joinPorts`), so where nobody signs in with that provider the rule
+ * admits nobody. deevy Cloud has no GitLab sign-in and offered the rule all the
+ * same; `allowlist.add` refuses one there now, and Settings › General offers a
+ * kind only beside its provider's button (docs/plans/docs.md).
+ */
+export const allowlistRuleSignIn = {
+  email_domain: null,
+  github_org: { id: "github", label: "GitHub", rule: "GitHub organization" },
+  gitlab_group: { id: "gitlab", label: "GitLab", rule: "GitLab group" },
+} as const satisfies Record<
+  (typeof allowlistRuleKinds)[number],
+  { id: string; label: string; rule: string } | null
+>;
+
+/**
  * A rule as an admin states one. The kind is checked with the value rather
  * than beside it, so the message names the shape the admin was actually asked
  * for instead of the union of all three.

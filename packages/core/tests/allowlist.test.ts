@@ -4,6 +4,18 @@ import { router } from "../src/operations/index.ts";
 import { memberContext, testDb } from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
+/**
+ * A deployment that signs in with both forges, so a rule of either kind is one
+ * that can admit somebody. What `createApp` hands every operation is the list
+ * `health.ping` reports (app.ts).
+ */
+const bothForges = {
+  signInProviders: [
+    { id: "github", label: "GitHub", kind: "social" as const },
+    { id: "gitlab", label: "GitLab", kind: "social" as const },
+  ],
+};
+
 const closers: Array<() => void> = [];
 afterEach(() => {
   for (const close of closers.splice(0)) close();
@@ -43,7 +55,7 @@ describe("allowlist.add", () => {
     const { db, close } = testDb();
     closers.push(close);
     const admin = await memberContext(db, { role: "admin", name: "Ada" });
-    const client = createRouterClient(router, { context: admin });
+    const client = createRouterClient(router, { context: { ...admin, ...bothForges } });
 
     await expect(
       client.allowlist.add({ kind: "github_org", value: "example.com" }),
@@ -103,7 +115,7 @@ describe("allowlist.add", () => {
     const { db, close } = testDb();
     closers.push(close);
     const admin = await memberContext(db, { role: "admin", name: "Ada" });
-    const client = createRouterClient(router, { context: admin });
+    const client = createRouterClient(router, { context: { ...admin, ...bothForges } });
 
     const rule = await client.allowlist.add({ kind: "gitlab_group", value: "Acme/Platform" });
     expect(rule).toMatchObject({ kind: "gitlab_group", value: "acme/platform" });
@@ -112,6 +124,59 @@ describe("allowlist.add", () => {
       client.allowlist.add({ kind: "email_domain", value: "acme/platform" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
+
+  /**
+   * A GitHub organization rule asks the sign-in's GitHub account which
+   * organizations it is in, and a GitLab group rule its GitLab account
+   * (auth.ts, `joinPorts`). Where nobody signs in with that provider — deevy
+   * Cloud has no GitLab sign-in — the rule could only ever admit nobody, so it
+   * is refused with a reason rather than saved as one that looks like it works.
+   */
+  it("refuses a rule for a sign-in this deployment does not offer", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const admin = await memberContext(db, { role: "admin", name: "Ada" });
+    const withoutGitLab = createRouterClient(router, {
+      context: {
+        ...admin,
+        signInProviders: [
+          { id: "github", label: "GitHub", kind: "social" as const },
+          { id: "google", label: "Google", kind: "social" as const },
+        ],
+      },
+    });
+
+    await expect(
+      withoutGitLab.allowlist.add({ kind: "gitlab_group", value: "acme/platform" }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: expect.stringMatching(/sign in here with GitLab/) as unknown as string,
+    });
+    expect(await withoutGitLab.allowlist.add({ kind: "github_org", value: "acme" })).toMatchObject({
+      kind: "github_org",
+    });
+
+    // An instance that offers no sign-in at all takes only the rule that is
+    // about the address.
+    const withNone = createRouterClient(router, { context: admin });
+    await expect(
+      withNone.allowlist.add({ kind: "github_org", value: "acme-labs" }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: expect.stringMatching(/sign in here with GitHub/) as unknown as string,
+    });
+    expect(
+      await withNone.allowlist.add({ kind: "email_domain", value: "example.com" }),
+    ).toMatchObject({ kind: "email_domain" });
+
+    // Nothing was saved for the two it refused, and no Event says otherwise.
+    expect((await withNone.allowlist.list({})).rules.map((rule) => rule.value)).toEqual([
+      "acme",
+      "example.com",
+    ]);
+    const page = await withNone.events.list({ subjectType: "allowlist_rule" });
+    expect(page.events).toHaveLength(2);
+  });
 });
 
 describe("allowlist.remove", () => {
@@ -119,7 +184,7 @@ describe("allowlist.remove", () => {
     const { db, close } = testDb();
     closers.push(close);
     const admin = await memberContext(db, { role: "admin", name: "Ada" });
-    const client = createRouterClient(router, { context: admin });
+    const client = createRouterClient(router, { context: { ...admin, ...bothForges } });
     const rule = await client.allowlist.add({ kind: "github_org", value: "acme" });
 
     await client.allowlist.remove({ ruleId: rule.id });

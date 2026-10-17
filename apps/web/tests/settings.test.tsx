@@ -26,12 +26,29 @@ const stub = vi.hoisted(() => ({
     { id: "r-2", kind: "github_org", value: "acme", createdAt: new Date() },
     { id: "r-3", kind: "gitlab_group", value: "acme/platform", createdAt: new Date() },
   ],
+  /** What this deployment signs in with, as `health.ping` reports it. */
+  providers: [] as Array<{ id: string; label: string; kind: "social" }>,
 }));
+
+const github = { id: "github", label: "GitHub", kind: "social" as const };
+const gitlab = { id: "gitlab", label: "GitLab", kind: "social" as const };
+const google = { id: "google", label: "Google", kind: "social" as const };
 
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
   const { stubClient } = await import("./stub-client.ts");
   const client = stubClient({
+    health: {
+      ping: async () => ({
+        ok: true,
+        time: new Date(0).toISOString(),
+        devSignIn: false,
+        devSockets: false,
+        providers: stub.providers,
+        version: null,
+        live: "stream",
+      }),
+    },
     members: { list: async () => ({ members: stub.members }) },
     allowlist: { list: async () => ({ rules: stub.rules }) },
     workspace: {
@@ -87,6 +104,7 @@ describe("the Members settings page", () => {
 
 describe("the Allowlist row of Workspace › General", () => {
   it("shows every rule that admits a sign-in, each one droppable", async () => {
+    stub.providers = [github, gitlab];
     mount(<AllowlistRow />);
 
     // Chips, not a table: nearly every rule is one domain, and a rule is two words.
@@ -102,6 +120,7 @@ describe("the Allowlist row of Workspace › General", () => {
   });
 
   it("keeps the form for a new rule behind Add rule", async () => {
+    stub.providers = [github, gitlab];
     mount(<AllowlistRow />);
 
     await screen.findByText("example.com");
@@ -111,6 +130,55 @@ describe("the Allowlist row of Workspace › General", () => {
 
     expect(await screen.findByLabelText("Match on")).toBeTruthy();
     expect(screen.getByLabelText("Domain")).toBeTruthy();
+  });
+
+  /**
+   * A GitHub organization rule is decided by the GitHub account somebody
+   * signed in with, and a GitLab group rule by their GitLab account, so a kind
+   * whose provider nobody signs in with here could only ever let nobody in.
+   * deevy Cloud offered the GitLab group rule with no GitLab sign-in
+   * (docs/plans/docs.md).
+   */
+  it("offers a kind of rule only where people sign in with its provider", async () => {
+    const offeredWith = async (providers: (typeof stub)["providers"]) => {
+      stub.providers = providers;
+      const { unmount } = mount(<AllowlistRow />);
+      await screen.findByText("example.com");
+      fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+      fireEvent.keyDown(await screen.findByLabelText("Match on"), { key: "ArrowDown" });
+      await screen.findByRole("option", { name: "Email domain" });
+      const names = screen.getAllByRole("option").map((option) => option.textContent?.trim());
+      unmount();
+      return names;
+    };
+
+    expect(await offeredWith([github, google])).toEqual(["Email domain", "GitHub organization"]);
+    expect(await offeredWith([google, gitlab])).toEqual(["Email domain", "GitLab group"]);
+    expect(await offeredWith([github, gitlab])).toEqual([
+      "Email domain",
+      "GitHub organization",
+      "GitLab group",
+    ]);
+    // An address is every provider's, so its rule is always there.
+    expect(await offeredWith([])).toEqual(["Email domain"]);
+  });
+
+  it("keeps a rule whose provider nobody signs in with, and says it lets nobody in", async () => {
+    stub.providers = [github, google];
+    mount(<AllowlistRow />);
+
+    // Still listed, and still the admin's to remove.
+    expect(await screen.findByText("acme/platform")).toBeTruthy();
+    const note = await screen.findByText(
+      "GitLab group acme/platform lets nobody in until people can sign in here with GitLab.",
+    );
+    expect(screen.getByRole("button", { name: "Stop allowing acme/platform" })).toBeTruthy();
+    // The chip points at the line that says why.
+    const chip = screen.getByText("acme/platform").closest("span");
+    expect(chip?.getAttribute("aria-describedby")).toBe(note.id);
+    // The rules that do let people in say nothing of the sort.
+    expect(screen.queryByText(/acme lets nobody in/)).toBeNull();
+    expect(screen.queryByText(/example\.com lets nobody in/)).toBeNull();
   });
 });
 

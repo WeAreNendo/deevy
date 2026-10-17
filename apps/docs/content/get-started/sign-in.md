@@ -27,7 +27,8 @@ Google both confirm your address, so signing in with Google one day and GitHub t
 Two different addresses are two different Humans.
 
 Signing in with GitHub asks to read which organizations you belong to. That is how a rule that lets in a
-GitHub organization knows you are in it ([Invite your team](/get-started/invite-your-team/)).
+GitHub organization knows you are in it ([Invite your team](/get-started/invite-your-team/)), so such a
+rule lets you in when you sign in with GitHub, not with Google.
 
 ## If you can't get in
 

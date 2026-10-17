@@ -114,10 +114,11 @@ export interface AppContext {
    */
   secret?: string;
   /**
-   * The sign-in providers this deployment configured, in the order the sign-in
-   * page renders them. Only `health.ping` reads it, so a signed-out SPA knows
-   * which buttons to draw; absent means this instance offers none
-   * (docs/plans/sign-in.md).
+   * The sign-in providers this deployment offers — configured, and registered
+   * by Better Auth (app.ts) — in the order the sign-in page renders them.
+   * `health.ping` reports it, so a signed-out SPA knows which buttons to draw,
+   * and `allowlist.add` refuses a rule whose provider is not among them;
+   * absent means this instance offers none (docs/plans/sign-in.md).
    */
   signInProviders?: SignInProvider[];
   /**

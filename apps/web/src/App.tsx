@@ -64,14 +64,17 @@ function useInvitation(): [string | null, (token: null) => void] {
 
 export function SignedOut({ invitation = null }: { invitation?: string | null }) {
   // Public, so it answers before anyone is signed in: which providers this
-  // deployment configured, and whether sign-in goes through the development
-  // stub (DEEVY_DEV_STUB_OAUTH).
+  // deployment configured and Better Auth registered — an identity provider
+  // whose discovery document could not be fetched at startup is not among
+  // them — and whether sign-in goes through the development stub
+  // (DEEVY_DEV_STUB_OAUTH).
   const health = useQuery(orpc.health.ping.queryOptions());
   const providers = health.data?.providers;
   // What a button that did not start says. Better Auth answers a provider it
-  // never registered with an error rather than a redirect — the case a
-  // discovery document that could not be fetched at startup leaves behind — and
-  // without this the click is a silent no-op (docs/plans/sign-in.md).
+  // never registered with an error rather than a redirect — which a server
+  // whose initialisation failed outright can still offer, since it reports
+  // what it was configured with — and without this the click is a silent
+  // no-op (docs/plans/sign-in.md).
   const [failed, setFailed] = useState<string | null>(null);
   // Read once: the cookie Better Auth's `lastLoginMethod` left on this browser.
   const [lastUsed] = useState(() => authClient.getLastUsedLoginMethod());

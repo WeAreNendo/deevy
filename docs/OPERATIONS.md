@@ -796,16 +796,25 @@ names their own IdP without a deployment of the SPA. Who may join is still the a
 rule admits the addresses the IdP hands out and says it verified.
 
 Two things to know about pointing it at an IdP. The discovery document is fetched **once, when the instance
-starts**: an IdP that cannot be reached at that moment is skipped with a line in the log and no error, and
-the button is not offered until the process (or, on Workers, the isolate) is replaced — and because the fetch
-is awaited before the first sign-in of any kind, an issuer pointed at an address that hangs delays the first
-GitHub or Google sign-in too, for as long as the runtime's own connect timeout. Point `DEEVY_OIDC_ISSUER` at
-something reachable, or leave it unset. And an IdP that sends no `email_verified` claim — Microsoft Entra
+starts**: an IdP that cannot be reached at that moment is skipped with a line in the log and no error. The
+sign-in page draws what `health.ping` reports, which is the configured providers Better Auth actually
+registered (its context's social providers, read in `createApp`), so the button is not offered until the
+process (on Workers, the isolate; for a hosted Workspace, its Durable Object) is replaced and the fetch is
+tried again. Because that fetch is awaited before the instance says what it offers, an issuer pointed at an
+address that hangs holds up the whole sign-in page, GitHub's and Google's buttons included, for as long as
+the runtime's own connect timeout. Point `DEEVY_OIDC_ISSUER` at something reachable, or leave it unset. And an IdP that sends no `email_verified` claim — Microsoft Entra
 sends none — can sign a teammate in, but cannot become the _second_ provider for a Human who already has one
 here: that link is refused, for the reason under **One Human is one Member** below.
 
 **Who may join, and who is invited.** A rule admits a category — an email domain, a GitHub organization, a
-GitLab group — and it goes on admitting everybody who matches it, this month and next. An invitation admits
+GitLab group — and it goes on admitting everybody who matches it, this month and next. An organization or a
+group is asked of the account the Human signed in with on that forge, so a `github_org` rule admits only a
+GitHub sign-in and a `gitlab_group` rule only a GitLab one. Where that provider is not offered the rule could
+admit nobody, so Settings › General offers a kind only when its provider is among the sign-ins `health.ping`
+reports, and `allowlist.add` refuses one that is not with `PRECONDITION_FAILED` (deevy Cloud has no GitLab
+sign-in, so it takes no GitLab group rule). A rule saved before its provider was taken away stays listed,
+drawn faint, with a line saying it lets nobody in until people can sign in with that provider again; removing
+it is the admin's call. An invitation admits
 one person: an admin creates it in Settings, Workspace with an address and a role, and gets a link back
 once, because deevy has no email Channel to send it with and keeps only a hash of the token. The invited
 Human clicks the link, signs in with whichever provider the instance offers, and accepting is what makes

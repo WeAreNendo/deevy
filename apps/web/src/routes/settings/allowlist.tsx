@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { SettingsRow } from "@/components/settings-page";
 import { orpc } from "@/lib/orpc.ts";
+import { cn } from "@/lib/utils";
 
 const kindLabels = {
   email_domain: "Email domain",
@@ -35,7 +36,21 @@ const kindPrefixes = {
   gitlab_group: "group",
 } as const;
 
+/**
+ * The sign-in a kind of rule is decided by. A GitHub organization rule asks
+ * the GitHub account somebody signed in with which organizations it is in, and
+ * a GitLab group rule their GitLab account, so where nobody signs in with that
+ * provider the rule lets nobody in — deevy Cloud has no GitLab sign-in. The
+ * server refuses such a rule too (`allowlistRuleSignIn` in packages/core).
+ */
+const kindSignIns = {
+  email_domain: null,
+  github_org: { id: "github", label: "GitHub" },
+  gitlab_group: { id: "gitlab", label: "GitLab" },
+} as const;
+
 type RuleKind = keyof typeof kindLabels;
+const ruleKinds = Object.keys(kindLabels) as RuleKind[];
 
 /**
  * M1 admits teammates by rule rather than by invitation: any sign-in matching a
@@ -67,6 +82,19 @@ export function AllowlistRow() {
   const failed = add.error ?? remove.error;
   const listed = rules.data?.rules ?? [];
 
+  // The providers this deployment signs in with, as the sign-in page draws
+  // them. A kind is offered only beside its provider's button; a rule saved
+  // before that provider went away stays listed, and says it lets nobody in.
+  const health = useQuery(orpc.health.ping.queryOptions());
+  const signsIn = new Set((health.data?.providers ?? []).map((provider) => provider.id));
+  const offered = (kind: RuleKind) => {
+    const needs = kindSignIns[kind];
+    return needs === null || signsIn.has(needs.id);
+  };
+  const kinds = ruleKinds.filter(offered);
+  const strandedRules = health.isSuccess ? listed.filter((rule) => !offered(rule.kind)) : [];
+  const stranded = new Set(strandedRules.map((rule) => rule.id));
+
   return (
     <SettingsRow
       label="Who may join"
@@ -94,9 +122,11 @@ export function AllowlistRow() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="email_domain">{kindLabels.email_domain}</SelectItem>
-                    <SelectItem value="github_org">{kindLabels.github_org}</SelectItem>
-                    <SelectItem value="gitlab_group">{kindLabels.gitlab_group}</SelectItem>
+                    {kinds.map((one) => (
+                      <SelectItem key={one} value={one}>
+                        {kindLabels[one]}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -134,7 +164,13 @@ export function AllowlistRow() {
         {listed.map((rule) => (
           <span
             key={rule.id}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border pr-1 pl-2.5 font-mono text-xs"
+            // A rule that lets nobody in is still the admin's to remove, so it
+            // stays a chip, drawn faint and pointing at the line that says why.
+            className={cn(
+              "inline-flex h-7 items-center gap-1.5 rounded-md border pr-1 pl-2.5 font-mono text-xs",
+              stranded.has(rule.id) && "border-dashed text-muted-foreground",
+            )}
+            aria-describedby={stranded.has(rule.id) ? `stranded-${rule.id}` : undefined}
           >
             {kindPrefixes[rule.kind] ? (
               <span className="font-sans text-muted-foreground">{kindPrefixes[rule.kind]}</span>
@@ -160,6 +196,15 @@ export function AllowlistRow() {
         ) : null}
       </div>
 
+      {strandedRules.map((rule) => {
+        const needs = kindSignIns[rule.kind];
+        return needs ? (
+          <p key={rule.id} id={`stranded-${rule.id}`} className="text-sm text-muted-foreground">
+            {kindLabels[rule.kind]} {rule.value} lets nobody in until people can sign in here with{" "}
+            {needs.label}.
+          </p>
+        ) : null;
+      })}
       {failed ? <p className="text-sm text-destructive">{failed.message}</p> : null}
       {rules.isError ? (
         <p className="text-sm text-destructive">Could not load it: {rules.error.message}</p>

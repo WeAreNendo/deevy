@@ -99,8 +99,14 @@ these are the disagreements, each still to be settled on the code's side or OPER
 - **A webhook's retries never reached OPERATIONS.md's six-hour cap**: eight attempts from ten seconds,
   doubling, wait at most 640 seconds. Settled on OPERATIONS.md's side: it and webhooks.md now give the
   longest wait as about ten minutes and the whole window as about twenty, and the code is unchanged.
-- **An OpenID Connect provider unreachable at startup still shows its button**, and signing in with it
-  fails until deevy restarts; OPERATIONS.md says the button is not offered.
+- **An OpenID Connect provider unreachable at startup still shows its button**: settled on OPERATIONS.md's
+  side, since `createApp` already offered only what Better Auth registered (#43). The page was corrected to
+  say the button waits for a restart, and the tests now answer the discovery request themselves, at the core
+  and at the Node entry, so they never touch the network.
+- **Settings › General offered a GitLab group rule on deevy Cloud, where nobody signs in with GitLab**, and a
+  GitHub organization rule wherever GitHub was no sign-in, each admitting nobody: settled. The form offers a
+  kind only beside its provider's button, a rule left without one is listed as letting nobody in, and
+  `allowlist.add` refuses one with `PRECONDITION_FAILED`.
 - **deevy Cloud's export told people to load the dump with `sqlite3`**, skipping `import.mjs`, which drops
   the sign-in tokens tied to the hosted address and checks `DEEVY_SECRET`. Settled in
   WeAreNendo/deevy-cloud#13: the export's steps go through the import script, as
