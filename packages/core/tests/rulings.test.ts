@@ -260,6 +260,25 @@ describe("a Ruling from the tracker", () => {
     );
   });
 
+  it("takes a rejection from the Human the Run is for at a four-eyes Checkpoint", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { gate, run, say, decisions, kinds } = await waiting(db, { excludeRequester: true });
+
+    await say({ login: "ada", id: "1001" }, "/reject Not before the freeze lifts");
+
+    // The same rule as the ruling screen's: excluded from the agreement, never
+    // from stopping it (ADR-0020).
+    expect(await decisions()).toMatchObject([
+      { decision: "rejected", note: "Not before the freeze lifts", via: "socket" },
+    ]);
+    expect((await db.query.gateRequest.findFirst({ where: { id: gate.id } }))?.status).toBe(
+      "rejected",
+    );
+    expect((await db.query.run.findFirst({ where: { id: run.id } }))?.status).toBe("active");
+    expect(await kinds()).not.toContain("gate.ruling_refused");
+  });
+
   it("says the arithmetic when one is not enough, and the Run keeps waiting", async () => {
     const { db, close } = testDb();
     closers.push(close);
@@ -273,6 +292,24 @@ describe("a Ruling from the tracker", () => {
     );
     // This Human never sees the ruling screen, so the reply is the card.
     expect(await replies()).toContainEqual(expect.stringContaining("1 of 2"));
+  });
+
+  it("says on the record that the Gate passed when an admin lowered Approvals", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, seeded, say, replies } = await waiting(db, { approvalsRequired: 2 });
+    await say({ login: "bob", id: "1002" });
+
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 1 }],
+    });
+
+    expect(await replies()).toContainEqual(
+      expect.stringContaining(
+        "**Approved** at the `ship` Checkpoint — 1 of 1, once Approvals was lowered from 2 to 1.",
+      ),
+    );
   });
 
   it("refuses an account linked to a suspended Member", async () => {

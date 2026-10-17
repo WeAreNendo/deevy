@@ -6,12 +6,15 @@ import {
   type GateDecision,
   type GateRequest,
   type Member,
+  type Run,
 } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import {
+  approvalShortfall,
   CheckpointPolicySchema,
+  plural,
   policyFor,
   requesterFor,
   rulingRefusal,
@@ -74,22 +77,24 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
   const member = await db.query.member.findFirst({ where: { id: input.memberId } });
   assertMayRule(member);
   const policy = await policyFor(db, request.projectId, request.checkpoint);
-  if (policy.approverMemberIds.length > 0 && !policy.approverMemberIds.includes(member.id)) {
-    throw new ORPCError("FORBIDDEN", {
-      message: `Only the Humans named on the ${request.checkpoint} Checkpoint can rule on this`,
-    });
-  }
-  if (policy.excludeRequester) {
-    const requester = await requesterFor(db, request.run);
-    if (requester === member.id) {
-      throw new ORPCError("FORBIDDEN", {
-        message: `The ${request.checkpoint} Checkpoint wants somebody other than the Human this Run is for`,
-      });
-    }
-  }
-  if (request.decisions.some((row) => row.memberId === member.id)) {
-    throw new ORPCError("CONFLICT", { message: "You have already ruled on this Gate" });
-  }
+  // Only an approval asks who the Run is for: the Human a four-eyes policy
+  // excludes may still reject (ADR-0020), so a rejection never needs to know.
+  const requesterId =
+    policy.excludeRequester && input.decision === "approved"
+      ? await requesterFor(db, request.run)
+      : null;
+  const refusal = rulingRefusal(
+    policy,
+    {
+      viewerId: member.id,
+      viewerKind: member.kind,
+      requesterId,
+      hasRuled: request.decisions.some((row) => row.memberId === member.id),
+      status: request.status,
+    },
+    input.decision,
+  );
+  if (refusal) throw new ORPCError(refusal.code, { message: refusal.message });
 
   const [recorded] = await db
     .insert(gateDecisionTable)
@@ -135,15 +140,111 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
   }
 
   const status = input.decision === "approved" ? "approved" : "rejected";
-  const [decided] = await db
+  const who = member.handle ? `@${member.handle}` : "A Human";
+  const decided = await settleGate(
+    source,
+    request,
+    {
+      status,
+      approvals,
+      required: policy.approvalsRequired,
+      via: recorded.via,
+      note: recorded.note,
+      said: `${who} ${status} the ${request.checkpoint} Checkpoint${recorded.note ? `: ${recorded.note}` : ""}`,
+    },
+    request.run,
+  );
+  return { request: decided ?? request, approvals, settled };
+}
+
+/**
+ * Passes the open Gates a save of the Project's Checkpoints lowered Approvals
+ * under, wherever the approvals they already have now meet it — the way each
+ * would have passed had the threshold been that low when the last of those
+ * approvals landed (ADR-0020's way out for a Gate left short).
+ *
+ * Only what was given counts: a Ruling that was refused was never recorded, so
+ * turning the exclusion off in the same save adds nothing to the count. The
+ * actor is the admin who saved, and the Event says the threshold was lowered,
+ * so nobody's history claims a Ruling they did not make. One read of the open
+ * Gates of the lowered Checkpoints, with their Rulings and Runs, whatever their
+ * number; a Gate that passes then pays only for its own writes.
+ */
+export async function passLoweredGates(
+  source: EventSource & { member: Pick<Member, "id" | "handle"> },
+  projectId: string,
+  lowered: ReadonlyMap<string, { from: number; to: number }>,
+): Promise<number> {
+  if (lowered.size === 0) return 0;
+  const open = await source.db.query.gateRequest.findMany({
+    where: { projectId, status: "open", checkpoint: { in: [...lowered.keys()] } },
+    with: { decisions: true, run: true },
+  });
+  const who = source.member.handle ? `@${source.member.handle}` : "An admin";
+  let passed = 0;
+  for (const request of open) {
+    const change = lowered.get(request.checkpoint);
+    const approvals = request.decisions.filter((one) => one.decision === "approved").length;
+    if (!change || approvals < change.to) continue;
+    const decided = await settleGate(
+      source,
+      request,
+      {
+        status: "approved",
+        approvals,
+        required: change.to,
+        // Where the admin decided it, which is deevy's own screen or its API.
+        via: "web",
+        note: null,
+        loweredFrom: change.from,
+        said: `${who} lowered Approvals on the ${request.checkpoint} Checkpoint from ${String(change.from)} to ${String(change.to)}, so it passed with the ${plural(approvals, "approval")} it had`,
+      },
+      request.run,
+    );
+    if (decided) passed += 1;
+  }
+  return passed;
+}
+
+/** How a Gate settled, as its Event and the Run's feed say it. */
+interface Settlement {
+  status: "approved" | "rejected";
+  approvals: number;
+  required: number;
+  via: GateDecision["via"];
+  note: string | null;
+  /** The threshold an admin lowered, where lowering it is what passed the Gate. */
+  loweredFrom?: number;
+  /** The line the Run's feed gets, which is what the Agent reads. */
+  said: string;
+}
+
+/**
+ * Ends an open Gate: its status, the Event that says how, and the Run carrying
+ * on with `run.answered`.
+ *
+ * The one tail every way a Gate settles goes through — the Ruling that decides
+ * it, and an admin lowering Approvals to what it already has — so the tracker's
+ * comment, the chat messages, the webhooks and the Agent's inbox, which all
+ * read those Events, hear about each the same way. Only a row still open is
+ * settled, so two settling it at once settle it once, and the one that loses
+ * appends nothing.
+ */
+async function settleGate(
+  source: EventSource,
+  request: GateRequest,
+  settlement: Settlement,
+  run?: Run | null,
+): Promise<GateRequest | null> {
+  const [decided] = await source.db
     .update(gateRequestTable)
-    .set({ status, decidedAt: new Date() })
-    .where(eq(gateRequestTable.id, request.id))
+    .set({ status: settlement.status, decidedAt: new Date() })
+    .where(and(eq(gateRequestTable.id, request.id), eq(gateRequestTable.status, "open")))
     .returning();
-  const settledRow = (decided as GateRequest | undefined) ?? request;
+  if (!decided) return null;
 
   await appendEvent(source, {
-    kind: status === "approved" ? "gate.approved" : "gate.rejected",
+    kind: settlement.status === "approved" ? "gate.approved" : "gate.rejected",
     subjectType: "gate",
     subjectId: request.id,
     projectId: request.projectId,
@@ -151,14 +252,15 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
       issueId: request.issueId,
       runId: request.runId,
       checkpoint: request.checkpoint,
-      approvals,
-      required: policy.approvalsRequired,
-      via: recorded.via,
-      ...(input.note ? { note: input.note } : {}),
+      approvals: settlement.approvals,
+      required: settlement.required,
+      via: settlement.via,
+      ...(settlement.note ? { note: settlement.note } : {}),
+      ...(settlement.loweredFrom === undefined ? {} : { loweredFrom: settlement.loweredFrom }),
     },
   });
-  await resumeGateRun(source, settledRow, recorded, member);
-  return { request: settledRow, approvals, settled };
+  await resumeGateRun(source, decided as GateRequest, settlement, run);
+  return decided as GateRequest;
 }
 
 /** Nobody but a Human who is still a Member may rule (ADR-0004). */
@@ -179,23 +281,24 @@ function assertMayRule(member: Member | undefined): asserts member is Member {
  * answer does: that feed is where the Agent looks, and a decision it cannot
  * read is no decision. `run.answered` is what reaches its inbox (ADR-0003).
  */
-export async function resumeGateRun(
+async function resumeGateRun(
   source: EventSource,
   request: GateRequest,
-  decision: GateDecision,
-  member: Member,
+  answer: Pick<Settlement, "status" | "note" | "loweredFrom" | "said">,
+  known?: Run | null,
 ): Promise<void> {
-  const run = await source.db.query.run.findFirst({ where: { id: request.runId } });
+  // Read with the Gate where the caller had it, so a page of Gates passing at
+  // once is not a read of each one's Run.
+  const run = known ?? (await source.db.query.run.findFirst({ where: { id: request.runId } }));
   if (!run || !isOpen(run.status)) return;
 
-  const who = member.handle ? `@${member.handle}` : "A Human";
-  const said = decision.note ? `: ${decision.note}` : "";
+  const lowered = answer.loweredFrom === undefined ? {} : { loweredFrom: answer.loweredFrom };
   await source.db.insert(activityTable).values({
     id: newId("activity"),
     runId: run.id,
     kind: "prompt",
-    body: `${who} ${decision.decision === "approved" ? "approved" : "rejected"} the ${request.checkpoint} Checkpoint${said}`,
-    payload: { gateRequestId: request.id, decision: decision.decision },
+    body: answer.said,
+    payload: { gateRequestId: request.id, decision: answer.status, ...lowered },
   });
   if (run.status === "awaiting_input") {
     await setRunStatus(source.db, run, "active", { touchActivity: true });
@@ -210,8 +313,9 @@ export async function resumeGateRun(
       issueId: request.issueId,
       gateRequestId: request.id,
       checkpoint: request.checkpoint,
-      decision: decision.decision,
-      ...(decision.note ? { note: decision.note } : {}),
+      decision: answer.status,
+      ...(answer.note ? { note: answer.note } : {}),
+      ...lowered,
     },
   });
 }
@@ -266,10 +370,37 @@ export const GateRequestSchema = z.object({
    * that would refuse the Ruling itself (checkpoints.ts).
    */
   you: z.object({
+    /** Whether they may make a Ruling here at all: reject it, and approve it where `mayApprove` says so. */
     mayRule: z.boolean(),
+    /**
+     * Whether an approval from them would count. False wherever `mayRule` is,
+     * and for the Human the Run is for at a Checkpoint that excludes them, who
+     * may still reject.
+     */
+    mayApprove: z.boolean(),
     hasRuled: z.boolean(),
+    /** Why they may not rule at all, or null when they may. */
     why: z.string().nullable(),
+    /** Why they may not approve, or null when they may: `why`, where they may not rule at all. */
+    whyNotApprove: z.string().nullable(),
   }),
+  /**
+   * Said while the Gate is open and the Humans who could still approve it —
+   * active, named where the Checkpoint names any, not the Human the Run is for
+   * where it excludes them, and not already approved — are fewer than the
+   * approvals it still wants. Null otherwise. The same for every reader: it is
+   * the Gate's standing, not theirs (ADR-0020).
+   */
+  shortfall: z
+    .object({
+      /** Approvals this visit still wants before it settles: at least one, while it is open. */
+      wanted: z.number().int(),
+      /** Humans who could still give one. */
+      couldApprove: z.number().int(),
+      /** Both numbers and what an admin can do, as a screen shows it where Approve is. */
+      why: z.string(),
+    })
+    .nullable(),
 });
 
 export type GateRequestView = z.infer<typeof GateRequestSchema>;
@@ -295,6 +426,11 @@ export interface GateViewInput {
   viewer: { id: string; kind: "human" | "agent" };
   /** The Human this Run is for, read off the Run (`requesterFor`). */
   requesterId: string | null;
+  /**
+   * The Workspace's active Humans (`activeHumans`), which is what says whether
+   * an open Gate is left short. A Gate that is no longer open needs none.
+   */
+  active: ReadonlySet<string> | null;
 }
 
 export function gateView({
@@ -305,15 +441,26 @@ export function gateView({
   origin,
   viewer,
   requesterId,
+  active,
 }: GateViewInput): GateRequestView {
   const hasRuled = decisions.some((row) => row.memberId === viewer.id);
-  const why = rulingRefusal(policy, {
+  const standing = {
     viewerId: viewer.id,
     viewerKind: viewer.kind,
     requesterId,
     hasRuled,
     status: request.status,
-  });
+  };
+  // A rejection is refused only where any Ruling would be, so its refusal is
+  // the answer to "may they rule at all".
+  const why = rulingRefusal(policy, standing, "rejected")?.message ?? null;
+  const whyNotApprove = rulingRefusal(policy, standing, "approved")?.message ?? null;
+  const approvedBy = decisions
+    .filter((row) => row.decision === "approved")
+    .map((row) => row.memberId);
+  const shortfall = active
+    ? approvalShortfall(policy, { status: request.status, requesterId, approvedBy }, active)
+    : null;
   return {
     id: request.id,
     runId: request.runId,
@@ -341,8 +488,15 @@ export function gateView({
       verifiedBy: verifiedByOf(row.externalRef),
       createdAt: row.createdAt,
     })),
-    approvals: decisions.filter((row) => row.decision === "approved").length,
+    approvals: approvedBy.length,
     run: { id: request.runId, issueKey },
-    you: { mayRule: why === null, hasRuled, why },
+    you: {
+      mayRule: why === null,
+      mayApprove: whyNotApprove === null,
+      hasRuled,
+      why,
+      whyNotApprove,
+    },
+    shortfall,
   };
 }

@@ -10,8 +10,10 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { appendEvent } from "../events.ts";
 import {
+  activeHumans,
   CheckpointPolicySchema,
   defaultPolicy,
+  loweredApprovals,
   policyFor,
   policyOf,
   requesterFor,
@@ -22,6 +24,7 @@ import {
   GateLinkSchema,
   GateRequestSchema,
   gateView,
+  passLoweredGates,
   recordRuling,
   type GateDecisionRow,
 } from "../gates.ts";
@@ -80,7 +83,21 @@ async function gateFor(context: ContextFor<"member">, requestId: string) {
     decisions: found.decisions,
     issueKey: found.issue.externalKey,
     requesterId,
+    active: await activeWhileOpen(context, [found]),
   };
+}
+
+/**
+ * The Workspace's active Humans, read once for however many Gates a view
+ * shows, and only where one of them is still open: that is the only Gate that
+ * can be left short.
+ */
+async function activeWhileOpen(
+  context: ContextFor<"member">,
+  requests: Array<Pick<GateRequest, "status">>,
+): Promise<Set<string> | null> {
+  if (!requests.some((one) => one.status === "open")) return null;
+  return activeHumans(context.db, context.workspace.id);
 }
 
 function viewOf(
@@ -91,6 +108,7 @@ function viewOf(
     decisions: GateDecisionRow[];
     issueKey: string;
     requesterId?: string | null;
+    active: ReadonlySet<string> | null;
   },
 ) {
   return gateView({
@@ -150,6 +168,8 @@ export const gates = {
           policy,
           decisions: standing.decisions,
           issueKey: key,
+          requesterId: policy.excludeRequester ? await requesterFor(context.db, run) : null,
+          active: await activeWhileOpen(context, [standing]),
         });
       }
 
@@ -217,6 +237,7 @@ export const gates = {
           policy,
           decisions: answered.decisions,
           issueKey: key,
+          active: null,
         });
       }
 
@@ -289,7 +310,16 @@ export const gates = {
         },
       });
 
-      return viewOf(context, { request, policy, decisions: [], issueKey: key });
+      // A Gate can be short the moment it is asked, where Humans were suspended
+      // after the policy was saved, and the Agent asking is told so too.
+      return viewOf(context, {
+        request,
+        policy,
+        decisions: [],
+        issueKey: key,
+        requesterId: policy.excludeRequester ? await requesterFor(context.db, run) : null,
+        active: await activeWhileOpen(context, [request]),
+      });
     },
   }),
 
@@ -314,7 +344,7 @@ export const gates = {
     auth: "member",
     agents: true,
     input: z.object({
-      /** Only the ones this Human could rule on right now. */
+      /** Only the ones waiting on this Human: those they could approve right now. */
       mine: z.union([z.boolean(), z.stringbool()]).optional(),
       /** Every Gate one Run has asked for, which is what a Run's page shows. */
       runId: z.string().optional(),
@@ -389,6 +419,12 @@ export const gates = {
         });
         for (const one of runs) requesters.set(one.id, await requesterFor(context.db, one));
       }
+      // Who could still approve, for every open Gate on the page: one more
+      // statement, and none where the page holds nothing open.
+      const active = await activeWhileOpen(
+        context,
+        rows.map(({ gate }) => gate),
+      );
 
       const gatesOut = [];
       for (const { gate, externalKey } of rows) {
@@ -401,11 +437,13 @@ export const gates = {
           decisions: ruled,
           issueKey: externalKey,
           requesterId: requesters.get(gate.runId) ?? null,
+          active,
         });
         // "Waiting on me" is the whole question a home page asks, and it is
         // the same question the ruling screen answers: a Gate this Human may
-        // rule on right now.
-        if (input.mine && !view.you.mayRule) continue;
+        // approve right now. The Human a Checkpoint excludes may still reject
+        // it, but it is not waiting on them, just as their inbox is not asked.
+        if (input.mine && !view.you.mayApprove) continue;
         gatesOut.push(view);
       }
       return { gates: gatesOut };
@@ -519,6 +557,13 @@ export const checkpoints = {
       if (names.size !== input.checkpoints.length) {
         throw new ORPCError("BAD_REQUEST", { message: "Two Checkpoints cannot share a name" });
       }
+      // What it asked before, because a threshold lowered to what an open Gate
+      // already has passes that Gate (ADR-0020), and only the old list says
+      // what was lowered.
+      const before = await context.db.query.checkpoint.findMany({
+        where: { projectId: project.id },
+        columns: { name: true, approvalsRequired: true },
+      });
       await setCheckpoints(context.db, project.id, context.workspace.id, input.checkpoints);
 
       await appendEvent(context, {
@@ -528,6 +573,9 @@ export const checkpoints = {
         projectId: project.id,
         payload: { slug: project.slug, checkpoints: [...names] },
       });
+      // After the policy's own Event, so the history reads in the order it
+      // happened: the threshold changed, and then the Gates passed because of it.
+      await passLoweredGates(context, project.id, loweredApprovals(before, input.checkpoints));
 
       const rows = await context.db.query.checkpoint.findMany({
         where: { projectId: project.id },

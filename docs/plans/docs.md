@@ -91,11 +91,16 @@ these are the disagreements, each still to be settled on the code's side or OPER
   dead-ends for an organization's repositories. tools/github.md and get-started/connect-a-tool.md give the
   way that works (an organization owner makes the App, **Paste an App you already have**); OPERATIONS.md
   says the flow makes the App "in your organization", which it does not. Proposed as its own change.
-- **The Human the work is for, excluded from a Checkpoint, may neither approve nor reject** in the code
-  (`recordRuling`, `rulingRefusal`), where ADR-0020 and OPERATIONS.md say they may still reject. The pages
-  follow the code until Matt decides which is meant.
-- **No message says a Gate was left short by a suspension**, which OPERATIONS.md describes; the pages only
-  say an admin reinstates the Member or lowers **Approvals**.
+- **The Human the work is for, excluded from a Checkpoint, could neither approve nor reject**, where
+  ADR-0020 says they may still reject. Settled as ADR-0020 has it, after Matt chose it: `rulingRefusal`
+  refuses them only an approval, at every door through `recordRuling`, and the Gate's view gains
+  `you.mayApprove` and `you.whyNotApprove`, so the ruling screen offers them Reject alone.
+- **No message said a Gate was left short by a suspension**, which OPERATIONS.md described. Settled: the
+  Gate's view gains `shortfall` (`approvalShortfall`), and the ruling card shows it above Approve with
+  both numbers and an admin's way out. Lowering Approvals had settled nothing, so a short Gate holding an
+  approval waited for ever; saving a lower threshold now passes every open Gate that already meets it
+  (`passLoweredGates`, through the same `settleGate` tail as the last approval), as the admin, with
+  `loweredFrom` on its Events.
 - **A webhook's retries never reached OPERATIONS.md's six-hour cap**: eight attempts from ten seconds,
   doubling, wait at most 640 seconds. Settled on OPERATIONS.md's side: it and webhooks.md now give the
   longest wait as about ten minutes and the whole window as about twenty, and the code is unchanged.

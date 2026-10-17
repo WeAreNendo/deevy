@@ -201,6 +201,44 @@ describe("a Gate in a Slack room", () => {
       message: { kind: "gate", gate: { status: "approved", approvals: 2 } },
     });
   });
+
+  it("is changed when an admin lowers Approvals to what the Gate already has", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asPlanner, run, chat, slackId, send, click } = await posting(db);
+    const room = await asAda.channels.createInSocket({
+      name: "#deevy",
+      socketId: slackId,
+      conversation: "C0DEEVY",
+    });
+    await asAda.routing.set({
+      rules: [{ notificationKind: "gate_awaiting", projectId: null, channelId: room.id }],
+    });
+    await asAda.checkpoints.set({
+      projectSlug: "deevy",
+      checkpoints: [{ name: "plan", approvalsRequired: 2 }],
+    });
+    const gate = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Ship it",
+    });
+    await send();
+    const posted = chat.posted.find((one) => one.channel === "C0DEEVY");
+    await click("U0GRACE", gate.id);
+    await send();
+
+    await asAda.checkpoints.set({
+      projectSlug: "deevy",
+      checkpoints: [{ name: "plan", approvalsRequired: 1 }],
+    });
+    await send();
+
+    const inRoom = chat.updated.filter((one) => one.ref.ts === posted?.ref.ts);
+    expect(inRoom.at(-1)).toMatchObject({
+      message: { kind: "gate", gate: { status: "approved", approvals: 1 } },
+    });
+  });
 });
 
 describe("a direct message in Slack", () => {

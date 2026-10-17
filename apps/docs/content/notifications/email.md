@@ -10,7 +10,7 @@ invitations.
 
 ## Your own email
 
-deevy emails you about what is waiting on you: a Gate you may rule on, and a Run waiting for your answer. You
+deevy emails you about what is waiting on you: a Gate you may approve, and a Run waiting for your answer. You
 can choose more, or less, under **Settings › Notifications**.
 
 deevy only ever writes to an address your sign-in confirmed. **Settings › Notifications** says which, under

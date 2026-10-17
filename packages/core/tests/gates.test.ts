@@ -95,6 +95,38 @@ describe("a Checkpoint that wants two Humans", () => {
     expect(ada.member.id).toBeTruthy();
   });
 
+  /**
+   * ADR-0020: "The requester, excluded from approving, may still reject." They
+   * are told they cannot also be the agreement, not silenced. The Sockets
+   * rewrite refused both until 2026-10-16.
+   */
+  it("lets the one who brought the work reject, and only reject", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asPlanner, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+
+    await expect(asAda.gates.approve({ requestId: asked.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringContaining("you may still reject it"),
+    });
+    const ruled = await asAda.gates.reject({ requestId: asked.id, note: "Not this week" });
+
+    expect(ruled).toMatchObject({ status: "rejected" });
+    expect(ruled.decisions).toMatchObject([{ decision: "rejected", note: "Not this week" }]);
+    expect((await asPlanner.runs.get({ runId: run.id })).status).toBe("active");
+    const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
+    expect(kinds).toContain("gate.rejected");
+  });
+
   it("will not let one Human count twice", async () => {
     const { db, close } = testDb();
     closers.push(close);
@@ -519,15 +551,345 @@ describe("what the Gate says to the Human reading it", () => {
       hasRuled: false,
       why: null,
     });
+    // Ada is the Human this Run is for: she may rule, by rejecting, and the
+    // view says why Approve is not hers so the screen can offer Reject alone.
     const ada = await asAda.gates.get({ requestId: asked.id });
-    expect(ada.you.mayRule).toBe(false);
-    expect(ada.you.why).toContain("somebody other than the Human this Run is for");
+    expect(ada.you).toMatchObject({ mayRule: true, mayApprove: false, why: null });
+    expect(ada.you.whyNotApprove).toBe(
+      "The ship Checkpoint wants somebody other than the Human this Run is for to approve it; you may still reject it",
+    );
 
     await asBob.gates.approve({ requestId: asked.id });
     const bobAgain = await asBob.gates.get({ requestId: asked.id });
-    expect(bobAgain.you).toMatchObject({ mayRule: false, hasRuled: true });
+    expect(bobAgain.you).toMatchObject({ mayRule: false, mayApprove: false, hasRuled: true });
+    expect(bobAgain.you.why).toBe("You have already ruled on this Gate");
+    expect(bobAgain.you.whyNotApprove).toBe(bobAgain.you.why);
     expect(bobAgain.approvals).toBe(1);
     expect(bobAgain.policy.approvalsRequired).toBe(2);
-    expect((await asCarol.gates.get({ requestId: asked.id })).you.mayRule).toBe(true);
+    expect((await asCarol.gates.get({ requestId: asked.id })).you).toMatchObject({
+      mayRule: true,
+      mayApprove: true,
+      whyNotApprove: null,
+    });
+  });
+
+  it("is waiting on the Humans who may approve it, and not on the one it excludes", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 1, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+
+    // The same answer as the inbox's: Ada is not asked, though she may reject.
+    expect((await asBob.gates.list({ mine: true })).gates.map((gate) => gate.id)).toEqual([
+      asked.id,
+    ]);
+    expect((await asAda.gates.list({ mine: true })).gates).toEqual([]);
+    const [listed] = (await asAda.gates.list({})).gates;
+    expect(listed?.you).toMatchObject({ mayRule: true, mayApprove: false });
+  });
+});
+
+/**
+ * ADR-0020: "A pool that shrinks afterwards is said out loud, not guessed
+ * around." A policy is checked against the Humans there are when it is saved,
+ * and suspending one afterwards can leave an open Gate wanting more approvals
+ * than anybody left could give. The Gate says so, with both numbers and an
+ * admin's way out, and deevy lowers nothing for anybody.
+ */
+describe("a Gate left short of Humans who could approve it", () => {
+  it("says how many it still wants and how many could still give one", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, carol, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    expect(asked.shortfall).toBeNull();
+
+    // Ada is excluded, so Bob and Carol were the two; without Carol it is one.
+    await asAda.members.suspend({ memberId: carol.member.id });
+
+    const short = await asBob.gates.get({ requestId: asked.id });
+    expect(short.shortfall).toEqual({
+      wanted: 2,
+      couldApprove: 1,
+      why: "This Gate still wants 2 approvals and only 1 Human can still give one. An admin can lower Approvals on the ship Checkpoint, or reinstate a suspended Member.",
+    });
+    // Every Human reading it is told, and the list says what the Gate says.
+    expect((await asAda.gates.get({ requestId: asked.id })).shortfall).toEqual(short.shortfall);
+    const [listed] = (await asBob.gates.list({ runId: run.id })).gates;
+    expect(listed?.shortfall).toEqual(short.shortfall);
+
+    // The approval still counts: it is true, and it is what a lower threshold
+    // passes the Gate with. Nobody is left after Bob, and lowering still helps.
+    const approved = await asBob.gates.approve({ requestId: asked.id });
+    expect(approved).toMatchObject({ status: "open", approvals: 1 });
+    expect(approved.shortfall).toEqual({
+      wanted: 1,
+      couldApprove: 0,
+      why: "This Gate still wants 1 approval and nobody can still give one. An admin can lower Approvals on the ship Checkpoint, or reinstate a suspended Member.",
+    });
+  });
+
+  it("stops saying so once an admin lowers Approvals, and the next approval settles it", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, carol, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await asAda.members.suspend({ memberId: carol.member.id });
+
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 1, excludeRequester: true }],
+    });
+
+    expect((await asBob.gates.get({ requestId: asked.id })).shortfall).toBeNull();
+    expect(await asBob.gates.approve({ requestId: asked.id })).toMatchObject({
+      status: "approved",
+      shortfall: null,
+    });
+  });
+
+  it("counts only the Humans the Checkpoint names", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asCarol, asPlanner, bob, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 1, approverMemberIds: [bob.member.id] }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+
+    await asAda.members.suspend({ memberId: bob.member.id });
+
+    // Carol is active and could rule anywhere else, but not here. With no
+    // approval given and nobody to give one, no threshold an admin could set
+    // helps, so the way out names only reinstating.
+    expect((await asCarol.gates.get({ requestId: asked.id })).shortfall).toEqual({
+      wanted: 1,
+      couldApprove: 0,
+      why: "This Gate still wants 1 approval and nobody can still give one. An admin can reinstate a suspended Member.",
+    });
+    await asAda.members.reinstate({ memberId: bob.member.id });
+    expect((await asCarol.gates.get({ requestId: asked.id })).shortfall).toBeNull();
+  });
+
+  it("says nothing once the Gate is no longer open", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, carol, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await asAda.members.suspend({ memberId: carol.member.id });
+
+    const rejected = await asBob.gates.reject({ requestId: asked.id, note: "Not yet" });
+
+    expect(rejected).toMatchObject({ status: "rejected", shortfall: null });
+  });
+});
+
+/**
+ * Lowering a Checkpoint's Approvals to what an open Gate already has passes
+ * it, the way it would have passed had the threshold been that low when the
+ * last of those approvals landed. Without this, a Gate short of approvers with
+ * an approval in hand waited for ever: lowering the threshold settled nothing,
+ * and nobody was left to give the approval that would.
+ */
+describe("an admin lowering Approvals", () => {
+  it("passes an open Gate that already has what it now wants, as the admin, and says why", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { ada, asAda, asBob, asPlanner, carol, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await asBob.gates.approve({ requestId: asked.id, note: "Reads right" });
+    await asAda.members.suspend({ memberId: carol.member.id });
+
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 1, excludeRequester: true }],
+    });
+
+    expect(await asBob.gates.get({ requestId: asked.id })).toMatchObject({
+      status: "approved",
+      approvals: 1,
+      shortfall: null,
+    });
+    expect((await asPlanner.runs.get({ runId: run.id })).status).toBe("active");
+
+    // The history reads true: the policy changed, then the Gate passed because
+    // of it, both by the admin who saved it, and nothing claims a Ruling.
+    const events = await db.query.event.findMany({ orderBy: { seq: "asc" } });
+    const kinds = events.map((event) => event.kind);
+    expect(kinds.lastIndexOf("project.updated")).toBeLessThan(kinds.indexOf("gate.approved"));
+    expect(events.find((event) => event.kind === "gate.approved")).toMatchObject({
+      actorMemberId: ada.member.id,
+      payload: { approvals: 1, required: 1, loweredFrom: 2, via: "web", checkpoint: "ship" },
+    });
+    expect(events.find((event) => event.kind === "run.answered")).toMatchObject({
+      actorMemberId: ada.member.id,
+      payload: { decision: "approved", loweredFrom: 2 },
+    });
+    expect(await db.query.gateDecision.findMany({})).toHaveLength(1);
+
+    // The Agent hears it where it hears every answer (ADR-0003).
+    const inbox = await asPlanner.inbox.list({ unreadOnly: true });
+    expect(inbox.notifications.map((row) => row.kind)).toContain("run_answered");
+    const said = (await asPlanner.runs.get({ runId: run.id })).activities.map((one) => one.body);
+    expect(said).toContainEqual(
+      "@ada lowered Approvals on the ship Checkpoint from 2 to 1, so it passed with the 1 approval it had",
+    );
+  });
+
+  it("settles nothing that is raised, kept, or lowered to more than the Gate has", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, run, seeded } = await workspace(db);
+    const ship = (approvalsRequired: number) =>
+      asAda.checkpoints.set({
+        projectSlug: seeded.project.slug,
+        checkpoints: [{ name: "ship", approvalsRequired }],
+      });
+    await ship(2);
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await asBob.gates.approve({ requestId: asked.id });
+
+    await ship(2);
+    await ship(3);
+    await ship(2);
+    expect((await asBob.gates.get({ requestId: asked.id })).status).toBe("open");
+
+    await ship(1);
+    expect((await asBob.gates.get({ requestId: asked.id })).status).toBe("approved");
+    const passed = (await db.query.event.findMany({})).filter(
+      (event) => event.kind === "gate.approved",
+    );
+    expect(passed).toHaveLength(1);
+    expect(passed[0]?.payload).toMatchObject({ loweredFrom: 2, required: 1 });
+  });
+
+  it("never counts an approval that was refused, when the exclusion is turned off", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asPlanner, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2, excludeRequester: true }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await expect(asAda.gates.approve({ requestId: asked.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+
+    // Lower and drop the exclusion in one save: Ada's refused click was never
+    // an approval, so there is nothing to pass the Gate with.
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 1, excludeRequester: false }],
+    });
+    expect((await asAda.gates.get({ requestId: asked.id })).status).toBe("open");
+
+    // Now she may approve, and her approval is a new one that counts.
+    expect(await asAda.gates.approve({ requestId: asked.id })).toMatchObject({
+      status: "approved",
+    });
+  });
+
+  it("passes a Gate whose Checkpoint was taken off the list, which wants one approval again", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 2 }],
+    });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await asBob.gates.approve({ requestId: asked.id });
+
+    await asAda.checkpoints.set({ projectSlug: seeded.project.slug, checkpoints: [] });
+
+    const passed = await asBob.gates.get({ requestId: asked.id });
+    expect(passed).toMatchObject({ status: "approved", policy: { approvalsRequired: 1 } });
+  });
+
+  it("leaves the Gates of a Checkpoint that was not lowered alone", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 2 },
+      ],
+    });
+    const plan = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Plan it",
+    });
+    await asBob.gates.approve({ requestId: plan.id });
+
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 1 },
+      ],
+    });
+
+    expect((await asBob.gates.get({ requestId: plan.id })).status).toBe("open");
   });
 });

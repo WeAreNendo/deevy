@@ -323,6 +323,9 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
 - **`components/gate-controls.tsx` is the only place a ruling is made in deevy.** It says the arithmetic
   out loud ("1 of 2"), and says why it will not take this Human's ruling before they click — the reason is
   the server's own (`gates.get`), so the disabled button and the refusal behind it can never disagree.
+  Approve and Reject are decided apart (`you.mayApprove` beside `you.mayRule`): the Human the work is for,
+  at a Checkpoint that excludes them, gets Reject with Approve disabled and its reason. A Gate left short of
+  Humans who could approve says so above the buttons (`shortfall.why`, `data-slot="gate-shortfall"`).
   `group "<Checkpoint> Gate"` with `data-focused`, a `Note`, `Approve` and `Reject`; `⇧A`/`⇧R` choose and
   `⌘↵` commits, and nothing commits on a key alone.
 - **Work is read-only** (`/work`, `table "Work"`): every record deevy projected, filtered in the URL by

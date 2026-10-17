@@ -15,8 +15,18 @@ const calls = vi.hoisted(() => ({
   reject: vi.fn(async (_input: { requestId: string; note?: string }) => ({})),
 }));
 
+/** Where the Human reading a Gate stands when they may approve and reject alike. */
+const mayDoAnything = vi.hoisted(() => () => ({
+  mayRule: true,
+  mayApprove: true,
+  hasRuled: false,
+  why: null as string | null,
+  whyNotApprove: null as string | null,
+}));
+
 const state = vi.hoisted(() => ({
-  you: { mayRule: true, hasRuled: false, why: null as string | null },
+  you: mayDoAnything(),
+  shortfall: null as { wanted: number; couldApprove: number; why: string } | null,
   verifiedBy: "sign_in" as "sign_in" | "oauth" | "link_code" | "email" | null,
 }));
 
@@ -53,6 +63,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
             },
           ],
           you: state.you,
+          shortfall: state.shortfall,
         }),
       approve: calls.approve,
       reject: calls.reject,
@@ -111,7 +122,7 @@ const { mountAt } = await import("./mount.tsx");
 
 describe("the Gate a Human opens", () => {
   it("shows what is proposed, where the work is, and where the count stands", async () => {
-    state.you = { mayRule: true, hasRuled: false, why: null };
+    state.you = mayDoAnything();
     await mountAt("/gates/gate_stub00000");
 
     expect(await screen.findByRole("heading", { name: "Checkout rewrite" })).toBeTruthy();
@@ -133,7 +144,7 @@ describe("the Gate a Human opens", () => {
    * as a link (lib/href.ts).
    */
   it("draws no link to an address that is not a web page", async () => {
-    state.you = { mayRule: true, hasRuled: false, why: null };
+    state.you = mayDoAnything();
     await mountAt("/gates/gate_stub00000");
 
     expect(await screen.findByText("The fix")).toBeTruthy();
@@ -142,7 +153,7 @@ describe("the Gate a Human opens", () => {
   });
 
   it("names the door a Ruling came through", async () => {
-    state.you = { mayRule: true, hasRuled: false, why: null };
+    state.you = mayDoAnything();
     await mountAt("/gates/gate_stub00000");
 
     const ruled = await screen.findByRole("list", { name: "Gate decisions" });
@@ -152,7 +163,7 @@ describe("the Gate a Human opens", () => {
   });
 
   it("says so when all deevy knew of the Human was their address", async () => {
-    state.you = { mayRule: true, hasRuled: false, why: null };
+    state.you = mayDoAnything();
     state.verifiedBy = "email";
     await mountAt("/gates/gate_stub00000");
 
@@ -162,7 +173,7 @@ describe("the Gate a Human opens", () => {
   });
 
   it("rules by keyboard: ⇧A chooses, ⌘↵ commits, and the Note goes with it", async () => {
-    state.you = { mayRule: true, hasRuled: false, why: null };
+    state.you = mayDoAnything();
     calls.approve.mockClear();
     await mountAt("/gates/gate_stub00000");
     const gate = await screen.findByRole("group", { name: /ship Gate/ });
@@ -183,14 +194,71 @@ describe("the Gate a Human opens", () => {
   it("says why it will not take a ruling from this Human, rather than failing on the click", async () => {
     state.you = {
       mayRule: false,
-      hasRuled: false,
-      why: "The ship Checkpoint wants somebody other than the Human this Run is for",
+      mayApprove: false,
+      hasRuled: true,
+      why: "You have already ruled on this Gate",
+      whyNotApprove: "You have already ruled on this Gate",
     };
     await mountAt("/gates/gate_stub00000");
 
     const gate = await screen.findByRole("group", { name: /ship Gate/ });
-    expect(within(gate).getByText(/somebody other than the Human/)).toBeTruthy();
+    expect(within(gate).getAllByText("You have already ruled on this Gate")).toHaveLength(1);
     expect(within(gate).getByRole("button", { name: "Approve" })).toHaveProperty("disabled", true);
     expect(within(gate).getByRole("button", { name: "Reject" })).toHaveProperty("disabled", true);
+    expect(within(gate).getByLabelText("Note")).toHaveProperty("disabled", true);
+  });
+
+  /**
+   * ADR-0020: the Human the work is for, at a Checkpoint that excludes them,
+   * cannot also be the agreement, but may still say stop. The card offers
+   * Reject, and says why Approve is not theirs where Approve is.
+   */
+  it("offers the Human the work is for Reject, and says why Approve is not theirs", async () => {
+    state.you = {
+      mayRule: true,
+      mayApprove: false,
+      hasRuled: false,
+      why: null,
+      whyNotApprove:
+        "The ship Checkpoint wants somebody other than the Human this Run is for to approve it; you may still reject it",
+    };
+    calls.approve.mockClear();
+    calls.reject.mockClear();
+    await mountAt("/gates/gate_stub00000");
+    const gate = await screen.findByRole("group", { name: /ship Gate/ });
+
+    expect(within(gate).getByText(/you may still reject it/)).toBeTruthy();
+    expect(within(gate).getByRole("button", { name: "Approve" })).toHaveProperty("disabled", true);
+    const reject = within(gate).getByRole("button", { name: "Reject" });
+    expect(reject).toHaveProperty("disabled", false);
+
+    // ⇧A chooses nothing they could commit; ⇧R still puts them in the Note.
+    fireEvent.keyDown(document.body, { key: "A", shiftKey: true });
+    expect(gate.getAttribute("data-ruling")).toBeNull();
+    fireEvent.keyDown(document.body, { key: "R", shiftKey: true });
+    const note = within(gate).getByLabelText("Note");
+    expect(document.activeElement).toBe(note);
+    fireEvent.change(note, { target: { value: "Not before the freeze lifts" } });
+    fireEvent.keyDown(note, { key: "Enter", metaKey: true });
+
+    await waitFor(() => expect(calls.reject).toHaveBeenCalledTimes(1));
+    expect(calls.reject.mock.calls[0]?.[0]).toMatchObject({ note: "Not before the freeze lifts" });
+    expect(calls.approve).not.toHaveBeenCalled();
+  });
+
+  it("says where Approve is when the Gate is left short, naming both numbers", async () => {
+    state.you = mayDoAnything();
+    state.shortfall = {
+      wanted: 2,
+      couldApprove: 1,
+      why: "This Gate still wants 2 approvals and only 1 Human can still give one. An admin can lower Approvals on the ship Checkpoint, or reinstate a suspended Member.",
+    };
+    await mountAt("/gates/gate_stub00000");
+
+    const gate = await screen.findByRole("group", { name: /ship Gate/ });
+    expect(within(gate).getByText(/still wants 2 approvals and only 1 Human/)).toBeTruthy();
+    // An approval is still true and still counts, so it is still offered.
+    expect(within(gate).getByRole("button", { name: "Approve" })).toHaveProperty("disabled", false);
+    state.shortfall = null;
   });
 });

@@ -318,9 +318,10 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
  * pays it. Every later comment by the same Human skips the account read, the
  * write and its Event. Then one more, from slice 10: a Ruling changes what the
  * Gate's chat messages should say, so it asks where there are any
- * (sockets/chat-out.ts).
+ * (sockets/chat-out.ts). One fewer since a settled Gate resumes its Run from
+ * the row read with the Gate rather than reading the Run again (gates.ts).
  */
-const rulingFromTracker = 31;
+const rulingFromTracker = 30;
 
 describe(`the D1 request budget: a Ruling from the tracker costs ${String(rulingFromTracker)}`, () => {
   it("is under D1's cap the first time deevy meets the account", async () => {
@@ -398,9 +399,10 @@ describe(`the D1 request budget: a Ruling from the tracker costs ${String(ruling
  * The request's own row and its outcome, the Gate, the Identity, then
  * `recordRuling` as the web pays it — including the one read of where the
  * Gate's chat messages are, which owes this click's own message its update
- * through the outbox rather than changing it inline.
+ * through the outbox rather than changing it inline. Like the tracker's, one
+ * fewer since the Run resumes from the row read with the Gate.
  */
-const slackClick = 24;
+const slackClick = 23;
 
 describe(`the D1 request budget: a Slack click that rules costs ${String(slackClick)}`, () => {
   it("is under D1's cap, and changes nothing in Slack on the way", async () => {
@@ -490,9 +492,14 @@ describe(`the D1 request budget: a Slack click that rules costs ${String(slackCl
  * with nothing (sockets/chat-out.ts). Since the first real GitHub walk the ask
  * also reads whether this exact Proposal was already approved on the record,
  * which is how an approval that stands is carried rather than asked twice.
+ * And since a Gate says when it is left short of Humans who could approve it,
+ * the ask reads the Workspace's active Humans once for its answer; the
+ * ruling's answer does not, because the approval that settles a Gate leaves
+ * nothing open to be short. And the ruling no longer reads the Run it resumes:
+ * the Gate was read with it.
  */
-const asking = 20;
-const ruling = 20;
+const asking = 21;
+const ruling = 19;
 
 describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
   it("stays well under D1's cap on both halves", async () => {
@@ -575,6 +582,59 @@ describe(`the Runs feed: ${String(listingRuns)} statements a page`, () => {
     expect(page.runs).toHaveLength(3);
     expect(statements.length).toBe(one);
     expect(one).toBe(listingRuns);
+  });
+});
+
+/**
+ * Saving a Project's Checkpoints reads the Project and what it replaces, the
+ * active Humans it checks the policy against, replaces the rows, appends its
+ * Event, and — where a save lowers Approvals — reads the open Gates of the
+ * lowered Checkpoints once, with their Rulings and Runs, then the list it
+ * answers with. A Gate that passes then pays for its own writes; one that does
+ * not costs nothing more, so many of them waiting is the same save as one.
+ */
+const savingCheckpoints = 9;
+
+describe(`saving Checkpoints: ${String(savingCheckpoints)} statements, however many Gates are open`, () => {
+  async function lowering(gates: number) {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    await memberContext(db, { name: "Carol", email: "carol@example.com" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+    const asAda = createRouterClient(router, { context: ada });
+    const ship = (approvalsRequired: number) =>
+      asAda.checkpoints.set({
+        projectSlug: seeded.project.slug,
+        checkpoints: [{ name: "ship", approvalsRequired }],
+      });
+    await ship(3);
+    for (let at = 1; at <= gates; at += 1) {
+      const issue = await seeded.record({ externalId: String(at), title: `Record ${String(at)}` });
+      const run = await asPlanner.runs.start({ issue: issue.url });
+      await asPlanner.gates.request({ runId: run.id, checkpoint: "ship", proposal: "Ship it" });
+    }
+
+    statements.length = 0;
+    // Lowered, to more than any of them has, so every one is read and none passes.
+    await ship(2);
+    return statements.length;
+  }
+
+  it("reads the open Gates of a lowered Checkpoint once, not once a Gate", async () => {
+    const one = await lowering(1);
+    expect(await lowering(3)).toBe(one);
+    expect(one).toBe(savingCheckpoints);
+    expect(savingCheckpoints).toBeLessThan(d1StatementsPerInvocation);
   });
 });
 

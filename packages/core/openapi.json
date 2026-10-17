@@ -11379,6 +11379,9 @@
                         "mayRule": {
                           "type": "boolean"
                         },
+                        "mayApprove": {
+                          "type": "boolean"
+                        },
                         "hasRuled": {
                           "type": "boolean"
                         },
@@ -11387,14 +11390,53 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "whyNotApprove": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
                         "mayRule",
+                        "mayApprove",
                         "hasRuled",
-                        "why"
+                        "why",
+                        "whyNotApprove"
                       ],
                       "additionalProperties": false
+                    },
+                    "shortfall": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "wanted": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "couldApprove": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "wanted",
+                            "couldApprove",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -11415,7 +11457,8 @@
                     "decisions",
                     "approvals",
                     "run",
-                    "you"
+                    "you",
+                    "shortfall"
                   ],
                   "additionalProperties": false
                 }
@@ -11678,6 +11721,9 @@
                         "mayRule": {
                           "type": "boolean"
                         },
+                        "mayApprove": {
+                          "type": "boolean"
+                        },
                         "hasRuled": {
                           "type": "boolean"
                         },
@@ -11686,14 +11732,53 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "whyNotApprove": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
                         "mayRule",
+                        "mayApprove",
                         "hasRuled",
-                        "why"
+                        "why",
+                        "whyNotApprove"
                       ],
                       "additionalProperties": false
+                    },
+                    "shortfall": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "wanted": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "couldApprove": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "wanted",
+                            "couldApprove",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -11714,7 +11799,8 @@
                     "decisions",
                     "approvals",
                     "run",
-                    "you"
+                    "you",
+                    "shortfall"
                   ],
                   "additionalProperties": false
                 }
@@ -12043,6 +12129,9 @@
                               "mayRule": {
                                 "type": "boolean"
                               },
+                              "mayApprove": {
+                                "type": "boolean"
+                              },
                               "hasRuled": {
                                 "type": "boolean"
                               },
@@ -12051,14 +12140,53 @@
                                   "string",
                                   "null"
                                 ]
+                              },
+                              "whyNotApprove": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               }
                             },
                             "required": [
                               "mayRule",
+                              "mayApprove",
                               "hasRuled",
-                              "why"
+                              "why",
+                              "whyNotApprove"
                             ],
                             "additionalProperties": false
+                          },
+                          "shortfall": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "wanted": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "couldApprove": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "why": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "wanted",
+                                  "couldApprove",
+                                  "why"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -12079,7 +12207,8 @@
                           "decisions",
                           "approvals",
                           "run",
-                          "you"
+                          "you",
+                          "shortfall"
                         ],
                         "additionalProperties": false
                       }
@@ -12364,6 +12493,9 @@
                         "mayRule": {
                           "type": "boolean"
                         },
+                        "mayApprove": {
+                          "type": "boolean"
+                        },
                         "hasRuled": {
                           "type": "boolean"
                         },
@@ -12372,14 +12504,53 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "whyNotApprove": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
                         "mayRule",
+                        "mayApprove",
                         "hasRuled",
-                        "why"
+                        "why",
+                        "whyNotApprove"
                       ],
                       "additionalProperties": false
+                    },
+                    "shortfall": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "wanted": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "couldApprove": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "wanted",
+                            "couldApprove",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -12400,7 +12571,8 @@
                     "decisions",
                     "approvals",
                     "run",
-                    "you"
+                    "you",
+                    "shortfall"
                   ],
                   "additionalProperties": false
                 }
@@ -12678,6 +12850,9 @@
                         "mayRule": {
                           "type": "boolean"
                         },
+                        "mayApprove": {
+                          "type": "boolean"
+                        },
                         "hasRuled": {
                           "type": "boolean"
                         },
@@ -12686,14 +12861,53 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "whyNotApprove": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
                         "mayRule",
+                        "mayApprove",
                         "hasRuled",
-                        "why"
+                        "why",
+                        "whyNotApprove"
                       ],
                       "additionalProperties": false
+                    },
+                    "shortfall": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "wanted": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "couldApprove": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "wanted",
+                            "couldApprove",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -12714,7 +12928,8 @@
                     "decisions",
                     "approvals",
                     "run",
-                    "you"
+                    "you",
+                    "shortfall"
                   ],
                   "additionalProperties": false
                 }

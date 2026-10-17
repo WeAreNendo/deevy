@@ -31,7 +31,7 @@ const signingSecret = "a-slack-signing-secret-for-tests";
  * Slack Socket is a fake that carries its interaction verbatim — Slack's own
  * wire format is `packages/sockets`' to prove.
  */
-async function withSlack(db: Db) {
+async function withSlack(db: Db, policy: { excludeRequester?: boolean } = {}) {
   const ada = await memberContext(db, { role: "admin", name: "Ada" });
   const grace = await memberContext(db, { name: "Grace", email: "grace@example.com" });
   const omar = await memberContext(db, { name: "Omar", email: "omar@example.com" });
@@ -69,6 +69,13 @@ async function withSlack(db: Db) {
     externalLogin: "grace",
     verifiedBy: "link_code",
   });
+
+  if (policy.excludeRequester) {
+    await createRouterClient(router, { context: { ...ada, sockets } }).checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "plan", approvalsRequired: 1, excludeRequester: true }],
+    });
+  }
 
   const asPlanner = createRouterClient(router, { context: { ...planner, sockets } });
   const run = await asPlanner.runs.start({ issue: issue.url });
@@ -175,6 +182,47 @@ describe("a Slack click", () => {
     expect(await decisions()).toMatchObject([
       { decision: "rejected", note: "Split the migration first", via: "slack" },
     ]);
+  });
+
+  it("takes a rejection from the Human the Run is for at a four-eyes Checkpoint, and no approval", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { ada, chat, gate, send, click, decisions } = await withSlack(db, {
+      excludeRequester: true,
+    });
+    // Ada sponsors the Agent that asked, so she is the Human this Run is for.
+    await db.insert(memberIdentity).values({
+      id: newId("memberIdentity"),
+      workspaceId: ada.workspace.id,
+      memberId: ada.member.id,
+      provider: "slack",
+      instance: "T0TEST",
+      externalUserId: "U0ADA",
+      externalLogin: "ada",
+      verifiedBy: "link_code",
+    });
+
+    await send(click("U0ADA", "approved"));
+    expect(chat.responses[0]?.text).toBe(
+      "That ruled nothing. The plan Checkpoint wants somebody other than the Human this Run is for to approve it; you may still reject it.",
+    );
+    expect(await decisions()).toEqual([]);
+
+    await send(
+      click("U0ADA", "rejected", {
+        wantsNote: false,
+        note: "Not before the freeze lifts",
+        responseUrl: null,
+        triggerId: null,
+      }),
+      { event: "view_submission" },
+    );
+    expect(await decisions()).toMatchObject([
+      { memberId: ada.member.id, decision: "rejected", via: "slack" },
+    ]);
+    expect((await db.query.gateRequest.findFirst({ where: { id: gate.id } }))?.status).toBe(
+      "rejected",
+    );
   });
 
   it("gives an account nobody linked a code, said to them alone, and rules nothing", async () => {

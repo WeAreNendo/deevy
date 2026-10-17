@@ -16,7 +16,14 @@ export interface GateView {
   status: "open" | "approved" | "rejected" | "superseded";
   approvals: number;
   policy: { approvalsRequired: number; excludeRequester: boolean; approverMemberIds: string[] };
-  you: { mayRule: boolean; hasRuled: boolean; why: string | null };
+  you: {
+    mayRule: boolean;
+    mayApprove: boolean;
+    hasRuled: boolean;
+    why: string | null;
+    whyNotApprove: string | null;
+  };
+  shortfall: { wanted: number; couldApprove: number; why: string } | null;
 }
 
 /**
@@ -27,6 +34,12 @@ export interface GateView {
  * to be able to check, and it says why it will not take a ruling from this
  * Human before they click rather than after: the reason is the server's own,
  * so the disabled button and the refusal behind it can never disagree.
+ *
+ * Approve and Reject are decided apart, because they are refused apart: the
+ * Human the work is for, at a Checkpoint that excludes them, may reject and
+ * never approve. And where the Humans left could not give the approvals the
+ * Gate still wants, the card says so beside Approve, with both numbers, for
+ * whoever is reading — an admin is who can do something about it.
  *
  * `⇧A` and `⇧R` choose a ruling and put the cursor in the Note; `⌘↵` commits
  * it. Nothing here commits on a keypress alone — a ruling is a decision, and
@@ -59,13 +72,19 @@ export function GateControls({
   const pending = approve.isPending || reject.isPending;
   const error = approve.error ?? reject.error;
 
+  const may = (next: "approved" | "rejected") =>
+    next === "approved" ? gate.you.mayApprove : gate.you.mayRule;
+  // Why this Human cannot do all of it, if they cannot: nothing at all, or
+  // everything but approve.
+  const refused = gate.you.why ?? gate.you.whyNotApprove;
+
   const choose = (next: "approved" | "rejected") => {
-    if (!open || !gate.you.mayRule) return;
+    if (!open || !may(next)) return;
     setRuling(next);
     noteRef.current?.focus();
   };
   const commit = (next: "approved" | "rejected" | null = ruling) => {
-    if (!next || !open || !gate.you.mayRule || pending) return;
+    if (!next || !open || !may(next) || pending) return;
     const input = { requestId: gate.id, ...(note.trim() ? { note: note.trim() } : {}) };
     if (next === "approved") approve.mutate(input);
     else reject.mutate(input);
@@ -134,8 +153,8 @@ export function GateControls({
             />
           </div>
 
-          {gate.you.why ? (
-            <p className="text-sm text-muted-foreground">{gate.you.why}</p>
+          {refused ? (
+            <p className="text-sm text-muted-foreground">{refused}</p>
           ) : (
             <p className="text-xs text-muted-foreground">
               <Shortcut keys="shift+a" /> approve · <Shortcut keys="shift+r" /> reject ·{" "}
@@ -143,11 +162,19 @@ export function GateControls({
             </p>
           )}
 
+          {/* Where Approve is, because it is about what an approval can still
+              do: the Gate wants more than the Humans left could give. */}
+          {gate.shortfall ? (
+            <p data-slot="gate-shortfall" className="text-sm text-gate-foreground dark:text-gate">
+              {gate.shortfall.why}
+            </p>
+          ) : null}
+
           <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant={ruling === "approved" ? "default" : "outline"}
-              disabled={!gate.you.mayRule || pending}
+              disabled={!gate.you.mayApprove || pending}
               onClick={() => {
                 setRuling("approved");
                 commit("approved");

@@ -10,7 +10,7 @@ or what it has done. The Run waits until the Humans who may rule have decided. T
 
 ## Where it reaches you
 
-A Gate you may rule on shows up in several places at once. Answer it in whichever you are already in:
+A Gate you may approve shows up in several places at once. Answer it in whichever you are already in:
 
 - **Needs me**, deevy's home page, under **Gates awaiting you**: a card per Gate with its Checkpoint, the
   first line of the Proposal, the record's key, the Agent, how long it has waited, and how many approvals it
@@ -68,10 +68,25 @@ greyed out. The reasons are the server's own, so they are exactly what would ref
 
 - you have already ruled on this Gate;
 - the Checkpoint names who may rule, and you are not one of them;
-- the Checkpoint wants somebody other than the Human the work is for, and that is you;
 - the Gate was already approved, rejected or superseded.
 
+### When you can only reject
+
+Where the Checkpoint wants somebody other than the Human the work is for, and that is you, only **Approve**
+is greyed out. The card says the Checkpoint wants somebody other than the Human this Run is for to approve
+it, and that you may still reject it. **Reject** works as it does for anybody, with `⇧R` and your Note, and
+ends the Gate. The Gate is not waiting on you, so it is not on your **Needs me** or in your Inbox, but you can
+open it from the Run, the record or its link.
+
 See [Gates that need more than one Human](/gates/more-than-one-human/).
+
+### When the Gate is short
+
+If the Humans left who could approve are fewer than the approvals the Gate still wants, usually because
+somebody was suspended after the Checkpoint was set, the card says so above **Approve**, with both numbers:
+"This Gate still wants 2 approvals and only 1 Human can still give one." Your approval still counts if you
+give it. An admin can lower **Approvals** on the Checkpoint, which passes the Gate at once if it already
+has that many, or reinstate a suspended Member, and the card says which of those can still help.
 
 ## What happens to the Run
 
@@ -82,6 +97,9 @@ See [Gates that need more than one Human](/gates/more-than-one-human/).
 - **A rejection** ends the Gate at once, whatever the count. Your Ruling and your note join the Run's feed,
   and the Agent is told. The Run is not over: the Agent can change course and ask again, which is a new Gate,
   one visit later.
+- **An admin lowering Approvals** to what the Gate already has approves it, the Run goes back to working,
+  and the Agent is told the threshold was lowered. See
+  [Lowering Approvals on a waiting Gate](/gates/more-than-one-human/#lowering-approvals-on-a-waiting-gate).
 
 If the Agent changes its Proposal while the Gate is open, the Gate is superseded and the new Proposal asks
 afresh. Approvals on the old one do not carry over.

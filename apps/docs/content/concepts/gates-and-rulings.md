@@ -15,7 +15,7 @@ A **Checkpoint** is a named point in a Project's policy, such as `plan` or `ship
 says:
 
 - how many different Humans must approve;
-- whether the Human the work is for may be one of them;
+- whether the Human the work is for may be one of them (they may always reject);
 - who may rule at all.
 
 A name the policy does not list gets the default: one approval, from any Human. See
@@ -27,11 +27,13 @@ A **Gate** is a Run's request to pass a Checkpoint: the Agent's Proposal, the li
 Rulings on it so far. While it is open:
 
 - the Run waits, as long as it takes, and never goes quiet;
-- the Humans who may rule are told, and reminded while nobody has decided;
-- the record in your tracker says it is waiting, if the Project mirrors Gates.
+- the Humans who may approve it are told, and reminded while nobody has decided;
+- the record in your tracker says it is waiting, if the Project mirrors Gates;
+- if suspending somebody leaves fewer Humans who could approve it than the approvals it still wants, the
+  Gate says so, with both numbers, and an admin decides what to do about it.
 
-A rejection ends the Gate. If the Agent asks again, that is a new Gate, one visit later, and any approvals
-on the old one are spent.
+A rejection ends the Gate, whoever among the Humans who may rule gives it. If the Agent asks again, that is a
+new Gate, one visit later, and any approvals on the old one are spent.
 
 An approval stands for its record. When a later Run on the same record asks with the same Proposal at the
 same Checkpoint, deevy answers it with the Gate already approved and the Run goes on without asking anybody,

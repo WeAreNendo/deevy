@@ -1359,7 +1359,7 @@ Projects › Checkpoints**
 | Setting                           | Default      | What it does                                                        |
 | --------------------------------- | ------------ | ------------------------------------------------------------------- |
 | **Approvals**                     | 1            | The Gate stays open until that many _distinct_ Humans have approved |
-| **Not the Human the work is for** | off          | The Human the Run is for is refused their own approval              |
+| **Not the Human the work is for** | off          | The Human the Run is for cannot approve; they may still reject      |
 | **Who may rule**                  | nobody named | Names who may rule at all; nobody named means any Human             |
 
 A Checkpoint an Agent names and the policy does not list gets the defaults: one approval, from any Human.
@@ -1368,9 +1368,14 @@ routing started it — the Human accountable for what the Agent is about to do.
 
 What is worth knowing before turning either on:
 
-- **One rejection ends it, whatever the threshold**, and the Human the work is for may still reject. Consensus
-  is for letting work through; one reason to stop is enough. Asking again after a rejection is a new Gate,
-  one visit later, and the approvals before it are spent.
+- **One rejection ends it, whatever the threshold**, and the Human the work is for may still reject — in
+  deevy, with `/reject` on the record, or with Slack's button, since every door goes through one
+  `recordRuling` and one `rulingRefusal`. Consensus is for letting work through; one reason to stop is
+  enough. Their approval is what is refused, in words that say they may still reject; the ruling screen
+  disables **Approve** alone (`you.mayApprove`, `you.whyNotApprove` beside `you.mayRule`). They are not
+  asked: their inbox gets no row and `gates.list({ mine: true })` — **Needs me** — leaves the Gate out,
+  because it is not waiting on them. Asking again after a rejection is a new Gate, one visit later, and
+  the approvals before it are spent.
 - **A changed Proposal is a new question.** Asking again with the same words is the same Gate; asking with
   different ones supersedes it, and any approvals on the old one do not carry over.
 - **An approval stands for its record.** A Run that fails after its plan was approved, and the Run that tries
@@ -1382,15 +1387,38 @@ What is worth knowing before turning either on:
   threshold that could not be met once they are left out: **a Workspace with one Human cannot turn it on at
   all**, and a Checkpoint wanting two approvals with it on needs three Humans.
 - **Suspending a Member can strand a Gate.** Checking the policy when it is saved cannot prevent it: two
-  approvals in a Workspace of two is fine until one of them is suspended. The Gate says so where the approve
-  button would be, naming both numbers, and the fix is an admin's — lower the threshold, or reinstate the
-  Member. deevy does not quietly lower it for you.
+  approvals in a Workspace of two is fine until one of them is suspended. The Humans who could still approve
+  an open Gate are the active ones who may rule there, less the Human the work is for where the Checkpoint
+  excludes them, less whoever already approved; where they are fewer than the approvals still wanted (at
+  least one while it is open), the Gate's view carries `shortfall` — both numbers and the sentence — and
+  the ruling card shows it above **Approve** to whoever opens it: "This Gate still wants 2 approvals and
+  only 1 Human can still give one. An admin can lower Approvals on the ship Checkpoint, or reinstate a
+  suspended Member." The fix is an admin's, and deevy does not quietly lower it for you. An approval to a
+  short Gate is still recorded and still counts. Working it out costs one read of the Workspace's active
+  Humans per view or page, and none where nothing is open.
+- **Lowering Approvals passes an open Gate that already has enough.** Saving a Checkpoint with a lower
+  **Approvals** — or taking it off the list, which falls back to the default's one — passes every open Gate
+  of that Checkpoint on that Project whose approvals this visit now meet it, the way it would have passed
+  had the threshold been that low when the last of them landed. It is the same settling as the approval
+  that meets the count (`settleGate` in `gates.ts`): the Gate's status, `gate.approved`, the Run resuming
+  with `run.answered`, the comment on the record and the chat messages changed. The actor is the admin who
+  saved, `via` is `web`, and both Events carry `loweredFrom` (the old threshold; `required` is the new
+  one), so the history says the threshold passed it rather than claiming a Ruling: the record's comment
+  reads "Approved at the `ship` Checkpoint — 1 of 1, once Approvals was lowered from 2 to 1", the Run's
+  feed "@ada lowered Approvals on the ship Checkpoint from 2 to 1, so it passed with the 1 approval it
+  had". Only lowering the threshold settles anything: what counts is the approvals already given, so
+  turning **Not the Human the work is for** off, in the same save or alone, never counts the approval it
+  refused, which was never recorded. The save reads the open Gates of the lowered Checkpoints once, with
+  their Rulings and Runs, however many there are. So the short Gate's sentence offers lowering wherever
+  there is an approval to pass it with or somebody left to give one, and names only reinstating where
+  there is neither.
 - **An Agent still never rules** (ADR-0004), whatever these are set to, and neither does a Human's delegated
   credential (ADR-0010). A policy that names who may rule may only name Humans.
 
 A Gate short of its threshold appends a `gate.approval` Event carrying how many approvals are still wanted;
-`gate.approved` is appended only when the last one lands, and the Run resumes with `run.answered`. A Human
-who has not ruled on a Gate waiting on them is reminded after `DEEVY_GATE_REMINDER_HOURS`.
+`gate.approved` is appended only when the last one lands, or when an admin lowers the threshold to what the
+Gate already has, and the Run resumes with `run.answered`. A Human who has not ruled on a Gate waiting on
+them is reminded after `DEEVY_GATE_REMINDER_HOURS`.
 
 ## Connecting your tools
 
