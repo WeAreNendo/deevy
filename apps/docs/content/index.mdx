@@ -1,69 +1,68 @@
 ---
 title: Documentation
-description: The glue between a team's tools and its Agents. The work stays in GitHub, Linear, GitLab or Notion; deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on.
+description: deevy is the glue between your team's tools and its Agents. The work stays in GitHub, Linear, GitLab or Notion; deevy routes it to Agents, records their Runs, and holds the decisions only a Human may make.
 template: splash
 editUrl: false
 hero:
   title: deevy
-  tagline: The work stays in GitHub, Linear, GitLab or Notion. deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on.
+  tagline: The work stays in GitHub, Linear, GitLab or Notion. deevy routes it to your Agents, records what they do, and holds the decisions only a Human may make.
   actions:
-    - text: Run it yourself
-      link: /running/
+    - text: Start on deevy Cloud
+      link: /get-started/ask-for-a-workspace/
       icon: right-arrow
-    - text: Connect your tools
-      link: /running/connecting-your-tools/
+    - text: Host it yourself
+      link: /self-hosting/overview/
       variant: minimal
 ---
 
 import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-{/* README.md: Status */}
-
-## Where it runs
+## Two ways to run it
 
 <CardGrid>
-  <Card title="Self-host" icon="laptop">
-    One image and one volume, or a Cloudflare Worker with D1: the same deevy from the same codebase, serving
-    one Workspace, on infrastructure you choose.
+  <Card title="deevy Cloud" icon="rocket">
+    A Workspace of your own at app.deevy.dev, with nothing to install and nothing to upgrade. Your data
+    stays in the EU, and you can take it home whenever you like.
 
-    - [Run the image](/running/the-image/)
-    - [Deploy the Worker](/running/the-worker/)
-    - [Configure it](/running/environment/)
+    - [Ask for a Workspace](/get-started/ask-for-a-workspace/)
+    - [Where your data lives](/cloud/where-your-data-lives/)
 
   </Card>
-  <Card title="Hosted (coming soon)" icon="rocket">
-    deevy, run for you at app.deevy.dev: a Workspace of your own, with nothing to deploy and nothing to
-    upgrade. It is the same code as the image, under the same license. It is not open yet.
+  <Card title="Self-hosted" icon="laptop">
+    The same deevy, under the AGPL: one Docker image and a volume, or a Cloudflare Worker, serving your
+    team's Workspace on infrastructure you choose.
+
+    - [Hosting deevy yourself](/self-hosting/overview/)
+    - [Run the Docker image](/self-hosting/docker/)
+
   </Card>
 </CardGrid>
 
-## Read on
+## What it does
+
+Your team keeps working where it works today. deevy connects to the tracker, sends the Issues you choose
+to Agents, keeps a record of every Run, and stops an Agent at a Gate when a Human has to decide. An Agent
+can ask; it can never approve its own work.
 
 <CardGrid>
   <LinkCard
-    title="Connecting your tools"
-    description="GitHub, Linear, GitLab, Notion and Slack: what each needs, and what deevy does there."
-    href="/running/connecting-your-tools/"
+    title="How deevy works"
+    href="/concepts/overview/"
+    description="Workspaces, Humans and Agents, Issues, Runs and Gates, in one page."
   />
   <LinkCard
-    title="Agents and MCP"
-    description="Give an Agent its own identity and key, and point a coding agent at deevy."
-    href="/running/agents-and-mcp/"
+    title="Connect your tools"
+    href="/tools/overview/"
+    description="GitHub, Linear, GitLab, Notion and Slack."
   />
   <LinkCard
-    title="Glossary"
-    description="Member, Agent, Socket, Gate, Run: the words deevy uses, and the ones it avoids."
-    href="/glossary/"
-  />
-  <LinkCard title="API reference" description="Every operation, over HTTP." href="/api/" />
-  <LinkCard
-    title="Design decisions"
-    description="The choices that would be expensive to reverse, and why each was made."
-    href="/decisions/"
+    title="Add an Agent"
+    href="/agents/overview/"
+    description="Give an Agent a key, run it, and decide what it may do."
   />
   <LinkCard
-    title="The source"
-    description="AGPL-3.0, on GitHub, with every page here in its docs/ directory."
-    href="https://github.com/WeAreNendo/deevy"
+    title="Rule on a Gate"
+    href="/gates/how-a-gate-asks/"
+    description="What an Agent asks for, and how a Human answers."
   />
 </CardGrid>

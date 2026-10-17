@@ -1,7 +1,6 @@
-# Written by scripts/sync.ts on every build, from the repository's own Markdown:
-# change the source in docs/, CONTEXT.md, README.md or packages/core/openapi.json.
+# Written by scripts/sync.ts on every build: change the pages in content/, and the
+# API reference in packages/core/openapi.json.
 src/content/docs/
-public/repo/
 .generated/
 # Astro's own generated types and caches.
 .astro/

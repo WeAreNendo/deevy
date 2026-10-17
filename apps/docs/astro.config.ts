@@ -5,10 +5,11 @@ import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
 
 /**
  * docs.deevy.dev: Starlight, built to static files and served by a Worker's
- * static assets (wrangler.jsonc). Every page but the landing is written by
- * scripts/sync.ts from the repository's own Markdown before Astro starts, so
- * the content directory and the API document below are generated and ignored
- * by git.
+ * static assets (wrangler.jsonc). Its pages are written for the site in
+ * content/, for a team on deevy Cloud and for whoever hosts deevy
+ * (docs/plans/docs.md); scripts/sync.ts copies them into the content directory
+ * and writes the API document below before Astro starts, so both are generated
+ * and ignored by git.
  *
  * Nothing on these pages loads from anywhere but this origin: no analytics, no
  * third-party script, and the two typefaces are the app's own, self-hosted
@@ -36,8 +37,8 @@ export default defineConfig({
       social: [
         { icon: "github", label: "deevy on GitHub", href: "https://github.com/WeAreNendo/deevy" },
       ],
-      // Each page names the file it came from (scripts/sync.ts), so this is only the fallback.
-      editLink: { baseUrl: "https://github.com/WeAreNendo/deevy/edit/main/" },
+      // Each page names its own file in content/ (scripts/sync.ts), so this is only the fallback.
+      editLink: { baseUrl: "https://github.com/WeAreNendo/deevy/edit/main/apps/docs/" },
       customCss: [
         "@fontsource-variable/inter/wght.css",
         "@fontsource-variable/jetbrains-mono/wght.css",
@@ -46,8 +47,8 @@ export default defineConfig({
       ],
       plugins: [
         // Fails the build on a link to a page or a heading that does not exist.
-        // Links to localhost are what the development pages are about, so those
-        // stand. The API reference is routes the OpenAPI plugin injects rather
+        // Links to localhost are what self-hosting is about, so those stand.
+        // The API reference is routes the OpenAPI plugin injects rather
         // than content, which the validator cannot see, so a link into it is
         // taken on trust; the sync wrote those pages from the same document.
         starlightLinksValidator({ errorOnLocalLinks: false, exclude: ["/api/", "/api/**"] }),
@@ -57,28 +58,66 @@ export default defineConfig({
             schema: "./.generated/openapi.json",
             sidebar: {
               label: "API reference",
+              collapsed: true,
               operations: { badges: true, labels: "operationId" },
               tags: { sort: "alphabetical" },
             },
           },
         ]),
       ],
-      // Each group is a directory the sync writes, ordered by the order it gives each page.
+      // The plan's map (docs/plans/docs.md): deevy Cloud first, what both read in
+      // the middle, self-hosting and the reference after. Each group is a
+      // directory of content/, ordered by each page's own `sidebar.order`.
       sidebar: [
-        { label: "Running deevy", items: [{ autogenerate: { directory: "running" } }] },
-        { label: "Worked examples", items: [{ autogenerate: { directory: "guides" } }] },
-        { label: "Glossary", slug: "glossary" },
+        { label: "Get started", items: [{ autogenerate: { directory: "get-started" } }] },
+        {
+          label: "Using deevy",
+          items: [
+            {
+              label: "How deevy works",
+              collapsed: true,
+              items: [{ autogenerate: { directory: "concepts" } }],
+            },
+            {
+              label: "Connect your tools",
+              collapsed: true,
+              items: [{ autogenerate: { directory: "tools" } }],
+            },
+            {
+              label: "Agents",
+              collapsed: true,
+              items: [{ autogenerate: { directory: "agents" } }],
+            },
+            { label: "Gates", collapsed: true, items: [{ autogenerate: { directory: "gates" } }] },
+            {
+              label: "Notifications and email",
+              collapsed: true,
+              items: [{ autogenerate: { directory: "notifications" } }],
+            },
+            {
+              label: "MCP and the CLI",
+              collapsed: true,
+              items: [{ autogenerate: { directory: "mcp-and-cli" } }],
+            },
+            { label: "Webhooks", slug: "webhooks" },
+          ],
+        },
+        {
+          label: "deevy Cloud",
+          collapsed: true,
+          items: [{ autogenerate: { directory: "cloud" } }],
+        },
+        {
+          label: "Self-hosting",
+          collapsed: true,
+          items: [{ autogenerate: { directory: "self-hosting" } }],
+        },
+        {
+          label: "Reference",
+          collapsed: true,
+          items: [{ autogenerate: { directory: "reference" } }],
+        },
         ...openAPISidebarGroups,
-        {
-          label: "Design decisions",
-          collapsed: true,
-          items: [{ autogenerate: { directory: "decisions" } }],
-        },
-        {
-          label: "Developing deevy",
-          collapsed: true,
-          items: [{ autogenerate: { directory: "developing" } }],
-        },
       ],
     }),
   ],

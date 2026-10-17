@@ -57,10 +57,12 @@ the docs.deevy.dev site).
 - `vp run -r build`, `vp run web#build:workers` then `vp run web#check:workers` (wrangler dry run). In that
   order: the check dry-runs `apps/web/dist/deevy/wrangler.json`, which the build writes, and the committed
   `wrangler.jsonc` is a source that wrangler will not deploy on its own.
-- `vp run docs#build`: docs.deevy.dev into `apps/docs/dist`. Its pages are written from `docs/`, `CONTEXT.md`
-  and the OpenAPI snapshot by `apps/docs/scripts/sync.ts` (OPERATIONS.md a page per `##`, every ADR a page,
-  `docs/plans` not published), and a link to a missing file, page or heading fails the build, so write links
-  in `docs/` the way GitHub reads them and the sync turns them into the site's. `vp run docs#serve` runs it.
+- `vp run docs#build`: docs.deevy.dev into `apps/docs/dist`, `vp run docs#serve` to read it. Its pages are
+  written by hand for two readers, a team on deevy Cloud and whoever hosts deevy, in `apps/docs/content`
+  (`docs/plans/docs.md`, "Writing the pages"), and the API reference is generated from the OpenAPI snapshot.
+  Nothing in `docs/` is published: that is the internal documentation, for the people building deevy. **A
+  change a team or a self-hoster would notice also updates the public page that says it**, the way it
+  updates OPERATIONS.md; a link to a missing page or heading fails the build.
 - Schema change: edit `packages/db/src/schema`, `vp run db#generate`, then hand-patch `NOT NULL` onto every
   `text PRIMARY KEY` in the new `migration.sql` (drizzle-kit rc regression) and run `vp run db#check:migrations`.
 - API change: `vp run core#snapshot:openapi` and commit `packages/core/openapi.json`; CI fails on a stale snapshot.
