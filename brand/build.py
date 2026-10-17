@@ -108,8 +108,6 @@ def main():
     png(touch, 180, "#ffffff").convert("RGB").save(path, optimize=True)
     print(path.relative_to(ROOT))
 
-    write(ROOT / "apps/docs/src/assets/deevy-logo.svg", svg(LOCKUP, mark_body(LIGHT) + word_body(LIGHT)))
-    write(ROOT / "apps/docs/src/assets/deevy-logo-dark.svg", svg(LOCKUP, mark_body(DARK) + word_body(DARK)))
 
     x0, y0, x1, y1 = LOCKUP
     lockup_box = f"{num(x0)} {num(y0)} {num(x1 - x0)} {num(y1 - y0)}"

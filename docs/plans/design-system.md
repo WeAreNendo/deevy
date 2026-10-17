@@ -45,4 +45,16 @@ highlighter, which coloured numbers in `--human`, moves them to green so they st
 
 ## What it found
 
-(Filled in as the slices land.)
+- **A tint mixed in oklch turns pink.** An aside tinted `color-mix(in oklch, indigo 6%, white)` came out
+  rose: white has no hue, and oklch interpolates toward hue 0. Every tint in the docs' theme mixes in oklab.
+- **Indigo as text and as a fill cannot be one value.** White on the dark theme's old indigo read at 3.0:1, and
+  the light indigo as text on the dark page at 4.0:1; the light theme's own indigo is 4.27:1 as text on its
+  paper. Hence `--link`, a step darker than the fill in light (4.96:1) and lighter in dark (5.87:1), with the
+  fill the same indigo in both themes (4.47:1 under white).
+- **The code highlighter used `--human` for numbers**, which would have matched its keywords once Humans became
+  indigo; numbers are green now.
+- **`astro dev` cannot serve Expressive Code's stylesheet**: Starlight's catch-all route answers
+  `/_astro/ec.*.css` with a 404, so code blocks have no frame in development while the build is fine. The
+  `docs:built` launch configuration serves the built site to check a design change against what ships.
+- **The sign-in page's legend said "Round, in sky blue"** and the Member chip's comment the same; both say
+  indigo. "Sky" stays as one of the Label palette's eight swatches, which is not the Human colour.

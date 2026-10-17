@@ -60,6 +60,16 @@
       "autoPort": true
     },
     {
+      "name": "docs:built",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/docs && ASTRO_TELEMETRY_DISABLED=1 exec ./node_modules/.bin/astro preview --port \"${PORT:-4322}\""
+      ],
+      "port": 4322,
+      "autoPort": true
+    },
+    {
       "name": "walk",
       "runtimeExecutable": "sh",
       "runtimeArgs": [

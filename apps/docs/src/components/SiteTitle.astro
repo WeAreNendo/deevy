@@ -1,0 +1,42 @@
+---
+/*
+ * The header's logo, drawn from @deevy/design's data as the app draws it
+ * (apps/web/src/components/deevy-logo.tsx), so it takes the theme's --human,
+ * --agent and text colour rather than switching between two image files, and
+ * stands at the app's size. Replaces Starlight's SiteTitle (astro.config.ts).
+ */
+import { bar, disc, lockupBox, word, wordAt } from "@deevy/design/logo";
+
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title">
+  <svg viewBox={lockupBox} role="img" aria-label={siteTitle}>
+    <path d={disc} class="disc"></path>
+    <path d={bar} class="bar"></path>
+    <path d={word} transform={`translate(${wordAt.x} ${wordAt.y})`} class="word"></path>
+  </svg>
+</a>
+
+<style>
+  .site-title {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  svg {
+    height: 1.375rem;
+    width: auto;
+  }
+  .disc {
+    fill: var(--human);
+  }
+  .bar {
+    fill: var(--agent);
+  }
+  .word {
+    fill: currentColor;
+  }
+</style>

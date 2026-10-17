@@ -13,9 +13,7 @@
   },
   "devDependencies": {
     "@astrojs/starlight": "catalog:",
-    "@fontsource-variable/inter": "catalog:",
-    "@fontsource-variable/jetbrains-mono": "catalog:",
-    "@fontsource-variable/outfit": "catalog:",
+    "@deevy/design": "workspace:*",
     "@types/node": "catalog:",
     "astro": "catalog:",
     "github-slugger": "catalog:",

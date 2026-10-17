@@ -12,8 +12,9 @@ import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
  * and ignored by git.
  *
  * Nothing on these pages loads from anywhere but this origin: no analytics, no
- * third-party script, and the two typefaces are the app's own, self-hosted
- * from @fontsource like the SPA does it. Astro's `security.csp` was tried on
+ * third-party script, and the typefaces are the app's own, self-hosted from
+ * @fontsource through @deevy/design, whose tokens dress the site as the app
+ * (src/styles/theme.css, docs/plans/design-system.md). Astro's `security.csp` was tried on
  * 2026-10-09 and left off: with Starlight 0.42 the policy it wrote still
  * blocked five inline scripts on a content page, and a data: font the search
  * dialog loads, so it needs more than switching on.
@@ -28,23 +29,23 @@ export default defineConfig({
       description:
         "The glue between a team's tools and its Agents: the work stays in GitHub, Linear, GitLab or Notion, and deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on.",
       favicon: "/favicon.svg",
-      // Written by brand/build.py. The title stays, for screen readers.
-      logo: {
-        light: "./src/assets/deevy-logo.svg",
-        dark: "./src/assets/deevy-logo-dark.svg",
-        replacesTitle: true,
-      },
+      // The logo drawn from @deevy/design's data in the theme's colours, at the app's size.
+      components: { SiteTitle: "./src/components/SiteTitle.astro" },
       social: [
         { icon: "github", label: "deevy on GitHub", href: "https://github.com/WeAreNendo/deevy" },
       ],
       // Each page names its own file in content/ (scripts/sync.ts), so this is only the fallback.
       editLink: { baseUrl: "https://github.com/WeAreNendo/deevy/edit/main/apps/docs/" },
-      customCss: [
-        "@fontsource-variable/inter/wght.css",
-        "@fontsource-variable/jetbrains-mono/wght.css",
-        "@fontsource-variable/outfit/wght.css",
-        "./src/styles/theme.css",
-      ],
+      customCss: ["@deevy/design/tokens.css", "./src/styles/theme.css"],
+      // Code blocks with the app's corners, hairline and faces.
+      expressiveCode: {
+        styleOverrides: {
+          borderRadius: "var(--radius)",
+          borderColor: "var(--border)",
+          codeFontFamily: "var(--face-mono)",
+          uiFontFamily: "var(--face-sans)",
+        },
+      },
       plugins: [
         // Fails the build on a link to a page or a heading that does not exist.
         // Links to localhost are what self-hosting is about, so those stand.
