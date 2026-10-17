@@ -1,0 +1,104 @@
+/*
+ * deevy's tokens: every colour in both themes, the three faces, the corner
+ * radius, the density and the tracking, for the app (apps/web) and the docs
+ * site (apps/docs) alike (docs/plans/design-system.md). Change a value here and
+ * both follow; neither keeps a copy.
+ *
+ * Paper and ink are cool blue-gray neutrals; the action colour is indigo, and
+ * the colours beside it are its neighbours: Humans sky blue, Agents rose, Gates
+ * amber, the one warm colour, so a Gate jumps. The base is tweakcn's
+ * clean-slate preset (https://tweakcn.com/r/themes/clean-slate.json,
+ * Apache-2.0, (c) tweakcn contributors), at a 5% roomier scale and 8px corners
+ * (docs/plans/ui-redesign-2.md). Three saturated slots carry the one idea the
+ * UI has: --human for a Human Member, --agent for an Agent, --gate for anything
+ * waiting on a Human's ruling. Nothing else on a screen is saturated except
+ * --primary and --destructive.
+ *
+ * The dark theme is a class on <html> in the app (`.dark`, from next-themes)
+ * and an attribute in the docs (`[data-theme="dark"]`, from Starlight), so the
+ * one block below answers to both.
+ *
+ * Titles are Outfit, the face of the logo's word (brand/README.md); everything
+ * else is Inter, and code JetBrains Mono. Self-hosted: a self-hosted AGPL app
+ * does not phone Google for its typeface.
+ */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/outfit/wght.css";
+
+:root {
+  --face-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --face-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --face-display: "Outfit Variable", var(--face-sans);
+  --radius: 0.5rem;
+  --density: 0.2625rem;
+  --tracking: 0em;
+  --background: oklch(0.9842 0.0034 247.8575);
+  --foreground: oklch(0.2795 0.0368 260.031);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2795 0.0368 260.031);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2795 0.0368 260.031);
+  --primary: oklch(0.5854 0.2041 277.12);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.9276 0.0058 264.5313);
+  --secondary-foreground: oklch(0.3729 0.0306 259.7328);
+  --muted: oklch(0.967 0.0029 264.5419);
+  --muted-foreground: oklch(0.551 0.0234 264.3637);
+  --accent: oklch(0.9299 0.0334 272.79);
+  --accent-foreground: oklch(0.3729 0.0306 259.7328);
+  --border: oklch(0.8717 0.0093 258.3382);
+  --input: oklch(0.8717 0.0093 258.3382);
+  --ring: oklch(0.5854 0.2041 277.12);
+  --sidebar: oklch(0.967 0.0029 264.5419);
+  --sidebar-foreground: oklch(0.2795 0.0368 260.031);
+  --sidebar-accent: oklch(0.9299 0.0334 272.79);
+  --sidebar-accent-foreground: oklch(0.3729 0.0306 259.7328);
+  --sidebar-border: oklch(0.8717 0.0093 258.3382);
+
+  --human: oklch(0.6 0.13 225);
+  --agent: oklch(0.6 0.17 345);
+  --gate: oklch(0.72 0.15 80);
+  --gate-foreground: var(--foreground);
+  --state-backlog: oklch(0.62 0.02 265);
+  --state-active: oklch(0.62 0.15 277);
+  --state-done: oklch(0.62 0.13 160);
+  --destructive: oklch(0.58 0.2 20);
+  --destructive-foreground: var(--background);
+}
+
+.dark,
+:root[data-theme="dark"] {
+  --background: oklch(0.2077 0.0398 265.7549);
+  --foreground: oklch(0.9288 0.0126 255.5078);
+  --card: oklch(0.2795 0.0368 260.031);
+  --card-foreground: oklch(0.9288 0.0126 255.5078);
+  --popover: oklch(0.2795 0.0368 260.031);
+  --popover-foreground: oklch(0.9288 0.0126 255.5078);
+  --primary: oklch(0.6801 0.1583 276.93);
+  --primary-foreground: oklch(0.2077 0.0398 265.7549);
+  --secondary: oklch(0.3351 0.0331 260.912);
+  --secondary-foreground: oklch(0.8717 0.0093 258.3382);
+  --muted: oklch(0.2427 0.0381 259.9437);
+  --muted-foreground: oklch(0.7137 0.0192 261.3246);
+  --accent: oklch(0.3729 0.0306 259.73);
+  --accent-foreground: oklch(0.8717 0.0093 258.3382);
+  --border: oklch(0.4461 0.0263 256.8018);
+  --input: oklch(0.4461 0.0263 256.8018);
+  --ring: oklch(0.6801 0.1583 276.93);
+  --sidebar: oklch(0.2795 0.0368 260.031);
+  --sidebar-foreground: oklch(0.9288 0.0126 255.5078);
+  --sidebar-accent: oklch(0.3729 0.0306 259.73);
+  --sidebar-accent-foreground: oklch(0.8717 0.0093 258.3382);
+  --sidebar-border: oklch(0.4461 0.0263 256.8018);
+
+  --human: oklch(0.76 0.12 225);
+  --agent: oklch(0.76 0.14 345);
+  --gate: oklch(0.82 0.14 85);
+  --gate-foreground: var(--background);
+  --state-backlog: oklch(0.6 0.02 265);
+  --state-active: oklch(0.72 0.12 277);
+  --state-done: oklch(0.72 0.13 160);
+  --destructive: oklch(0.68 0.17 20);
+  --destructive-foreground: var(--background);
+}

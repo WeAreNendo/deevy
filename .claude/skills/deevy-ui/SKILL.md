@@ -20,7 +20,7 @@ plan documents. Read `shadcn` (component rules) and `frontend-design` (design pr
 
 | You want                                 | Look at                                                                                                        |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| tokens, type, both themes                | `apps/web/src/index.css`, `/dev/tokens` on a dev instance                                                      |
+| tokens, type, both themes                | `packages/design/tokens.css` (shared with the docs site), `/dev/tokens` on a dev instance                      |
 | the frame, sidebar, top bar, member menu | `routes/shell.tsx`, `components/app-breadcrumb.tsx`                                                            |
 | ⌘K, shortcuts, `?`                       | `components/command-palette.tsx`, `lib/shortcuts.ts`, `components/shortcuts-sheet.tsx`                         |
 | what needs a Human                       | `routes/home.tsx` (Needs me)                                                                                   |
@@ -112,11 +112,11 @@ Every adopted file starts with a comment naming the registry, item, date and lic
 `components/<registry>/`, never `ui/`, so a re-add cannot clobber shadcn's own. New npm dependencies go
 through the catalog.
 
-## Design language (the tokens in `apps/web/src/index.css`)
+## Design language (the tokens in `packages/design/tokens.css`)
 
-- **Logo and titles.** The logo is `components/deevy-logo.tsx` (`DeevyLogo`, `DeevyMark`), written by
-  `brand/build.py` with the favicons; never edit it by hand (`brand/README.md`). Its word is Outfit
-  (`@fontsource-variable/outfit`), and so is every page's h1 and the title of a dialog, an alert dialog
+- **Logo and titles.** The logo is `components/deevy-logo.tsx` (`DeevyLogo`, `DeevyMark`), drawn from
+  `@deevy/design/logo`, the paths `brand/build.py` writes with the favicons; change the logo there, never its
+  data by hand (`brand/README.md`). Its word is Outfit (`@fontsource-variable/outfit`), and so is every page's h1 and the title of a dialog, an alert dialog
   and a sheet, through `font-display` (Matt, 2026-10-14): titles only, never body, rows, section headings
   or markdown. The `font-display` in `ui/dialog.tsx`, `ui/alert-dialog.tsx` and `ui/sheet.tsx` is a
   deevy edit; re-apply it after a `shadcn add --overwrite`.

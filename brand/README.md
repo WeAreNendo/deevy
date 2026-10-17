@@ -28,12 +28,14 @@ side bearing makes the visible gap about 22.6), tracked at −2%.
 
 - `apps/web/public`: `favicon.svg`, `favicon.ico` (16, 32 and 48 px) and `apple-touch-icon.png` (180 px, on
   white).
-- `apps/web/src/components/deevy-logo.tsx`: `DeevyMark` and `DeevyLogo`. The mark takes `--human` and
-  `--agent`, and the word the text colour, so both follow the theme.
+- `packages/design/src/logo.ts`: the paths and boxes as data, which the app's `DeevyMark` and `DeevyLogo`
+  (`apps/web/src/components/deevy-logo.tsx`) draw. The mark takes `--human` and `--agent`, and the word the
+  text colour, so both follow the theme.
 - `apps/docs`: the favicon, and the logo in the header (`src/assets`).
 
-The app sets its page and dialog titles in Outfit (`font-display`, `@fontsource-variable/outfit`), and the
-docs site its headings, so the word and the titles are one face.
+The colours are `@deevy/design`'s tokens (`packages/design/tokens.css`); `build.py` repeats them as hex for the
+files that cannot read a token, so change both together. The app sets its page and dialog titles in Outfit
+(`font-display`), and the docs site its headings, so the word and the titles are one face.
 
 ## Rebuilding
 
