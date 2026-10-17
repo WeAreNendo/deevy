@@ -1,6 +1,6 @@
 {
   "name": "@deevy/cli",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "deevy from a terminal",
   "homepage": "https://github.com/WeAreNendo/deevy/blob/main/apps/cli/README.md",
   "license": "AGPL-3.0-only",
