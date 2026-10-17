@@ -564,10 +564,11 @@ describe("an Agent's own webhook", () => {
     const admin = await memberContext(db, { role: "admin", name: "Ada" });
     const { sockets } = fakeSockets();
     const asAdmin = createRouterClient(router, { context: { ...admin, sockets } });
-    // The Project has to exist for the Agent to be granted one; nothing here
-    // needs its id.
-    await seedProject(db, admin.workspace.id);
+    // Granted, because an Agent's webhook is owed only what happens in the
+    // Projects it may see (webhooks.ts).
+    const { project } = await seedProject(db, admin.workspace.id);
     const created = await asAdmin.agents.create({ name: "Planner" });
+    await asAdmin.agents.grants.add({ memberId: created.id, projectId: project.id });
 
     await asAdmin.agents.update({
       memberId: created.id,

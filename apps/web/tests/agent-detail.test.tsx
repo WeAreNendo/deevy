@@ -78,6 +78,13 @@ const calls = vi.hoisted(() => ({
   grantRemove: vi.fn(async (_input: { memberId: string; projectId: string }) => ({
     projects: [],
   })),
+  update: vi.fn(
+    async (_input: {
+      memberId: string;
+      webhookUrl?: string | null;
+      webhookSecret?: string;
+    }) => ({}),
+  ),
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -109,6 +116,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
         ],
       }),
       list: async () => ({ agents: [stub.agent] }),
+      update: calls.update,
       keys: { list: async () => ({ keys: stub.keys }), issue: calls.issue, revoke: calls.revoke },
       grants: {
         list: async () => ({ projects: [stub.projects[0]] }),
@@ -264,5 +272,95 @@ describe("what an Agent costs", () => {
     await screen.findByRole("heading", { name: /planner/i });
     expect(screen.queryByRole("region", { name: "Usage" })).toBeNull();
     viewer.member = { id: "m-ada", role: "admin" };
+  });
+});
+
+describe("an Agent's webhook", () => {
+  it("sets the URL and the secret deevy signs with, and shows the secret once", async () => {
+    calls.update.mockClear();
+    await mountAt("/settings/agents/m-planner");
+
+    const section = await screen.findByRole("region", { name: "Webhook" });
+    // Without one it still finds its work, and the page says so before anything is set.
+    expect(within(section).getByText(/still finds its work/i)).toBeTruthy();
+    const start = within(section).getByRole("button", { name: "Start deliveries" });
+    fireEvent.change(within(section).getByLabelText("Webhook URL"), {
+      target: { value: "https://planner.example/deevy" },
+    });
+    // A URL with nothing to sign it with would sign nothing: deevy never invents one.
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+
+    const secret = within(section).getByLabelText("Signing secret") as HTMLInputElement;
+    expect(secret.type).toBe("password");
+    expect(secret.autocomplete).toBe("off");
+    fireEvent.change(secret, { target: { value: "whsec_the_runtime_holds_this" } });
+    fireEvent.click(start);
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    expect(calls.update.mock.calls[0]?.[0]).toEqual({
+      memberId: "m-planner",
+      webhookUrl: "https://planner.example/deevy",
+      webhookSecret: "whsec_the_runtime_holds_this",
+    });
+    // Shown once, now, because nothing can read it back afterwards.
+    expect(await within(section).findByText("whsec_the_runtime_holds_this")).toBeTruthy();
+    expect(within(section).getByText(/never shows it again\. Give it/i)).toBeTruthy();
+  });
+
+  it("generates a secret for somebody who has none yet", async () => {
+    calls.update.mockClear();
+    await mountAt("/settings/agents/m-planner");
+
+    const section = await screen.findByRole("region", { name: "Webhook" });
+    fireEvent.change(within(section).getByLabelText("Webhook URL"), {
+      target: { value: "https://planner.example/deevy" },
+    });
+    fireEvent.click(within(section).getByRole("button", { name: "Generate" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Start deliveries" }));
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    const sent = calls.update.mock.calls[0]?.[0];
+    expect(sent?.webhookSecret).toMatch(/^whsec_[0-9a-f]{48}$/);
+    expect(await within(section).findByText(sent?.webhookSecret ?? "")).toBeTruthy();
+  });
+
+  it("moves an Agent's deliveries without a new secret, and stops them", async () => {
+    calls.update.mockClear();
+    (stub.agent as { webhookUrl: string | null }).webhookUrl = "https://planner.example/deevy";
+    try {
+      await mountAt("/settings/agents/m-planner");
+
+      const section = await screen.findByRole("region", { name: "Webhook" });
+      expect(within(section).getByText("https://planner.example/deevy")).toBeTruthy();
+
+      // A new URL keeps the secret it already signs with.
+      fireEvent.change(within(section).getByLabelText("Webhook URL"), {
+        target: { value: "https://planner.example/hooks" },
+      });
+      fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+      expect(calls.update.mock.calls[0]?.[0]).toEqual({
+        memberId: "m-planner",
+        webhookUrl: "https://planner.example/hooks",
+      });
+
+      fireEvent.click(within(section).getByRole("button", { name: "Stop deliveries" }));
+      await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(2));
+      expect(calls.update.mock.calls[1]?.[0]).toEqual({ memberId: "m-planner", webhookUrl: null });
+    } finally {
+      (stub.agent as { webhookUrl: string | null }).webhookUrl = null;
+    }
+  });
+
+  it("is not offered to somebody who is neither its Sponsor nor an admin", async () => {
+    viewer.member = { id: "m-omar", role: "member" };
+    try {
+      await mountAt("/settings/agents/m-planner");
+
+      await screen.findByRole("heading", { name: /planner/i });
+      expect(screen.queryByRole("region", { name: "Webhook" })).toBeNull();
+    } finally {
+      viewer.member = { id: "m-ada", role: "admin" };
+    }
   });
 });

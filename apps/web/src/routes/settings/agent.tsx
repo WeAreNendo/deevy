@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ConnectAgent } from "@/components/connect-agent";
 import { MemberChip } from "@/components/member-chip";
 import { RunStatus, type RunStatusValue } from "@/components/run-status";
+import { SecretInput } from "@/components/secret-input";
 import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,6 +110,7 @@ export function AgentPage({ memberId }: { memberId: string }) {
       <Grants memberId={memberId} onChanged={refresh} />
       <Keys memberId={memberId} onChanged={refresh} />
       <Connect />
+      {answersForIt ? <Webhook memberId={memberId} url={agent.webhookUrl} /> : null}
 
       <SettingsSection title="Schedule">
         <div className="flex flex-col gap-2">
@@ -424,6 +426,137 @@ function Connect() {
       description="Point a coding agent at this deevy and hand it the key. Every tool speaks MCP; only where the configuration lives differs."
     >
       <ConnectAgent />
+    </SettingsSection>
+  );
+}
+
+/** A secret nobody has to think up, in the shape the Webhooks page makes one. */
+function newSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return `whsec_${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** What `agents.update` takes for a secret: shorter is guessable. */
+const minimumSecretLength = 16;
+
+/**
+ * Where deevy tells this Agent's runtime there is work (ADR-0003). The URL is
+ * the Agent's own subscription, the row delivery reads, so saving it here and
+ * deevy delivering to it are one act. The secret goes in and never comes out:
+ * it is typed or generated here and shown once, after it is saved, because
+ * nothing can read it back afterwards. Its Sponsor and admins see this, as the
+ * server allows them and nobody else.
+ */
+function Webhook({ memberId, url }: { memberId: string; url: string | null }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState(url ?? "");
+  const [secret, setSecret] = useState("");
+  const [shown, setShown] = useState<string | null>(null);
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: orpc.agents.key() });
+    await queryClient.invalidateQueries({ queryKey: orpc.webhooks.key() });
+  };
+  const save = useMutation(
+    orpc.agents.update.mutationOptions({
+      onSuccess: async (_saved, sent) => {
+        setShown(sent.webhookSecret ?? null);
+        setSecret("");
+        if (sent.webhookUrl === null) setDraft("");
+        await refresh();
+      },
+    }),
+  );
+
+  const target = draft.trim();
+  // A URL already delivering keeps the secret it signs with unless a new one
+  // is given; one that is not has to be told what to sign with.
+  const secretOk = secret ? secret.length >= minimumSecretLength : url !== null;
+  const ready = target.startsWith("https://") && secretOk && (target !== url || secret !== "");
+
+  return (
+    <SettingsSection
+      aria-label="Webhook"
+      title="Webhook"
+      description="Give this Agent's runtime a URL and deevy posts to it the moment there is work in the Projects it was granted, signed with a secret you choose. Without one, the Agent still finds its work by asking every so often."
+    >
+      {shown ? (
+        <div className="flex flex-col gap-2 rounded-md border border-gate/50 bg-gate/10 p-3">
+          <p className="text-sm font-medium">
+            Copy this secret now: deevy never shows it again. Give it to the runtime, which checks
+            every delivery against it.
+          </p>
+          <code className="overflow-x-auto rounded bg-background px-2 py-1 font-mono text-sm">
+            {shown}
+          </code>
+        </div>
+      ) : null}
+
+      {url ? (
+        <p className="text-sm text-muted-foreground">
+          Delivering to <code className="font-mono break-all text-foreground">{url}</code>
+        </p>
+      ) : null}
+
+      <form
+        aria-label="Set the webhook"
+        className="flex flex-col gap-3"
+        onSubmit={(submitted) => {
+          submitted.preventDefault();
+          if (!ready) return;
+          save.mutate({
+            memberId,
+            webhookUrl: target,
+            ...(secret ? { webhookSecret: secret } : {}),
+          });
+        }}
+      >
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="agent-webhook-url">Webhook URL</Label>
+          <Input
+            id="agent-webhook-url"
+            inputMode="url"
+            value={draft}
+            placeholder="https://agent.example.com/"
+            onChange={(changed) => setDraft(changed.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">It must be https.</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="agent-webhook-secret">Signing secret</Label>
+          <div className="flex gap-2">
+            <SecretInput
+              id="agent-webhook-secret"
+              value={secret}
+              placeholder="whsec_…"
+              onChange={(changed) => setSecret(changed.target.value)}
+            />
+            <Button type="button" variant="outline" onClick={() => setSecret(newSecret())}>
+              Generate
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            At least {minimumSecretLength} characters. deevy signs every delivery with it, and never
+            shows it again once it is saved.
+            {url ? " Leave it empty to keep the one it signs with now." : null}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={save.isPending || !ready}>
+            {url ? "Save" : "Start deliveries"}
+          </Button>
+          {url ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={save.isPending}
+              onClick={() => save.mutate({ memberId, webhookUrl: null })}
+            >
+              Stop deliveries
+            </Button>
+          ) : null}
+        </div>
+      </form>
+      {save.error ? <p className="text-sm text-destructive">{save.error.message}</p> : null}
     </SettingsSection>
   );
 }

@@ -83,9 +83,9 @@ Written on 2026-10-16, 53 pages by four writers in parallel from the shared rule
 its facts in the code. Where OPERATIONS.md and the code disagreed, the pages say what the code does, and
 these are the disagreements, each still to be settled on the code's side or OPERATIONS.md's:
 
-- **An Agent's own webhook is sent every Event of the Workspace**, Projects it is not granted included:
-  `setAgentWebhook` saves the subscription with no kind and no Project, and delivery never scopes by
-  Member. Proposed as its own change (scope it to the Agent's grants); webhooks.md says what it does today.
+- **An Agent's own webhook was sent every Event of the Workspace**, Projects it was not granted included.
+  Settled on the code's side: `deriveWebhookDeliveriesForMany` now owes a subscription that belongs
+  to an Agent only the Events of its granted Projects, with one read of the grants, and webhooks.md says so.
 - **The GitHub App deevy creates is the person's own**: the manifest goes to `github.com/settings/apps/new`
   with `public: false`, and a private App installs only on its owner's account, so the guided path
   dead-ends for an organization's repositories. tools/github.md and get-started/connect-a-tool.md give the
@@ -96,8 +96,9 @@ these are the disagreements, each still to be settled on the code's side or OPER
   follow the code until Matt decides which is meant.
 - **No message says a Gate was left short by a suspension**, which OPERATIONS.md describes; the pages only
   say an admin reinstates the Member or lowers **Approvals**.
-- **A webhook's retries never reach OPERATIONS.md's six-hour cap**: eight attempts from ten seconds,
-  doubling, wait at most 640 seconds. The pages leave the cap out.
+- **A webhook's retries never reached OPERATIONS.md's six-hour cap**: eight attempts from ten seconds,
+  doubling, wait at most 640 seconds. Settled on OPERATIONS.md's side: it and webhooks.md now give the
+  longest wait as about ten minutes and the whole window as about twenty, and the code is unchanged.
 - **An OpenID Connect provider unreachable at startup still shows its button**, and signing in with it
   fails until deevy restarts; OPERATIONS.md says the button is not offered.
 - **deevy Cloud's export told people to load the dump with `sqlite3`**, skipping `import.mjs`, which drops
@@ -115,7 +116,9 @@ these are the disagreements, each still to be settled on the code's side or OPER
   Agent there, and taking a Project back from its Default Agent leaves the Project with no default.
 - **apps/cli/README.md** named a flag that does not exist (`--project-key`) and four of the eleven
   commands the CLI cannot run; fixed here.
-- Two jobs have no screen and are done from the CLI on the pages: setting an Agent's webhook, and rotating
-  a Slack Socket's signing secret. deevy Cloud had no support address beyond `privacy@deevy.dev`.
-  Settled: `support@deevy.dev`, forwarded by Email Routing beside it, is on cloud/support.md, the
-  console's suspended notice and the site's footer (WeAreNendo/deevy-cloud#13).
+- Setting an Agent's webhook had no screen; it is now the **Webhook** section of the Agent's page, and the
+  pages say so, with the CLI as the other way.
+- Rotating a Slack Socket's signing secret has no screen and is done from the CLI on the pages.
+- deevy Cloud had no support address beyond `privacy@deevy.dev`. Settled: `support@deevy.dev`, forwarded
+  by Email Routing beside it, is on cloud/support.md, the console's suspended notice and the site's
+  footer (WeAreNendo/deevy-cloud#13).
