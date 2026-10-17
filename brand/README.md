@@ -31,7 +31,8 @@ side bearing makes the visible gap about 22.6), tracked at −2%.
 - `packages/design/src/logo.ts`: the paths and boxes as data, which the app's `DeevyMark` and `DeevyLogo`
   (`apps/web/src/components/deevy-logo.tsx`) draw. The mark takes `--human` and `--agent`, and the word the
   text colour, so both follow the theme.
-- `apps/docs`: the favicon, and the logo in the header (`src/assets`).
+- `apps/docs/public`: the favicon. The docs site's header draws the logo from `packages/design/src/logo.ts`
+  (`src/components/SiteTitle.astro`).
 
 The colours are `@deevy/design`'s tokens (`packages/design/tokens.css`); `build.py` repeats them as hex for the
 files that cannot read a token, so change both together. The app sets its page and dialog titles in Outfit
