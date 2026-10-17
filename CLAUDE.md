@@ -26,8 +26,12 @@ Human's Notifications at their verified address, team addresses as Channels, inv
 Settings › Email. Then **hosted Workspaces** (`docs/plans/hosted.md`, ADR-0028 to ADR-0032): a deployment may
 live under a path, several may sign in through one relay, and `apps/hosted` serves many Workspaces from one
 Worker, each one's database a Durable Object of its own, released as an attested archive that the private
-WeAreNendo/deevy-cloud deploys. What comes next is that account's setup, then the rest of PLAN.md's "After
-Sockets" list, budgets first.
+WeAreNendo/deevy-cloud deploys; deevy Cloud has served it at app.deevy.dev since 2026-10-14. Then the
+**public docs** (`docs/plans/docs.md`): docs.deevy.dev written by hand for a team on deevy Cloud and for
+whoever hosts deevy, with `docs/` kept as the internal documentation; and **one design system**
+(`docs/plans/design-system.md`): `@deevy/design` holds the tokens, faces and logo the app and the docs both
+wear, indigo for a Human and what a Human does, rose for an Agent, amber for a Gate. What comes next is the
+real walks of the tools beyond GitHub, then the rest of PLAN.md's "After Sockets" list, budgets first.
 
 ## Commands
 

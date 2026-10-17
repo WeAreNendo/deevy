@@ -322,8 +322,11 @@ address, team addresses as Channels, invitations by email, through whichever of 
 has. Hosted Workspaces followed ([hosted.md](./plans/hosted.md), built 2026-10-09; ADR-0028 to ADR-0032): one
 Worker serving every hosted Workspace at `app.deevy.dev/<slug>`, each Workspace's database a Durable Object of
 its own, sign-in through one relay, the release carrying that Worker for a private console and deploy
-pipeline (WeAreNendo/deevy-cloud) to run; an invite-only free beta first and billing after. What it waits for
-is the Cloudflare account, the provider Apps, and the measurements only a real account can give. Then, in rough order: budgets that stop a Run or an Agent's
+pipeline (WeAreNendo/deevy-cloud) to run; an invite-only free beta first and billing after. It has been live
+at app.deevy.dev since 2026-10-14, its idle and loaded costs measured (hosted.md, "What it found"). The public
+docs were then rewritten for their two readers ([docs.md](./plans/docs.md)) and the app and the docs given one
+design system ([design-system.md](./plans/design-system.md)), both 2026-10-16 and 17. Next are the real walks of
+Linear, GitLab, Notion and Slack, which only GitHub has had so far. Then, in rough order: budgets that stop a Run or an Agent's
 month, sized on what Runs are now seen to spend; per-Agent identities on a Socket where a provider makes them
 cheap; Jira and Asana; private Projects; Postgres adapter.
 
