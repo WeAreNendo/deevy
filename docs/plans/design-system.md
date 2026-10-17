@@ -51,6 +51,13 @@ highlighter, which coloured numbers in `--human`, moves them to green so they st
   the light indigo as text on the dark page at 4.0:1; the light theme's own indigo is 4.27:1 as text on its
   paper. Hence `--link`, a step darker than the fill in light (4.96:1) and lighter in dark (5.87:1), with the
   fill the same indigo in both themes (4.47:1 under white).
+- **Twelve text pairs read under AA, not the two first flagged.** Measured on the grounds the components really
+  compose (a Working badge is rose text on rose at 10%), light mode had rose names and badges at 3.7 to 4.1:1,
+  green Finished at 2.9:1, red at 3.9:1, a Human's initials and a pressed toggle at 4.1 to 4.4:1, hints in the
+  sidebar at 4.4:1 and white on indigo at 4.47:1; dark had the destructive button at 4.4:1. Each colour lost only
+  lightness, hue and chroma kept, to the first value that clears 4.5:1 everywhere it is text, and
+  `packages/design/tests/contrast.test.ts` holds all 34 pairs to it. The logo's halves follow their tokens, so
+  in light they are a shade deeper (`#5252d8`, `#af3b85`).
 - **The code highlighter used `--human` for numbers**, which would have matched its keywords once Humans became
   indigo; numbers are green now.
 - **`astro dev` cannot serve Expressive Code's stylesheet**: Starlight's catch-all route answers

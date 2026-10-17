@@ -33,7 +33,7 @@ WORD_X = INK[2] + 20
 # @deevy/design's --human and --agent in each theme (packages/design/tokens.css),
 # as hex for the files that cannot read a token: indigo for the Human, rose for
 # the Agent (Matt, 2026-10-17).
-LIGHT = dict(human="#5a5ce2", agent="#c34e97", ink="#1e293b")
+LIGHT = dict(human="#5252d8", agent="#af3b85", ink="#1e293b")
 DARK = dict(human="#818cf8", agent="#ef8bc5", ink="#f8fafc")
 
 
