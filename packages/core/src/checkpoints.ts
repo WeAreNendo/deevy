@@ -1,12 +1,13 @@
 import {
   checkpoint as checkpointTable,
   checkpointApprover,
+  gateRequest as gateRequestTable,
   type Checkpoint,
   type Db,
   type Run,
 } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { newId } from "./ids.ts";
 
@@ -131,7 +132,23 @@ export async function gateApprovers(
   return approversAmong(policy, await activeHumans(db, workspaceId));
 }
 
-/** Replaces a Project's Checkpoints, refusing a threshold nobody could meet. */
+/**
+ * Sets a Project's Checkpoints to the list given, refusing a threshold nobody
+ * could meet, and answers what they were before (`loweredApprovals` reads it).
+ *
+ * The list is the policy, so a Checkpoint left out of it is one the Project no
+ * longer has. But a Checkpoint that stays is changed where it is, by name, and
+ * keeps its id: an open Gate links the row it was asked under, and the Slack
+ * message and the email read its threshold through that link. Deleting and
+ * inserting every row, as this did until 2026-10-16, cut every open Gate
+ * loose on any save, and both then said one approval whatever was wanted.
+ *
+ * Sequential statements, because D1 has no interactive transactions: the rows
+ * removed, the approvers of the rows kept where they had any, a statement per
+ * Checkpoint, every approver in one, and — for a Checkpoint added at a name an
+ * open Gate already asked at — that Gate linked to it, so it reads the new
+ * threshold the way a ruling on it does.
+ */
 export async function setCheckpoints(
   db: Db,
   projectId: string,
@@ -142,7 +159,7 @@ export async function setCheckpoints(
     excludeRequester: boolean;
     approverMemberIds: string[];
   }>,
-): Promise<void> {
+): Promise<Array<{ name: string; approvalsRequired: number }>> {
   const active = await activeHumans(db, workspaceId);
 
   for (const one of wanted) {
@@ -165,24 +182,74 @@ export async function setCheckpoints(
     }
   }
 
-  // Replaced rather than merged: the list is the policy, so a Checkpoint left
-  // out of it is one the Project no longer has.
-  await db.delete(checkpointTable).where(eq(checkpointTable.projectId, projectId));
-  for (const one of wanted) {
-    const id = newId("checkpoint");
-    await db.insert(checkpointTable).values({
-      id,
-      projectId,
-      name: one.name,
-      approvalsRequired: one.approvalsRequired,
-      excludeRequester: one.excludeRequester,
-    });
-    if (one.approverMemberIds.length > 0) {
-      await db
-        .insert(checkpointApprover)
-        .values(one.approverMemberIds.map((memberId) => ({ checkpointId: id, memberId })));
-    }
+  const existing = await db.query.checkpoint.findMany({
+    where: { projectId },
+    columns: { id: true, name: true, approvalsRequired: true },
+    with: { approvers: { columns: { memberId: true } } },
+  });
+  const named = new Set(wanted.map((one) => one.name));
+  const byName = new Map(existing.map((row) => [row.name, row]));
+
+  // A removed Checkpoint's open Gates lose their link (`ON DELETE SET NULL`)
+  // and want the default's one approval, which is what a ruling on them and
+  // `passLoweredGates` read too.
+  const removed = existing.filter((row) => !named.has(row.name)).map((row) => row.id);
+  if (removed.length > 0) {
+    await db.delete(checkpointTable).where(inArray(checkpointTable.id, removed));
   }
+  // Who may rule is replaced whole, like the list: cleared where it was set.
+  const naming = existing
+    .filter((row) => named.has(row.name) && row.approvers.length > 0)
+    .map((row) => row.id);
+  if (naming.length > 0) {
+    await db.delete(checkpointApprover).where(inArray(checkpointApprover.checkpointId, naming));
+  }
+
+  const approvers: Array<{ checkpointId: string; memberId: string }> = [];
+  const added: Array<{ id: string; name: string }> = [];
+  for (const one of wanted) {
+    const kept = byName.get(one.name);
+    const id = kept?.id ?? newId("checkpoint");
+    if (kept) {
+      await db
+        .update(checkpointTable)
+        .set({
+          approvalsRequired: one.approvalsRequired,
+          excludeRequester: one.excludeRequester,
+          updatedAt: new Date(),
+        })
+        .where(eq(checkpointTable.id, id));
+    } else {
+      await db.insert(checkpointTable).values({
+        id,
+        projectId,
+        name: one.name,
+        approvalsRequired: one.approvalsRequired,
+        excludeRequester: one.excludeRequester,
+      });
+      added.push({ id, name: one.name });
+    }
+    for (const memberId of one.approverMemberIds) approvers.push({ checkpointId: id, memberId });
+  }
+  if (approvers.length > 0) await db.insert(checkpointApprover).values(approvers);
+
+  // A Gate asked at a name nobody had configured links nothing; once the name
+  // is a Checkpoint, its open Gates are measured against it, so they link it.
+  for (const one of added) {
+    await db
+      .update(gateRequestTable)
+      .set({ checkpointId: one.id })
+      .where(
+        and(
+          eq(gateRequestTable.projectId, projectId),
+          eq(gateRequestTable.checkpoint, one.name),
+          eq(gateRequestTable.status, "open"),
+          isNull(gateRequestTable.checkpointId),
+        ),
+      );
+  }
+
+  return existing.map((row) => ({ name: row.name, approvalsRequired: row.approvalsRequired }));
 }
 
 export const CheckpointPolicySchema = z.object({
