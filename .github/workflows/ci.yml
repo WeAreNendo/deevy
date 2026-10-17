@@ -101,7 +101,7 @@ jobs:
           - name: web
             filters: -F web
           - name: core
-            filters: -F core -F db -F adapters -F sockets -F email -F release -F cli -F docs
+            filters: -F core -F db -F adapters -F sockets -F email -F design -F release -F cli -F docs
           - name: runtime and server
             filters: -F agent -F server -F hosted
     steps:

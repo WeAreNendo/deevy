@@ -20,6 +20,7 @@ const packages = [
   "packages/adapters",
   "packages/sockets",
   "packages/email",
+  "packages/design",
   "apps/web",
   "apps/server",
   "apps/agent",

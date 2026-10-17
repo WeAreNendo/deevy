@@ -111,51 +111,41 @@ def main():
     x0, y0, x1, y1 = LOCKUP
     lockup_box = f"{num(x0)} {num(y0)} {num(x1 - x0)} {num(y1 - y0)}"
     mx0, my0, mx1, my1 = INK
+    # The logo as data, for the app's component and the docs site's title to
+    # draw in the theme's colours (packages/design/src/logo.ts).
     write(
-        ROOT / "apps/web/src/components/deevy-logo.tsx",
+        ROOT / "packages/design/src/logo.ts",
         f'''/*
- * deevy's logo, written by brand/build.py: change it there and run it again.
+ * deevy's logo as data, written by brand/build.py: change it there and run it
+ * again (brand/README.md).
  *
- * The mark is a "d" made of two halves, a Human's (sky) and an Agent's (rose),
- * so it takes the --human and --agent tokens and follows the theme. The word
- * is Outfit SemiBold as outlines, in the text colour around it.
+ * A "d" made of two halves standing on one baseline, a Human's half-disc and an
+ * Agent's bar, beside "deevy" in Outfit SemiBold as outlines. The paths carry
+ * no colour: whoever draws them fills the disc with --human, the bar with
+ * --agent and the word with the text colour, so the logo follows the theme. The
+ * app draws it in components/deevy-logo.tsx, the docs site in its site title.
  */
-import {{ cn }} from "@/lib/utils";
 
-const disc = "{DISC}";
-const bar = "{BAR}";
-const word =
+/** The Human's half-disc. */
+export const disc = "{DISC}";
+
+/** The Agent's bar. */
+export const bar = "{BAR}";
+
+/** "deevy", drawn at `wordAt`. */
+export const word =
   "{WORD}";
 
-/** The mark alone. Decoration: whatever it sits in says "deevy". */
-export function DeevyMark({{ className, ...props }}: React.ComponentProps<"svg">) {{
-  return (
-    <svg viewBox="{mx0} {my0} {mx1 - mx0} {my1 - my0}" aria-hidden className={{cn("h-6 w-auto", className)}} {{...props}}>
-      <path d={{disc}} className="fill-human" />
-      <path d={{bar}} className="fill-agent" />
-    </svg>
-  );
-}}
+/** Where the word's origin sits: its baseline, after the bar. */
+export const wordAt = {{ x: {num(WORD_X)}, y: {num(BASELINE)} }};
 
-/** The mark and the word, named "deevy". */
-export function DeevyLogo({{ className, ...props }}: React.ComponentProps<"svg">) {{
-  return (
-    <svg
-      viewBox="{lockup_box}"
-      role="img"
-      aria-label="deevy"
-      className={{cn("h-7 w-auto", className)}}
-      {{...props}}
-    >
-      <path d={{disc}} className="fill-human" />
-      <path d={{bar}} className="fill-agent" />
-      <path d={{word}} transform="translate({num(WORD_X)} {num(BASELINE)})" fill="currentColor" />
-    </svg>
-  );
-}}
+/** The mark's ink, as a viewBox. */
+export const markBox = "{mx0} {my0} {mx1 - mx0} {my1 - my0}";
+
+/** The mark and the word together, down to the "y"'s tail, as a viewBox. */
+export const lockupBox = "{lockup_box}";
 ''',
     )
-
 
 if __name__ == "__main__":
     main()
