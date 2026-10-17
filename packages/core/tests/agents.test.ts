@@ -1,5 +1,6 @@
 import { createRouterClient, Procedure } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+import { appendEvent } from "../src/events.ts";
 import { router } from "../src/operations/index.ts";
 import type { OperationMeta } from "../src/operations/registry.ts";
 import { getOperationMeta } from "../src/operations/registry.ts";
@@ -530,6 +531,30 @@ describe("agents.grants", () => {
       "agent.project_revoked",
     ]);
   });
+
+  it("leaves a Project with no default when it is taken back from its default Agent", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const asAda = createRouterClient(router, { context: ada });
+    const { project: dev } = await seedProject(db, ada.workspace.id);
+    const planner = await asAda.agents.create({ name: "Planner" });
+    // Choosing a default grants it the Project.
+    await asAda.projects.update({ slug: dev.slug, defaultAgentMemberId: planner.id });
+
+    await asAda.agents.grants.remove({ memberId: planner.id, projectId: dev.id });
+
+    // A default that cannot see its Project would be handed every record
+    // nobody named, and start no Run on any of them.
+    expect((await asAda.projects.get({ slug: dev.slug })).defaultAgentMemberId).toBeNull();
+    const last = await db.query.event.findFirst({ orderBy: { seq: "desc" } });
+    expect(last).toMatchObject({
+      kind: "project.updated",
+      subjectId: dev.id,
+      actorMemberId: ada.member.id,
+      payload: { defaultAgentMemberId: { from: planner.id, to: null } },
+    });
+  });
 });
 
 describe("an Agent's own webhook", () => {
@@ -639,7 +664,7 @@ describe("every door into an ungranted Project", () => {
     const { sockets } = fakeSockets();
     const asAda = createRouterClient(router, { context: { ...ada, sockets } });
     const { project: dev } = await seedProject(db, ada.workspace.id);
-    await seedProject(db, ada.workspace.id, { slug: "ops", scopeKey: "acme/ops" });
+    const ops = await seedProject(db, ada.workspace.id, { slug: "ops", scopeKey: "acme/ops" });
 
     const agent = await agentContext(db, { sponsor: ada.member, grants: [dev.id] });
     const asAgent = createRouterClient(router, { context: agent });
@@ -650,13 +675,27 @@ describe("every door into an ungranted Project", () => {
       code: "NOT_FOUND",
     });
 
+    // deevy will not hand it a record there: it could never see the Run.
+    await expect(
+      asAda.issues.create({
+        projectSlug: "ops",
+        title: "Rotate the keys",
+        assignAgent: agent.member.id,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
     // And the inbox is a door too: a Notification names an Issue, and reading
-    // it back is reading a projection in a Project the Agent cannot see.
-    await asAda.issues.create({
-      projectSlug: "ops",
-      title: "Rotate the keys",
-      assignAgent: agent.member.id,
+    // it back is reading a projection in a Project the Agent cannot see. A
+    // tracker can still name it there, so the assignment arrives as one would.
+    const record = await ops.record({ externalId: "9", title: "Rotate the keys" });
+    await appendEvent(ada, {
+      kind: "issue.assigned",
+      subjectType: "issue",
+      subjectId: record.id,
+      projectId: record.projectId,
+      payload: { from: null, to: agent.member.id, byRouting: true },
     });
     expect((await asAgent.inbox.list({})).notifications).toEqual([]);
+    expect(await db.query.run.findMany({ where: { agentMemberId: agent.member.id } })).toEqual([]);
   });
 });

@@ -105,10 +105,21 @@ export const issues = {
       }
       if (parent) await assertRoomBelow(context, parent.issue, parent.issue.externalKey);
 
-      const assignee = input.assignAgent ? await requireAssignee(context, input.assignAgent) : null;
+      const assignee = input.assignAgent
+        ? await requireAssignee(context, input.assignAgent, project.id)
+        : null;
       if (assignee && assignee.kind !== "agent") {
         throw new ORPCError("BAD_REQUEST", {
           message: "Only an Agent is named by a routing label; assign a Human in the tracker",
+        });
+      }
+      // An Agent works only the Projects it was granted, and a record handed
+      // to one that cannot see it is a Run that waits for good: refused here,
+      // where whoever asked is still there to read why, rather than dropped by
+      // the trigger afterwards.
+      if (assignee && assignee.grantedProjects.length === 0) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: `${assignee.user.name} cannot see the ${project.name} Project; grant it the Project first`,
         });
       }
 

@@ -1001,7 +1001,10 @@ A Sponsor creates an Agent under Settings, Agents. Creating one makes a Member w
 Sponsor is the Human who created it, and mints its first API key, shown **once** in the dialog that created
 it — an Agent with no key could reach nothing at all. Later keys are issued on the Agent's own page and are
 shown once in the same way. Grant the Agent the Projects it should see: an ungranted Project does not exist
-to it, and an Agent starts with none.
+to it, and an Agent starts with none. Nothing gives it work outside them either: a label or a mention that
+names it in another Project starts no Run, `issues.create` refuses to assign it a record there, and taking a
+Project back from the Agent that is its default leaves the Project with no default, with a `project.updated`
+saying so. A Run started there could never be seen by the Agent it was for, and would wait for good.
 
 The command to connect with is shown beside the key, in the dialog that created the Agent and beside every
 key issued afterwards, with that key already in it: a key is readable once, so that is the only moment deevy
@@ -1868,7 +1871,8 @@ Nothing here is measured, and these are the knobs that move the bill rather than
 | `CURSOR_API_KEY`                  | `cursor`                                                                                              | —   | The runtime refuses to start. Cursor's API key, from cursor.com; the desktop app's login is not shared with the CLI. |
 | `DEEVY_AGENT_POLL_SECONDS`        | Costs deevy requests, not tokens. A poll that finds nothing spends nothing.                           |
 
-Runs are triggered by assignment, mention, a workflow rule, or an Agent's schedule. A schedule on an Agent is
+Runs are triggered by assignment, mention, an Agent's sub-issues all closing, or an Agent's schedule, and only
+ever in a Project the Agent was granted. A schedule on an Agent is
 the one that can spend money while nobody is watching.
 
 ## The volume

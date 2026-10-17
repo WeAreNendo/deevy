@@ -75,6 +75,31 @@ describe("the assignment trigger", () => {
   });
 });
 
+describe("an Agent the Project was not granted to", () => {
+  it("is given no Run, whether a record is routed to it or a comment mentions it", async () => {
+    const { db, admin, asAdmin, issue } = await workspaceWithAgent();
+    const stranger = await agentContext(db, {
+      sponsor: admin.member,
+      name: "Stranger",
+      handle: "stranger",
+    });
+
+    await route(admin, issue, stranger.member.id);
+    await appendEvent(admin, {
+      kind: "comment.created",
+      subjectType: "issue",
+      subjectId: issue.id,
+      projectId: issue.projectId,
+      payload: { body: "@stranger have a look", mentionedMemberIds: [stranger.member.id] },
+    });
+
+    // It could never see one: runs.list leaves out a Project it was not granted,
+    // so a Run started for it would wait, pending, for good.
+    const { runs } = await asAdmin.runs.list({ issue: issue.url });
+    expect(runs).toEqual([]);
+  });
+});
+
 describe("the mention trigger", () => {
   it("creates a Run for an Agent a comment mentions", async () => {
     const { admin, asAdmin, issue, agent } = await workspaceWithAgent();
