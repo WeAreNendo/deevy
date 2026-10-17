@@ -304,15 +304,15 @@ sub-issues is one line in that Sponsor's inbox and not forty. Built in six slice
 
 **Sockets.** The first milestone to remove more than it added, built in fifteen slices from 2026-09-19 to
 2026-09-24. deevy stopped being a tracker and became the glue between a team's existing tools and its
-Agents: an Issue is a projection of a record in a Socket, a Project is a binding, a Gate is a request on a Run
+Agents: an Issue is a projection of a record in a Socket, a Project is bound to a Socket's container, a Gate is a request on a Run
 with a Proposal, and a Ruling may come from the tracker or from Slack as well as from deevy. GitHub first,
 with the acceptance walk rebuilt around a Socket and run on both deployments on every commit; then rulings
 from outside, the Slack app, Linear, GitLab and Notion, and a Project's documents read where the team keeps
 them. Plan and findings in [sockets.md](./plans/sockets.md), decisions in
 [ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
 [ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md). A clean break: the first release of
-this shape starts from an empty database. What no test can do is still owed: each provider's setup walked
-once against the real tool.
+this shape starts from an empty database. GitHub's setup was walked against github.com on 2026-09-25;
+Linear's, GitLab's, Notion's and Slack's, each walked once against the real tool, are still owed.
 
 **After Sockets.** Usage and time per Run came first and is done ([run-usage.md](./plans/run-usage.md),
 2026-09-26): every Run shows the tokens and the cost its client reported and how long it worked and waited,
@@ -323,12 +323,13 @@ has. Hosted Workspaces followed ([hosted.md](./plans/hosted.md), built 2026-10-0
 Worker serving every hosted Workspace at `app.deevy.dev/<slug>`, each Workspace's database a Durable Object of
 its own, sign-in through one relay, the release carrying that Worker for a private console and deploy
 pipeline (WeAreNendo/deevy-cloud) to run; an invite-only free beta first and billing after. It has been live
-at app.deevy.dev since 2026-10-14, its idle and loaded costs measured (hosted.md, "What it found"). The public
-docs were then rewritten for their two readers ([docs.md](./plans/docs.md)) and the app and the docs given one
-design system ([design-system.md](./plans/design-system.md)), both 2026-10-16 and 17. Next are the real walks of
-Linear, GitLab, Notion and Slack, which only GitHub has had so far. Then, in rough order: budgets that stop a Run or an Agent's
-month, sized on what Runs are now seen to spend; per-Agent identities on a Socket where a provider makes them
-cheap; Jira and Asana; private Projects; Postgres adapter.
+at app.deevy.dev since 2026-10-14, with what an idle Workspace costs and how many awake ones an isolate holds
+measured (hosted.md, "What it found"). The public docs were then rewritten for their two readers
+([docs.md](./plans/docs.md)) and the app and the docs given one design system
+([design-system.md](./plans/design-system.md)), on 2026-10-16 and 2026-10-17. Next are the real walks of
+Linear, GitLab, Notion and Slack, which only GitHub has had so far. Then, in rough order: budgets that stop a
+Run or an Agent's month, sized on the Usage Runs are now seen to report; per-Agent identities on a Socket where
+a provider makes them cheap; Jira and Asana; private Projects; Postgres adapter.
 
 ## Risks worth naming
 

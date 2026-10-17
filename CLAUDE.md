@@ -13,7 +13,7 @@ plan in `docs/plans/`, followed by the harness spike (ADR-0018), the agent ownin
 invitations, four-eyes Gates (ADR-0020), live Documents (ADR-0021) and sub-issue delegation (ADR-0022). Then
 the **Sockets** milestone (`docs/plans/sockets.md`, ADR-0024 and ADR-0025), done in fifteen slices, cut
 deevy's own tracker out: an Issue is a projection of a record in a Socket (a GitHub App, a Linear
-application, a GitLab user, a Notion connection, a Slack app), a Project is a binding, a Gate is a request on
+application, a GitLab user, a Notion connection, a Slack app), a Project is bound to a Socket's container, a Gate is a request on
 a Run with a Proposal, a Ruling may come from deevy, the tracker or Slack, and Documents, the Workflow,
 Labels, Teams, stored comments and the board are gone. What each slice found is at the end of that plan. The
 acceptance walk is a script (`vp run agent#acceptance`, `docs/sockets-acceptance.md`) that runs a record
@@ -26,7 +26,8 @@ Human's Notifications at their verified address, team addresses as Channels, inv
 Settings › Email. Then **hosted Workspaces** (`docs/plans/hosted.md`, ADR-0028 to ADR-0032): a deployment may
 live under a path, several may sign in through one relay, and `apps/hosted` serves many Workspaces from one
 Worker, each one's database a Durable Object of its own, released as an attested archive that the private
-WeAreNendo/deevy-cloud deploys; deevy Cloud has served it at app.deevy.dev since 2026-10-14. Then the
+WeAreNendo/deevy-cloud deploys; deevy Cloud has served hosted Workspaces from it at app.deevy.dev since
+2026-10-14. Then the
 **public docs** (`docs/plans/docs.md`): docs.deevy.dev written by hand for a team on deevy Cloud and for
 whoever hosts deevy, with `docs/` kept as the internal documentation; and **one design system**
 (`docs/plans/design-system.md`): `@deevy/design` holds the tokens, faces and logo the app and the docs both
@@ -105,13 +106,14 @@ module and never build oRPC procedures outside the registry (ADR-0009). GET oper
 need an object input schema; use `NoInput` for none.
 
 **Request context** is built once per request in `packages/core/src/app.ts`: Better Auth session, then the
-caller's Member row and the Workspace. `createApp({ db, auth?, origin })` is the Hono app both entries mount:
-`apps/server` (Node, `@hono/node-server`) and `apps/web/src/worker.ts` (Cloudflare Worker, D1).
+caller's Member row and the Workspace. `createApp({ db, auth?, origin })` is the Hono app the three entries mount:
+`apps/server` (Node, `@hono/node-server`), `apps/web/src/worker.ts` (Cloudflare Worker, D1) and
+`apps/hosted/src/workspace.ts` (one per hosted Workspace's Durable Object).
 
 **Sockets** (ADR-0024): the core holds the port — the types a tool must answer to, in
 `packages/core/src/sockets/port.ts`, exported as `@deevy/core/sockets` — and never a provider. Each tool is a
 module in `packages/sockets/src/<provider>` (github, linear, gitlab, notion, slack, and the in-process `stub`);
-the two entries build the registry with `socketModules()` and pass it as `createApp({ sockets })`. A tool
+the entries build the registry with `socketModules()` and pass it as `createApp({ sockets })`. A tool
 delivers to `POST /hooks/:socketId`, mounted before everything else, where the module verifies the raw body,
 `normalize` turns it into `InboundEvent`s, and `applyInbound` projects, routes and rules. Credentials are
 sealed under `DEEVY_SECRET` (`secrets.ts`). A provider module is tested against recorded payloads with an
@@ -125,8 +127,9 @@ The core uses no interactive transactions because D1 has none; multi-statement w
 (bootstrap) or batches.
 
 **Identity** (ADR-0007): every Member is a Better Auth user (`user.kind` is `human | agent`); deevy's own
-`workspace` and `member` tables hold roles and Sponsors. A single instance serves one Workspace, created by
-`bootstrapWorkspace` when `DEEVY_ADMIN_EMAIL` signs in (runs on user creation and on every new session, and is
+`workspace` and `member` tables hold roles and Sponsors. A self-hosted deployment serves one Workspace, a hosted
+one many, each in its own database (ADR-0028), and each is created by `bootstrapWorkspace` when its admin's
+address (`DEEVY_ADMIN_EMAIL`) signs in (runs on user creation and on every new session, and is
 idempotent). Other sign-ins join through the allowlist or an invitation. A Human's accounts on the tools are
 Identities (`member_identity`, `packages/core/src/identities.ts`), which is what makes a Ruling from a tool
 theirs (ADR-0025).

@@ -27,7 +27,8 @@ record to an Agent by a label or a default, records the Run, holds the Gate wher
 Agent proposes (in deevy, with `/approve` in a comment on the record, or with a button in Slack), opens the pull
 request that closes the record, and says what happened back where the team reads. Agents are Members with their
 own identity, keys and audit trail, working over MCP. Every change is an Event, and the inbox, Slack, the
-webhooks and what deevy writes in the tools all derive from that one log.
+webhooks and what deevy writes in the tools all derive from that one log. It is also hosted, as deevy Cloud at
+app.deevy.dev, an invite-only beta.
 
 [`apps/agent`](./apps/agent) is the reference runtime on the other side: a service holding one
 Agent's key that runs a coding-agent CLI (Claude Code, OpenCode, Cursor or Copilot) against the records that
