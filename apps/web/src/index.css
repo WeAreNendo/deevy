@@ -108,6 +108,7 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
 
+  --color-link: var(--link);
   --color-human: var(--human);
   --color-agent: var(--agent);
   --color-gate: var(--gate);
@@ -186,7 +187,7 @@
   .hljs-built_in,
   .hljs-doctag,
   .hljs-meta {
-    color: var(--primary);
+    color: var(--link);
   }
   .hljs-string,
   .hljs-attr,
@@ -201,7 +202,7 @@
   .hljs-variable,
   .hljs-template-variable,
   .hljs-deletion {
-    color: var(--human);
+    color: var(--state-done);
   }
   .hljs-title,
   .hljs-section,

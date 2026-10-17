@@ -81,7 +81,7 @@ export function WorkItemPage({ issueId }: { issueId: string }) {
             href={webHref(record.url)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+            className="inline-flex w-fit items-center gap-1 text-sm text-link hover:underline"
           >
             Read the conversation on {where}
             <ExternalLink aria-hidden className="size-3" />

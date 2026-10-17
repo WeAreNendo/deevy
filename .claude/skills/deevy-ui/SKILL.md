@@ -127,12 +127,15 @@ through the catalog.
   radius 8px (`--radius: 0.5rem`); the spacing unit is `--density: 0.2625rem`, 5% roomier than Tailwind's
   default — every spacing utility multiplies it. The families, radius, density and `--tracking` are
   variables `@theme inline` hands to the utilities, so a palette review retunes them from one block.
-- **Color slots.** `--human` (sky blue) for a Human Member; `--agent` (rose) for an Agent; `--gate` (amber)
-  for a Gate and anything waiting on a ruling; `--state-backlog|active|done` for a Run's status;
-  `--primary` (indigo) for the one action colour; cool blue-gray paper and ink — the base is tweakcn's
-  _clean-slate_ preset (Apache-2.0), picked by Matt. Those three saturated slots are the only saturated
-  colours on a screen besides `--primary` and `--destructive`: sky & rose as indigo's neighbours, amber the one
-  warm colour, so a Gate jumps. Both themes; a real System/Light/Dark toggle in the Member menu.
+- **Color slots.** Indigo is a Human and what a Human does, as the logo's half-disc says (Matt, 2026-10-17):
+  `--primary` is the fill (buttons, checks, the same indigo in both themes, white text on it) and `--link` the
+  indigo for text on the page (links, a pressed toggle, a Human's name: `text-link`, never `text-primary`,
+  which fails contrast on a dark page); `--human` is `--link`. `--agent` (rose) for an Agent, the logo's bar;
+  `--gate` (amber) for a Gate and anything waiting on a ruling; `--state-backlog|active|done` for a Run's
+  status; cool blue-gray paper and ink, the base tweakcn's _clean-slate_ preset (Apache-2.0), picked by Matt.
+  Indigo, rose and amber are the only saturated colours on a screen besides `--destructive`; amber is the one
+  warm colour, so a Gate jumps. Sky, which marked Humans until 2026-10-17, is gone. Both themes; a real
+  System/Light/Dark toggle in the Member menu.
 - **Layout.** Full-bleed frame, 240px sidebar collapsing to 48px, edge-to-edge lists with a 40px filter bar.
   A page with a subject and its context — a Gate, a Run, a record — is a main column and an 18–22rem rail,
   one column under `@3xl`. Where the rail holds what a Human acts on (a Gate's ruling card, a Run's Gates) it

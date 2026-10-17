@@ -15,7 +15,7 @@ export const proseClassName = cn(
   "[&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-2",
   "[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-1",
   "[&_h4]:text-sm [&_h4]:font-medium",
-  "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4",
+  "[&_a]:text-link [&_a]:underline [&_a]:underline-offset-4",
   "[&_strong]:font-semibold",
   "[&_code]:rounded-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em]",
   "[&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:text-xs/5",

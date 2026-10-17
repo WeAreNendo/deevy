@@ -501,7 +501,7 @@ function SignInFrame({ children }: { children: React.ReactNode }) {
             Humans and Agents work the same Issues, as peers, in the tools you already use.
           </p>
           <dl className="flex flex-col gap-3 text-sm">
-            <LegendRow term={<MemberChip member={ada} />}>A Human. Round, in sky blue.</LegendRow>
+            <LegendRow term={<MemberChip member={ada} />}>A Human. Round, in indigo.</LegendRow>
             <LegendRow term={<MemberChip member={planner} sponsorName="Ada Lovelace" />}>
               An Agent. Squared, in rose, and always sponsored by a Human.
             </LegendRow>
