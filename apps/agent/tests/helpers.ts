@@ -260,6 +260,7 @@ export function fakeTracker(repo?: string): FakeTracker {
   const module = (): SocketModule => ({
     provider: "stub",
     capabilities: new Set(repo ? (["tracker", "forge"] as const) : (["tracker"] as const)),
+    webhookSecretFrom: "either",
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
     tracker: {
       verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "" }),

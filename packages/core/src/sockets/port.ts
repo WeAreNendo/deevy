@@ -430,9 +430,28 @@ export interface IdentityScope {
   linkBySignIn?: boolean;
 }
 
+/**
+ * Who makes the secret a tool signs its deliveries with, which decides how a
+ * Socket's is changed.
+ *
+ * - `either`: the tool's settings take a secret typed in, so deevy may mint
+ *   one for it (`sockets.rotate`) or take one the tool has (`sockets.update`):
+ *   a GitHub App's webhook secret, a GitLab webhook's secret or signing token.
+ * - `tool`: the tool makes it and takes none typed in, so deevy can only take
+ *   the tool's, and a minted one would refuse every delivery: Slack's signing
+ *   secret, a Linear webhook's.
+ * - `handshake`: the tool sends it to establish its webhook and deevy keeps
+ *   what it sent (hooks.ts): Notion's verification token. A minted one would
+ *   replace it and break the webhook.
+ */
+export const webhookSecretOrigins = ["either", "tool", "handshake"] as const;
+export type WebhookSecretFrom = (typeof webhookSecretOrigins)[number];
+
 export interface SocketModule {
   provider: SocketProvider;
   capabilities: ReadonlySet<SocketCapability>;
+  /** Who makes what its deliveries are signed with: see `WebhookSecretFrom`. */
+  webhookSecretFrom: WebhookSecretFrom;
   /** Where its accounts live. Absent, the provider's name is the instance and nothing is shared. */
   identityScope?: IdentityScope;
   /** Proves the credential at connect, and is what `sockets.test` re-asks. */

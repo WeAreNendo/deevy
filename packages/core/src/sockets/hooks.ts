@@ -41,9 +41,11 @@ export interface InboundOptions {
 }
 
 /**
- * How long a replaced webhook secret is still taken. A tool whose secret is
- * rotated in its own settings — Slack's signing secret — signs with the old one
- * until the new one is pasted into deevy, and a day is room to do both.
+ * How long a replaced webhook secret is still taken, whether the new one was
+ * pasted (`sockets.update`) or minted (`sockets.rotate`). Either side of a
+ * rotation can be changed first — a tool goes on signing with the old one
+ * until the new one is pasted into it, or signs with its new one before it is
+ * pasted into deevy — and a day is room to do both.
  */
 export const PREVIOUS_SECRET_MS = 24 * 3_600_000;
 

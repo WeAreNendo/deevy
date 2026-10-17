@@ -344,9 +344,10 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   a secret is shown once, in mono, and said to be shown once.
 - **A Socket's page** (`routes/settings/socket.tsx`) answers what an operator actually asks: is the tool
   talking to deevy or is deevy asking it (`How it is doing`), where it delivers (`region "Where it delivers"`,
-  with **Point GitHub at this address** for an App), what it signs with (`signingOf`: a field for the tool's
-  new secret where the tool makes one, **Mint** where deevy may, and no section for Notion, whose
-  verification token is its secret), and what it has said lately
+  with **Point GitHub at this address** for an App), what it signs with (by the provider's own
+  `webhookSecretFrom` in `sockets.providers`, which `sockets.rotate` obeys too: a field for the tool's new
+  secret where the tool makes one, **Mint** where deevy may, and no section for Notion, whose verification
+  token is its secret), and what it has said lately
   (`table "Deliveries"`). A section that only one tool has — Notion's `region "Verifying the webhook"` and
   "Who commented", Linear's "Assigning issues to deevy", GitHub's "Where it is installed" with a link to
   install the App on more repositories — keys off `socket.provider`; what a tool _can_ do is the server's to

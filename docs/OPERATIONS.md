@@ -1463,16 +1463,22 @@ click on a Slack button. Those need the public address.
 ### What a tool signs with
 
 Every delivery is checked against the Socket's webhook secret, and the Socket's page changes it under **What
-it signs with**, in the way the tool allows. **Where the tool makes the secret** — Slack's signing secret,
-the signing secret on a Linear application's webhook, or a GitHub App's or a GitLab webhook's secret when
-you change it there — paste the new one into **New secret from** the tool and choose **Use the new secret**
-(`sockets.update` with `webhookSecret`). deevy keeps taking the old one for a day (`PREVIOUS_SECRET_MS`), so
-the two sides can change in either order. **Where deevy can mint one** — GitHub and GitLab, whose settings
-take a secret typed in — **Mint a webhook secret** (`sockets.rotate`) shows a new one once and replaces the
-old at once, so it goes into the tool straight away. Slack and Linear are offered no Mint, because nothing
-deevy minted can be pasted into them. A Notion Socket has no such section: Notion signs with the
-verification token it sent, which **Verifying the webhook** shows, and a minted secret would replace it and
-break the webhook.
+it signs with**, in the way the tool allows. Each Socket module says which way that is (`webhookSecretFrom`,
+answered per provider by `sockets.providers`), and both the page and `sockets.rotate` go by it:
+
+- **`either`** — GitHub and GitLab, whose settings take a secret typed in. Paste the tool's new one into
+  **New secret from** the tool and choose **Use the new secret** (`sockets.update` with `webhookSecret`), or
+  **Mint a webhook secret** (`sockets.rotate`), which shows a new one once for you to paste into the tool.
+- **`tool`** — Slack's signing secret and a Linear application's webhook signing secret, which the tool
+  makes and nothing deevy minted can be pasted into. Only the paste; `sockets.rotate` refuses, saying so.
+- **`handshake`** — Notion, which signs with the verification token it sends when its subscription is made.
+  The page has no such section, since **Verifying the webhook** shows that token, and `sockets.rotate`
+  refuses, because a minted secret would replace the token and break the webhook.
+
+Whichever way it changes, deevy keeps taking the old secret for a day (`PREVIOUS_SECRET_MS`, the sealed
+`previousWebhookSecret` and `webhookSecretChangedAt` on the Socket row), so the two sides can change in
+either order and nothing the tool signs meanwhile is refused. Neither column, nor any other sealed one, is in
+any answer or in `openapi.json`; `secrets.test.ts` asks every `sockets.*` operation and the document.
 
 ### Working in GitHub
 

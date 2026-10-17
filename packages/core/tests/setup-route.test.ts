@@ -29,6 +29,7 @@ function setupSockets(
   const module = (): SocketModule => ({
     provider: "stub",
     capabilities: new Set(["tracker"] as const),
+    webhookSecretFrom: "either",
     identity: () => Promise.resolve({ login: "deevy", id: "1", mentionHandle: "@deevy" }),
     setup: ({ params, redirectUri }) => {
       asked.params = params;
@@ -245,6 +246,7 @@ describe("a connected tool's own install", () => {
       stub: (): SocketModule => ({
         provider: "stub",
         capabilities: new Set(["tracker"] as const),
+        webhookSecretFrom: "either",
         identity: () => Promise.resolve({ login: "deevy", id: "1", mentionHandle: "@deevy" }),
       }),
     } satisfies SocketModules;

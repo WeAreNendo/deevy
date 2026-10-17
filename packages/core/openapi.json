@@ -7227,12 +7227,21 @@
                                 "chat"
                               ]
                             }
+                          },
+                          "webhookSecretFrom": {
+                            "type": "string",
+                            "enum": [
+                              "either",
+                              "tool",
+                              "handshake"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "label",
-                          "capabilities"
+                          "capabilities",
+                          "webhookSecretFrom"
                         ],
                         "additionalProperties": false
                       }
@@ -7341,24 +7350,6 @@
                               }
                             ]
                           },
-                          "previousWebhookSecret": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "webhookSecretChangedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "installedBy": {
                             "type": [
                               "string",
@@ -7426,8 +7417,6 @@
                           "name",
                           "identity",
                           "config",
-                          "previousWebhookSecret",
-                          "webhookSecretChangedAt",
                           "installedBy",
                           "status",
                           "lastInboundAt",
@@ -7600,24 +7589,6 @@
                         }
                       ]
                     },
-                    "previousWebhookSecret": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "webhookSecretChangedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -7691,8 +7662,6 @@
                     "name",
                     "identity",
                     "config",
-                    "previousWebhookSecret",
-                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",
@@ -7839,24 +7808,6 @@
                         }
                       ]
                     },
-                    "previousWebhookSecret": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "webhookSecretChangedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -7939,8 +7890,6 @@
                     "name",
                     "identity",
                     "config",
-                    "previousWebhookSecret",
-                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",
@@ -8242,24 +8191,6 @@
                         }
                       ]
                     },
-                    "previousWebhookSecret": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "webhookSecretChangedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -8324,8 +8255,6 @@
                     "name",
                     "identity",
                     "config",
-                    "previousWebhookSecret",
-                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",
@@ -8346,7 +8275,7 @@
     "/sockets/{socketId}/rotate": {
       "post": {
         "operationId": "sockets.rotate",
-        "summary": "Mint a new webhook secret for a tool, and say it once",
+        "summary": "Mint a new webhook secret for a tool whose settings take one, and say it once",
         "parameters": [
           {
             "in": "path",
@@ -8453,24 +8382,6 @@
                             }
                           ]
                         },
-                        "previousWebhookSecret": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "webhookSecretChangedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
                         "installedBy": {
                           "type": [
                             "string",
@@ -8535,8 +8446,6 @@
                         "name",
                         "identity",
                         "config",
-                        "previousWebhookSecret",
-                        "webhookSecretChangedAt",
                         "installedBy",
                         "status",
                         "lastInboundAt",
@@ -8900,24 +8809,6 @@
                         }
                       ]
                     },
-                    "previousWebhookSecret": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "webhookSecretChangedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "installedBy": {
                       "type": [
                         "string",
@@ -8982,8 +8873,6 @@
                     "name",
                     "identity",
                     "config",
-                    "previousWebhookSecret",
-                    "webhookSecretChangedAt",
                     "installedBy",
                     "status",
                     "lastInboundAt",

@@ -27,53 +27,39 @@ import { providerLabel } from "@/lib/providers";
 import { cn } from "@/lib/utils";
 
 /**
- * Who makes a tool's signing secret, and so what the Socket's page can offer
- * to change it.
+ * Where each tool keeps the secret it signs with, said beside the field that
+ * takes a new one.
  *
- * Slack and Linear make theirs and take nothing typed in, so a secret deevy
- * minted could never reach them: the page takes the one the tool made. GitHub
- * and GitLab take one typed into their settings, so either side can make it.
- * Notion signs with the verification token it sent, and a minted secret would
- * replace that and break the webhook, so it has no entry and the section is
- * not shown: "Verifying the webhook" is where its token is.
+ * Copy only. Whether the page offers that field, Mint, or neither is the
+ * provider's own word — `webhookSecretFrom` in `sockets.providers`, which
+ * `sockets.rotate` decides by too — so the page and the server cannot
+ * disagree, and a tool with no sentence here still gets the right controls:
+ * `tool` (Slack, Linear) takes only the tool's, `either` (GitHub, GitLab)
+ * takes the tool's or mints one, and `handshake` (Notion) has no section,
+ * since "Verifying the webhook" is where its token is.
  *
- * A pasted secret goes through `sockets.update`, which keeps the old one good
- * for a day (`PREVIOUS_SECRET_MS` in the core's hooks.ts); a minted one
- * replaces it at once.
+ * Either way the one replaced is still taken for a day (`PREVIOUS_SECRET_MS`
+ * in the core's hooks.ts), so the two sides can change in either order.
  */
-interface Signing {
-  /** Where the tool keeps its secret, said where the page takes a new one; null where it takes none. */
-  made: string | null;
-  /** Whether deevy may mint one for the tool to take. */
-  mint: boolean;
-}
-
-const signingByProvider: Record<string, Signing | null> = {
-  slack: {
-    made: "Slack makes it: the Signing Secret, under Basic Information in the app's settings. When you regenerate it there, paste the new one here.",
-    mint: false,
-  },
-  linear: {
-    made: "Linear makes it: the signing secret on the webhook in your OAuth application's settings. When it changes there, paste the new one here.",
-    mint: false,
-  },
-  github: {
-    made: "It is the webhook secret in the App's settings on GitHub. Type a new one there and paste it here, or mint one here and paste it there.",
-    mint: true,
-  },
-  gitlab: {
-    made: "It is the secret token on each webhook in GitLab, or the signing token GitLab generated on it. Paste a new one from GitLab here, or mint a secret token here and paste it into each webhook.",
-    mint: true,
-  },
-  notion: null,
+const whereItIsMade: Record<string, string> = {
+  slack:
+    "Slack makes it: the Signing Secret, under Basic Information in the app's settings. When you regenerate it there, paste the new one here.",
+  linear:
+    "Linear makes it: the signing secret on the webhook in your OAuth application's settings. When it changes there, paste the new one here.",
+  github:
+    "It is the webhook secret in the App's settings on GitHub. Type a new one there and paste it here, or mint one here and paste it there.",
+  gitlab:
+    "It is the secret token on each webhook in GitLab, or the signing token GitLab generated on it. Paste a new one from GitLab here, or mint a secret token here and paste it into each webhook.",
 };
 
-/** How a Socket's secret changes; null where the page offers no way, as for Notion. */
-function signingOf(provider: string): Signing | null {
-  // A tool the page knows nothing particular about — the stub — is deevy's to mint for.
-  return provider in signingByProvider
-    ? (signingByProvider[provider] ?? null)
-    : { made: null, mint: true };
+/** The tool's own sentence, or one that fits who makes the secret. */
+function madeWhere(provider: string, from: "either" | "tool", tool: string): string {
+  return (
+    whereItIsMade[provider] ??
+    (from === "tool"
+      ? `${tool} makes it. When it changes there, paste the new one here.`
+      : `Paste a new one from ${tool} here, or mint one here and paste it into ${tool}.`)
+  );
 }
 
 interface Delivery {
@@ -97,6 +83,8 @@ interface Delivery {
 export function SocketPage({ socketId }: { socketId: string }) {
   const client = useQueryClient();
   const sockets = useQuery(orpc.sockets.list.queryOptions({ input: {} }));
+  // What each tool says of itself, here who makes its webhook secret.
+  const providers = useQuery(orpc.sockets.providers.queryOptions({ input: {} }));
   const deliveries = useQuery(orpc.sockets.inbound.queryOptions({ input: { socketId } }));
   const [minted, setMinted] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -145,7 +133,19 @@ export function SocketPage({ socketId }: { socketId: string }) {
 
   const standing = socketStanding(socket);
   const tool = providerLabel(socket.provider);
-  const signing = signingOf(socket.provider);
+  // Undefined until the server has said, and where it could not: the section
+  // then says only whether there is a secret, and offers nothing to change it.
+  const from = providers.data?.providers.find(
+    (one) => one.id === socket.provider,
+  )?.webhookSecretFrom;
+  const signing =
+    providers.isPending || from === "handshake"
+      ? null
+      : {
+          made:
+            from === "tool" || from === "either" ? madeWhere(socket.provider, from, tool) : null,
+          mint: from === "either",
+        };
   const config = socket.config as Record<string, unknown>;
   // Where a GitHub App is installed: an account per installation, written by
   // the install's redirect and by GitHub's own `installation` delivery.
@@ -471,8 +471,8 @@ export function SocketPage({ socketId }: { socketId: string }) {
                 <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
                   {minted}
                   <span className="mt-1 block font-sans text-xs text-muted-foreground">
-                    This is the only time deevy will show it. deevy stops taking the old one now, so
-                    paste it into {tool} straight away.
+                    This is the only time deevy will show it. Paste it into {tool}: deevy takes the
+                    old one for a day more, so nothing {tool} sends meanwhile is refused.
                   </span>
                 </p>
               ) : null}

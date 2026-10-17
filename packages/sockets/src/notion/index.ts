@@ -175,6 +175,9 @@ export function createNotionSocket({
   return {
     provider: "notion",
     capabilities: new Set(["tracker", "docs"] as const),
+    // Notion signs with the verification token it sends when its subscription
+    // is made (`handshake`), which deevy keeps and an admin pastes back.
+    webhookSecretFrom: "handshake",
     // No account a Human can link, and nobody signs in with Notion: the
     // workspace is where its accounts live, and an address is the proof
     // (ADR-0025).

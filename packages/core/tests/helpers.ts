@@ -280,6 +280,7 @@ export function fakeSockets(
   const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
     provider: "stub",
     capabilities: new Set(["tracker", "forge", "docs"] as const),
+    webhookSecretFrom: "either",
     // Its accounts are GitHub's sign-in accounts where the Socket's
     // configuration says so, which is how a test plays a Human who signed in
     // to deevy with GitHub and rules from the tracker (ADR-0025) — or
@@ -593,6 +594,7 @@ export function fakeChat(): FakeChat {
   const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
     provider: "slack",
     capabilities: new Set(["chat"] as const),
+    webhookSecretFrom: "tool",
     identityScope: { instance: typeof config.teamId === "string" ? config.teamId : "T0TEST" },
     identity: () =>
       Promise.resolve({

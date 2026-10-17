@@ -215,6 +215,8 @@ export function createSlackSocket({
   return {
     provider: "slack",
     capabilities: new Set(["chat"] as const),
+    // The app's Signing Secret is Slack's, regenerated there and never typed in.
+    webhookSecretFrom: "tool",
     // A team's accounts (ADR-0025). Sign in with Slack keeps the same user id,
     // and the id token it keeps names the team, which has to be this one
     // before that sign-in counts here. Anybody else is linked by a code Slack
