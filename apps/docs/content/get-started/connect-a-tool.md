@@ -23,9 +23,11 @@ nobody copies a private key anywhere.
 1. Go to **Settings › Sockets**, and under **Connect a tool** choose **Connect GitHub**.
 2. Give it a **Name**, such as `acme on GitHub`. GitHub names the App after it, and deevy names the
    Socket.
-3. Choose **Create the App on GitHub**, then **Continue on GitHub**.
-4. On GitHub, create the App. GitHub then shows you where to install it.
-5. Install it on the repositories deevy should work in. GitHub sends you back to deevy, to the Socket's
+3. If your repositories belong to a GitHub organization, put the organization's login in
+   **Organization**, such as `acme`. Leave it empty for repositories on your own account.
+4. Choose **Create the App on GitHub**, then **Continue on GitHub**.
+5. On GitHub, create the App. GitHub then shows you where to install it.
+6. Install it on the repositories deevy should work in. GitHub sends you back to deevy, to the Socket's
    page.
 
 Under **Where it is installed**, the Socket's page lists where the App is installed, with a link to
@@ -33,10 +35,11 @@ install it on more repositories later. An App installed nowhere can see no repos
 nothing to bind yet.
 
 :::caution[Repositories that belong to an organization]
-GitHub makes the App on your own GitHub account, as a private App, and a private App can be installed
-only on the account that owns it. If your repositories belong to a GitHub organization, an owner of the
-organization makes the App there instead, and you connect it with **Paste an App you already have**:
-its App id, its private key and its webhook secret. [GitHub](/tools/github/) has the details.
+The App is private, and GitHub installs a private App only on the account that owns it, so for an
+organization's repositories the App has to be the organization's: that is what **Organization** does.
+Only an owner of the organization, or one of its GitHub App managers, can make it there, and installing
+it takes an owner of the organization or an admin of the repositories it goes on. If that is not you,
+ask one to connect GitHub with you. [GitHub](/tools/github/#for-an-organizations-repositories) has the details.
 :::
 
 ## Bind a Project

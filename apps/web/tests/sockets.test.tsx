@@ -231,6 +231,57 @@ describe("the tools this Workspace is connected to", () => {
     ]);
   });
 
+  it("makes the App on an organization when one is named, so its repositories can install it", async () => {
+    state.sockets = [];
+    calls.begin.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: /GitHub/ }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "acme on GitHub" } });
+    fireEvent.change(screen.getByLabelText("Organization"), { target: { value: "acme-inc" } });
+    // Who GitHub lets make an App there, said before anybody is sent to a 404.
+    expect(screen.getByText(/owner of the organization/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create the App on GitHub" }));
+
+    await waitFor(() => expect(calls.begin).toHaveBeenCalledTimes(1));
+    // A private App installs only on the account that owns it: made on the
+    // person's own account, an organization's repositories could never have it.
+    const form = await screen.findByRole("form", { name: "Create the App on GitHub" });
+    expect(form.getAttribute("action")).toBe(
+      "https://github.com/organizations/acme-inc/settings/apps/new?state=1790000000000.abc",
+    );
+    expect(within(form).getByText(/acme-inc/)).toBeTruthy();
+    const manifest = JSON.parse(
+      (within(form).getByTestId("manifest") as HTMLInputElement).value,
+    ) as Record<string, unknown>;
+    expect(manifest).toMatchObject({ name: "acme on GitHub", public: false });
+  });
+
+  it("refuses an organization GitHub would never have called that", async () => {
+    state.sockets = [];
+    calls.begin.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: /GitHub/ }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "acme on GitHub" } });
+    const organization = screen.getByLabelText("Organization");
+    const create = screen.getByRole("button", { name: "Create the App on GitHub" });
+
+    // GitHub's own rule for a login: letters, digits and single hyphens, never
+    // at either end, and no more than 39 of them.
+    for (const typed of ["acme_inc", "-acme", "acme-", "acme--inc", "acme inc", "a".repeat(40)]) {
+      fireEvent.change(organization, { target: { value: typed } });
+      expect(organization.getAttribute("aria-invalid")).toBe("true");
+      expect(screen.getByRole("alert").textContent).toMatch(/login/);
+      expect(create.hasAttribute("disabled")).toBe(true);
+    }
+    for (const typed of ["acme", "Acme-Inc", "a".repeat(39), "  acme  "]) {
+      fireEvent.change(organization, { target: { value: typed } });
+      expect(organization.getAttribute("aria-invalid")).toBeNull();
+      expect(create.hasAttribute("disabled")).toBe(false);
+    }
+  });
+
   it("takes an App somebody already made, pasted", async () => {
     state.sockets = [];
     calls.connect.mockClear();
@@ -645,6 +696,95 @@ describe("one Socket's own page", () => {
     await waitFor(() => expect(calls.rotate).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("whsec_said_exactly_once")).toBeTruthy();
     expect(screen.getByText(/only time/i)).toBeTruthy();
+  });
+
+  it.each([
+    ["Slack", "slack", /Basic Information/],
+    ["Linear", "linear", /OAuth application/],
+  ] as const)(
+    "takes the new secret %s made, since deevy cannot mint one it would take",
+    async (tool, provider, where) => {
+      calls.update.mockClear();
+      calls.rotate.mockClear();
+      state.sockets = [
+        { ...stubSocket, provider, name: `Acme on ${tool}`, hasWebhookSecret: true, config: {} },
+      ];
+
+      await mountAt(`/settings/sockets/${stubSocket.id}`);
+      const signs = await screen.findByRole("region", { name: "What it signs with" });
+      // The tool makes its own secret and has nowhere to paste one: a minted
+      // one would only ever refuse every delivery.
+      expect(within(signs).queryByRole("button", { name: "Mint a webhook secret" })).toBeNull();
+      expect(within(signs).getByText(where)).toBeTruthy();
+      // The old one stays good for a day (PREVIOUS_SECRET_MS), so it does not
+      // matter which side changes first.
+      expect(within(signs).getByText(/old one for a day/)).toBeTruthy();
+
+      fireEvent.change(secret(`New secret from ${tool}`), {
+        target: { value: " 8f14e45fceea167a5a36dedd4bea2543 " },
+      });
+      fireEvent.click(within(signs).getByRole("button", { name: "Use the new secret" }));
+
+      await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+      expect(calls.update.mock.calls[0]?.[0]).toEqual({
+        socketId: stubSocket.id,
+        webhookSecret: "8f14e45fceea167a5a36dedd4bea2543",
+      });
+      expect(await within(signs).findByText(/checks deliveries against the new one/)).toBeTruthy();
+      expect(calls.rotate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["GitHub", "github"],
+    ["GitLab", "gitlab"],
+  ] as const)(
+    "offers %s both ways: the secret it has now, or one deevy mints",
+    async (tool, provider) => {
+      calls.update.mockClear();
+      calls.rotate.mockClear();
+      state.sockets = [
+        { ...stubSocket, provider, name: `acme on ${tool}`, hasWebhookSecret: true, config: {} },
+      ];
+
+      await mountAt(`/settings/sockets/${stubSocket.id}`);
+      const signs = await screen.findByRole("region", { name: "What it signs with" });
+
+      fireEvent.change(secret(`New secret from ${tool}`), {
+        target: { value: "whsec_typed_into_the_tool" },
+      });
+      fireEvent.click(within(signs).getByRole("button", { name: "Use the new secret" }));
+      await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+      expect(calls.update.mock.calls[0]?.[0]).toEqual({
+        socketId: stubSocket.id,
+        webhookSecret: "whsec_typed_into_the_tool",
+      });
+
+      fireEvent.click(within(signs).getByRole("button", { name: "Mint a webhook secret" }));
+      await waitFor(() => expect(calls.rotate).toHaveBeenCalledTimes(1));
+      expect(await within(signs).findByText("whsec_said_exactly_once")).toBeTruthy();
+      // A minted one replaces the old at once, unlike a pasted one.
+      expect(
+        within(signs).getByText(new RegExp(`paste it into ${tool} straight away`)),
+      ).toBeTruthy();
+    },
+  );
+
+  it("offers a Notion Socket no secret of deevy's, since Notion signs with its verification token", async () => {
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "notion",
+        name: "Acme's Notion",
+        hasWebhookSecret: true,
+        config: { webhookVerified: true },
+      },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    expect(await screen.findByRole("region", { name: "Verifying the webhook" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "What it signs with" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mint a webhook secret" })).toBeNull();
   });
 
   it("rests it, and disconnects it with the credential", async () => {

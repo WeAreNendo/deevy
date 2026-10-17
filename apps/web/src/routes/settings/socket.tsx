@@ -5,7 +5,9 @@ import { SettingsPage, SettingsSection } from "@/components/settings-page";
 import { socketStanding } from "@/routes/settings/sockets";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
+import { SecretInput } from "@/components/secret-input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +24,57 @@ import { leaveFor } from "@/lib/leave";
 import { orpc } from "@/lib/orpc";
 import { ago } from "@/lib/time";
 import { providerLabel } from "@/lib/providers";
+import { cn } from "@/lib/utils";
+
+/**
+ * Who makes a tool's signing secret, and so what the Socket's page can offer
+ * to change it.
+ *
+ * Slack and Linear make theirs and take nothing typed in, so a secret deevy
+ * minted could never reach them: the page takes the one the tool made. GitHub
+ * and GitLab take one typed into their settings, so either side can make it.
+ * Notion signs with the verification token it sent, and a minted secret would
+ * replace that and break the webhook, so it has no entry and the section is
+ * not shown: "Verifying the webhook" is where its token is.
+ *
+ * A pasted secret goes through `sockets.update`, which keeps the old one good
+ * for a day (`PREVIOUS_SECRET_MS` in the core's hooks.ts); a minted one
+ * replaces it at once.
+ */
+interface Signing {
+  /** Where the tool keeps its secret, said where the page takes a new one; null where it takes none. */
+  made: string | null;
+  /** Whether deevy may mint one for the tool to take. */
+  mint: boolean;
+}
+
+const signingByProvider: Record<string, Signing | null> = {
+  slack: {
+    made: "Slack makes it: the Signing Secret, under Basic Information in the app's settings. When you regenerate it there, paste the new one here.",
+    mint: false,
+  },
+  linear: {
+    made: "Linear makes it: the signing secret on the webhook in your OAuth application's settings. When it changes there, paste the new one here.",
+    mint: false,
+  },
+  github: {
+    made: "It is the webhook secret in the App's settings on GitHub. Type a new one there and paste it here, or mint one here and paste it there.",
+    mint: true,
+  },
+  gitlab: {
+    made: "It is the secret token on each webhook in GitLab, or the signing token GitLab generated on it. Paste a new one from GitLab here, or mint a secret token here and paste it into each webhook.",
+    mint: true,
+  },
+  notion: null,
+};
+
+/** How a Socket's secret changes; null where the page offers no way, as for Notion. */
+function signingOf(provider: string): Signing | null {
+  // A tool the page knows nothing particular about — the stub — is deevy's to mint for.
+  return provider in signingByProvider
+    ? (signingByProvider[provider] ?? null)
+    : { made: null, mint: true };
+}
 
 interface Delivery {
   id: string;
@@ -50,9 +103,23 @@ export function SocketPage({ socketId }: { socketId: string }) {
 
   const refresh = () => client.invalidateQueries({ queryKey: orpc.sockets.key() });
   const update = useMutation(orpc.sockets.update.mutationOptions({ onSuccess: refresh }));
+  // Apart from `update`, so a secret saved and a Socket paused say so each in
+  // their own place. Whichever of a pasted and a minted secret came last is
+  // the one the section talks about.
+  const [replacement, setReplacement] = useState("");
+  const replace = useMutation(
+    orpc.sockets.update.mutationOptions({
+      onSuccess: async () => {
+        setReplacement("");
+        setMinted(null);
+        await refresh();
+      },
+    }),
+  );
   const rotate = useMutation(
     orpc.sockets.rotate.mutationOptions({
       onSuccess: async (answer) => {
+        replace.reset();
         setMinted(answer.webhookSecret);
         await refresh();
       },
@@ -77,6 +144,8 @@ export function SocketPage({ socketId }: { socketId: string }) {
   if (!socket) return <NotFoundPage what="Socket" />;
 
   const standing = socketStanding(socket);
+  const tool = providerLabel(socket.provider);
+  const signing = signingOf(socket.provider);
   const config = socket.config as Record<string, unknown>;
   // Where a GitHub App is installed: an account per installation, written by
   // the install's redirect and by GitHub's own `installation` delivery.
@@ -347,33 +416,83 @@ export function SocketPage({ socketId }: { socketId: string }) {
         </SettingsSection>
       ) : null}
 
-      <SettingsSection
-        aria-label="What it signs with"
-        title="What it signs with"
-        description="deevy checks every delivery against this. The tool needs the same one."
-      >
-        <p className="text-sm text-muted-foreground">
-          {socket.hasWebhookSecret
-            ? "There is one, and deevy will not show it again."
-            : "There is none, so every delivery is refused."}
-        </p>
-        {minted ? (
-          <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
-            {minted}
-            <span className="mt-1 block font-sans text-xs text-muted-foreground">
-              This is the only time deevy will show it. Paste it into the tool now.
-            </span>
-          </p>
-        ) : null}
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={rotate.isPending}
-          onClick={() => rotate.mutate({ socketId })}
+      {signing ? (
+        <SettingsSection
+          aria-label="What it signs with"
+          title="What it signs with"
+          description="deevy checks every delivery against this. The tool needs the same one."
         >
-          Mint a webhook secret
-        </Button>
-      </SettingsSection>
+          <p className="text-sm text-muted-foreground">
+            {socket.hasWebhookSecret
+              ? "There is one, and deevy will not show it again."
+              : "There is none, so every delivery is refused."}
+          </p>
+          {signing.made ? (
+            <>
+              <p className="text-sm text-muted-foreground">{signing.made}</p>
+              <Field>
+                <FieldLabel htmlFor="socket-new-secret">New secret from {tool}</FieldLabel>
+                <div className="flex flex-col gap-2 @md:flex-row">
+                  <SecretInput
+                    id="socket-new-secret"
+                    className="@md:flex-1"
+                    value={replacement}
+                    onChange={(changed) => setReplacement(changed.target.value)}
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-fit"
+                    disabled={!replacement.trim() || replace.isPending}
+                    onClick={() => replace.mutate({ socketId, webhookSecret: replacement.trim() })}
+                  >
+                    Use the new secret
+                  </Button>
+                </div>
+                <FieldDescription>
+                  deevy keeps taking the old one for a day after, so it does not matter which side
+                  changes first.
+                </FieldDescription>
+              </Field>
+              {replace.isSuccess ? (
+                <p className="text-sm text-muted-foreground">
+                  deevy checks deliveries against the new one now, and takes the old one for a day
+                  more.
+                </p>
+              ) : null}
+              {replace.error ? (
+                <p className="text-sm text-destructive">{replace.error.message}</p>
+              ) : null}
+            </>
+          ) : null}
+          {signing.mint ? (
+            // Apart from the field above where there is one: the other way round.
+            <div className={cn("flex flex-col gap-3", signing.made && "border-t pt-3")}>
+              {minted ? (
+                <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
+                  {minted}
+                  <span className="mt-1 block font-sans text-xs text-muted-foreground">
+                    This is the only time deevy will show it. deevy stops taking the old one now, so
+                    paste it into {tool} straight away.
+                  </span>
+                </p>
+              ) : null}
+              <div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={rotate.isPending}
+                  onClick={() => rotate.mutate({ socketId })}
+                >
+                  Mint a webhook secret
+                </Button>
+              </div>
+              {rotate.error ? (
+                <p className="text-sm text-destructive">{rotate.error.message}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </SettingsSection>
+      ) : null}
 
       <SettingsSection aria-label="Deliveries" title="What it has said lately">
         <DataTable
