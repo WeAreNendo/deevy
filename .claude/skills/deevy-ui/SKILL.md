@@ -135,7 +135,9 @@ through the catalog.
   status; cool blue-gray paper and ink, the base tweakcn's _clean-slate_ preset (Apache-2.0), picked by Matt.
   Indigo, rose and amber are the only saturated colours on a screen besides `--destructive`; amber is the one
   warm colour, so a Gate jumps. Sky, which marked Humans until 2026-10-17, is gone. Both themes; a real
-  System/Light/Dark toggle in the Member menu.
+  System/Light/Dark toggle in the Member menu. Every colour set as text reads at 4.5:1 on each ground the app
+  composes for it, its own tints included, in both themes: `packages/design/tests/contrast.test.ts` lists the
+  pairs, so a new text-on-tint combination goes there too.
 - **Layout.** Full-bleed frame, 240px sidebar collapsing to 48px, edge-to-edge lists with a 40px filter bar.
   A page with a subject and its context — a Gate, a Run, a record — is a main column and an 18–22rem rail,
   one column under `@3xl`. Where the rail holds what a Human acts on (a Gate's ruling card, a Run's Gates) it
