@@ -1,12 +1,12 @@
 # deevy's logo
 
-A "d" made of two halves: a Human's half-disc in sky and an Agent's bar in rose, standing on one baseline.
+A "d" made of two halves: a Human's half-disc in indigo and an Agent's bar in rose, standing on one baseline.
 Neither makes the letter alone. Beside it, "deevy" in Outfit SemiBold, drawn as outlines.
 
 | File                  | Use                                                                          |
 | --------------------- | ---------------------------------------------------------------------------- |
 | `deevy-logo.svg`      | The mark and the word, on a light ground                                     |
-| `deevy-logo-dark.svg` | The same on a dark ground (lighter sky and rose, near-white word)            |
+| `deevy-logo-dark.svg` | The same on a dark ground (lighter indigo and rose, near-white word)         |
 | `deevy-mark.svg`      | The mark alone, in a square: avatars, app icons, anywhere the word won't fit |
 | `deevy-mark-dark.svg` | The mark alone on a dark ground                                              |
 

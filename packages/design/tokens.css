@@ -4,15 +4,23 @@
  * site (apps/docs) alike (docs/plans/design-system.md). Change a value here and
  * both follow; neither keeps a copy.
  *
- * Paper and ink are cool blue-gray neutrals; the action colour is indigo, and
- * the colours beside it are its neighbours: Humans sky blue, Agents rose, Gates
- * amber, the one warm colour, so a Gate jumps. The base is tweakcn's
+ * Paper and ink are cool blue-gray neutrals. Indigo is a Human and what a Human
+ * does: the action colour, since only a Human clicks, and a Human Member, as the
+ * logo's half-disc says. Rose is an Agent, the logo's bar, and amber a Gate, the
+ * one warm colour, so a Gate jumps (Matt, 2026-10-17; sky, which marked Humans
+ * until then, left the palette). The base is tweakcn's
  * clean-slate preset (https://tweakcn.com/r/themes/clean-slate.json,
  * Apache-2.0, (c) tweakcn contributors), at a 5% roomier scale and 8px corners
  * (docs/plans/ui-redesign-2.md). Three saturated slots carry the one idea the
  * UI has: --human for a Human Member, --agent for an Agent, --gate for anything
  * waiting on a Human's ruling. Nothing else on a screen is saturated except
  * --primary and --destructive.
+ *
+ * Indigo has two jobs one value cannot do in both themes: a fill white text
+ * sits on (--primary, the same in both, so a button reads white on indigo in
+ * dark as in light) and a colour for text on the page (--link: links, a pressed
+ * toggle's label, a Human's name), which has to be lighter on a dark page to
+ * be read. --human is --link, since a Human is mostly a name in text.
  *
  * The dark theme is a class on <html> in the app (`.dark`, from next-themes)
  * and an attribute in the docs (`[data-theme="dark"]`, from Starlight), so the
@@ -50,13 +58,14 @@
   --border: oklch(0.8717 0.0093 258.3382);
   --input: oklch(0.8717 0.0093 258.3382);
   --ring: oklch(0.5854 0.2041 277.12);
+  --link: oklch(0.55 0.2 277);
   --sidebar: oklch(0.967 0.0029 264.5419);
   --sidebar-foreground: oklch(0.2795 0.0368 260.031);
   --sidebar-accent: oklch(0.9299 0.0334 272.79);
   --sidebar-accent-foreground: oklch(0.3729 0.0306 259.7328);
   --sidebar-border: oklch(0.8717 0.0093 258.3382);
 
-  --human: oklch(0.6 0.13 225);
+  --human: var(--link);
   --agent: oklch(0.6 0.17 345);
   --gate: oklch(0.72 0.15 80);
   --gate-foreground: var(--foreground);
@@ -75,8 +84,8 @@
   --card-foreground: oklch(0.9288 0.0126 255.5078);
   --popover: oklch(0.2795 0.0368 260.031);
   --popover-foreground: oklch(0.9288 0.0126 255.5078);
-  --primary: oklch(0.6801 0.1583 276.93);
-  --primary-foreground: oklch(0.2077 0.0398 265.7549);
+  --primary: oklch(0.5854 0.2041 277.12);
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.3351 0.0331 260.912);
   --secondary-foreground: oklch(0.8717 0.0093 258.3382);
   --muted: oklch(0.2427 0.0381 259.9437);
@@ -86,13 +95,14 @@
   --border: oklch(0.4461 0.0263 256.8018);
   --input: oklch(0.4461 0.0263 256.8018);
   --ring: oklch(0.6801 0.1583 276.93);
+  --link: oklch(0.6801 0.1583 276.93);
   --sidebar: oklch(0.2795 0.0368 260.031);
   --sidebar-foreground: oklch(0.9288 0.0126 255.5078);
   --sidebar-accent: oklch(0.3729 0.0306 259.73);
   --sidebar-accent-foreground: oklch(0.8717 0.0093 258.3382);
   --sidebar-border: oklch(0.4461 0.0263 256.8018);
 
-  --human: oklch(0.76 0.12 225);
+  --human: var(--link);
   --agent: oklch(0.76 0.14 345);
   --gate: oklch(0.82 0.14 85);
   --gate-foreground: var(--background);

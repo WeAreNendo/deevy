@@ -18,7 +18,7 @@ from outline import shape  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 BRAND = ROOT / "brand"
 
-# The mark, in a 100-unit box: a Human half-disc (sky) and an Agent bar (rose)
+# The mark, in a 100-unit box: a Human half-disc (indigo) and an Agent bar (rose)
 # standing on one baseline. Its ink spans x 24..84 and y 8..92.
 DISC = "M58 24A34 34 0 0 0 58 92Z"
 BAR = "M62 92V19A11 11 0 0 1 84 19V92Z"
@@ -30,8 +30,11 @@ FONT, AXES, TRACK = "Outfit", {"wght": 600}, -0.02
 BASELINE = 92 - 8
 WORD_X = INK[2] + 20
 
-LIGHT = dict(human="#008fba", agent="#c34e97", ink="#1e293b")
-DARK = dict(human="#49c1ea", agent="#ef8bc5", ink="#f8fafc")
+# @deevy/design's --human and --agent in each theme (packages/design/tokens.css),
+# as hex for the files that cannot read a token: indigo for the Human, rose for
+# the Agent (Matt, 2026-10-17).
+LIGHT = dict(human="#5a5ce2", agent="#c34e97", ink="#1e293b")
+DARK = dict(human="#818cf8", agent="#ef8bc5", ink="#f8fafc")
 
 
 def num(v):
