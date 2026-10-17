@@ -4,8 +4,9 @@ name: Docs
 # changes: its pages (apps/docs/content), the OpenAPI snapshot the API
 # reference is generated from, the version it states, the site itself, or what
 # it is built with. Nothing in docs/ is published (docs/plans/docs.md).
-# CI builds the same site on every pull request (ci.yml), where a broken link
-# fails; this file only ever deploys what main already has.
+# A pull request builds the same site, where a broken link fails: CI (ci.yml)
+# when it changes code, prose.yml when it changes only Markdown or the site's
+# pages. This file only ever deploys what main already has.
 #
 # The site is a Worker with static assets (apps/docs/wrangler.jsonc), uploaded
 # with `wrangler deploy`. What it needs, all of it in the `docs` environment:

@@ -1,10 +1,36 @@
 name: CI
 
+# Not for a change that is only prose. Markdown builds nothing and no suite
+# reads it, so a pull request (or a push to main) that touches nothing else runs
+# none of the jobs below: about a dozen runner-minutes saved each time. The
+# exceptions are the Markdown something does read: docs/OPERATIONS.md, whose
+# tables apps/agent, apps/server and tools/release check against the code, and
+# Markdown under a package's src/, such as the Agent's instructions the image
+# ships. prose.yml checks a Markdown change instead, formatting and the docs
+# site's build and tests, in one job. Order matters in `paths`: a later pattern wins, so the
+# exceptions come after the exclusions. The two lists are the same; keep them so.
 on:
   push:
     branches: [main]
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!**/*.mdx"
+      - "!apps/docs/content/**"
+      - docs/OPERATIONS.md
+      - "apps/*/src/**/*.md"
+      - "packages/*/src/**/*.md"
   pull_request:
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!**/*.mdx"
+      - "!apps/docs/content/**"
+      - docs/OPERATIONS.md
+      - "apps/*/src/**/*.md"
+      - "packages/*/src/**/*.md"
   # Called by release.yml, so a tag cannot publish something that does not build.
+  # A call always runs, whatever changed.
   workflow_call:
 
 concurrency:

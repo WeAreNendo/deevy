@@ -1,0 +1,50 @@
+name: Prose
+
+# What a change to Markdown is checked for, since CI (ci.yml) does not run for
+# Markdown alone: that every file is formatted, and that the docs site still
+# builds from its pages, every link landing, and passes its own tests
+# (apps/docs/tests: frontmatter, and no environment variable on a page for a
+# deevy Cloud team). One job, about a minute and a half, where the full CI is a
+# dozen runner-minutes. A pull request that also changes code runs CI as well,
+# which checks the same among the rest.
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "**/*.mdx"
+      - "apps/docs/**"
+      - .github/workflows/prose.yml
+
+concurrency:
+  group: prose-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  prose:
+    name: Prose is formatted, and the docs site builds from it
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1.19.0
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: false
+
+      - name: Install
+        run: vp install --frozen-lockfile
+
+      - name: Every file is formatted
+        run: vp fmt --check
+
+      - name: The docs site builds, and every link in it lands
+        run: vp run docs#build
+
+      - name: The docs site's own tests
+        run: vp run -F docs test
