@@ -1,5 +1,0 @@
----
-"@deevy/web": patch
----
-
-**Connect GitHub** can make the App on an organization. Give it the organization's login in the new **Organization** field and the manifest goes to that organization's settings on GitHub, so the App belongs to the organization and its repositories can install it; until now the App was always made on your own account, and as a private App it could never be installed on an organization's repositories. Only an owner of the organization or one of its GitHub App managers can make it there. A Socket's page also changes its signing secret the way each tool allows, under **What it signs with**: where the tool makes the secret (Slack, Linear, and GitHub or GitLab when you change it there) you paste the new one into **New secret from** the tool, and deevy keeps accepting the old one for a day, so the two can change in either order. **Mint a webhook secret** is offered only for GitHub and GitLab, whose settings can take a secret deevy made, and a Notion Socket no longer offers it at all, since a minted secret would replace Notion's verification token and break its webhook.
