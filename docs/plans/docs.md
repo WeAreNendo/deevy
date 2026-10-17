@@ -100,9 +100,10 @@ these are the disagreements, each still to be settled on the code's side or OPER
   doubling, wait at most 640 seconds. The pages leave the cap out.
 - **An OpenID Connect provider unreachable at startup still shows its button**, and signing in with it
   fails until deevy restarts; OPERATIONS.md says the button is not offered.
-- **deevy Cloud's export tells people to load the dump with `sqlite3`**, skipping `import.mjs`, which drops
-  the sign-in tokens tied to the hosted address and checks `DEEVY_SECRET`. self-hosting/from-deevy-cloud.md
-  uses the import script; the console's text should too (WeAreNendo/deevy-cloud).
+- **deevy Cloud's export told people to load the dump with `sqlite3`**, skipping `import.mjs`, which drops
+  the sign-in tokens tied to the hosted address and checks `DEEVY_SECRET`. Settled in
+  WeAreNendo/deevy-cloud#13: the export's steps go through the import script, as
+  self-hosting/from-deevy-cloud.md does.
 - **The repository's `docker-compose.yml` had no `DEEVY_SECRET`**, and OPERATIONS.md's `docker run`
   generated both secrets inline, so a new container signed everybody out and lost every Socket's
   credentials. Settled: the compose file asks for `DEEVY_SECRET` the way it asks for
@@ -110,5 +111,6 @@ these are the disagreements, each still to be settled on the code's side or OPER
 - **apps/cli/README.md** named a flag that does not exist (`--project-key`) and four of the eleven
   commands the CLI cannot run; fixed here.
 - Two jobs have no screen and are done from the CLI on the pages: setting an Agent's webhook, and rotating
-  a Slack Socket's signing secret. deevy Cloud has no support address beyond `privacy@deevy.dev`;
-  cloud/support.md says so, and a real one is owed.
+  a Slack Socket's signing secret. deevy Cloud had no support address beyond `privacy@deevy.dev`.
+  Settled: `support@deevy.dev`, forwarded by Email Routing beside it, is on cloud/support.md, the
+  console's suspended notice and the site's footer (WeAreNendo/deevy-cloud#13).
