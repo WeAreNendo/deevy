@@ -162,7 +162,12 @@ const IDLE_MS = 15_000;
 
 /** Everything but the open tab; answers with Ada's session at acme, for `live`. */
 async function phases(origin: string): Promise<string> {
-  check("/healthz answers", (await fetch(`${origin}/healthz`)).status === 200);
+  const health = await fetch(`${origin}/healthz`);
+  check(
+    "/healthz answers with the release it is, which a deploy pinned to a version reads",
+    health.status === 200 &&
+      ((await health.json()) as { version?: string }).version === (await version()),
+  );
   check(
     "the root of the host is the console's",
     (await (await fetch(`${origin}/`)).text()) === "the console",

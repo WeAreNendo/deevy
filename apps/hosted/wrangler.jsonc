@@ -11,7 +11,7 @@
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["new_module_registry"],
   // `__DEEVY_VERSION__`, what a Workspace reports to `Platform.status`, is
-  // defined by the build from package.json (scripts/build.ts) rather than here,
+  // defined by the build from package.json (scripts/local.ts) rather than here,
   // so a release never ships the version before it.
   "assets": {
     // The SPA apps/web builds; every Workspace serves the same files under its
