@@ -28,10 +28,17 @@ export async function route(
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // The release in the answer is how a deploy proves which version served a
-  // request: one pinned with Cloudflare's version override header reaches a
-  // version deployed at 0%, and only this says it did (deevy-cloud's rollout).
-  if (path === "/healthz") return Response.json({ ok: true, version: VERSION ?? null });
+  // How a deploy proves which version served a request: one pinned with
+  // Cloudflare's version override header reaches a version deployed at 0%,
+  // and the Worker version's id says it did, even for a redeploy of the same
+  // release (deevy-cloud's rollout); the release says which one it is.
+  if (path === "/healthz") {
+    return Response.json({
+      ok: true,
+      version: VERSION ?? null,
+      versionId: bindings.CF_VERSION_METADATA?.id ?? null,
+    });
+  }
 
   const discovery =
     /^\/\.well-known\/(oauth-authorization-server|oauth-protected-resource|openid-configuration)\/([^/]+)(\/.*)?$/.exec(

@@ -49,6 +49,10 @@ describe("wrangler.jsonc, read without wrangler", () => {
 describe("the wrangler.json a release carries", () => {
   const shipped = template(committed);
 
+  it("binds the version serving a request, which /healthz answers with for a deploy to read", () => {
+    expect(shipped.version_metadata).toEqual({ binding: "CF_VERSION_METADATA" });
+  });
+
   it("deploys the bundle beside it as it is, with the SPA beside that", () => {
     expect(shipped).toMatchObject({
       name: "deevy-hosted",
@@ -109,6 +113,7 @@ describe("the manifest", () => {
       "CONSOLE",
       "EMAIL",
       "ANALYTICS",
+      "CF_VERSION_METADATA",
     ]);
     const reads = [
       ...declared("src/env.ts", "HostedBindings"),

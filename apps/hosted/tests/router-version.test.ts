@@ -14,6 +14,6 @@ describe("the host's /healthz, built", () => {
       bindings(),
       readHostedEnv(bindings()),
     );
-    expect(await response.json()).toEqual({ ok: true, version: "9.9.9" });
+    expect(await response.json()).toEqual({ ok: true, version: "9.9.9", versionId: null });
   });
 });
