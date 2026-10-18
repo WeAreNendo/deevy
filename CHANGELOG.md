@@ -7,6 +7,13 @@ A release is two Docker images and one `vX.Y.Z` tag — see [docs/OPERATIONS.md]
 
 <!-- Entries are inserted below this line by `vp run version`. -->
 
+## 0.11.4
+
+### Patch Changes
+
+- **hosted** — [#190](https://github.com/WeAreNendo/deevy/pull/190) [`36bbe5d`](https://github.com/WeAreNendo/deevy/commit/36bbe5d4575893ff46c0b35058f18d396da0d95a) Thanks [@mattallty](https://github.com/mattallty)! - The hosted Worker's own `/healthz` now also answers with `versionId`, the id of the Cloudflare Worker version serving the request, through a new `version_metadata` binding (`CF_VERSION_METADATA`) in its `wrangler.json`. A deploy that tests a version at 0% through Cloudflare's version override header compares it with the version it uploaded, which proves the request reached that version even when the release is the same as the one running. A deployment of your own needs nothing new: Cloudflare provides the binding.
+- **hosted** — [#188](https://github.com/WeAreNendo/deevy/pull/188) [`828f086`](https://github.com/WeAreNendo/deevy/commit/828f0866f53042657a03ef1421f437b9e0d42c97) Thanks [@mattallty](https://github.com/mattallty)! - The hosted Worker's own `/healthz`, at the root of its host, now answers with the release it runs (`{ "ok": true, "version": "<release>" }`), as each Workspace's `/healthz` already does. A deploy that tests a new version through Cloudflare's version override header reads it to prove the request reached that version.
+
 ## 0.11.3
 
 ### Patch Changes
