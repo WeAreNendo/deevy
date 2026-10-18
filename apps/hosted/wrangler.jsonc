@@ -39,5 +39,10 @@
   // A data point per request, by Workspace (src/meter.ts): what a console shows of a
   // Workspace's use and what a plan is billed by later. Nothing personal goes in it.
   "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "deevy_hosted_requests" }],
+  // The Worker version serving a request, which the host's /healthz answers
+  // with: a deploy pins a request to a version deployed at 0% with Cloudflare's
+  // version override header, and only this id proves that version answered,
+  // a redeploy of the same release included.
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "observability": { "enabled": true },
 }

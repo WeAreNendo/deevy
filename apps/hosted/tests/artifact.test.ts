@@ -109,6 +109,7 @@ describe("the manifest", () => {
       "CONSOLE",
       "EMAIL",
       "ANALYTICS",
+      "CF_VERSION_METADATA",
     ]);
     const reads = [
       ...declared("src/env.ts", "HostedBindings"),
