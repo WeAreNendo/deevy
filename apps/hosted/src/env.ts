@@ -28,7 +28,7 @@ export interface HostedBindings extends ProviderVariables {
   EMAIL?: CloudflareEmailBinding;
   /** Workers Analytics Engine: a data point per request, by Workspace (meter.ts). Optional. */
   ANALYTICS?: Meter;
-  /** The Worker version serving this request (`version_metadata`); absent under a local workerd. */
+  /** The Worker version serving this request (`version_metadata`): a random id under `wrangler dev`, absent where nothing binds it (unit tests). */
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
   /** Where every Workspace lives: `https://app.deevy.dev`, each under `/<slug>`. */
   DEEVY_HOSTED_ORIGIN?: string;
