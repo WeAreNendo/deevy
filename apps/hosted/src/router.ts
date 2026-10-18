@@ -2,6 +2,7 @@ import { isAppPath, serveSpaUnder, underBase } from "@deevy/adapters/workers";
 import { relaySignInCallback } from "@deevy/core";
 import { isSlug, lookup, RESERVED_SLUGS, type DirectoryEntry } from "./directory.ts";
 import type { HostedBindings, HostedEnv } from "./env.ts";
+import { VERSION } from "./version.ts";
 import type { WorkspaceObject } from "./workspace.ts";
 
 /**
@@ -27,7 +28,11 @@ export async function route(
   const url = new URL(request.url);
   const path = url.pathname;
 
-  if (path === "/healthz") return Response.json({ ok: true });
+  // The release in the answer is how a deploy proves which version served a
+  // request: one pinned with Cloudflare's version override header reaches a
+  // version deployed at 0%, and only this says it did (deevy-cloud's rollout).
+  if (path === "/healthz")
+    return Response.json({ ok: true, ...(VERSION ? { version: VERSION } : {}) });
 
   const discovery =
     /^\/\.well-known\/(oauth-authorization-server|oauth-protected-resource|openid-configuration)\/([^/]+)(\/.*)?$/.exec(
