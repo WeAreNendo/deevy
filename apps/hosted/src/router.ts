@@ -31,8 +31,7 @@ export async function route(
   // The release in the answer is how a deploy proves which version served a
   // request: one pinned with Cloudflare's version override header reaches a
   // version deployed at 0%, and only this says it did (deevy-cloud's rollout).
-  if (path === "/healthz")
-    return Response.json({ ok: true, ...(VERSION ? { version: VERSION } : {}) });
+  if (path === "/healthz") return Response.json({ ok: true, version: VERSION ?? null });
 
   const discovery =
     /^\/\.well-known\/(oauth-authorization-server|oauth-protected-resource|openid-configuration)\/([^/]+)(\/.*)?$/.exec(
