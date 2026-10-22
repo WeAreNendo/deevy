@@ -565,6 +565,24 @@ describe("one Socket's own page", () => {
     ).toBe("https://github.test/apps/deevy-acme/installations/new");
   });
 
+  it("sends somebody to install the App only on the page GitHub said is its own", async () => {
+    // A slug alone says nothing about which GitHub the App is on: on a GitHub
+    // Enterprise Server, github.com/apps/<slug> is somebody else's App or none.
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "github",
+        name: "acme on GitHub Enterprise",
+        config: { slug: "deevy-acme", installations: [{ id: "7", account: "acme" }] },
+      },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const installed = await screen.findByRole("region", { name: "Where it is installed" });
+    expect(within(installed).getByText("acme")).toBeTruthy();
+    expect(within(installed).queryByRole("link")).toBeNull();
+  });
+
   it("says a GitHub App installed nowhere can work nothing yet", async () => {
     state.sockets = [
       {
@@ -577,7 +595,12 @@ describe("one Socket's own page", () => {
 
     await mountAt(`/settings/sockets/${stubSocket.id}`);
     const installed = await screen.findByRole("region", { name: "Where it is installed" });
-    expect(within(installed).getByText(/Installed nowhere yet/)).toBeTruthy();
+    // Only what deevy has been told: binding a Project asks GitHub, so an App
+    // installed before it was connected is not called installed nowhere.
+    expect(within(installed).getByText(/Installed nowhere deevy knows of/)).toBeTruthy();
+    expect(
+      within(installed).getByText(/Ask who deevy is there brings this up to date/),
+    ).toBeTruthy();
     expect(within(installed).getByRole("link", { name: "Install it" }).getAttribute("href")).toBe(
       "https://github.test/apps/deevy-acme/installations/new",
     );

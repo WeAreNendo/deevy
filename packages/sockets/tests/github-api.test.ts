@@ -1,6 +1,7 @@
 import { generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createGithubSocket, resetGithubTokens } from "../src/github/index.ts";
+import installations from "./fixtures/github/app.installations.json" with { type: "json" };
 import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" };
 
 /**
@@ -86,14 +87,19 @@ function githubReturning(
   }) as typeof fetch;
 
   /** Another Socket for the same App id, on this same GitHub, in this same isolate. */
-  const connect = (other: { privateKey: string; apiBase?: string }) => {
+  const connect = (other: {
+    privateKey: string;
+    apiBase?: string;
+    /** Where the Socket already knows the App is installed. */
+    installations?: { id: string; account: string }[];
+  }) => {
     const apiBase = other.apiBase ?? options.apiBase;
     const module = createGithubSocket({
       config: {
         appId: "1284461",
         slug: "deevy",
         ...(apiBase ? { apiBase } : {}),
-        installations: [{ id: "61892041", account: "acme" }],
+        installations: other.installations ?? [{ id: "61892041", account: "acme" }],
       },
       credentials: { privateKey: other.privateKey },
       fetch: fetchImpl,
@@ -215,26 +221,80 @@ describe("how deevy authenticates", () => {
 
   it("says who deevy is there, which is the App's own bot account", async () => {
     const { module } = githubReturning({
-      "GET /app": { id: 1284461, slug: "deevy", name: "deevy" },
+      "GET /app": {
+        id: 1284461,
+        slug: "deevy",
+        name: "deevy",
+        html_url: "https://github.com/apps/deevy",
+      },
+      "GET /app/installations": installations,
     });
 
     expect(await module.identity()).toEqual({
       login: "deevy[bot]",
       id: "1284461",
       mentionHandle: "@deevy",
+      // What the manifest's conversion would have said, for an App that was
+      // pasted: its page, to install it on more from, and where it is
+      // installed, since an App pasted after it was installed never sent
+      // anybody through the install's redirect.
+      learned: {
+        slug: "deevy",
+        htmlUrl: "https://github.com/apps/deevy",
+        installations: [{ id: "61892041", account: "acme" }],
+      },
     });
+  });
+
+  it("learns every page of where the App is installed, less what GitHub suspended", async () => {
+    const full = Array.from({ length: 100 }, (_, at) => ({
+      id: 1000 + at,
+      account: { login: `org-${String(at)}` },
+      suspended_at: null,
+    }));
+    const { module, asked } = githubReturning({
+      "GET /app": { id: 1284461, slug: "deevy", name: "deevy" },
+      "GET /app/installations?per_page=100&page=1": full,
+      "GET /app/installations?per_page=100&page=2": [
+        ...installations,
+        { id: 7, account: { login: "paused-org" }, suspended_at: "2026-09-20T00:00:00Z" },
+      ],
+    });
+
+    const learned = (await module.identity()).learned?.installations as { account: string }[];
+
+    // A short page is the last one, and a suspended installation mints no
+    // token, so it is nowhere the App works.
+    expect(learned).toHaveLength(101);
+    expect(learned.at(-1)).toEqual({ id: "61892041", account: "acme" });
+    expect(learned.map((one) => one.account)).not.toContain("paused-org");
+    const listed = asked.filter((one) => one.url.includes("/app/installations"));
+    expect(listed).toHaveLength(2);
+    // As the App: these are the App's installations, which no installation's token lists.
+    expect(listed.every((one) => one.authorization.startsWith("Bearer eyJ"))).toBe(true);
   });
 
   it("talks to a GitHub Enterprise Server where one is configured", async () => {
     const apiBase = "https://github.acme.test/api/v3";
     const { module, asked } = githubReturning(
-      { "GET /app": { id: 1, slug: "deevy", name: "deevy" } },
+      {
+        "GET /app": {
+          id: 1,
+          slug: "deevy",
+          name: "deevy",
+          html_url: "https://github.acme.test/github-apps/deevy",
+        },
+        "GET /app/installations": [],
+      },
       { apiBase },
     );
 
-    await module.identity();
+    const { learned } = await module.identity();
 
     expect(asked[0]?.url).toBe(`${apiBase}/app`);
+    expect(asked[1]?.url).toBe(`${apiBase}/app/installations?per_page=100&page=1`);
+    // The server's own page for the App, never one deevy builds on github.com.
+    expect(learned?.htmlUrl).toBe("https://github.acme.test/github-apps/deevy");
   });
 });
 
@@ -321,6 +381,68 @@ describe("reading a repository", () => {
         name: "acme/ops",
       },
     ]);
+  });
+
+  it("asks GitHub where the App is installed when the Socket knows of nowhere", async () => {
+    // A Socket pasted before deevy learned installations at connect: its
+    // configuration lists none, though GitHub has had the App installed all along.
+    const { connect, asked } = githubReturning({
+      "GET /app/installations": installations,
+      "POST /app/installations/61892041/access_tokens": {
+        token: "ghs_token",
+        expires_at: "2026-09-21T11:00:00Z",
+      },
+      "GET /installation/repositories": {
+        repositories: [{ full_name: "acme/deevy", name: "deevy", default_branch: "main" }],
+      },
+    });
+    const { tracker } = connect({ privateKey, installations: [] });
+
+    const containers = await tracker.listContainers();
+
+    expect(containers.map((one) => one.scopeKey)).toEqual(["acme/deevy"]);
+    expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
+      "GET /app/installations",
+      "POST /app/installations/61892041/access_tokens",
+      "GET /installation/repositories",
+    ]);
+  });
+
+  it("offers every installation GitHub has, though the Socket kept only one", async () => {
+    // Pasted before deevy learned installations, installed on acme and on
+    // acme-labs, then told of acme alone by one delivery: what the Socket
+    // keeps names acme, and GitHub names both.
+    const repositoryFor: Record<string, string> = {
+      "Bearer ghs_acme": "acme/deevy",
+      "Bearer ghs_labs": "acme-labs/site",
+    };
+    const fetchImpl = ((input: string, init?: RequestInit) => {
+      const url = new URL(input);
+      if (url.pathname === "/app/installations") {
+        return Promise.resolve(
+          Response.json([...installations, { id: 7, account: { login: "acme-labs" } }]),
+        );
+      }
+      const minted = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname)?.[1];
+      if (minted) {
+        const token = minted === "7" ? "ghs_labs" : "ghs_acme";
+        return Promise.resolve(Response.json({ token, expires_at: "2026-09-21T11:00:00Z" }));
+      }
+      const full = repositoryFor[new Headers(init?.headers).get("authorization") ?? ""] ?? "";
+      return Promise.resolve(
+        Response.json({ repositories: [{ full_name: full, name: full, default_branch: "main" }] }),
+      );
+    }) as typeof fetch;
+    const module = createGithubSocket({
+      config: { appId: "1284461", installations: [{ id: "61892041", account: "acme" }] },
+      credentials: { privateKey },
+      fetch: fetchImpl,
+      now: () => new Date("2026-09-21T10:00:00Z"),
+    });
+
+    const containers = await module.tracker?.listContainers();
+
+    expect(containers?.map((one) => one.scopeKey)).toEqual(["acme/deevy", "acme-labs/site"]);
   });
 });
 
@@ -423,7 +545,8 @@ describe("the repository behind a Project", () => {
       secret: "ghs_installation_token_for_acme",
     });
     expect(credential.expiresAt?.toISOString()).toBe("2026-09-21T11:00:00.000Z");
-    // The same token the API calls use: one mint, one hour, one repository.
+    // The same token the API calls use: one mint, kept for its hour, and the
+    // whole installation's rather than this repository's alone.
     expect(asked.filter((one) => one.url.includes("access_tokens"))).toHaveLength(1);
   });
 

@@ -156,13 +156,11 @@ export function SocketPage({ socketId }: { socketId: string }) {
       }))
     : [];
   // What GitHub said the App's page is, and only if it is a web page: it is
-  // drawn as a link below (lib/href.ts).
+  // drawn as a link below (lib/href.ts). Never one built from the slug, which
+  // would be github.com's even for an App on a GitHub Enterprise Server; a
+  // pasted App learns its page when it connects.
   const htmlUrl = typeof config.htmlUrl === "string" ? webHref(config.htmlUrl) : undefined;
-  const appPage = htmlUrl
-    ? htmlUrl.replace(/\/+$/, "")
-    : typeof config.slug === "string"
-      ? `https://github.com/apps/${config.slug}`
-      : null;
+  const appPage = htmlUrl ? htmlUrl.replace(/\/+$/, "") : null;
   const quiet = standing.tone === "quiet" && socket.status === "active";
   const columns: DataColumn<Delivery>[] = [
     {
@@ -292,8 +290,13 @@ export function SocketPage({ socketId }: { socketId: string }) {
               ))}
             </ul>
           ) : (
+            // What deevy has been told, which binding a Project does not rely
+            // on: that asks GitHub. So this says what deevy knows, and how to
+            // catch it up with an App installed before it was connected.
             <p className="text-sm text-muted-foreground">
-              Installed nowhere yet, so it can see no repository and no Project can be bound to it.
+              Installed nowhere deevy knows of. If you have installed it already, Ask who deevy is
+              there brings this up to date. Installed nowhere, it can see no repository and no
+              Project can be bound to it.
             </p>
           )}
           {appPage ? (
