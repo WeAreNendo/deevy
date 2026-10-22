@@ -40,10 +40,13 @@ describe("the deevy image", () => {
     );
   });
 
-  it("starts as root, saying so rather than inheriting a user", async () => {
+  it("starts as root, saying so before WORKDIR makes /app", async () => {
     // The `:nonroot` base sets 65532, and the image replaces it on purpose: the
-    // entrypoint needs root to give /data away, then drops it (ADR-0033).
-    expect(await runtimeStage()).toMatch(/^USER 0:0$/m);
+    // entrypoint needs root to give /data away, then drops it (ADR-0033). Said
+    // after WORKDIR, it would leave /app 65532's, and 65532 could swap the code.
+    const stage = await runtimeStage();
+    expect(stage).toMatch(/^USER 0:0$/m);
+    expect(stage.indexOf("\nUSER 0:0")).toBeLessThan(stage.indexOf("\nWORKDIR /app"));
   });
 
   it("runs everything through the entrypoint that gives up root", async () => {
@@ -83,14 +86,14 @@ describe("the deevy image", () => {
     expect(await runtimeStage()).toMatch(/^COPY --from=\S+ --chown=65532:65532 \S+ \/data$/m);
   });
 
-  it("leaves the code to root, so the process cannot change what root runs next", async () => {
+  it("gives the code to root, so the process cannot change what root runs next", async () => {
     // The entrypoint runs as root at every start: whoever could rewrite
-    // /app/dist could rewrite it.
+    // /app/dist could rewrite it. Said outright, because `COPY --from` keeps
+    // the build stage's owner, vp's 1000, and leaving --chown out did not.
     const copies = (await runtimeStage()).split("\n").filter((line) => line.startsWith("COPY "));
-    expect(copies.filter((line) => !line.endsWith(" /data"))).toHaveLength(2);
-    for (const line of copies) {
-      if (!line.endsWith(" /data")) expect(line).not.toContain("--chown");
-    }
+    const code = copies.filter((line) => !line.endsWith(" /data"));
+    expect(code).toHaveLength(2);
+    for (const line of code) expect(line).toContain("--chown=0:0");
   });
 
   it("is the only place the healthcheck is defined", async () => {

@@ -54,8 +54,8 @@ It is built on Google's distroless Node base and carries nothing else: no shell,
 `apt`, no `curl`. There is no `docker exec ... sh` to be had, which is the point — anything that gets into
 the container finds no tools there. Work that needs a shell is done from a sidecar against the same volume,
 the way [Backup and restore](#backup-and-restore) does it. It starts as root only long enough to make
-`/data` its own, then runs as an unprivileged user for good — the owner of `/data`, or uid **65532** when
-that is root ([ADR-0033](./adr/0033-the-image-makes-its-volume-its-own.md)); see [The volume](#the-volume).
+`/data` belong to uid **65532**, then runs as 65532 for good
+([ADR-0033](./adr/0033-the-image-makes-its-volume-its-own.md)); see [The volume](#the-volume).
 
 The image also carries its own healthcheck, so `docker ps` shows `healthy` and Compose's
 `depends_on: condition: service_healthy` works with nothing configured.
@@ -1967,28 +1967,29 @@ volume upgrades itself. Mount a named volume or a host directory; do not mount t
 writes `-wal` and `-shm` alongside it.
 
 Neither needs anything done to it first. The image starts as root, and its entrypoint
-(`apps/server/src/entrypoint.ts`) gives `/data` to the user deevy will be, becomes that user for good, and
-only then loads the server — or whichever script `docker run` named, such as `dist/import.mjs`:
+(`apps/server/src/entrypoint.ts`) gives `/data` to 65532 when it is not 65532's already, becomes 65532 for
+good, and only then loads the server — or whichever script `docker run` named, such as `dist/import.mjs`. A
+named volume created fresh is 65532's already, because the image's `/data` is. A host directory, whoever
+made it, and a volume a release before 0.8 wrote as root are given to 65532; so are the database and its
+`-wal`, `-shm` and `-journal` when another wrote them, which is what a restore from a root sidecar leaves.
 
-- **`/data` belongs to someone other than root**: deevy runs as that user and group. A host directory
-  somebody made stays theirs, and deevy writes as them. A named volume created fresh belongs to 65532,
-  because the image's `/data` does.
-- **`/data` belongs to root** — Docker made the host directory, or a release before 0.8 wrote the volume:
-  deevy gives the directory to 65532 and runs as 65532.
-
-Either way the database and its `-wal`, `-shm` and `-journal` are given to that user when another wrote
-them, which is what a restore from a root sidecar leaves. Nothing else in the directory is touched, nothing
-is followed through a link or a second name, and the directory deevy's code is in is never given away. Its
-log says who it runs as and what it gave.
+It always becomes 65532, never the directory's owner: a host directory is often its operator's, and a
+container escape as that user would own their home. What it gives is as narrow as it can make it
+(`apps/server/src/ownership.ts`): nothing else in the directory; each file opened without following a link
+and given through that descriptor, so it cannot be swapped between the check and the `chown`; nothing with a
+second name or on another device; nothing in a directory reached through a link; and nothing at all on the
+image's own file system, so neither the code nor Node can be handed to the process that runs them. The code
+itself is root's. Its log says what it gave and what it could not, as when root may not `chown` on an NFS
+export that squashes it, or the container lacks `CHOWN`, `SETUID` and `SETGID`, which Docker grants by
+default. Under rootless Docker or Podman, 65532 is a subordinate uid on the host, and a host directory ends
+up that uid's.
 
 To keep it from starting as root at all, run it as the user it should be: `--user 65532:65532`, Compose's
 `user:`, Kubernetes' `runAsUser: 65532` (with `fsGroup: 65532` for the volume). The entrypoint then changes
 nothing, so `/data` has to be that user's already. deevy checks that it can write `/data` before it opens
 the database, and names the command that fixes it when it cannot, rather than starting and failing at the
-first write.
-
-Going back to a release before 0.12 on a host directory deevy adopted for a user other than 65532 needs that
-directory given to 65532 first: those releases always run as 65532 and give nothing away, and they say so.
+first write. The healthcheck and `docker exec` run as the image's user, root, either way: neither goes
+through the entrypoint.
 
 ## The schema, on either runtime
 
@@ -2107,7 +2108,7 @@ docker start deevy
 Deleting the `-wal` and `-shm` files matters: leaving a stale write-ahead log next to a restored database
 gives SQLite two disagreeing versions of the truth.
 
-The sidecar writes the copy as root, and deevy gives it to itself when it starts ([The volume](#the-volume)).
+The sidecar writes the copy as root, and deevy gives it to 65532 when it starts ([The volume](#the-volume)).
 An instance run with `--user` gives nothing away, so its restore ends by handing the file to that user,
 `&& chown <uid>:<gid> /data/deevy.sqlite`, or deevy refuses to start and names that command.
 

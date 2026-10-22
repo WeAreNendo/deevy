@@ -116,14 +116,12 @@ function notWritable(path: string, because: string): Error {
   // Named rather than described: the whole point is that the person reading
   // this should not have to work out what to run (docs/OPERATIONS.md, The
   // volume). In the image this is reached only by a process that was never
-  // root, or one that could not give the directory away as root: started as
-  // root, the entrypoint gives it to deevy first (ADR-0033).
+  // root, or one whose entrypoint could not give the directory away as root —
+  // its log says which (ADR-0033) — so the command holds for both.
   const fix =
     uid === undefined
       ? `give ${dirname(path)} and anything already in it to the user deevy runs as`
-      : `deevy runs as uid ${String(uid)}. Started without --user, the image gives the ` +
-        "directory to itself before it gives up root; started with one, give it to that " +
-        "user with the container stopped:\n" +
+      : `deevy runs as uid ${String(uid)}; with the container stopped, run\n` +
         `  docker run --rm -v deevy-data:/data alpine chown -R ${String(uid)}:${String(process.getgid?.() ?? uid)} /data`;
   return new Error(`cannot write the database at ${path}: ${because}. ${fix}`);
 }

@@ -548,8 +548,8 @@ docker run -p 3000:3000 -v deevy-data:/data --env-file .env -e BETTER_AUTH_URL=h
 ```
 
 The runtime stage is distroless, so there is no shell in it to debug with. It starts as root and its
-entrypoint (`apps/server/src/entrypoint.ts`) gives `/data` to the user it will be before it drops root for
-good — a named volume, a host directory and a restored database all work with nothing done to them
+entrypoint (`apps/server/src/entrypoint.ts`) gives `/data` to 65532 before it drops root for good — a
+named volume, a host directory and a restored database all work with nothing done to them
 (docs/OPERATIONS.md, "The volume", and ADR-0033). To ask the built image whether it still does all of that:
 
 ```bash

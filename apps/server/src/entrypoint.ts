@@ -1,21 +1,28 @@
 /**
  * The image's entrypoint (ADR-0033). Started as root, which the image is, it
- * gives the database's directory to the user deevy will be (ownership.ts), then
- * becomes that user for good and runs the script it was handed: dist/index.mjs,
- * or whatever `docker run` names instead, such as dist/import.mjs. Started as
- * anyone else — `--user`, a Kubernetes `runAsUser` — it changes nothing and
- * runs the script as that user, and openDatabase says what to do if it cannot
- * write.
+ * gives the database's directory to 65532 (ownership.ts), then becomes 65532
+ * for good and runs the script it was handed: dist/index.mjs, or whatever
+ * `docker run` names instead, such as dist/import.mjs. Started as anyone else —
+ * `--user`, a Kubernetes `runAsUser` — it changes nothing and runs the script
+ * as that user, and openDatabase says what to do if it cannot write.
  *
- * It imports node builtins and ownership.ts and nothing else, and the script is
- * imported only once root is gone: static imports are evaluated first, so a
- * drop at the top of index.ts would come after the whole server had been
- * loaded as root.
+ * It imports node builtins and ownership.ts and nothing else, which the image
+ * smoke holds it to, and the script is imported only once root is gone: static
+ * imports are evaluated first, so a drop at the top of index.ts would come
+ * after the whole server had been loaded as root.
  */
-import { lchownSync, lstatSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { takeOwnership, type Owner, type OwnershipFs } from "./ownership.ts";
+import {
+  closeSync,
+  constants,
+  fchownSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  realpathSync,
+} from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { NONROOT, takeOwnership, type OwnershipFs } from "./ownership.ts";
 
 const [script, ...args] = process.argv.slice(2);
 if (!script) {
@@ -25,24 +32,33 @@ if (!script) {
   process.exit(2);
 }
 
+const { O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_DIRECTORY } = constants;
+
 const nodeFs: OwnershipFs = {
-  lstat(path) {
-    try {
-      const stat = lstatSync(path);
-      const kind = stat.isDirectory() ? "directory" : stat.isFile() ? "file" : "other";
-      return { uid: stat.uid, gid: stat.gid, kind, nlink: stat.nlink };
-    } catch {
-      return undefined;
-    }
+  rootDevice: lstatSync("/").dev,
+  realpath: (path) => realpathSync.native(path),
+  open(path, kind) {
+    // O_NONBLOCK so that a FIFO planted in place of the database cannot hold
+    // the open forever; it is then refused for not being a file.
+    const flags = O_RDONLY | O_NOFOLLOW | O_NONBLOCK | (kind === "directory" ? O_DIRECTORY : 0);
+    const fd = openSync(path, flags);
+    const stat = fstatSync(fd);
+    return {
+      uid: stat.uid,
+      dev: stat.dev,
+      nlink: stat.nlink,
+      kind: stat.isDirectory() ? "directory" : stat.isFile() ? "file" : "other",
+      chown: (uid, gid) => fchownSync(fd, uid, gid),
+      close: () => closeSync(fd),
+    };
   },
-  lchown: lchownSync,
 };
 
 /**
  * setuid(2) from root sets the real, effective and saved ids together, so
  * there is no way back. Asked anyway, because everything rests on it.
  */
-function become({ uid, gid }: Owner): void {
+function become(uid: number, gid: number): void {
   process.setgroups!([gid]);
   process.setgid!(gid);
   process.setuid!(uid);
@@ -64,19 +80,18 @@ if (process.getuid?.() === 0) {
   const ownership = takeOwnership(
     databasePath === ":memory:" ? databasePath : resolve(databasePath),
     nodeFs,
-    { code: resolve(dirname(fileURLToPath(import.meta.url)), "..") },
   );
-  const { uid, gid } = ownership.owner;
-  const who = `${String(uid)}:${String(gid)}`;
+  const who = `${String(NONROOT)}:${String(NONROOT)}`;
+  if (ownership.untouched) console.warn(`gave nothing to ${who}: ${ownership.untouched}`);
   for (const path of ownership.given) console.log(`gave ${path} to ${who}`);
   for (const { path, error } of ownership.refused) {
     console.warn(`could not give ${path} to ${who}: ${error}`);
   }
   for (const path of ownership.skipped) {
-    console.warn(`left ${path} as it is: it is not a file with one name, so it is not given away`);
+    console.warn(`left ${path} as it is: it is not a file with one name on the volume`);
   }
   try {
-    become(ownership.owner);
+    become(NONROOT, NONROOT);
   } catch (error) {
     console.error(
       `deevy started as root and could not become ${who}: ${error instanceof Error ? error.message : String(error)}. ` +
@@ -85,7 +100,10 @@ if (process.getuid?.() === 0) {
     );
     process.exit(1);
   }
-  console.log(`deevy runs as ${who}, ${ownership.because}`);
+  // Docker set HOME for root. Nothing of deevy's reads it, but a dependency
+  // that one day does should find a home it may write: the base image's own.
+  process.env.HOME = "/home/nonroot";
+  console.log(`deevy runs as ${who}`);
 }
 
 // The script sees the command line it would have had as the entrypoint itself.

@@ -27,8 +27,8 @@ A few things about the image that shape how you run it:
 - **It has no shell.** It is built on a distroless Node base and carries nothing else: no shell, no package
   manager, no `curl`. There is no `docker exec … sh`. Anything that needs a shell, such as a backup, runs
   in a small container of its own beside the same volume.
-- **It doesn't stay root.** It starts as root only long enough to make `/data` its own, then runs as an
-  unprivileged user for good. See [The volume](#the-volume).
+- **Its server doesn't run as root.** The image starts as root only long enough to give `/data` to uid
+  65532, then runs deevy as that user for good. See [The volume](#the-volume).
 - **It checks its own health.** `docker ps` shows `healthy` once it answers, with nothing configured.
 - **It speaks plain HTTP on port 3000.** Put a reverse proxy that terminates TLS in front of it, and read
   [Behind a proxy or under a path](/self-hosting/under-a-path/) for what the proxy must pass through.
@@ -119,17 +119,25 @@ Everything deevy keeps is one SQLite file, `/data/deevy.sqlite`, with the `-wal`
 writes beside it. Mount a named volume or a host directory at `/data`. Never mount the database file on its
 own, because SQLite needs to write next to it.
 
-Neither needs anything done to it first. deevy starts as root, makes `/data` its own, and gives up root
-before it loads anything else. It then runs as:
+Neither needs anything done to it first. deevy starts as root, gives `/data` to uid 65532 if it isn't
+already that user's, and gives up root before it loads anything else. From then on it runs as 65532.
 
-- **The owner of `/data`**, when that isn't root. A host directory you made, such as `/srv/deevy`, stays
-  yours, and deevy writes its files as you. A named volume created fresh, like `deevy-data` above, belongs
-  to uid 65532.
-- **uid 65532**, when `/data` belongs to root, as a host directory Docker created for you does. deevy gives
-  the directory to that user first.
+- **A named volume created fresh**, like `deevy-data` above, already belongs to 65532.
+- **A host directory**, such as `/srv/deevy`, ends up belonging to 65532 whoever made it, the way a
+  database image's data directory belongs to its own user.
+- **A database somebody else wrote there**, such as one you restored from a backup, is given to 65532 the
+  next time deevy starts.
 
-Either way, a database somebody else wrote there, such as one you restored from a backup, is given to the
-same user when deevy starts. Nothing else in `/data` is changed.
+Only the directory itself and the database's own files are changed. Nothing else in `/data` is, nothing a
+link points to, and nothing in a `/data` that isn't a mounted volume or host directory.
+
+Giving the directory away needs the `CHOWN`, `SETUID` and `SETGID` capabilities, which Docker grants by
+default. A container that drops them all runs with `--user`, below. Under rootless Docker or Podman, uid
+65532 in the container is one of your subordinate uids on the host, so that's who a host directory ends up
+belonging to.
+
+The volume and the two secrets belong together: a copy of the database without `DEEVY_SECRET` can't open
+the credentials of the tools you connected. See [Backup and restore](/self-hosting/backup-and-restore/).
 
 ### Without ever being root
 
@@ -143,9 +151,6 @@ In Compose that's `user: "65532:65532"`, and on Kubernetes `runAsUser: 65532`, w
 volume is writable. deevy then changes nothing, so `/data` has to be writable by that user already. A named
 volume created fresh is. If it isn't, deevy exits before it opens the database, and its log names the
 command that fixes it.
-
-The volume and the two secrets belong together: a copy of the database without `DEEVY_SECRET` can't open
-the credentials of the tools you connected. See [Backup and restore](/self-hosting/backup-and-restore/).
 
 ## Sign in as the admin
 

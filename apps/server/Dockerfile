@@ -20,13 +20,19 @@ RUN mkdir -p /src/.empty
 # say which bytes it shipped is not one. `docker buildx imagetools inspect` on
 # the tag prints the digest to move it to.
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e AS runtime
+# Root, on purpose, for as long as the entrypoint takes to give /data to 65532,
+# and no longer: it drops before it loads the server
+# (apps/server/src/entrypoint.ts), so a volume, a host directory and a restore
+# need no chown. Said first, so that the /app WORKDIR makes is root's: the base
+# is the `nonroot` one, because 65532 is its user, and its USER is 65532.
+USER 0:0
 ENV NODE_ENV=production
 WORKDIR /app
-# The code belongs to root and is only read. The process that runs it stops
-# being root before it loads any of it, and must not be able to change what the
-# next start runs as root (ADR-0033).
-COPY --from=build /src/apps/server/dist ./dist
-COPY --from=build /src/apps/web/dist ./web
+# The code belongs to root and is only read, so the process that runs it cannot
+# change what the next start runs as root (ADR-0033). `COPY --from` keeps the
+# build stage's owner, vp's 1000, unless told otherwise.
+COPY --from=build --chown=0:0 /src/apps/server/dist ./dist
+COPY --from=build --chown=0:0 /src/apps/web/dist ./web
 # A fresh named volume takes its ownership from here, so the entrypoint finds
 # /data already 65532's and has nothing to give. It is also what keeps
 # `--user 65532:65532` working on one, for whoever will not start as root.
@@ -34,13 +40,6 @@ COPY --from=build --chown=65532:65532 /src/.empty /data
 ENV DEEVY_PORT=3000 \
     DEEVY_DATABASE_PATH=/data/deevy.sqlite \
     DEEVY_WEB_DIST=/app/web
-# Root, on purpose, for as long as the entrypoint takes to give /data to the
-# user deevy will be — the directory's owner, or 65532 when that is root — and
-# no longer: it drops before it loads the server (apps/server/src/entrypoint.ts).
-# A volume or a host directory therefore needs no chown, nor does a restore. The
-# base is the `nonroot` one because 65532 is its user; it is only its USER that
-# is replaced here.
-USER 0:0
 VOLUME ["/data"]
 EXPOSE 3000
 # Docker runs an exec-form healthcheck directly rather than through the

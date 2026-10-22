@@ -112,11 +112,11 @@ async function start(name = container, on = volume): Promise<string> {
  */
 async function serverUser(name = container): Promise<string> {
   const pid = await docker("inspect", "-f", "{{.State.Pid}}", name);
-  // `docker top` prints the numeric uid when the host has no user by that id,
-  // which is the answer wanted: what the kernel sees, not what the image said.
-  // `pid` has to be asked for: the daemon looks for it in the ps output and
-  // refuses the call without it, whatever the other columns say.
-  const processes = await attempt("top", name, "-o", "pid,user");
+  // `uid` rather than `user`, which prints a name when the host has a user by
+  // that id: what the kernel sees, not what the image said. `pid` has to be
+  // asked for: the daemon looks for it in the ps output and refuses the call
+  // without it, whatever the other columns say.
+  const processes = await attempt("top", name, "-o", "pid,uid");
   const row = processes.output.split("\n").find((line) => line.trim().split(/\s+/)[0] === pid);
   return row?.trim().split(/\s+/)[1] ?? `no process ${pid} in:\n${processes.output}`;
 }
@@ -153,6 +153,37 @@ async function smoke(): Promise<void> {
   // is a claim about what is in it and not about what it is called.
   const shell = await attempt("run", "--rm", "--entrypoint", "/bin/sh", image, "-c", "true");
   check("it has no shell for anything that gets in to use", shell.code !== 0, shell.output);
+
+  // The entrypoint runs as root at every start, so whoever could change the
+  // code could change what root runs next. `COPY --from` keeps the build
+  // stage's owner, vp's 1000, unless the Dockerfile says otherwise.
+  const writable = await inTheImage(`
+    const { lstatSync, readdirSync } = require("node:fs");
+    const walk = (p) => {
+      const s = lstatSync(p);
+      const bad = s.uid !== 0 || s.gid !== 0 || (s.mode & 0o022) !== 0 ? [p + " " + s.uid + ":" + s.gid + " " + (s.mode & 0o777).toString(8)] : [];
+      return s.isDirectory() ? bad.concat(...readdirSync(p).map((n) => walk(p + "/" + n))) : bad;
+    };
+    console.log(walk("/app").join("\\n"));`);
+  check(
+    "its code is root's and nobody else may change it",
+    writable.code === 0 && writable.output === "",
+    writable.output,
+  );
+
+  // Everything the entrypoint imports statically is evaluated as root, before
+  // the drop: Node's own modules, and nothing of the server's (ownership.ts is
+  // inlined). A literal `import("…")` would be too, once reached; the one that
+  // imports the script is not a literal and runs after the drop.
+  const imports = await inTheImage(`
+    const source = require("node:fs").readFileSync("/app/dist/entrypoint.mjs", "utf8");
+    const named = [...source.matchAll(/(?:^\\s*(?:import|export)\\b[^;]*?|\\bimport\\s*\\(\\s*)["']([^"']+)["']/gm)].map((m) => m[1]);
+    console.log(named.length === 0 ? "no imports found" : named.filter((name) => !name.startsWith("node:")).join(" "));`);
+  check(
+    "its entrypoint loads nothing but Node's own modules as root",
+    imports.code === 0 && imports.output === "",
+    imports.output,
+  );
 
   await docker("volume", "create", volume);
 
@@ -194,12 +225,14 @@ async function smoke(): Promise<void> {
     listing.output,
   );
 
+  // Stopped first, so that the copies the cases below take of its database
+  // are of a database nothing is writing.
+  await docker("stop", container);
   await takesAVolumeRootWrote();
-  await becomesWhoeverOwnsTheDirectory();
+  await takesADirectorySomebodyElseOwns();
   await refusesWhatAnotherUserCannotWrite();
   await runsTheScriptItIsHanded();
 
-  await docker("stop", container);
   await docker("start", container);
   check(
     "it comes back up on the volume it wrote",
@@ -225,6 +258,11 @@ async function volumeWith(suffix: string, script: string): Promise<string> {
     script,
   );
   return other;
+}
+
+/** Node in the image itself, which has nothing else to ask it with. */
+async function inTheImage(script: string): Promise<{ code: number; output: string }> {
+  return attempt("run", "--rm", "--entrypoint", "/nodejs/bin/node", image, "-e", script);
 }
 
 async function ownerOn(on: string, path: string): Promise<string> {
@@ -260,24 +298,26 @@ async function takesAVolumeRootWrote(): Promise<void> {
 /**
  * A host directory somebody made, played by a volume whose root is theirs:
  * the same code path, without the ownership Docker Desktop makes up for a bind
- * mount. deevy runs as them and their files stay theirs. 4321 rather than
- * 1000, which is a real user on most hosts and which `docker top` would name.
+ * mount. deevy gives it to 65532 and runs as 65532, never as them: a container
+ * escape as its owner would be a real user on the host (ADR-0033).
  *
  * Something has to be in it: Docker copies the image's /data, ownership and
  * all, into a named volume that is empty when it is mounted, which would make
  * this 65532's before deevy saw it. A host directory has no such step. A file
  * of root's serves, and says whether anything else in the directory is touched.
  */
-async function becomesWhoeverOwnsTheDirectory(): Promise<void> {
+async function takesADirectorySomebodyElseOwns(): Promise<void> {
   const theirs = await volumeWith("theirs", "touch /data/notes.txt && chown 4321:4321 /data");
   const name = `${container}-theirs`;
   try {
     const up = await healthy(await start(name, theirs));
     check("it starts on a directory somebody else owns", up, await logs(name));
     const user = await serverUser(name);
-    check("and runs as them", user === "4321", user);
+    check("and runs as 65532 rather than as them", user === "65532", user);
+    const dir = await ownerOn(theirs, "/data");
+    check("and gives the directory to 65532", dir === "65532:65532", dir);
     const owner = await ownerOn(theirs, "/data/deevy.sqlite");
-    check("and writes the database as them", owner === "4321:4321", owner);
+    check("and writes the database as 65532", owner === "65532:65532", owner);
     const notes = await ownerOn(theirs, "/data/notes.txt");
     check("and leaves the rest of the directory alone", notes === "0:0", notes);
   } finally {

@@ -46,8 +46,8 @@ docker start deevy
 ```
 
 Removing the `-wal` and `-shm` files matters: a stale write-ahead log beside a restored database gives
-SQLite two versions of the truth. The helper container writes the copy as root, and deevy makes it its own
-when it starts. If you run deevy with `--user`, it can't, so give the file to that user in the same
+SQLite two versions of the truth. The helper container writes the copy as root, and deevy gives it to uid
+65532 when it starts. If you run deevy with `--user`, it can't, so give the file to that user in the same
 command, adding `&& chown 65532:65532 /data/deevy.sqlite` for `--user 65532:65532`.
 
 A backup from an older release restores under a newer image, which brings it forward when it starts.
