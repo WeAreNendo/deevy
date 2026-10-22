@@ -62,14 +62,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Titles in Outfit, the logo's face, as the app's are; everything else is Inter. */
+/*
+ * Titles in Outfit, the logo's face, as the app's are; everything else is Inter.
+ * A component that sets its own (the landing's, in .not-content) keeps them.
+ */
 h1,
-.sl-markdown-content :is(h2, h3, h4) {
+.sl-markdown-content :is(h2, h3, h4):not(:where(.not-content *)) {
   font-family: var(--face-display);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-.sl-markdown-content :is(h2, h3, h4) {
+.sl-markdown-content :is(h2, h3, h4):not(:where(.not-content *)) {
   color: var(--foreground);
 }
 .sl-markdown-content h2 {
@@ -238,13 +241,21 @@ site-search button > kbd {
   background-color: var(--card);
 }
 
-/* The splash page's title and tagline at the app's weight. */
-.hero h1 {
-  font-family: var(--face-display);
-  letter-spacing: -0.02em;
+/*
+ * The landing (content/index.mdx, src/components/Hero.astro): wide enough for
+ * the workflow graph, and its own headings in the hero's Geist, bold.
+ */
+:root[data-has-hero] {
+  --sl-content-width: 76rem;
 }
-.hero .tagline {
-  color: var(--muted-foreground);
+[data-has-hero] .sl-markdown-content > .sl-heading-wrapper.level-h2 {
+  margin-top: clamp(3rem, 8vw, 6rem);
+}
+[data-has-hero] .sl-markdown-content > .sl-heading-wrapper > h2 {
+  font-family: "Geist Variable", var(--face-sans);
+  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
 }
 
 /* Previous and next, and the page's footer links, as quiet cards. */

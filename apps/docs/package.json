@@ -14,6 +14,8 @@
   "devDependencies": {
     "@astrojs/starlight": "catalog:",
     "@deevy/design": "workspace:*",
+    "@fontsource-variable/geist": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
     "@types/node": "catalog:",
     "astro": "catalog:",
     "github-slugger": "catalog:",
