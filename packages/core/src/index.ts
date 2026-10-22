@@ -30,6 +30,7 @@ export {
   slugify,
   type Auth,
   type AuthEnv,
+  type AuthLogger,
   type AuthProviders,
   type OAuthClient,
   type Session,
@@ -60,6 +61,7 @@ export {
   type JobKind,
   type JobQueue,
 } from "./jobs.ts";
+export { describeError, withoutBoundValues } from "./errors.ts";
 export { dataHeaders, pageHeaders, pagePolicy } from "./headers.ts";
 export { onEventAppended, type LiveOptions, type LiveReader, type LiveSocket } from "./live.ts";
 export { createDeevyMcp, type DeevyMcp, type DeevyMcpOptions } from "./mcp/server.ts";
