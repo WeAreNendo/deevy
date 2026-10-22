@@ -621,7 +621,13 @@ describe("one Socket's own page", () => {
       await within(verifying).findByText("secret_notion-verification-token-for-tests"),
     ).toBeTruthy();
     // Notion has no account to link, so an admin may let a verified address
-    // vouch for who commented (ADR-0025).
+    // vouch for who commented (ADR-0025). The weaker proof is marked on the
+    // Gate's page alone, and the sentence says so rather than "wherever it is
+    // shown", which Slack, the feed and the tracker's comment never were.
+    const commented = screen.getByRole("region", { name: "Who commented" });
+    expect(
+      within(commented).getByText(/the Gate's page marks every ruling made this way “\(email\)”/),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("switch", { name: "Take a verified address as proof" }));
     await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
     expect(calls.update.mock.calls[0]?.[0]).toEqual({

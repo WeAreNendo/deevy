@@ -373,10 +373,13 @@ export function SocketPage({ socketId }: { socketId: string }) {
             />
             Take a verified address as proof
           </label>
+          {/* The mark is the Gate page's list of decisions (gates/gate.tsx), and
+              only there: Slack, the feed and the tracker's comment name the
+              Human without it, so the sentence says where to look. */}
           <p className="text-xs text-muted-foreground">
             A comment counts as a Member&apos;s when Notion reports an address they verified in
-            deevy. That is weaker than a linked account, and every ruling it makes says
-            &ldquo;(email)&rdquo;.
+            deevy. That is weaker than a linked account, so the Gate&apos;s page marks every ruling
+            made this way &ldquo;(email)&rdquo;.
           </p>
         </SettingsSection>
       ) : null}
