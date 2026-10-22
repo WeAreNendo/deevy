@@ -205,9 +205,11 @@ const first = wires[0]!;
     box-shadow: 0 60px 140px -50px color-mix(in oklab, var(--primary) 45%, transparent);
     overflow: clip;
     /*
-     * Tilted about its middle and scaled down while tilted, so the edge that
-     * comes toward the reader never grows past the column: nothing clips the
-     * board or its shadow, and the page never scrolls sideways.
+     * Tilted about its middle (the default, written for the reader) and scaled
+     * down while tilted, so the edge that comes toward the reader never grows
+     * past the column: nothing clips the board or its shadow, and the page never
+     * scrolls sideways. That holds while the board is under about 740px tall;
+     * the landing's 76rem column keeps it at 528.
      */
     transform-origin: 50% 50%;
     transform: rotateX(calc((1 - var(--flat)) * 26deg)) scale(calc(0.88 + var(--flat) * 0.12));
@@ -351,10 +353,17 @@ const first = wires[0]!;
   /*
    * The starting state, set before first paint (the inline script above) and
    * handed over by the module script, which draws everything in. Should that
-   * script never run, the graph shows itself after three seconds anyway.
+   * script never run, the graph shows itself and the board lies flat after
+   * three seconds anyway.
    */
   .motion .board {
     --flat: 0;
+    animation: home-flatten 0s 3s forwards;
+  }
+  @keyframes home-flatten {
+    to {
+      --flat: 1;
+    }
   }
   .motion :is(.wire, .node, .ports) {
     opacity: 0;
