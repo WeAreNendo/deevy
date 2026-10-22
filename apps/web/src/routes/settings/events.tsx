@@ -8,6 +8,7 @@ import { SettingsPage } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
 import { ScrollText, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { kindFamiliesFor, subjectFamiliesFor } from "@/lib/event-families";
 import { describeEvent, toneClass } from "@/lib/event-text";
 import { useEventContext } from "@/lib/mentions";
 import { orpc } from "@/lib/orpc";
@@ -26,28 +27,6 @@ import {
 const PAGE = 100;
 /** Base UI's Select wants a value for "everything"; the empty string is not one. */
 const ANY = "__any";
-
-/**
- * The Event kinds by what they are about, so the filter reads as the log does.
- * A prefix nothing appends is a filter that always answers nothing, which reads
- * as a bug in the log rather than in this list — `event-log.test.tsx` holds it
- * against the core's own union.
- */
-export const kindFamilies = [
-  { label: "Records", prefixes: ["issue", "comment"] },
-  { label: "Runs", prefixes: ["run"] },
-  {
-    label: "Workspace",
-    prefixes: ["member", "invitation", "allowlist", "agent", "socket", "project", "workspace"],
-  },
-];
-export const subjectFamilies = [
-  { label: "Work", types: ["issue", "run", "project"] },
-  {
-    label: "Workspace",
-    types: ["member", "invitation", "allowlist_rule", "socket", "channel", "webhook", "workspace"],
-  },
-];
 
 interface EventRow {
   seq: number;
@@ -91,6 +70,12 @@ export function EventLogPage() {
     }),
   );
   const projects = useQuery(orpc.projects.list.queryOptions({ input: {} }));
+  // The filters offer what this reader's log can hold, which is less than an
+  // admin's: the server leaves invitations out for everybody else.
+  const me = useQuery(orpc.me.get.queryOptions());
+  const admin = me.data?.member?.role === "admin";
+  const kindFamilies = kindFamiliesFor(admin);
+  const subjectFamilies = subjectFamiliesFor(admin);
   // Names for what an older payload only numbers; the actor rides on the row.
   const eventContext = useEventContext();
   const projectById = useMemo(
