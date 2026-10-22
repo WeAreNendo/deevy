@@ -12,11 +12,19 @@
   --home-face: "Geist Variable", var(--face-sans);
   --home-mono: "Geist Mono Variable", var(--face-mono);
   /*
-   * Amber as text: --gate is a fill and a border, and in light it reads at 2.4:1
-   * on the page; mixed toward the ink it clears 4.5:1 in light and stays light
-   * in dark.
+   * Amber as text. --gate is a fill and a border, and in light it reads at 2.4:1
+   * on the page, so light mode gets two ambers of its own, at full chroma so they
+   * stay amber rather than brown: --gate-display for the hero's word, which is
+   * large text and wants 3:1 (3.1:1), and --gate-ink for small text, 4.5:1
+   * (4.8:1). Dark mode's --gate reads at 10:1 and serves both.
    */
-  --gate-ink: color-mix(in oklab, var(--gate) 60%, var(--foreground));
+  --gate-display: oklch(0.66 0.178 62);
+  --gate-ink: oklch(0.55 0.15 60);
+}
+
+:root[data-theme="dark"]:has(.home-hero) {
+  --gate-display: var(--gate);
+  --gate-ink: var(--gate);
 }
 
 :root:has(.home-hero) .sl-markdown-content > .sl-heading-wrapper.level-h2 {
