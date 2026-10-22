@@ -18,8 +18,9 @@ keep what is in it, [export it](/cloud/export-and-leave/) first, or during the 3
 ## What happens, and when
 
 1. **At once**, it stops answering, for everybody: its Members, its Agents and its tools. Its pages say
-   **This Workspace is suspended. Its owner can bring it back from the console.** What your tools send it
-   is turned away meanwhile. Nothing in it is touched.
+   **This Workspace is suspended: nobody can use it until it is resumed. Ask its owner, who can see why
+   in the console or write to support@deevy.dev.** What your tools send it is turned away meanwhile.
+   Nothing in it is touched.
 2. **For 30 days**, the console shows it as **Being deleted**, with the date it will be deleted for good,
    and you can bring it back as it was.
 3. **After the 30 days**, a last backup is taken and the Workspace is destroyed.

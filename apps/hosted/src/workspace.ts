@@ -32,6 +32,7 @@ import { socketModules } from "@deevy/sockets";
 import { count, eq, gte } from "drizzle-orm";
 import { readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
 import { betterAuthLogger, reportFor, throwDescribed } from "./log.ts";
+import { SUSPENDED, suspendedPage } from "./router.ts";
 import { workspaceSecret } from "./secrets.ts";
 import { VERSION } from "./version.ts";
 
@@ -121,10 +122,14 @@ interface LiveAttachment {
 /** How long appends are gathered before one push, so a burst is one message. */
 const PUSH_GATHER_MS = 25;
 
-/** Close codes of deevy's own (4000–4999): why the object let a socket go. */
+/**
+ * Close codes of deevy's own (4000–4999): why the object let a socket go. A
+ * reason is at most 123 bytes, so a suspended Workspace's is the first
+ * sentence of what its page says (router.ts), not the whole of it.
+ */
 const CLOSED = {
   sessionEnded: [4401, "The session ended"],
-  suspended: [4403, "This Workspace is suspended"],
+  suspended: [4403, SUSPENDED],
   gone: [4404, "This Workspace is gone"],
 } as const;
 
@@ -173,9 +178,9 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
 
   override async fetch(request: Request): Promise<Response> {
     if (!this.#config) return new Response("There is no Workspace here.", { status: 404 });
-    if (this.#config.status === "suspended") {
-      return new Response("This Workspace is suspended.", { status: 403 });
-    }
+    // What the router says too, for the minute its cached directory entry may
+    // still say active after the platform suspended the Workspace here first.
+    if (this.#config.status === "suspended") return suspendedPage();
     if (this.#migrations.error) {
       return new Response("This Workspace is being upgraded. Try again in a minute.", {
         status: 503,

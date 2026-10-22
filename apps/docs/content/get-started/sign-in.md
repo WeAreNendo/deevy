@@ -40,8 +40,9 @@ rule lets you in when you sign in with GitHub, not with Google.
   address it was for; choose **Sign out and try another account**.
 - **Your membership is suspended**: an admin has paused your access. They can reinstate you at any
   time.
-- **This Workspace is suspended. Its owner can bring it back from the console.**: the whole Workspace is
-  paused, or is being deleted ([Delete a Workspace](/cloud/delete-a-workspace/)).
+- **This Workspace is suspended: nobody can use it until it is resumed. Ask its owner, who can see why in
+  the console or write to support@deevy.dev.**: the whole Workspace is paused, or is being deleted
+  ([Delete a Workspace](/cloud/delete-a-workspace/)).
 
 ## More than one Workspace
 
