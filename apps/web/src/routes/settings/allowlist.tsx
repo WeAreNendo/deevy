@@ -13,14 +13,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SettingsRow } from "@/components/settings-page";
+import {
+  ruleKindLabels,
+  ruleKinds,
+  ruleKindSignIns,
+  ruleKindWorks,
+  type RuleKind,
+} from "@/lib/join-rules.ts";
 import { orpc } from "@/lib/orpc.ts";
 import { cn } from "@/lib/utils";
-
-const kindLabels = {
-  email_domain: "Email domain",
-  github_org: "GitHub organization",
-  gitlab_group: "GitLab group",
-} as const;
 
 /** What the value field asks for, and what it shows as an example, per kind. */
 const valueFields = {
@@ -35,22 +36,6 @@ const kindPrefixes = {
   github_org: "org",
   gitlab_group: "group",
 } as const;
-
-/**
- * The sign-in a kind of rule is decided by. A GitHub organization rule asks
- * the GitHub account somebody signed in with which organizations it is in, and
- * a GitLab group rule their GitLab account, so where nobody signs in with that
- * provider the rule lets nobody in — deevy Cloud has no GitLab sign-in. The
- * server refuses such a rule too (`allowlistRuleSignIn` in packages/core).
- */
-const kindSignIns = {
-  email_domain: null,
-  github_org: { id: "github", label: "GitHub" },
-  gitlab_group: { id: "gitlab", label: "GitLab" },
-} as const;
-
-type RuleKind = keyof typeof kindLabels;
-const ruleKinds = Object.keys(kindLabels) as RuleKind[];
 
 /**
  * M1 admits teammates by rule rather than by invitation: any sign-in matching a
@@ -86,11 +71,7 @@ export function AllowlistRow() {
   // them. A kind is offered only beside its provider's button; a rule saved
   // before that provider went away stays listed, and says it lets nobody in.
   const health = useQuery(orpc.health.ping.queryOptions());
-  const signsIn = new Set((health.data?.providers ?? []).map((provider) => provider.id));
-  const offered = (kind: RuleKind) => {
-    const needs = kindSignIns[kind];
-    return needs === null || signsIn.has(needs.id);
-  };
+  const offered = (kind: RuleKind) => ruleKindWorks(kind, health.data?.providers ?? []);
   const kinds = ruleKinds.filter(offered);
   const strandedRules = health.isSuccess ? listed.filter((rule) => !offered(rule.kind)) : [];
   const stranded = new Set(strandedRules.map((rule) => rule.id));
@@ -118,13 +99,13 @@ export function AllowlistRow() {
               <Label htmlFor="rule-kind">Match on</Label>
               <Select value={kind} onValueChange={(next) => setKind(next as RuleKind)}>
                 <SelectTrigger id="rule-kind" className="w-full">
-                  <SelectValue>{(selected: RuleKind) => kindLabels[selected]}</SelectValue>
+                  <SelectValue>{(selected: RuleKind) => ruleKindLabels[selected]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     {kinds.map((one) => (
                       <SelectItem key={one} value={one}>
-                        {kindLabels[one]}
+                        {ruleKindLabels[one]}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -197,11 +178,11 @@ export function AllowlistRow() {
       </div>
 
       {strandedRules.map((rule) => {
-        const needs = kindSignIns[rule.kind];
+        const needs = ruleKindSignIns[rule.kind];
         return needs ? (
           <p key={rule.id} id={`stranded-${rule.id}`} className="text-sm text-muted-foreground">
-            {kindLabels[rule.kind]} {rule.value} lets nobody in until people can sign in here with{" "}
-            {needs.label}.
+            {ruleKindLabels[rule.kind]} {rule.value} lets nobody in until people can sign in here
+            with {needs.label}.
           </p>
         ) : null;
       })}
