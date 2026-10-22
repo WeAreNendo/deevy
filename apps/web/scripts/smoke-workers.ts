@@ -22,7 +22,9 @@
  * (docs/plans/m3.md slice 10). The sixth adds the queue binding an account
  * with Queues has, and the seventh takes it away again — the same webhook,
  * delivered by the Cron path alone, which is what makes the binding optional
- * (docs/plans/m3.md slice 9).
+ * (docs/plans/m3.md slice 9). One more server, before the sign-in, has no
+ * BETTER_AUTH_SECRET at all, and has to refuse every request rather than sign
+ * anybody in on the default Better Auth publishes.
  *
  * Two checks with no server at all close it: that the shape a free account
  * deploys passes a dry run, and that the file the dry run validates is the one
@@ -1233,6 +1235,32 @@ async function theWorkerServesDeevy(origin: string): Promise<void> {
   );
 }
 
+/**
+ * A Worker deployed without `BETTER_AUTH_SECRET` serves nothing and says why
+ * (apps/web/src/env.ts): the health check is a 503, and a sign-in that the
+ * stubbed GitHub would otherwise finish is refused before it starts.
+ */
+async function noSecretNoDeevy(origin: string): Promise<void> {
+  const health = await fetch(`${origin}/healthz`);
+  const said = await health.text();
+  check(
+    "without BETTER_AUTH_SECRET, /healthz is a 503 that names it",
+    health.status === 503 && said.startsWith("BETTER_AUTH_SECRET is not set"),
+    `status ${String(health.status)}: ${said.slice(0, 120)}`,
+  );
+  const start = await fetch(`${origin}/api/auth/sign-in/social`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin },
+    body: JSON.stringify({ provider: "github", callbackURL: "/" }),
+  });
+  const refused = await start.text();
+  check(
+    "and a sign-in is refused before it starts",
+    start.status === 503 && refused === said && start.headers.getSetCookie().length === 0,
+    `status ${String(start.status)}: ${refused.slice(0, 120)}`,
+  );
+}
+
 /** Slice 5: a Human signs in with GitHub and lands in the Workspace, on D1. */
 async function aHumanSignsIn(origin: string): Promise<void> {
   // The isolate is built by whichever request arrives first, and this phase
@@ -1379,8 +1407,34 @@ try {
 
   await withServer(
     persistTo,
-    { config, port: 0, vars: { BETTER_AUTH_URL: baseURL } },
+    {
+      config,
+      port: 0,
+      vars: {
+        BETTER_AUTH_URL: baseURL,
+        BETTER_AUTH_SECRET: "smoke-secret-that-is-at-least-32-characters",
+      },
+    },
     theWorkerServesDeevy,
+  );
+
+  // The same Worker with every provider answering and no secret: the one
+  // binding it may not run without, because workerd shows Better Auth no
+  // NODE_ENV and it would sign the Human in on its published default.
+  const unsignedPort = await freePort();
+  await withServer(
+    persistTo,
+    {
+      config: await stubbedOutside(),
+      port: unsignedPort,
+      vars: {
+        BETTER_AUTH_URL: `http://127.0.0.1:${String(unsignedPort)}`,
+        GITHUB_CLIENT_ID: "stub-client-id",
+        GITHUB_CLIENT_SECRET: "stub-client-secret",
+        DEEVY_ADMIN_EMAIL: adminEmail,
+      },
+    },
+    noSecretNoDeevy,
   );
 
   // A sign-in needs BETTER_AUTH_URL to be the origin the browser actually

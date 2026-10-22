@@ -140,6 +140,19 @@ export interface SignInProvider {
   kind: SignInProviderKind;
 }
 
+/**
+ * Why an entry will not run without `BETTER_AUTH_SECRET`, in the words both
+ * say it in. Better Auth falls back to a default it publishes and refuses it
+ * only where it reads `NODE_ENV=production`: in the image that is inside its
+ * context, so the server comes up, `/healthz` answers and every sign-in fails;
+ * on a Worker without `nodejs_compat` there is no `NODE_ENV` to read, so
+ * sessions, the links deevy sends and the provider tokens it seals all rest on
+ * a value anybody can look up. The Node server refuses to start instead, and
+ * the Worker refuses every request (docs/OPERATIONS.md).
+ */
+export const MISSING_AUTH_SECRET =
+  "BETTER_AUTH_SECRET is not set. deevy signs sessions and the links it sends with it, and seals sign-in providers' tokens under it, so it does not run without one: set it to at least 32 random characters, such as the output of `openssl rand -base64 32`.";
+
 export interface AuthEnv {
   /** Public URL of the server; callbacks derive from it. */
   baseURL?: string;

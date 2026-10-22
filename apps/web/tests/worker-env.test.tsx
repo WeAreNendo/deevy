@@ -1,8 +1,8 @@
-import { signInProviders } from "@deevy/core";
+import { MISSING_AUTH_SECRET, signInProviders } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { readWorkerEnv } from "../src/env.ts";
-import { isolateFor } from "../src/worker.ts";
+import worker, { isolateFor } from "../src/worker.ts";
 
 /**
  * The half of the wiring `apps/server/tests/server.test.ts` asserts from the
@@ -23,6 +23,57 @@ describe("the Worker's identity configuration", () => {
     });
 
     expect(isolate.authEnv.fetchClientMetadataResource).toBe(fetchClientMetadataResource);
+  });
+});
+
+/**
+ * workerd shows Better Auth no `NODE_ENV`, so without `BETTER_AUTH_SECRET` it
+ * signed everybody in with the default it publishes and never said so. The
+ * Worker refuses everything instead, and says why (MISSING_AUTH_SECRET); the
+ * smoke proves the same on workerd (scripts/smoke-workers.ts).
+ */
+describe("a Worker with no BETTER_AUTH_SECRET", () => {
+  const bindings = {
+    DB: undefined as never,
+    BETTER_AUTH_URL: "https://deevy.example.com",
+    GITHUB_CLIENT_ID: "id",
+    GITHUB_CLIENT_SECRET: "secret",
+    DEEVY_ADMIN_EMAIL: "ada@example.com",
+  };
+
+  it("refuses every request, the health check and a sign-in included, and says why", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      for (const secret of [undefined, "", "  "]) {
+        for (const request of [
+          new Request("https://deevy.example.com/healthz"),
+          new Request("https://deevy.example.com/api/auth/sign-in/social", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ provider: "github", callbackURL: "/" }),
+          }),
+        ]) {
+          const response = await worker.fetch(request, { ...bindings, BETTER_AUTH_SECRET: secret });
+          expect(response.status).toBe(503);
+          expect(await response.text()).toBe(MISSING_AUTH_SECRET);
+        }
+      }
+      expect(logged).toHaveBeenCalledWith(MISSING_AUTH_SECRET);
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it("runs none of the background work either", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const waitUntil = vi.fn();
+      worker.scheduled(undefined, bindings, { waitUntil });
+      expect(waitUntil).not.toHaveBeenCalled();
+      await expect(worker.queue({ messages: [] }, bindings)).rejects.toThrow(MISSING_AUTH_SECRET);
+    } finally {
+      logged.mockRestore();
+    }
   });
 });
 

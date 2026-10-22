@@ -9,7 +9,8 @@
 # the MCP challenge names it. Without it, deevy answers on whatever origin the
 # request arrived at.
 BETTER_AUTH_URL=http://localhost:8787
-# At least 32 random characters. Generate with: npx auth@1.7.2 secret
+# At least 32 random characters. Generate with: npx auth@1.7.3 secret. Without it
+# the Worker refuses every request.
 BETTER_AUTH_SECRET=
 # GitHub OAuth App. Authorization callback URL: ${BETTER_AUTH_URL}/api/auth/callback/github
 GITHUB_CLIENT_ID=

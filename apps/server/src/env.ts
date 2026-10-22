@@ -172,6 +172,18 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
   if (devStubEmail && env.NODE_ENV === "production") {
     throw new Error("DEEVY_DEV_STUB_EMAIL sends email nowhere and cannot be set in production");
   }
+  // Better Auth reads its own list of rotated secrets from the environment and
+  // prefers it to the secret deevy hands it, so honouring it would sign the
+  // sessions and seal the tokens with keys other than the one deevy signs its
+  // own links with — and only on Node, since a Worker has no environment for
+  // Better Auth to read. Refused for the same reason as the stubs.
+  // `AUTH_SECRET`, its other fallback, is never reached: deevy always passes
+  // `BETTER_AUTH_SECRET`, and will not build a server without it (server.ts).
+  if (env.BETTER_AUTH_SECRETS?.trim()) {
+    throw new Error(
+      "BETTER_AUTH_SECRETS is Better Auth's list of rotated secrets, which deevy does not use: unset it and keep the current secret in BETTER_AUTH_SECRET",
+    );
+  }
   const providers = providersFromEnv(env);
   return {
     // DEEVY_PORT first: tooling commonly injects a generic PORT meant for something else.
