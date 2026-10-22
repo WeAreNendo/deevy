@@ -6,7 +6,7 @@ import { ProjectSchema } from "../schemas.ts";
 import { requireSocket, scopeKeyOf, socketModuleFor } from "../sockets/registry.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
-import { defineOperation } from "./registry.ts";
+import { defineOperation, type ContextFor } from "./registry.ts";
 import {
   ProjectSlug,
   ProjectSlugLookup,
@@ -23,6 +23,22 @@ const BindingInput = z.object({
   /** The container the provider's own `listContainers` offered. */
   scope: z.record(z.string(), z.unknown()),
 });
+
+/**
+ * An Agent of this Workspace, or nobody: a record routed to a Human or to a
+ * stranger by default would be one nothing ever picks up.
+ */
+async function requireDefaultAgent(context: ContextFor<"member">, memberId: string) {
+  const agent = await context.db.query.member.findFirst({
+    where: { id: memberId, workspaceId: context.workspace.id, kind: "agent" },
+    columns: { id: true },
+  });
+  if (!agent) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "The default has to be one of this Workspace's Agents",
+    });
+  }
+}
 
 export const projects = {
   list: defineOperation({
@@ -111,22 +127,8 @@ export const projects = {
       if (input.description !== undefined && input.description !== found.description) {
         changes.description = { from: found.description, to: input.description ?? null };
       }
-      // An Agent of this Workspace, or nobody: a record routed to a Human or to
-      // a stranger by default would be one nothing ever picks up.
       if (input.defaultAgentMemberId) {
-        const agent = await context.db.query.member.findFirst({
-          where: {
-            id: input.defaultAgentMemberId,
-            workspaceId: context.workspace.id,
-            kind: "agent",
-          },
-          columns: { id: true },
-        });
-        if (!agent) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "The default has to be one of this Workspace's Agents",
-          });
-        }
+        await requireDefaultAgent(context, input.defaultAgentMemberId);
       }
       if (
         input.defaultAgentMemberId !== undefined &&
@@ -275,6 +277,9 @@ export const projects = {
       }
       if (input.forge) await requireSocket(context, input.forge.socketId);
       if (input.docs) await requireSocket(context, input.docs.socketId);
+      if (input.defaultAgentMemberId) {
+        await requireDefaultAgent(context, input.defaultAgentMemberId);
+      }
 
       const created = await createProject(context.db, {
         workspaceId: context.workspace.id,
@@ -297,6 +302,11 @@ export const projects = {
         projectId: created.id,
         payload: { slug: created.slug, name: created.name, trackerScopeKey },
       });
+      // As in `projects.update`: a default is granted the Project, after the
+      // Event that made it, or every record routed to it would wait forever.
+      if (input.defaultAgentMemberId) {
+        await grantProject(context, input.defaultAgentMemberId, created);
+      }
       return loadProject(context.db, created.id);
     },
   }),
