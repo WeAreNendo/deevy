@@ -20,10 +20,11 @@
   --gate-display: var(--human);
   /*
    * Amber as small text, such as the gate.requested label: --gate is a fill and
-   * a border and reads at 2.4:1 in light, so light mode gets an amber of its
-   * own at full chroma, 4.8:1. Dark mode's --gate serves.
+   * a border and reads at 2.4:1 in light, so light mode gets a deeper amber of
+   * its own, as saturated as sRGB allows at that lightness, 4.56:1. Dark mode's
+   * --gate serves.
    */
-  --gate-ink: oklch(0.55 0.15 60);
+  --gate-ink: oklch(0.56 0.12 72);
 }
 
 :root[data-theme="dark"]:has(.home-hero) {
