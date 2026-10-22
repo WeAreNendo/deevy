@@ -53,8 +53,9 @@ it runs the SPA and the API on one port, so there is no separate web container.
 It is built on Google's distroless Node base and carries nothing else: no shell, no package manager, no
 `apt`, no `curl`. There is no `docker exec ... sh` to be had, which is the point — anything that gets into
 the container finds no tools there. Work that needs a shell is done from a sidecar against the same volume,
-the way [Backup and restore](#backup-and-restore) does it. It runs as uid **65532**, so everything under
-`/data` has to belong to that user; see [The volume](#the-volume) and [Upgrading](#upgrading).
+the way [Backup and restore](#backup-and-restore) does it. It starts as root only long enough to make
+`/data` belong to uid **65532**, then runs as 65532 for good
+([ADR-0033](./adr/0033-the-image-makes-its-volume-its-own.md)); see [The volume](#the-volume).
 
 The image also carries its own healthcheck, so `docker ps` shows `healthy` and Compose's
 `depends_on: condition: service_healthy` works with nothing configured.
@@ -1965,17 +1966,30 @@ Everything is in one SQLite file under `/data`. Migrations are applied at startu
 volume upgrades itself. Mount a named volume or a host directory; do not mount the file itself, because SQLite
 writes `-wal` and `-shm` alongside it.
 
-deevy runs as uid 65532 and `/data` must belong to it. A **named volume created fresh** takes its ownership
-from the image and needs nothing. A **host directory** does not: `chown -R 65532:65532` it before the first
-start, or deevy will be able to read it and not write it. Nor will a volume something else wrote as root;
-give it to deevy once, with the container stopped:
+Neither needs anything done to it first. The image starts as root, and its entrypoint
+(`apps/server/src/entrypoint.ts`) gives `/data` to 65532 when it is not 65532's already, becomes 65532 for
+good, and only then loads the server — or whichever script `docker run` named, such as `dist/import.mjs`. A
+named volume created fresh is 65532's already, because the image's `/data` is. A host directory, whoever
+made it, and a volume a release before 0.8 wrote as root are given to 65532; so are the database and its
+`-wal`, `-shm` and `-journal` when another wrote them, which is what a restore from a root sidecar leaves.
 
-```bash
-docker run --rm -v deevy-data:/data alpine chown -R 65532:65532 /data
-```
+It always becomes 65532, never the directory's owner: a host directory is often its operator's, and a
+container escape as that user would own their home. What it gives is as narrow as it can make it
+(`apps/server/src/ownership.ts`): nothing else in the directory; each file opened without following a link
+and given through that descriptor, so it cannot be swapped between the check and the `chown`; nothing with a
+second name or on another device; nothing in a directory reached through a link; and nothing at all on the
+image's own file system, so neither the code nor Node can be handed to the process that runs them. The code
+itself is root's. Its log says what it gave and what it could not, as when root may not `chown` on an NFS
+export that squashes it, or the container lacks `CHOWN`, `SETUID` and `SETGID`, which Docker grants by
+default. Under rootless Docker or Podman, 65532 is a subordinate uid on the host, and a host directory ends
+up that uid's.
 
-deevy checks that it can write `/data` before it opens the database, and names that command when it cannot,
-rather than starting and failing at the first write.
+To keep it from starting as root at all, run it as the user it should be: `--user 65532:65532`, Compose's
+`user:`, Kubernetes' `runAsUser: 65532` (with `fsGroup: 65532` for the volume). The entrypoint then changes
+nothing, so `/data` has to be that user's already. deevy checks that it can write `/data` before it opens
+the database, and names the command that fixes it when it cannot, rather than starting and failing at the
+first write. The healthcheck and `docker exec` run as the image's user, root, either way: neither goes
+through the entrypoint.
 
 ## The schema, on either runtime
 
@@ -2087,17 +2101,16 @@ Restoring is the reverse, with the container stopped so nothing is mid-write:
 ```bash
 docker stop deevy
 docker run --rm -v deevy-data:/data -v "$PWD:/in" alpine \
-  sh -c 'rm -f /data/deevy.sqlite-wal /data/deevy.sqlite-shm && cp /in/deevy-2026-09-03.sqlite /data/deevy.sqlite \
-         && chown 65532:65532 /data/deevy.sqlite'
+  sh -c 'rm -f /data/deevy.sqlite-wal /data/deevy.sqlite-shm && cp /in/deevy-2026-09-03.sqlite /data/deevy.sqlite'
 docker start deevy
 ```
 
 Deleting the `-wal` and `-shm` files matters: leaving a stale write-ahead log next to a restored database
 gives SQLite two disagreeing versions of the truth.
 
-The `chown` matters for the same reason the one in [Upgrading](#upgrading) does: the sidecar writes as root
-and deevy runs as uid 65532. Without it deevy refuses to start and names the command, which is better than
-the alternative but still a restore that does not come back up.
+The sidecar writes the copy as root, and deevy gives it to 65532 when it starts ([The volume](#the-volume)).
+An instance run with `--user` gives nothing away, so its restore ends by handing the file to that user,
+`&& chown <uid>:<gid> /data/deevy.sqlite`, or deevy refuses to start and names that command.
 
 ## Health
 

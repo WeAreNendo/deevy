@@ -19,9 +19,10 @@ describe("node adapters", () => {
   });
 
   /**
-   * A database it can read and not write is the shape an upgrade leaves behind:
-   * the image runs as uid 65532 and every file an earlier release wrote belongs
-   * to root. SQLite does not fail a `journal_mode` it cannot honour — it stays
+   * A database it can read and not write is what a process started with
+   * `--user` finds on a volume somebody else wrote: the image's entrypoint
+   * gives /data away only when it starts as root (ADR-0033). SQLite does not
+   * fail a `journal_mode` it cannot honour — it stays
    * in `delete` and says nothing — so without this the server starts, answers
    * /healthz, reports healthy, and fails on the first write anybody attempts.
    *

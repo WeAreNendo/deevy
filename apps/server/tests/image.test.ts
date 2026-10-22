@@ -40,15 +40,29 @@ describe("the deevy image", () => {
     );
   });
 
-  it("says which user it runs as rather than inheriting one", async () => {
-    // The `:nonroot` tag already sets 65532, but a retag can drop it silently
-    // and nothing here would notice. Saying it makes the fact greppable too.
-    expect(await runtimeStage()).toMatch(/^USER 65532:65532$/m);
+  it("starts as root, saying so before WORKDIR makes /app", async () => {
+    // The `:nonroot` base sets 65532, and the image replaces it on purpose: the
+    // entrypoint needs root to give /data away, then drops it (ADR-0033). Said
+    // after WORKDIR, it would leave /app 65532's, and 65532 could swap the code.
+    const stage = await runtimeStage();
+    expect(stage).toMatch(/^USER 0:0$/m);
+    expect(stage.indexOf("\nUSER 0:0")).toBeLessThan(stage.indexOf("\nWORKDIR /app"));
   });
 
-  it("names the script and not the interpreter, because the entrypoint is node", async () => {
-    // The distroless entrypoint IS /nodejs/bin/node, so `CMD ["node", …]` runs
-    // `node node dist/index.mjs` and the container dies looking for /app/node.
+  it("runs everything through the entrypoint that gives up root", async () => {
+    // So `docker run … dist/import.mjs` drops as the server does. The
+    // interpreter is named in full, because /nodejs/bin is not on PATH.
+    const entrypoint = /^ENTRYPOINT (\[.*\])$/m.exec(await runtimeStage());
+    expect(entrypoint).not.toBeNull();
+    expect(JSON.parse(entrypoint![1]) as string[]).toEqual([
+      "/nodejs/bin/node",
+      "/app/dist/entrypoint.mjs",
+    ]);
+  });
+
+  it("names the script and not the interpreter, because the entrypoint runs it", async () => {
+    // The entrypoint imports the script it is handed once it is no longer
+    // root, so `CMD ["node", …]` would have it look for /app/node.
     const cmd = /^CMD (\[.*\])$/m.exec(await runtimeStage());
     expect(cmd).not.toBeNull();
     const argv = JSON.parse(cmd![1]) as string[];
@@ -66,16 +80,20 @@ describe("the deevy image", () => {
   });
 
   it("brings a /data the runtime user owns, because VOLUME alone would not", async () => {
-    // Docker creates a missing mount point as root, and the process is 65532:
-    // it could then neither create the database nor, more quietly, the -wal
-    // beside it (packages/adapters/src/node/db.ts).
+    // Docker creates a missing mount point as root. The entrypoint would give
+    // it away, but a fresh named volume copies this and so needs nothing given,
+    // and `--user 65532:65532` keeps working on one.
     expect(await runtimeStage()).toMatch(/^COPY --from=\S+ --chown=65532:65532 \S+ \/data$/m);
   });
 
-  it("hands everything it copies to that user", async () => {
-    for (const line of (await runtimeStage()).split("\n")) {
-      if (line.startsWith("COPY ")) expect(line).toContain("--chown=65532:65532");
-    }
+  it("gives the code to root, so the process cannot change what root runs next", async () => {
+    // The entrypoint runs as root at every start: whoever could rewrite
+    // /app/dist could rewrite it. Said outright, because `COPY --from` keeps
+    // the build stage's owner, vp's 1000, and leaving --chown out did not.
+    const copies = (await runtimeStage()).split("\n").filter((line) => line.startsWith("COPY "));
+    const code = copies.filter((line) => !line.endsWith(" /data"));
+    expect(code).toHaveLength(2);
+    for (const line of code) expect(line).toContain("--chown=0:0");
   });
 
   it("is the only place the healthcheck is defined", async () => {
@@ -89,26 +107,33 @@ describe("the deevy image", () => {
 });
 
 /**
- * The half of the change an operator feels. An image that runs as 65532 needs
- * files owned by 65532, and every existing instance has a volume full of files
- * written as root — so the upgrade note is not documentation of the change, it
- * is part of it.
+ * The half of the change an operator feels. The image used to need /data given
+ * to 65532 by hand — a host directory, a volume an earlier release wrote, a
+ * restore — and now gives it to itself, so the docs stop asking for it and say
+ * how to keep it from ever starting as root instead (ADR-0033).
  */
 describe("what the docs tell an operator about it", () => {
   it("no longer calls the runtime image node:24-slim", async () => {
     expect(await read("docs/OPERATIONS.md")).not.toContain("`node:24-slim`");
   });
 
-  it("gives an existing volume to the new user before the new image wants it", async () => {
-    expect(await read("docs/OPERATIONS.md")).toContain("chown -R 65532:65532 /data");
+  it("gives nobody a chown to run for the image to start, restore included", async () => {
+    // In a command, that is: the pages still say what one started with
+    // `--user` needs, in prose, because that is the one case it still holds.
+    for (const page of [
+      "docs/OPERATIONS.md",
+      "apps/docs/content/self-hosting/docker.md",
+      "apps/docs/content/self-hosting/backup-and-restore.md",
+    ]) {
+      const commands = (await read(page)).match(/```[\s\S]*?```/g) ?? [];
+      expect(commands.length, page).toBeGreaterThan(0);
+      for (const command of commands) expect(command, page).not.toContain("chown");
+    }
   });
 
-  it("gives a restored database to it too", async () => {
-    // The backup sidecar writes as root, so a restored file lands owned by 0:0
-    // and deevy cannot open it — the failure arrives at the worst moment there is.
-    const doc = await read("docs/OPERATIONS.md");
-    const restore = doc.slice(doc.indexOf("## Backup and restore"));
-    expect(restore).toContain("chown 65532:65532");
+  it("says how to run it without ever being root", async () => {
+    expect(await read("docs/OPERATIONS.md")).toContain("--user 65532:65532");
+    expect(await read("apps/docs/content/self-hosting/docker.md")).toContain("--user 65532:65532");
   });
 });
 

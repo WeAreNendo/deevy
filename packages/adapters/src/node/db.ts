@@ -114,7 +114,10 @@ function mustBeWritable(path: string): void {
 function notWritable(path: string, because: string): Error {
   const uid = process.getuid?.();
   // Named rather than described: the whole point is that the person reading
-  // this should not have to work out what to run (docs/OPERATIONS.md, Upgrading).
+  // this should not have to work out what to run (docs/OPERATIONS.md, The
+  // volume). In the image this is reached only by a process that was never
+  // root, or one whose entrypoint could not give the directory away as root —
+  // its log says which (ADR-0033) — so the command holds for both.
   const fix =
     uid === undefined
       ? `give ${dirname(path)} and anything already in it to the user deevy runs as`
