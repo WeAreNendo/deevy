@@ -1357,7 +1357,9 @@ export function waitingOnGatesQuery(
 }
 
 /**
- * Asks a Gate's approvers again when nobody has decided it.
+ * Asks a Gate's approvers again while it is undecided, the ones who have not
+ * ruled on it yet, and the Human behind a Run's question again while nobody
+ * has answered it.
  *
  * A Run waiting on a Human is not stale, so the stale sweep leaves it alone
  * for ever (docs/plans/m2.md). Left there it occupies the Agent's one open Run
@@ -1409,11 +1411,23 @@ export async function remindAboutGates({
     // index makes it a no-op and the unread flag is what asks them again. A
     // Slack room owed a message for that Event keeps the one it was owed, for
     // the same reason (docs/plans/m3.md, slice 2).
-    await deriveNotifications(db, event);
-    await db
-      .update(notificationTable)
-      .set({ readAt: null })
-      .where(eq(notificationTable.eventId, event.seq));
+    const { inbox } = await deriveNotifications(db, event);
+    // Only whoever the derivation asks now is asked again, not every row the
+    // Event ever had: on a Gate that wants two approvals the Human who gave
+    // the first has nothing left to do, and nor has somebody suspended, or no
+    // longer named on the Checkpoint, since the ask (notifications.ts).
+    const stillAsked = inbox.map((recipient) => recipient.memberId);
+    if (stillAsked.length > 0) {
+      await db
+        .update(notificationTable)
+        .set({ readAt: null })
+        .where(
+          and(
+            eq(notificationTable.eventId, event.seq),
+            inArray(notificationTable.recipientMemberId, stillAsked),
+          ),
+        );
+    }
     result.changed += 1;
   }
   return result;

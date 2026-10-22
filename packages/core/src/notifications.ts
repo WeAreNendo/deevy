@@ -27,9 +27,13 @@ import { newId } from "./ids.ts";
  * per Event, both of them the unique indexes' invariant rather than this
  * function's care (docs/plans/m3.md). The actor is never told about their own
  * action, and a suspended Member is told nothing at all.
+ *
+ * Answers the routing it derived, which is who this Event concerns as of now:
+ * the reminder asks again only them (work.ts).
  */
-export async function deriveNotifications(db: Db, event: Event): Promise<void> {
-  const { inbox, slack, dms, emails } = await routeEvent(db, event);
+export async function deriveNotifications(db: Db, event: Event): Promise<Routing> {
+  const routing = await routeEvent(db, event);
+  const { inbox, slack, dms, emails } = routing;
 
   if (inbox.length > 0) {
     // One row per recipient per kind per Event, which the unique index makes
@@ -86,6 +90,7 @@ export async function deriveNotifications(db: Db, event: Event): Promise<void> {
   if (owed.length > 0) {
     await db.insert(deliveryTable).values(owed).onConflictDoNothing();
   }
+  return routing;
 }
 
 export type Recipient = { memberId: string; kind: Notification["kind"] };
@@ -445,25 +450,34 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
 
 /**
  * Who is asked to rule on a Gate: the Humans the Checkpoint names, or every
- * active Human where it names nobody, less the one the policy excludes.
+ * active Human where it names nobody, less the one the policy excludes and
+ * whoever has already ruled on it.
  *
  * Read live rather than carried in the payload, so an approver named after the
  * ask is owed a row the next time the reminder re-derives this — which is what
- * the reminder is for (work.ts).
+ * the reminder is for (work.ts) — and somebody who has ruled, been suspended or
+ * stopped being named since is not asked again.
  */
 async function gateRecipients(db: Db, event: Event, requestId: string): Promise<Recipient[]> {
   const request = await db.query.gateRequest.findFirst({
     where: { id: requestId },
-    with: { run: true },
+    with: { run: true, decisions: { columns: { memberId: true } } },
   });
-  if (!request) return [];
+  // A Gate that is no longer open asks nobody anything.
+  if (!request || request.status !== "open") return [];
   const policy = await policyFor(db, request.projectId, request.checkpoint);
   const asked = await gateApprovers(db, event.workspaceId, policy);
   // Asking the Human this Run is for, at a Checkpoint that will refuse them,
   // is an inbox row about something they cannot do.
   const excluded = policy.excludeRequester ? await requesterFor(db, request.run) : null;
+  // And so is asking somebody who has already ruled: on a Gate that wants two
+  // approvals, the first one in has nothing left to give.
+  const ruled = new Set(request.decisions.map((row) => row.memberId));
   return asked
-    .filter((memberId) => memberId !== excluded && memberId !== event.actorMemberId)
+    .filter(
+      (memberId) =>
+        memberId !== excluded && memberId !== event.actorMemberId && !ruled.has(memberId),
+    )
     .map((memberId) => ({ memberId, kind: "gate_awaiting" as const }));
 }
 
