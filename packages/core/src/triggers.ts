@@ -40,6 +40,10 @@ export async function triggersFor(db: Db, event: Event): Promise<EventInput[]> {
     const mentioned = Array.isArray(payload.mentionedMemberIds)
       ? payload.mentionedMemberIds.filter((id): id is string => typeof id === "string")
       : [];
+    // A Project can say a mention hands nobody work (`routing.mention`). The
+    // comment still tells whoever it names (notifications.ts), and a label,
+    // an assignment or the Project's default still routes the record.
+    if (mentioned.length === 0 || !(await mentionsRoute(db, event.projectId))) return [];
     return startRuns(db, event, mentioned, "mention");
   }
 
@@ -158,6 +162,16 @@ async function startRuns(
     if (started) events.push(runStartedEvent(started, event.projectId));
   }
   return events;
+}
+
+/** Whether a mention starts work in this Project, which it does unless the Project turned it off. */
+async function mentionsRoute(db: Db, projectId: string | null): Promise<boolean> {
+  if (!projectId) return false;
+  const project = await db.query.project.findFirst({
+    where: { id: projectId },
+    columns: { routing: true },
+  });
+  return project?.routing.mention !== false;
 }
 
 /** Of the Members named, those that are Agents at all, suspended or not. */

@@ -19,6 +19,8 @@ const calls = vi.hoisted(() => ({
 const state = vi.hoisted(() => ({
   checkpoints: [] as unknown[],
   refuse: null as string | null,
+  /** The routing somebody else saved, which the Project read back then says. */
+  routing: null as { labelPrefix: string; mention: boolean } | null,
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -31,7 +33,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const client = stubClient({
     projects: {
       list: async () => ({ projects: [project] }),
-      get: async () => project,
+      get: async () => (state.routing ? { ...project, routing: state.routing } : project),
       update: async (input: Record<string, unknown>) => {
         void calls.update(input);
         return { ...project, ...input };
@@ -173,6 +175,54 @@ describe("what a Project is bound to", () => {
 
     await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
     expect(calls.update.mock.calls[0]?.[0]).toMatchObject({ mirror: "off" });
+  });
+
+  it("says whether a mention hands a record over, and keeps the label just typed", async () => {
+    state.checkpoints = [];
+    calls.update.mockClear();
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const binding = await screen.findByRole("region", { name: "Binding" });
+    const mentions = within(binding).getByRole("switch", { name: "Route by mention" });
+    expect(mentions.getAttribute("aria-checked")).toBe("true");
+    // The example is the tracker's own way of naming deevy.
+    expect(within(binding).getByText("@deevy planner")).toBeTruthy();
+
+    // Leaving the field for the switch saves the field first, and the switch
+    // must not put back the label the Project said before it.
+    const label = within(binding).getByLabelText("Routing label");
+    fireEvent.change(label, { target: { value: "for:" } });
+    fireEvent.blur(label);
+    fireEvent.click(mentions);
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(2));
+    expect(calls.update.mock.calls[1]?.[0]).toMatchObject({
+      slug: "acme-deevy",
+      routing: { labelPrefix: "for:", mention: false },
+    });
+  });
+
+  it("never puts back a routing label somebody else saved since", async () => {
+    state.checkpoints = [];
+    calls.update.mockClear();
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const binding = await screen.findByRole("region", { name: "Binding" });
+    const label = within(binding).getByLabelText<HTMLInputElement>("Routing label");
+    expect(label.value).toBe("agent:");
+
+    // Another tab, or the CLI, saves `for:`; this screen reads it back after
+    // its own next change, here the Mirror.
+    state.routing = { labelPrefix: "for:", mention: true };
+    await pickOption(within(binding).getByRole("combobox", { name: "Mirror" }), "Runs as well");
+    await waitFor(() => expect(label.value).toBe("for:"));
+
+    fireEvent.click(within(binding).getByRole("switch", { name: "Route by mention" }));
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(2));
+    expect(calls.update.mock.calls[1]?.[0]).toMatchObject({
+      routing: { labelPrefix: "for:", mention: false },
+    });
+    state.routing = null;
   });
 });
 

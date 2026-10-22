@@ -276,6 +276,42 @@ describe("a comment arriving from a tracker", () => {
     expect((await asPlanner.runs.list({})).runs).toHaveLength(1);
   });
 
+  /**
+   * A Project can route by label alone (`routing.mention`): a comment there is
+   * a conversation, and naming an Agent in one hands it nothing.
+   */
+  it("starts no work for an Agent it mentions in a Project that turned mentions off", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { apply, asAda, asPlanner, planner, seeded } = await workspace(db);
+    await asAda.projects.update({
+      slug: seeded.project.slug,
+      routing: { labelPrefix: "agent:", mention: false },
+    });
+    await apply([record({ externalId: "42", title: "Checkout rewrite" })]);
+
+    await apply([
+      comment("@deevy planner take this one, or you @planner", {
+        login: "ada-on-github",
+        id: "gh-1",
+        isBot: false,
+      }),
+    ]);
+
+    expect((await asPlanner.runs.list({})).runs).toEqual([]);
+    // Still a mention, and still recorded as one: whoever it named hears of it.
+    const { events } = await asAda.events.list({ kindPrefix: "comment" });
+    expect(events.map((event) => event.payload)).toMatchObject([
+      { mentionedMemberIds: [planner.member.id] },
+    ]);
+
+    // A label still hands a record over.
+    await apply([record({ externalId: "43", title: "Refunds", labels: ["agent:planner"] })]);
+    const runs = await asPlanner.runs.list({});
+    expect(runs.runs).toHaveLength(1);
+    expect(runs.runs[0]?.trigger).toBe("assignment");
+  });
+
   it("says nothing about a record it has never seen", async () => {
     const { db, close } = testDb();
     closers.push(close);

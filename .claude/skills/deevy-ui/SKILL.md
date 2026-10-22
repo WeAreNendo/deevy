@@ -361,8 +361,9 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   the tool itself offers, and a name — never a field somebody types, because a typo there is a Project bound
   to nothing — and, for a tool that holds code, binds the same container as its code unless **Its code is
   here too** is unticked. Its `region "Binding"` states the tracker and will not move it, and sets the Default
-  Agent (which grants that Agent the Project), the routing label, the Mirror, the **Repository** and **Base
-  branch** its code is in, and **Documents** — where its plans live, for an Agent's `docs_get`. `region
+  Agent (which grants that Agent the Project), the routing label, whether a mention routes (**Route by
+  mention**), the Mirror, the **Repository** and **Base branch** its code is in, and **Documents** — where
+  its plans live, for an Agent's `docs_get`. `region
 "Checkpoints"` is the policy (`checkpoint-policy.tsx`).
 - **What a Run spent is always somebody else's word** (docs/plans/run-usage.md). A Run's rail has
   `region "Usage"` — the harness's estimate said as one ("≈ $2.89, estimated by Claude Code"), "Cost not
@@ -446,8 +447,8 @@ webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox
 "Container"`, `checkbox "Its code is here too…"`, `Name`, `Bind it`; `region "Binding"` with `combobox
-"Default Agent"`, `Routing label`, `combobox "Mirror"`, `combobox "Repository"`, `Base branch`, `combobox
-"Documents"`; `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
+"Default Agent"`, `Routing label`, `switch "Route by mention"`, `combobox "Mirror"`, `combobox
+"Repository"`, `Base branch`, `combobox "Documents"`; `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
   `Approvals`, `checkbox "Not the Human the work is for"`, who may rule, `Save policy`.
 - **Identities.** `heading "Identities"`, `table "Identities"`, `Unlink @<login>`, `Link @<login> again`;
   `Code from Slack`, `Check the code`, `Link @<login> to me`; `region "Link an account"` with `Link

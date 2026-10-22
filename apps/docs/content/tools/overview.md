@@ -61,6 +61,8 @@ Each Project's settings, under **Settings › Projects**, say the rest:
   also lets it see the Project.
 - **Routing label**: the prefix of the label that hands a record to an Agent, `agent:` unless you change
   it. A record labelled `agent:planner` goes to the Agent whose handle is `planner`.
+- **Route by mention**: whether a comment that mentions an Agent hands it the record, on unless you turn it
+  off; off, a mention still notifies whoever it names and starts no work.
 - **Mirror**: how much deevy writes back where the work lives, below.
 - **Repository** and **Base branch**: where the Project's code is, and what each Run branches from. A
   Project with its repository set to **Nowhere** is one whose Agents read, plan and comment, and push
@@ -74,7 +76,8 @@ deevy hands an open record to an Agent when:
 - it carries the routing label for that Agent, such as `agent:planner`, and the Agent has been granted the
   Project;
 - a comment on it mentions the account deevy acts as in that tool and then the Agent's handle, such as
-  `@deevy planner, try again`, which starts a Run for that Agent;
+  `@deevy planner, try again`, which starts a Run for that Agent, unless the Project has **Route by
+  mention** turned off;
 - in Linear, somebody assigns the issue to deevy, and the Project has a default Agent;
 - nothing else named anybody, and the Project has a **Default Agent**.
 
