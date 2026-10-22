@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { invitation as invitationTable, user, type Db } from "@deevy/db";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { joinWorkspace, type Session } from "../src/auth.ts";
+import { appendEvent } from "../src/events.ts";
 import { newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
 import type { AppContext } from "../src/operations/registry.ts";
@@ -448,5 +449,57 @@ describe("who may read an invitation Event", () => {
 
     const asAdmin = await client.events.list({});
     expect(asAdmin.events.map((row) => row.kind)).toContain("invitation.created");
+  });
+
+  /**
+   * The stream is the same log by another transport, and `after: 0` replays
+   * all of it, so it keeps the same rule; `deevy events watch` reads it.
+   */
+  it("keeps the address out of a Member's stream of the log, and in an admin's", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client } = await workspaceWithAdmin(db);
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    const joined = await appendEvent(bob, {
+      kind: "member.joined",
+      subjectType: "member",
+      subjectId: bob.member.id,
+    });
+    await client.invitations.create({ email: "grace@example.com", role: "admin" });
+
+    // Each stream ends of its own accord, so what it sent is all it will send.
+    const live = { pollMs: 50, maxDurationMs: 300 };
+    async function streamed(context: AppContext) {
+      const stream = await createRouterClient(router, {
+        context: { ...context, live },
+      }).events.subscribe({ after: 0 });
+      const kinds: string[] = [];
+      let cursor: number | null = null;
+      for await (const message of stream) {
+        if (message.type === "event") kinds.push(message.event.kind);
+        else cursor = message.cursor;
+      }
+      return { kinds, cursor };
+    }
+
+    expect(await streamed(bob)).toEqual({ kinds: ["member.joined"], cursor: joined.seq });
+    expect(await streamed(admin)).toMatchObject({
+      kinds: ["member.joined", "invitation.created"],
+    });
+
+    // Without a cursor the stream starts from the newest Event this Member may
+    // read, which is not the invitation.
+    const controller = new AbortController();
+    const fromNow = await createRouterClient(router, { context: bob }).events.subscribe(
+      {},
+      { signal: controller.signal },
+    );
+    let opening: unknown;
+    for await (const message of fromNow) {
+      opening = message;
+      break;
+    }
+    controller.abort();
+    expect(opening).toEqual({ type: "heartbeat", cursor: joined.seq });
   });
 });

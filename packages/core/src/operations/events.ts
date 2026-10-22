@@ -126,6 +126,9 @@ export const events = {
         db: context.db,
         workspaceId: context.workspace.id,
         projectId: input.projectId,
+        // The rule `events.list` keeps, for the same reason: this is the same
+        // log, and `after: 0` would otherwise replay every invitation.
+        hideInvitations: context.member.role !== "admin",
         after: input.after,
         signal,
         // Whatever this runtime allows a stream. Absent on Node, where the
