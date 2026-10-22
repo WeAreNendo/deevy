@@ -65,3 +65,12 @@ highlighter, which coloured numbers in `--human`, moves them to green so they st
   `docs:built` launch configuration serves the built site to check a design change against what ships.
 - **The sign-in page's legend said "Round, in sky blue"** and the Member chip's comment the same; both say
   indigo. "Sky" stays as one of the Label palette's eight swatches, which is not the Human colour.
+
+## The docs landing
+
+On 2026-10-22 docs.deevy.dev's landing became the "Wired" direction, picked by Matt from six motion-led
+proposals: the hero is one Issue's way through deevy as a node graph (the tracker, deevy, the Agent, its
+Checkpoint, the Gate, the three places a Human can rule, the way back), drawn at build time and animated by
+a plain script, since the site loads nothing from another origin. Matt asked for a common, bold face for it,
+so the landing's hero and section titles are Geist and Geist Mono, self-hosted through @fontsource like the
+others; every other page keeps Outfit, Inter and JetBrains Mono, and so does the app.

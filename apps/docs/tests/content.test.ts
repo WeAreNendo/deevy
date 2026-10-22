@@ -54,3 +54,34 @@ describe("the site's pages", () => {
     expect(prose(text)).not.toMatch(/\b(tenant|tenants|multi-tenant)\b/i);
   });
 });
+
+// The landing's sections are components (src/components/home), whose links the
+// links validator in astro.config.ts cannot see and whose copy the tests above
+// do not read; these hold them to the same rules.
+const componentsDir = fileURLToPath(new URL("../src/components", import.meta.url));
+const components = readdirSync(componentsDir, { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile() && /\.(astro|ts)$/.test(entry.name))
+  .map((entry) => {
+    const path = join(entry.parentPath, entry.name);
+    return { name: relative(componentsDir, path), text: readFileSync(path, "utf8") };
+  });
+
+/** The page a site-relative link lands on, as a file in content/, or null. */
+function pageFor(href: string): string | null {
+  const path = href.replace(/#.*$/, "").replace(/^\/|\/$/g, "");
+  const candidates = path
+    ? [`${path}.md`, `${path}.mdx`, `${path}/index.md`, `${path}/index.mdx`]
+    : ["index.mdx", "index.md"];
+  return candidates.find((candidate) => pages.some(({ name }) => name === candidate)) ?? null;
+}
+
+describe("the landing's components", () => {
+  test.each(components)("$name links only to pages that exist", ({ text }) => {
+    const links = [...text.matchAll(/href="(\/[^"]*)"/g)].map((match) => match[1]!);
+    for (const href of links) expect(pageFor(href), href).not.toBeNull();
+  });
+
+  test.each(components)("$name uses deevy's words, not the ones CONTEXT.md avoids", ({ text }) => {
+    expect(text).not.toMatch(/\b(tenant|tenants|multi-tenant)\b/i);
+  });
+});

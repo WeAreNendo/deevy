@@ -1,0 +1,157 @@
+---
+/*
+ * The landing's hand-off to a coding agent: deevy never runs an Agent (ADR-0003),
+ * so the reference runtime is set up by whoever runs it, and the agent they
+ * already use can read the guide and do it. Its border turns once through the
+ * four colours of the graph above, and again while it is hovered.
+ */
+// The Agent's key stays out of the coding agent's reach, as the runtime's page says it must.
+const prompt =
+  "Read https://docs.deevy.dev/agents/reference-runtime/, then help me run deevy's agent runtime with Claude Code against our Workspace. I'll put the Agent's key and the Anthropic key in its environment myself; don't ask me for either.";
+---
+
+<section class="prompt not-content" aria-labelledby="hand-off">
+  <div>
+    <span class="kicker">deevy never runs an Agent</span>
+    <h2 id="hand-off">Hand the setup to the agent you already use</h2>
+    <p>
+      The reference runtime works each Run with Claude Code, OpenCode, Cursor or Copilot. Give your
+      coding agent this prompt, or follow the guide yourself.
+    </p>
+  </div>
+  <div class="glow">
+    <div class="inner">
+      <span class="kicker">Prompt · for your coding agent</span>
+      <p class="say" id="agent-prompt">{prompt}</p>
+      <div class="row">
+        <button type="button" data-copy={prompt} data-copy-target="agent-prompt" hidden>Copy prompt</button>
+        <a href="/agents/reference-runtime/">Read the guide</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import "./copy.ts";
+</script>
+
+<style>
+  .prompt {
+    margin-top: clamp(3rem, 8vw, 6rem);
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: center;
+    font-family: var(--home-face);
+  }
+  .kicker {
+    font-family: var(--home-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  h2 {
+    margin: 0.75rem 0 0;
+    font-family: inherit;
+    font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    color: var(--foreground);
+    text-wrap: balance;
+  }
+  p {
+    margin: 1rem 0 0;
+    color: var(--muted-foreground);
+    font-size: 1.0625rem;
+  }
+  @property --turn {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+  .glow {
+    position: relative;
+    isolation: isolate;
+    padding: 1.5px;
+    border-radius: 14px;
+    background: conic-gradient(
+      from var(--turn),
+      var(--human),
+      var(--agent),
+      var(--gate),
+      var(--state-done),
+      var(--human)
+    );
+    animation: turn 4.5s linear 1;
+  }
+  .glow:hover {
+    animation-iteration-count: infinite;
+  }
+  .glow::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    z-index: -1;
+    border-radius: 14px;
+    background: inherit;
+    filter: blur(22px);
+    opacity: 0.35;
+  }
+  @keyframes turn {
+    to {
+      --turn: 360deg;
+    }
+  }
+  .inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    padding: 1.25rem;
+    border-radius: 13px;
+    background: var(--card);
+  }
+  .say {
+    margin: 0;
+    color: var(--foreground);
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    font-size: 0.9375rem;
+  }
+  .row a {
+    color: var(--link);
+    text-underline-offset: 0.25em;
+  }
+  button {
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+    color: var(--foreground);
+    font: inherit;
+    font-family: var(--home-mono);
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+  button:hover {
+    border-color: var(--ring);
+  }
+  @media (max-width: 50rem) {
+    .prompt {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glow {
+      animation: none;
+    }
+  }
+</style>

@@ -1,0 +1,193 @@
+---
+import { LinkButton } from "@astrojs/starlight/components";
+
+/*
+ * The landing's two doors (docs/plans/docs.md): deevy Cloud for a team that
+ * runs nothing, the Docker image for whoever hosts it. The command is the one
+ * on Self-hosting › Docker.
+ */
+const command =
+  "docker run -d --name deevy --restart unless-stopped -p 3000:3000 -v deevy-data:/data --env-file deevy.env ghcr.io/wearenendo/deevy:latest";
+---
+
+<section class="paths not-content" aria-labelledby="two-ways">
+  <h2 id="two-ways">Two ways to run it</h2>
+  <div class="grid">
+    <div class="path cloud">
+      <span class="kicker">deevy Cloud</span>
+      <h3>Nothing to run</h3>
+      <p>
+        A Workspace of your own at app.deevy.dev, with nothing to install and nothing to upgrade.
+        Your data stays in the EU, and you can take it home whenever you like.
+      </p>
+      <div class="links">
+        <LinkButton href="/get-started/ask-for-a-workspace/" icon="right-arrow">Start on deevy Cloud</LinkButton>
+        <a href="/cloud/where-your-data-lives/">Where your data lives</a>
+      </div>
+    </div>
+    <div class="path self">
+      <span class="kicker">Self-hosted · AGPL-3.0</span>
+      <h3>One image, one volume</h3>
+      <p>
+        The same deevy on infrastructure you choose: the Docker image and a volume, or a Cloudflare
+        Worker.
+      </p>
+      <div class="cmd">
+        <span class="dollar" aria-hidden="true">$</span><code id="docker-command">{command}</code><button
+          type="button"
+          data-copy={command}
+          data-copy-target="docker-command"
+          aria-label="Copy the docker run command"
+          hidden>Copy</button
+        >
+      </div>
+      <p class="note">
+        It reads its settings from <code>deevy.env</code>:
+        <a href="/self-hosting/docker/">Run the Docker image</a> says what goes in it.
+      </p>
+      <div class="links">
+        <a href="/self-hosting/overview/">Hosting deevy yourself</a>
+        <a href="/self-hosting/cloudflare-workers/">On a Cloudflare Worker</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import "./copy.ts";
+</script>
+
+<style>
+  .paths {
+    margin-top: clamp(3rem, 8vw, 6rem);
+    font-family: var(--home-face);
+  }
+  h2 {
+    margin: 0;
+    font-family: inherit;
+    font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--foreground);
+  }
+  .grid {
+    margin-top: 1.75rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  .path {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    min-width: 0;
+    padding: 1.75rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--card);
+    overflow: clip;
+  }
+  .path::before {
+    content: "";
+    position: absolute;
+    inset: auto -30% -60% auto;
+    width: 70%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--human) 18%, transparent);
+    filter: blur(50px);
+    pointer-events: none;
+  }
+  .self::before {
+    background: color-mix(in oklab, var(--agent) 16%, transparent);
+  }
+  .path > * {
+    position: relative;
+  }
+  .kicker {
+    font-family: var(--home-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  h3 {
+    margin: 0;
+    font-family: inherit;
+    font-size: 1.625rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--foreground);
+  }
+  p {
+    margin: 0;
+    color: var(--muted-foreground);
+  }
+  .links {
+    margin-top: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    font-size: 0.9375rem;
+  }
+  .links :global(.sl-link-button) {
+    margin: 0;
+  }
+  .note {
+    font-size: 0.875rem;
+  }
+  .note code {
+    font-family: var(--home-mono);
+    font-size: 0.8125rem;
+    color: var(--foreground);
+  }
+  .note a,
+  .links a {
+    color: var(--link);
+    text-underline-offset: 0.25em;
+  }
+  .cmd {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+    padding: 0.5rem 0.5rem 0.5rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--background);
+    font-family: var(--home-mono);
+    font-size: 0.8125rem;
+  }
+  .cmd code {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    font-family: inherit;
+  }
+  .dollar {
+    color: var(--muted-foreground);
+  }
+  button {
+    min-height: 2rem;
+    padding: 0 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  button:hover {
+    color: var(--foreground);
+  }
+  @media (max-width: 50rem) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

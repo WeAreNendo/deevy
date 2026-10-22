@@ -1,0 +1,13 @@
+---
+/*
+ * Starlight's Hero everywhere but the landing (the 404 page has a `hero` too).
+ * The landing draws its own, home/HomeHero.astro, from content/index.mdx, so
+ * that its styles, script and typefaces load on that page alone.
+ */
+import Default from "@astrojs/starlight/components/Hero.astro";
+
+// Starlight gives the landing (index.mdx) the empty id.
+const landing = Astro.locals.starlightRoute.id === "";
+---
+
+{!landing && <Default />}

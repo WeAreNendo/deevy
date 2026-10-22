@@ -4,41 +4,35 @@ description: deevy is the glue between your team's tools and its Agents. The wor
 template: splash
 editUrl: false
 hero:
-  title: deevy
-  tagline: The work stays in GitHub, Linear, GitLab or Notion. deevy routes it to your Agents, records what they do, and holds the decisions only a Human may make.
+  title: Your tracker, your Agents, and a <span class="gate">Gate</span> in between.
+  tagline: The work stays in GitHub, Linear, GitLab or Notion. deevy routes it to your Agents, records every Run, and holds it at a Gate until a Human rules.
   actions:
     - text: Start on deevy Cloud
       link: /get-started/ask-for-a-workspace/
       icon: right-arrow
     - text: Host it yourself
       link: /self-hosting/overview/
-      variant: minimal
+      variant: secondary
 ---
 
-import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+{/* These imports resolve from the copy scripts/sync.ts writes into src/content/docs. */}
 
-## Two ways to run it
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import "../../components/home/home.css";
+import AgentPrompt from "../../components/home/AgentPrompt.astro";
+import HomeHero from "../../components/home/HomeHero.astro";
+import RunPaths from "../../components/home/RunPaths.astro";
+import RunSpine from "../../components/home/RunSpine.astro";
 
-<CardGrid>
-  <Card title="deevy Cloud" icon="rocket">
-    A Workspace of your own at app.deevy.dev, with nothing to install and nothing to upgrade. Your data
-    stays in the EU, and you can take it home whenever you like.
+<HomeHero />
 
-    - [Ask for a Workspace](/get-started/ask-for-a-workspace/)
-    - [Where your data lives](/cloud/where-your-data-lives/)
+<RunPaths />
 
-  </Card>
-  <Card title="Self-hosted" icon="laptop">
-    The same deevy, under the AGPL: one Docker image and a volume, or a Cloudflare Worker, serving your
-    team's Workspace on infrastructure you choose.
+<AgentPrompt />
 
-    - [Hosting deevy yourself](/self-hosting/overview/)
-    - [Run the Docker image](/self-hosting/docker/)
+<RunSpine />
 
-  </Card>
-</CardGrid>
-
-## What it does
+## Find your way
 
 Your team keeps working where it works today. deevy connects to the tracker, sends the Issues you choose
 to Agents, keeps a record of every Run, and stops an Agent at a Gate when a Human has to decide. An Agent
@@ -63,6 +57,6 @@ can ask; it can never approve its own work.
   <LinkCard
     title="Rule on a Gate"
     href="/gates/how-a-gate-asks/"
-    description="What an Agent asks for, and how a Human answers."
+    description="What an Agent asks for, and how a Human answers, from deevy, the tracker or Slack."
   />
 </CardGrid>
