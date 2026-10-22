@@ -12,11 +12,24 @@
   --home-face: "Geist Variable", var(--face-sans);
   --home-mono: "Geist Mono Variable", var(--face-mono);
   /*
-   * Amber as text: --gate is a fill and a border, and in light it reads at 2.4:1
-   * on the page; mixed toward the ink it clears 4.5:1 in light and stays light
-   * in dark.
+   * The hero's "Gate". In dark it is the Gate's own amber (10:1); in light no
+   * amber reads well enough without turning brown or orange, so it takes the
+   * logo's indigo, the Human half: a Gate is where a Human decides (Matt,
+   * 2026-10-22). --human is indigo as text, 5.6:1 on the light page.
    */
-  --gate-ink: color-mix(in oklab, var(--gate) 60%, var(--foreground));
+  --gate-display: var(--human);
+  /*
+   * Amber as small text, such as the gate.requested label: --gate is a fill and
+   * a border and reads at 2.4:1 in light, so light mode gets a deeper amber of
+   * its own, as saturated as sRGB allows at that lightness, 4.56:1. Dark mode's
+   * --gate serves.
+   */
+  --gate-ink: oklch(0.56 0.12 72);
+}
+
+:root[data-theme="dark"]:has(.home-hero) {
+  --gate-display: var(--gate);
+  --gate-ink: var(--gate);
 }
 
 :root:has(.home-hero) .sl-markdown-content > .sl-heading-wrapper.level-h2 {
