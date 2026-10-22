@@ -30,6 +30,8 @@ export interface DeliverOptions {
    * nothing regresses (docs/plans/agent-owns-git.md).
    */
   summary?: string;
+  /** Stops the git this runs: a push that hangs holds up whoever waits on it. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -71,8 +73,10 @@ export function titleFor(issueKey: string, summary?: string): string {
  * pull request is a worse record than none.
  */
 export async function deliver(options: DeliverOptions): Promise<Delivery | null> {
-  const { workspace, branch } = options;
-  const dirty = await workspace.git(["status", "--porcelain"]);
+  const { branch } = options;
+  const git = (args: string[]) =>
+    options.workspace.git(args, options.signal ? { signal: options.signal } : {});
+  const dirty = await git(["status", "--porcelain"]);
   if (dirty === "") return null;
 
   // A Run that stopped at a Gate and was resumed delivers twice, from a fresh
@@ -80,15 +84,15 @@ export async function deliver(options: DeliverOptions): Promise<Delivery | null>
   // remote's own branch is not part of, which git rejects and which loses the
   // second pass's work; continuing the branch keeps both passes on it
   // (docs/plans/agent-owns-git.md).
-  const already = await workspace.git(["ls-remote", "--heads", "origin", branch]).catch(() => "");
+  const already = await git(["ls-remote", "--heads", "origin", branch]).catch(() => "");
   if (already.trim() === "") {
-    await workspace.git(["checkout", "-b", branch]);
+    await git(["checkout", "-b", branch]);
   } else {
-    await workspace.git(["fetch", "--quiet", "origin", branch]);
-    await workspace.git(["checkout", "--quiet", "-B", branch, "FETCH_HEAD"]);
+    await git(["fetch", "--quiet", "origin", branch]);
+    await git(["checkout", "--quiet", "-B", branch, "FETCH_HEAD"]);
   }
-  await workspace.git(["add", "-A"]);
-  await workspace.git([
+  await git(["add", "-A"]);
+  await git([
     "-c",
     `user.name=${options.author.name}`,
     "-c",
@@ -98,8 +102,8 @@ export async function deliver(options: DeliverOptions): Promise<Delivery | null>
     "-m",
     titleFor(options.issueKey, options.summary),
   ]);
-  const commit = await workspace.git(["rev-parse", "HEAD"]);
-  await workspace.git(["push", "--quiet", "origin", branch]);
+  const commit = await git(["rev-parse", "HEAD"]);
+  await git(["push", "--quiet", "origin", branch]);
 
   return { branch, commit, pullRequest: await openPull(options, branch) };
 }

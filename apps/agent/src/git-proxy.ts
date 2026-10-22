@@ -24,6 +24,14 @@ export interface GitProxyOptions {
   token?: string;
   /** The user the token goes with, as the provider that minted it named it. */
   username?: string;
+  /**
+   * Called once each push has been answered, and awaited before the pusher
+   * hears the last of it, so whatever it records is recorded before `git push`
+   * returns — while the Run it belongs to can still take an Activity. Which
+   * refs moved is the remote's to say (src/refs.ts), so this says only that a
+   * push happened.
+   */
+  onPushed?: () => void | Promise<void>;
 }
 
 export interface GitProxy {
@@ -51,6 +59,15 @@ export function openGitProxy(options: GitProxyOptions): Promise<GitProxy> {
     await (remoteUpstream(options.upstream)
       ? forward(options, path, query, request, body, response)
       : serveLocally(options.upstream, path, query, request, body, response));
+    // Whatever the remote made of it: a refused ref is still a 200 from
+    // receive-pack, and the refs are what say what happened. The push happened
+    // whatever the record of it did, so a hook that fails ends nothing here.
+    if (request.method === "POST" && path.endsWith("/git-receive-pack")) {
+      await Promise.resolve()
+        .then(() => options.onPushed?.())
+        .catch(() => undefined);
+    }
+    response.end();
   }
 
   const server = createServer((request, response) => {
@@ -96,7 +113,7 @@ const forwardedRequestHeaders = [
  *
  * Bytes in and bytes out: git's own protocol, unread. What the session pushed
  * is established afterwards by comparing the remote's refs (src/refs.ts), which
- * is why nothing here parses a packfile.
+ * is why nothing here parses a packfile. The caller ends the response.
  */
 async function forward(
   options: GitProxyOptions,
@@ -133,12 +150,8 @@ async function forward(
   // The forge's own words on a refusal, whatever they were: "the remote said
   // no" with no reason is the worst thing a session can be told.
   response.writeHead(answered.status, out);
-  if (!answered.body) {
-    response.end();
-    return;
-  }
+  if (!answered.body) return;
   for await (const chunk of answered.body) response.write(chunk);
-  response.end();
 }
 
 /** What the repository is called, which is the one path segment the proxy serves. */
@@ -208,7 +221,8 @@ async function serveLocally(
 
 /**
  * A CGI answer as an HTTP one: headers, then the body streamed rather than
- * held, because a clone's packfile is as big as the repository.
+ * held, because a clone's packfile is as big as the repository. The caller
+ * ends the response.
  */
 function relayCgi(backend: ChildProcess, response: ServerResponse): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -244,8 +258,7 @@ function relayCgi(backend: ChildProcess, response: ServerResponse): Promise<void
     stdout.on("end", () => {
       if (settled) return;
       settled = true;
-      if (!sending) response.writeHead(500, { "content-type": "text/plain" }).end("no answer");
-      response.end();
+      if (!sending) response.writeHead(500, { "content-type": "text/plain" }).write("no answer");
       resolve();
     });
     stdout.on("error", reject);

@@ -19,7 +19,7 @@ import type { Db, Member, Workspace } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import type { Config } from "../src/config.ts";
 import { createDeevy } from "../src/deevy.ts";
-import { openProxy, type Proxy } from "../src/proxy.ts";
+import { openProxy, type Proxy, type ProxyOptions } from "../src/proxy.ts";
 import type { Session, SessionEvent, SessionInput } from "../src/session.ts";
 import { deevyToolNames } from "../src/tools.ts";
 import { newId } from "@deevy/core";
@@ -147,7 +147,7 @@ export async function instance({ repo }: InstanceOptions = {}) {
      * the Agent's key (src/proxy.ts). A test that wants a different key or a
      * shorter tool list calls `openProxy` itself with `inProcess`.
      */
-    proxy: (options: { onDenied?: (name: string) => void | Promise<void> } = {}): Promise<Proxy> =>
+    proxy: (options: Pick<ProxyOptions, "onDenied" | "onCall"> = {}): Promise<Proxy> =>
       openProxy({
         url: baseURL,
         key: issued.key,

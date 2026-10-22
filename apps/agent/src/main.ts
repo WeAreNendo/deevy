@@ -120,8 +120,10 @@ const work = {
   // What a Run's usage says counted it.
   harness: harness.name,
   // The key and the tool list stay here; the session gets a loopback URL.
-  proxy: (options: { onDenied: (name: string) => Promise<void> }) =>
-    openProxy({ url: config.url, key: config.key, tools: deevyToolNames, ...options }),
+  proxy: (options: {
+    onDenied: (name: string) => Promise<void>;
+    onCall: (name: string, args: Record<string, unknown>) => Promise<void>;
+  }) => openProxy({ url: config.url, key: config.key, tools: deevyToolNames, ...options }),
   runTimeoutMs: config.runTimeoutSeconds * 1000,
   checkout: async (run: Run) => (await deevy.checkout(run.id)) ?? override(run),
   workspace: (options: {

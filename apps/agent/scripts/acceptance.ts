@@ -485,13 +485,23 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     harness: "claude-code",
     // Every push in this walk goes through the supervisor's git proxy, which is
     // how the session reaches a remote at all (docs/plans/agent-owns-git.md).
-    gitProxy: async (checkout: { cloneUrl: string; token: string }) => {
-      const proxy = await openGitProxy({ upstream: checkout.cloneUrl, token: checkout.token });
+    // It says each push in the Run's feed as it carries it.
+    gitProxy: async (
+      checkout: { cloneUrl: string; token: string },
+      hooks: { onPushed: () => Promise<void> },
+    ) => {
+      const proxy = await openGitProxy({
+        upstream: checkout.cloneUrl,
+        token: checkout.token,
+        ...hooks,
+      });
       proxies.push(() => proxy.close());
       return proxy;
     },
-    proxy: (options: { onDenied: (name: string) => Promise<void> }) =>
-      openProxy({ url: origin, key, tools: deevyToolNames, ...options }),
+    proxy: (options: {
+      onDenied: (name: string) => Promise<void>;
+      onCall: (name: string, args: Record<string, unknown>) => Promise<void>;
+    }) => openProxy({ url: origin, key, tools: deevyToolNames, ...options }),
     runTimeoutMs: 120_000,
     workspace: (options: { runId: string; repo: RepoConfig | null; originUrl?: string }) =>
       openWorkspace(options),
@@ -833,13 +843,15 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   check(
     "the Event log tells the story of the Run from the label to the finish",
     // Each session ends by reporting what it spent: `run.usage_reported` after
-    // the plan, after the build, and after the finish.
+    // the plan, after the build, and after the finish. The branch the build
+    // pushed is an Activity the moment the push lands, before the pull request
+    // that names it.
     story ===
       "run.started run.checkout_issued run.activity run.activity gate.requested " +
         "run.awaiting_input run.usage_reported gate.ruling_refused identity.linked " +
-        "gate.approved run.answered run.checkout_issued issue.link_added " +
+        "gate.approved run.answered run.checkout_issued run.activity issue.link_added " +
         "run.pull_request_opened gate.requested run.awaiting_input run.usage_reported " +
-        "run.activity comment.created gate.ruling_refused gate.approved run.answered " +
+        "comment.created gate.ruling_refused gate.approved run.answered " +
         "run.checkout_issued run.completed run.usage_reported",
     story,
   );

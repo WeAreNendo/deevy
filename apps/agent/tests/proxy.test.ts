@@ -126,6 +126,49 @@ describe("the key stays with the supervisor", () => {
     expect(it.refused.length).toBe(before);
   });
 
+  it("tells the supervisor of each granted call before deevy hears it, and of no refused one", async () => {
+    const it = await instance();
+    closers.push(it.close);
+    // Routed to nobody, so the Run the call below opens is the first one.
+    const issue = await it.asAda.issues.create({ projectSlug: it.project.slug, title: "Told" });
+    const heard: Array<[string, Record<string, unknown>, number]> = [];
+    const proxy = await it.proxy({
+      // How many Runs the record had when the supervisor was told: none,
+      // because the call that opens one has not reached deevy yet.
+      onCall: async (name, args) => {
+        heard.push([name, args, (await it.deevy.runsOn(issue.externalKey)).length]);
+      },
+    });
+    closers.push(() => proxy.close());
+
+    await rpc(proxy.url, "tools/call", {
+      name: "runs_start",
+      arguments: { issue: issue.externalKey },
+    });
+    await rpc(proxy.url, "tools/call", { name: "issues_list", arguments: {} });
+
+    expect(heard).toEqual([["runs_start", { issue: issue.externalKey }, 0]]);
+    expect(await it.deevy.runsOn(issue.externalKey)).toHaveLength(1);
+  });
+
+  it("reads a call's arguments whether they came as an object or as JSON in a string", async () => {
+    const it = await instance();
+    closers.push(it.close);
+    const heard: Array<Record<string, unknown>> = [];
+    const proxy = await it.proxy({
+      onCall: (_name, args) => {
+        heard.push(args);
+      },
+    });
+    closers.push(() => proxy.close());
+
+    await rpc(proxy.url, "tools/call", { name: "runs_list", arguments: { status: "pending" } });
+    await rpc(proxy.url, "tools/call", { name: "runs_list", arguments: '{"status":"active"}' });
+    await rpc(proxy.url, "tools/call", { name: "runs_list", arguments: "not json" });
+
+    expect(heard).toEqual([{ status: "pending" }, { status: "active" }, {}]);
+  });
+
   it("answers the same as the key would for what it does grant", async () => {
     const it = await instance();
     closers.push(it.close);

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { openGitProxy } from "../src/git-proxy.ts";
+import { openGitProxy, type GitProxyOptions } from "../src/git-proxy.ts";
 
 const run = promisify(execFile);
 const scratch: string[] = [];
@@ -61,7 +61,7 @@ async function recordingRemote(seen: Array<string | undefined>): Promise<string>
   return `http://127.0.0.1:${String(port)}`;
 }
 
-async function proxyFor(options: { upstream: string; token?: string }) {
+async function proxyFor(options: GitProxyOptions) {
   const proxy = await openGitProxy(options);
   closers.push(() => proxy.close());
   return proxy;
@@ -114,6 +114,36 @@ describe("git through the supervisor", () => {
     expect(await git(["log", "-1", "--format=%s", "whatever-it-likes"], remote)).toBe(
       "the words the agent chose",
     );
+  });
+
+  it("tells the supervisor of a push before the pusher hears the end of it", async () => {
+    const remote = await upstream();
+    // What the remote held each time the supervisor was told of a push.
+    const told: string[] = [];
+    const proxy = await proxyFor({
+      upstream: remote,
+      onPushed: async () => {
+        told.push(await git(["ls-remote", remote]));
+      },
+    });
+    const work = await mkdtemp(join(tmpdir(), "deevy-session-"));
+    scratch.push(work);
+
+    // A clone and a fetch move nothing, and nobody is told of them.
+    await git(["clone", "--quiet", proxy.url, work]);
+    await git(["fetch", "--quiet", "origin"], work);
+    expect(told).toEqual([]);
+
+    await git(["checkout", "--quiet", "-b", "said-as-it-landed"], work);
+    await writeFile(join(work, "feature.ts"), "export const x = 1;\n");
+    await git(["add", "-A"], work);
+    await git(["commit", "--quiet", "-m", "pushed"], work);
+    await git(["push", "--quiet", "origin", "said-as-it-landed"], work);
+
+    // Told once, by the time `git push` came back, with the branch already on
+    // the remote: the session cannot finish its Run between the two.
+    expect(told).toHaveLength(1);
+    expect(told[0]).toContain("refs/heads/said-as-it-landed");
   });
 
   it("adds the credential on the way out, and never hands it to the session", async () => {
