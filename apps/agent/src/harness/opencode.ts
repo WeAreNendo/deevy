@@ -150,6 +150,9 @@ export function inlineConfig(context: HarnessContext): Record<string, unknown> {
 export const opencode: Harness = {
   name: "opencode",
   binary: "opencode",
+  // The runtime's default in the shape `--model` takes, so `ANTHROPIC_API_KEY`
+  // alone works the image; another provider's key wants its own model named.
+  model: "anthropic/claude-opus-5",
   env: {
     // Nothing is required by name: OpenCode serves seventy-odd providers and
     // which key the model needs is the operator's choice. A session with none

@@ -73,7 +73,17 @@ function effort(value: string | undefined): Config["effort"] {
   return found ?? "high";
 }
 
+import { harnesses } from "./harness/index.ts";
 import type { RepoConfig } from "./workspace.ts";
+
+/**
+ * The model a harness runs on when `DEEVY_AGENT_MODEL` names none: its recipe's
+ * own where it has one, because OpenCode takes `provider/model` and a bare name
+ * would fail its every Run.
+ */
+function defaultModel(harness: string): string {
+  return harnesses.find((recipe) => recipe.name === harness)?.model ?? "claude-opus-5";
+}
 
 /** A positive number from the environment, or the default when it is absent or nonsense. */
 function positive(value: string | undefined, fallback: number): number {
@@ -81,9 +91,13 @@ function positive(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/** A uid or gid: the default when absent, and zero for "the supervisor's own". */
+/**
+ * A uid or gid: the default when absent, and zero for "the supervisor's own".
+ * Empty is absent, because `Number("")` is zero, and a `DEEVY_AGENT_SESSION_UID=`
+ * left in an env file would otherwise hand the session the supervisor's user.
+ */
 function user(value: string | undefined, fallback: number): number {
-  if (value === undefined) return fallback;
+  if (value === undefined || value.trim() === "") return fallback;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
@@ -95,23 +109,26 @@ function required(env: Record<string, string | undefined>, name: string): string
 }
 
 export function readConfig(env: Record<string, string | undefined> = process.env): Config {
+  const harness = env.DEEVY_AGENT_HARNESS ?? "claude-code";
   return {
     url: required(env, "DEEVY_URL").replace(/\/+$/, ""),
     key: required(env, "DEEVY_AGENT_KEY"),
-    harness: env.DEEVY_AGENT_HARNESS ?? "claude-code",
+    harness,
     pollSeconds: positive(env.DEEVY_AGENT_POLL_SECONDS, 30),
     // Thirty minutes is deevy's own stale window (docs/plans/m2.md): a session
     // allowed to outlive it would be reported stale by the sweep while it was
     // still working, and the Human watching would be told the wrong thing.
     runTimeoutSeconds: positive(env.DEEVY_AGENT_RUN_TIMEOUT_SECONDS, 30 * 60),
-    model: env.DEEVY_AGENT_MODEL ?? "claude-opus-5",
+    // Empty is unset: a `DEEVY_AGENT_MODEL=` left in an env file would otherwise
+    // be `--model ""`.
+    model: env.DEEVY_AGENT_MODEL || defaultModel(harness),
     effort: effort(env.DEEVY_AGENT_EFFORT),
     maxTurns: positive(env.DEEVY_AGENT_MAX_TURNS, 100),
     repo: env.DEEVY_AGENT_REPO
       ? {
           url: env.DEEVY_AGENT_REPO,
           ...(env.DEEVY_AGENT_GIT_TOKEN ? { token: env.DEEVY_AGENT_GIT_TOKEN } : {}),
-          baseBranch: env.DEEVY_AGENT_BASE_BRANCH ?? "main",
+          baseBranch: env.DEEVY_AGENT_BASE_BRANCH || "main",
         }
       : null,
     ...(env.DEEVY_AGENT_WORKDIR ? { workdir: env.DEEVY_AGENT_WORKDIR } : {}),

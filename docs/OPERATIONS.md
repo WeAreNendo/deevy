@@ -1770,9 +1770,11 @@ run.
 ## The reference agent runtime
 
 deevy never runs an agent (ADR-0003). `apps/agent` is the thing on the other side: a service that
-holds one Agent's API key, asks deevy what that Agent has been assigned, and runs Claude against it through
-the Claude Agent SDK. It is not part of deevy and does not have to be run at all — an instance with no
-runtime is a Workspace where the Humans do the work.
+holds one Agent's API key, asks deevy what that Agent has been assigned, and runs a coding-agent CLI against
+it, one per image: Claude Code (`claude -p`), OpenCode (`opencode run`), Cursor CLI (`agent -p`) or GitHub
+Copilot CLI (`copilot -p`), each spawned per Run as a subprocess behind the same seam (ADR-0018,
+[docs/harnesses.md](./harnesses.md)). It is not part of deevy and does not have to be run at all — an
+instance with no runtime is a Workspace where the Humans do the work.
 
 It reaches deevy over HTTP and MCP like any third party, so it does not care which deployment it is talking
 to. Point it at a Docker instance or at a `workers.dev` origin and the only thing that changes is `DEEVY_URL`.
@@ -1792,7 +1794,12 @@ to. Point it at a Docker instance or at a `workers.dev` origin and the only thin
    narrates, asks at Checkpoints and finishes, and writes no code.
 4. **Run it.** `docker compose --profile agent up -d`, or the image directly. The image carries one
    coding-agent CLI, chosen at build time; `claude-code` is the default and `opencode`, `cursor` and
-   `copilot` are the others ([docs/harnesses.md](./harnesses.md)):
+   `copilot` are the others ([docs/harnesses.md](./harnesses.md)). Under Compose, `DEEVY_AGENT_IMAGE` picks
+   the image — `ghcr.io/wearenendo/deevy-agent:cursor`, say — and the service passes every harness's
+   credential and every variable in the table below from the environment or `.env` when it is set, so an
+   unset one leaves the runtime's default. It leaves `DEEVY_AGENT_HARNESS` to the image. The variables you
+   name in `DEEVY_AGENT_PASS_ENV` are the exception: the compose file cannot know them, so add each one to
+   the `agent` service's `environment` yourself:
 
 ```bash
 docker build -f apps/agent/Dockerfile --build-arg HARNESS=claude-code -t deevy-agent:claude-code .
@@ -1858,14 +1865,14 @@ other, and the runtime refuses to start when a harness's required one is missing
 | -------------------------------------------------------------- | ------------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEEVY_URL`                                                    | the runtime                    | —                    | It will not start, and says so. The deevy origin, with no trailing slash.                                                                                                                                                                                                           |
 | `DEEVY_AGENT_KEY`                                              | the runtime                    | —                    | It will not start. The Agent's API key, and the whole of the runtime's identity.                                                                                                                                                                                                    |
-| `DEEVY_AGENT_HARNESS`                                          | the runtime                    | `claude-code`        | Nothing: which coding-agent CLI works the Runs. The runtime refuses to start on a name it does not know, or a binary it cannot run.                                                                                                                                                 |
+| `DEEVY_AGENT_HARNESS`                                          | the runtime                    | `claude-code`        | Nothing: which coding-agent CLI works the Runs. Each image sets it to the CLI it carries. The runtime refuses to start on a name it does not know, or a binary it cannot run.                                                                                                       |
 | `ANTHROPIC_API_KEY`                                            | `claude-code`                  | —                    | With `claude-code`, every session fails at once unless the CLI is signed in some other way. Read by Claude Code, not by the runtime.                                                                                                                                                |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, … | `opencode`                     | —                    | The provider keys OpenCode reads, passed into its session by name (the list is `providerVariables` in its recipe); any other provider's goes through `DEEVY_AGENT_PASS_ENV`. Without one, every Run fails with the provider's own error.                                            |
 | `COPILOT_GITHUB_TOKEN`                                         | `copilot`                      | —                    | The runtime refuses to start. A fine-grained token with the Copilot Requests permission and **no repository permission**, and never the same value as `DEEVY_AGENT_GIT_TOKEN`: the session's shell runs under it, and a token that can push is a push the denylist cannot stop.     |
 | `CURSOR_API_KEY`                                               | `cursor`                       | —                    | The runtime refuses to start. Cursor's API key, from cursor.com; the desktop app's login is not shared with the CLI.                                                                                                                                                                |
 | `DEEVY_AGENT_POLL_SECONDS`                                     | the runtime                    | 30                   | Nothing: it asks every thirty seconds, backing off to eight times that while there is nothing to do.                                                                                                                                                                                |
 | `DEEVY_AGENT_RUN_TIMEOUT_SECONDS`                              | the runtime                    | 1800                 | Nothing. It matches deevy's own stale window: a session allowed to outlive it would be called stale while working.                                                                                                                                                                  |
-| `DEEVY_AGENT_MODEL`                                            | every harness                  | `claude-opus-5`      | Nothing.                                                                                                                                                                                                                                                                            |
+| `DEEVY_AGENT_MODEL`                                            | every harness                  | `claude-opus-5`      | Nothing, in each harness's own naming: OpenCode's default is `anthropic/claude-opus-5`, because it takes `provider/model`.                                                                                                                                                          |
 | `DEEVY_AGENT_EFFORT`                                           | `claude-code`                  | `high`               | Nothing. `low`, `medium`, `high`, `xhigh` or `max`; anything else is read as `high`.                                                                                                                                                                                                |
 | `DEEVY_AGENT_MAX_TURNS`                                        | `claude-code`, `opencode`      | 100                  | Nothing: a backstop on a session that will not stop. The timeout is the real bound.                                                                                                                                                                                                 |
 | `DEEVY_AGENT_REPO`                                             | the runtime                    | — deevy names it     | Nothing, where Projects are bound to a forge Socket: deevy answers every Run with the repository, the branch and a credential minted for it. Set it to work a repository deevy has no Socket for; a Run with no repository either way gets an empty directory, no shell and no web. |
@@ -1953,7 +1960,6 @@ Nothing here is measured, and these are the knobs that move the bill rather than
 | `DEEVY_AGENT_EFFORT`              | Thinking depth per session. `xhigh` suits code work; `low` suits a runtime that only reads and plans. |
 | `DEEVY_AGENT_RUN_TIMEOUT_SECONDS` | The ceiling on one Run. A session stopped at the timeout has still spent what it spent.               |
 | `DEEVY_AGENT_REPO`                | A repository means file and shell tools, which means longer sessions.                                 |
-| `CURSOR_API_KEY`                  | `cursor`                                                                                              | —   | The runtime refuses to start. Cursor's API key, from cursor.com; the desktop app's login is not shared with the CLI. |
 | `DEEVY_AGENT_POLL_SECONDS`        | Costs deevy requests, not tokens. A poll that finds nothing spends nothing.                           |
 
 Runs are triggered by assignment, mention, an Agent's sub-issues all closing, or an Agent's schedule, and only

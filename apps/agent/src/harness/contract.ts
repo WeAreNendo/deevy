@@ -36,6 +36,11 @@ export interface Harness {
   /** The executable, found on `PATH`. */
   binary: string;
   /**
+   * The model a session runs on when `DEEVY_AGENT_MODEL` names none, for a CLI
+   * that does not take the runtime's own default (`claude-opus-5`) as a name.
+   */
+  model?: string;
+  /**
    * The environment the session sees on top of the runtime's allowlist
    * (src/harness/env.ts): variables by name, and prefixes allowed whole.
    * `requires` is the subset the runtime refuses to start without.

@@ -79,7 +79,10 @@ slash. The runtime runs wherever you run it; deevy Cloud only talks to it.
 :::note[Self-hosted]
 Set `DEEVY_URL` to your deevy's own URL. With deevy's Docker Compose file, `docker compose --profile agent
 up -d` starts the runtime beside deevy and points it there; give it `DEEVY_AGENT_KEY` and the coding agent's
-credential in the environment. See [Docker](/self-hosting/docker/).
+credential in the environment or in `.env`. It runs Claude Code unless you set `DEEVY_AGENT_IMAGE` to
+another image, such as `ghcr.io/wearenendo/deevy-agent:cursor`. The settings below reach it the same way,
+except the variables you name in `DEEVY_AGENT_PASS_ENV`: add each of those to the `agent` service's
+`environment` as well. See [Docker](/self-hosting/docker/).
 :::
 
 ## Its settings
@@ -88,7 +91,8 @@ credential in the environment. See [Docker](/self-hosting/docker/).
 | ---------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEEVY_URL`                                                            | none                             | Your Workspace's URL. Required.                                                                                                                                              |
 | `DEEVY_AGENT_KEY`                                                      | none                             | The Agent's API key, and the whole of the runtime's identity. Required.                                                                                                      |
-| `DEEVY_AGENT_MODEL`                                                    | `claude-opus-5`                  | The model each Run uses, and the largest lever on what a Run costs. OpenCode wants `provider/model`, such as `anthropic/claude-haiku-4-5`; Cursor takes its own model names. |
+| `DEEVY_AGENT_HARNESS`                                                  | the image's coding agent         | Which coding agent works the Runs: `claude-code`, `opencode`, `cursor` or `copilot`. Each image sets it to the one it carries, so choose the image instead.                  |
+| `DEEVY_AGENT_MODEL`                                                    | `claude-opus-5`                  | The model each Run uses, and the largest lever on what a Run costs. OpenCode wants `provider/model`, by default `anthropic/claude-opus-5`; Cursor takes its own model names. |
 | `DEEVY_AGENT_EFFORT`                                                   | `high`                           | How hard Claude Code thinks: `low`, `medium`, `high`, `xhigh` or `max`. Claude Code only.                                                                                    |
 | `DEEVY_AGENT_MAX_TURNS`                                                | 100                              | A backstop on a coding agent that will not stop. Claude Code and OpenCode.                                                                                                   |
 | `DEEVY_AGENT_RUN_TIMEOUT_SECONDS`                                      | 1800                             | The longest one Run may work. It matches the half hour after which deevy calls a silent Run stale.                                                                           |
@@ -98,6 +102,7 @@ credential in the environment. See [Docker](/self-hosting/docker/).
 | `DEEVY_AGENT_PORT`                                                     | 8787                             | Where it answers `/healthz` and deevy's deliveries.                                                                                                                          |
 | `DEEVY_AGENT_WORKDIR`                                                  | the system's temporary directory | Where each Run's working directory is made.                                                                                                                                  |
 | `DEEVY_AGENT_REPO`, `DEEVY_AGENT_GIT_TOKEN`, `DEEVY_AGENT_BASE_BRANCH` | none, none, `main`               | Together, a repository to work that no Socket holds. Leave all three unset when your Projects name a repository.                                                             |
+| `DEEVY_AGENT_IMAGE`                                                    | `deevy-agent:latest`             | With deevy's Compose file, the image the runtime runs, and so its coding agent. Read by Compose, not by the runtime.                                                         |
 
 The image sets which coding agent it runs; the runtime refuses to start if that coding agent's credential is
 missing.
