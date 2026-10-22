@@ -22,28 +22,37 @@ RUN mkdir -p /src/.empty
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build --chown=65532:65532 /src/apps/server/dist ./dist
-COPY --from=build --chown=65532:65532 /src/apps/web/dist ./web
-# Docker creates a missing mount point as root, and this process is 65532: it
-# would then be unable to create the database — or, far quieter, unable to
-# create the -wal beside it, because SQLite does not fail a `journal_mode` it
-# cannot honour, it just stays in `delete` mode (packages/adapters/src/node/db.ts).
-# A fresh named volume takes its ownership from here; an upgrading instance's
-# existing volume does not, which is the one command docs/OPERATIONS.md asks for.
+# The code belongs to root and is only read. The process that runs it stops
+# being root before it loads any of it, and must not be able to change what the
+# next start runs as root (ADR-0033).
+COPY --from=build /src/apps/server/dist ./dist
+COPY --from=build /src/apps/web/dist ./web
+# A fresh named volume takes its ownership from here, so the entrypoint finds
+# /data already 65532's and has nothing to give. It is also what keeps
+# `--user 65532:65532` working on one, for whoever will not start as root.
 COPY --from=build --chown=65532:65532 /src/.empty /data
 ENV DEEVY_PORT=3000 \
     DEEVY_DATABASE_PATH=/data/deevy.sqlite \
     DEEVY_WEB_DIST=/app/web
-USER 65532:65532
+# Root, on purpose, for as long as the entrypoint takes to give /data to the
+# user deevy will be — the directory's owner, or 65532 when that is root — and
+# no longer: it drops before it loads the server (apps/server/src/entrypoint.ts).
+# A volume or a host directory therefore needs no chown, nor does a restore. The
+# base is the `nonroot` one because 65532 is its user; it is only its USER that
+# is replaced here.
+USER 0:0
 VOLUME ["/data"]
 EXPOSE 3000
 # Docker runs an exec-form healthcheck directly rather than through the
 # entrypoint, so the interpreter is named in full: /nodejs/bin is not on this
 # base's PATH, and there is no shell for a CMD-SHELL form to use. It reads
 # DEEVY_PORT rather than assuming 3000, so an instance that moves the port keeps
-# a working healthcheck — which the one in docker-compose.yml did not.
+# a working healthcheck — which the one in docker-compose.yml did not. It runs
+# as the image's user, root, and does nothing but ask.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
     CMD ["/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:'+(process.env.DEEVY_PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-# The entrypoint is node itself, so this names the script alone: `["node", ...]`
-# here would run `node node dist/index.mjs`.
+# Everything the image runs goes through the entrypoint, so
+# `docker run … dist/import.mjs` gives up root as the server does. The command
+# is the script alone, which the entrypoint imports once it is no longer root.
+ENTRYPOINT ["/nodejs/bin/node", "/app/dist/entrypoint.mjs"]
 CMD ["dist/index.mjs"]

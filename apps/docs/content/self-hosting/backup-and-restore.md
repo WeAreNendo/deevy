@@ -41,17 +41,14 @@ Stop deevy first, so nothing is mid-write, then put the copy in place:
 docker stop deevy
 docker run --rm -v deevy-data:/data -v "$PWD:/in" alpine \
   sh -c 'rm -f /data/deevy.sqlite-wal /data/deevy.sqlite-shm \
-         && cp /in/deevy-2026-10-01.sqlite /data/deevy.sqlite \
-         && chown 65532:65532 /data/deevy.sqlite'
+         && cp /in/deevy-2026-10-01.sqlite /data/deevy.sqlite'
 docker start deevy
 ```
 
-Two parts of that matter:
-
-- **Removing the `-wal` and `-shm` files.** A stale write-ahead log beside a restored database gives SQLite
-  two versions of the truth.
-- **The `chown`.** The helper container writes as root, and deevy runs as uid 65532. Without it, deevy
-  refuses to start and its log names the command to fix it.
+Removing the `-wal` and `-shm` files matters: a stale write-ahead log beside a restored database gives
+SQLite two versions of the truth. The helper container writes the copy as root, and deevy makes it its own
+when it starts. If you run deevy with `--user`, it can't, so give the file to that user in the same
+command, adding `&& chown 65532:65532 /data/deevy.sqlite` for `--user 65532:65532`.
 
 A backup from an older release restores under a newer image, which brings it forward when it starts.
 

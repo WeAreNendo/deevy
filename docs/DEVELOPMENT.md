@@ -547,9 +547,10 @@ docker build -f apps/server/Dockerfile -t deevy .
 docker run -p 3000:3000 -v deevy-data:/data --env-file .env -e BETTER_AUTH_URL=http://localhost:3000 deevy
 ```
 
-The runtime stage is distroless and runs as uid 65532, so there is no shell in it to debug with and `/data`
-has to belong to that user — a named volume created fresh does, a host directory you point at does not
-(docs/OPERATIONS.md, "The volume"). To ask the built image whether it still does all of that:
+The runtime stage is distroless, so there is no shell in it to debug with. It starts as root and its
+entrypoint (`apps/server/src/entrypoint.ts`) gives `/data` to the user it will be before it drops root for
+good — a named volume, a host directory and a restored database all work with nothing done to them
+(docs/OPERATIONS.md, "The volume", and ADR-0033). To ask the built image whether it still does all of that:
 
 ```bash
 vp run server#test:image                        # builds deevy:smoke if it is absent

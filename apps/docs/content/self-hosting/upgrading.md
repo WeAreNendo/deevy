@@ -75,6 +75,8 @@ on the schema the new one leaves.
 
 - **Docker**: start the previous image on the same volume. It finds the newer migrations applied, leaves
   them alone, says so in its log, and runs. Starting the newer image again later picks up where it was.
+  Releases before 0.12 only ever run as uid 65532: if a newer one has been running as the owner of a host
+  directory you made, give the directory to 65532 before you start an older one. Its log names the command.
 - **Workers**: roll the Worker back to its previous version, with `wrangler rollback` or the Worker's
   **Deployments** in Cloudflare's dashboard. Leave the D1 database as it is; there is nothing to undo.
 

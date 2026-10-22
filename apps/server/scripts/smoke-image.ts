@@ -73,8 +73,8 @@ async function ensureImage(): Promise<void> {
 }
 
 /** The port Docker chose for us. Asking for 0 and reading it back has no bind race. */
-async function publishedPort(): Promise<number> {
-  const mapping = await docker("port", container, "3000/tcp");
+async function publishedPort(name = container): Promise<number> {
+  const mapping = await docker("port", name, "3000/tcp");
   const port = Number(mapping.split("\n")[0]?.split(":").pop());
   if (!Number.isInteger(port) || port <= 0) throw new Error(`no published port in "${mapping}"`);
   return port;
@@ -91,25 +91,34 @@ async function healthy(origin: string, seconds = 60): Promise<boolean> {
   return false;
 }
 
-async function start(): Promise<string> {
-  await docker(
-    "run",
-    "-d",
-    "--name",
-    container,
-    "-p",
-    "0:3000",
-    "-v",
-    `${volume}:/data`,
-    "-e",
-    "BETTER_AUTH_SECRET=smoke-secret-that-is-at-least-32-characters",
-    "-e",
-    "BETTER_AUTH_URL=http://localhost:3000",
-    "-e",
-    "DEEVY_ADMIN_EMAIL=admin@example.com",
-    image,
-  );
-  return `http://127.0.0.1:${String(await publishedPort())}`;
+const env = [
+  "-e",
+  "BETTER_AUTH_SECRET=smoke-secret-that-is-at-least-32-characters",
+  "-e",
+  "BETTER_AUTH_URL=http://localhost:3000",
+  "-e",
+  "DEEVY_ADMIN_EMAIL=admin@example.com",
+];
+
+async function start(name = container, on = volume): Promise<string> {
+  await docker("run", "-d", "--name", name, "-p", "0:3000", "-v", `${on}:/data`, ...env, image);
+  return `http://127.0.0.1:${String(await publishedPort(name))}`;
+}
+
+/**
+ * Who the server process is, as the kernel sees it: the row of `docker top`
+ * whose pid is the container's own. That row and not every row, because a
+ * healthcheck in flight is a second process, and it runs as the image's user.
+ */
+async function serverUser(name = container): Promise<string> {
+  const pid = await docker("inspect", "-f", "{{.State.Pid}}", name);
+  // `docker top` prints the numeric uid when the host has no user by that id,
+  // which is the answer wanted: what the kernel sees, not what the image said.
+  // `pid` has to be asked for: the daemon looks for it in the ps output and
+  // refuses the call without it, whatever the other columns say.
+  const processes = await attempt("top", name, "-o", "pid,user");
+  const row = processes.output.split("\n").find((line) => line.trim().split(/\s+/)[0] === pid);
+  return row?.trim().split(/\s+/)[1] ?? `no process ${pid} in:\n${processes.output}`;
 }
 
 /** What the image says about itself, before anything is run. */
@@ -119,11 +128,14 @@ export function imageInvariants(config: {
   Cmd?: string[] | null;
 }): string[] {
   const problems: string[] = [];
-  if (config.User !== "65532:65532")
-    problems.push(`it runs as "${config.User ?? ""}" and not 65532:65532`);
-  // The entrypoint is the interpreter, so the command is the script alone —
-  // `["node", …]` here would run `node node dist/index.mjs`.
-  if (JSON.stringify(config.Entrypoint) !== JSON.stringify(["/nodejs/bin/node"]))
+  // Root on purpose, until the entrypoint has given /data away (ADR-0033).
+  if (config.User !== "0:0") problems.push(`it starts as "${config.User ?? ""}" and not 0:0`);
+  // Everything goes through the entrypoint, which drops root before it
+  // imports the script it is handed — so the command is the script alone.
+  if (
+    JSON.stringify(config.Entrypoint) !==
+    JSON.stringify(["/nodejs/bin/node", "/app/dist/entrypoint.mjs"])
+  )
     problems.push(`its entrypoint is ${JSON.stringify(config.Entrypoint)}`);
   if (JSON.stringify(config.Cmd) !== JSON.stringify(["dist/index.mjs"]))
     problems.push(`its command is ${JSON.stringify(config.Cmd)}`);
@@ -154,12 +166,8 @@ async function smoke(): Promise<void> {
 
   check("the SPA is served beside the API", (await fetch(origin).then((r) => r.status)) === 200);
 
-  // `docker top` prints the numeric uid when the host has no user by that id,
-  // which is the answer wanted: what the kernel sees, not what the image said.
-  // `pid` has to be asked for: the daemon looks for it in the ps output and
-  // refuses the call without it, whatever the other columns say.
-  const processes = await attempt("top", container, "-o", "pid,user");
-  check("the process really is unprivileged", /\b65532\b/.test(processes.output), processes.output);
+  const user = await serverUser();
+  check("the server gave up root for 65532", user === "65532", user);
 
   // The image says it is well, which is the mechanism compose's
   // `depends_on: condition: service_healthy` waits on — and it has to do it
@@ -186,7 +194,10 @@ async function smoke(): Promise<void> {
     listing.output,
   );
 
-  await refusesAVolumeItCannotWrite();
+  await takesAVolumeRootWrote();
+  await becomesWhoeverOwnsTheDirectory();
+  await refusesWhatAnotherUserCannotWrite();
+  await runsTheScriptItIsHanded();
 
   await docker("stop", container);
   await docker("start", container);
@@ -197,56 +208,112 @@ async function smoke(): Promise<void> {
   );
 }
 
+/** A volume of its own, filled by a sidecar as root from the one the run made. */
+async function volumeWith(suffix: string, script: string): Promise<string> {
+  const other = `${volume}-${suffix}`;
+  await docker("volume", "create", other);
+  await attempt(
+    "run",
+    "--rm",
+    "-v",
+    `${volume}:/from`,
+    "-v",
+    `${other}:/data`,
+    "busybox",
+    "sh",
+    "-c",
+    script,
+  );
+  return other;
+}
+
+async function ownerOn(on: string, path: string): Promise<string> {
+  const stat = ["stat", "-c", "%u:%g", path];
+  return (await attempt("run", "--rm", "-v", `${on}:/data`, "busybox", ...stat)).output;
+}
+
 /**
- * The shape an upgrade leaves behind: a volume every file of which belongs to
- * root, because that is who earlier releases ran as.
- *
- * Before the preflight this was the worst case there is — deevy applied no
- * migrations (they were applied already), bound its listener, answered /healthz
- * and reported `healthy`, then failed on the first write anybody attempted. It
- * must now refuse to start and say which command fixes it.
+ * A volume every file of which belongs to root: what releases before 0.8 left,
+ * and what a restore from a root sidecar leaves of the database. It was once
+ * the worst case there is — deevy applied no migrations, answered /healthz,
+ * reported healthy and failed at the first write — and then a refusal naming a
+ * chown. Now the entrypoint gives it to 65532 before the server opens it.
  */
-async function refusesAVolumeItCannotWrite(): Promise<void> {
-  const stale = `${volume}-stale`;
-  await docker("volume", "create", stale);
+async function takesAVolumeRootWrote(): Promise<void> {
+  const stale = await volumeWith("stale", "cp /from/deevy.sqlite /data/ && chown -R 0:0 /data");
+  const name = `${container}-stale`;
   try {
-    // Copy the database this run already made, as root, which is the whole point.
-    await attempt(
-      "run",
-      "--rm",
-      "-v",
-      `${volume}:/from`,
-      "-v",
-      `${stale}:/data`,
-      "busybox",
-      "sh",
-      "-c",
-      "cp /from/deevy.sqlite /data/ && chown -R 0:0 /data",
-    );
-    const refused = await attempt(
-      "run",
-      "--rm",
-      "-v",
-      `${stale}:/data`,
-      "-e",
-      "BETTER_AUTH_SECRET=smoke-secret-that-is-at-least-32-characters",
-      "-e",
-      "BETTER_AUTH_URL=http://localhost:3000",
-      image,
-    );
-    check(
-      "it refuses a volume it cannot write rather than looking well",
-      refused.code !== 0,
-      refused.output,
-    );
-    check(
-      "and names the command that fixes it",
-      /chown -R 65532:65532/.test(refused.output),
-      refused.output,
-    );
+    const up = await healthy(await start(name, stale));
+    check("it starts on a volume root wrote", up, await logs(name));
+    const dir = await ownerOn(stale, "/data");
+    check("and gives the directory to 65532", dir === "65532:65532", dir);
+    const owner = await ownerOn(stale, "/data/deevy.sqlite");
+    check("and the database", owner === "65532:65532", owner);
+    const user = await serverUser(name);
+    check("then runs as 65532", user === "65532", user);
   } finally {
+    await attempt("rm", "-f", name);
     await attempt("volume", "rm", "-f", stale);
   }
+}
+
+/**
+ * A host directory somebody made, played by a volume whose root is theirs:
+ * the same code path, without the ownership Docker Desktop makes up for a bind
+ * mount. deevy runs as them and their files stay theirs. 4321 rather than
+ * 1000, which is a real user on most hosts and which `docker top` would name.
+ *
+ * Something has to be in it: Docker copies the image's /data, ownership and
+ * all, into a named volume that is empty when it is mounted, which would make
+ * this 65532's before deevy saw it. A host directory has no such step. A file
+ * of root's serves, and says whether anything else in the directory is touched.
+ */
+async function becomesWhoeverOwnsTheDirectory(): Promise<void> {
+  const theirs = await volumeWith("theirs", "touch /data/notes.txt && chown 4321:4321 /data");
+  const name = `${container}-theirs`;
+  try {
+    const up = await healthy(await start(name, theirs));
+    check("it starts on a directory somebody else owns", up, await logs(name));
+    const user = await serverUser(name);
+    check("and runs as them", user === "4321", user);
+    const owner = await ownerOn(theirs, "/data/deevy.sqlite");
+    check("and writes the database as them", owner === "4321:4321", owner);
+    const notes = await ownerOn(theirs, "/data/notes.txt");
+    check("and leaves the rest of the directory alone", notes === "0:0", notes);
+  } finally {
+    await attempt("rm", "-f", name);
+    await attempt("volume", "rm", "-f", theirs);
+  }
+}
+
+/**
+ * `--user` keeps the image from ever being root, and so from giving anything
+ * away: on a volume that user cannot write, deevy must refuse to start rather
+ * than look well, and say what fixes it.
+ */
+async function refusesWhatAnotherUserCannotWrite(): Promise<void> {
+  const as = ["--user", "4242:4242"];
+  const refused = await attempt("run", "--rm", "-v", `${volume}:/data`, ...env, ...as, image);
+  check(
+    "it refuses a volume --user cannot write rather than looking well",
+    refused.code !== 0,
+    refused.output,
+  );
+  check(
+    "and names the command that fixes it",
+    /chown -R 4242:4242/.test(refused.output),
+    refused.output,
+  );
+}
+
+/** `docker run … dist/import.mjs` goes through the entrypoint too, and keeps its arguments. */
+async function runsTheScriptItIsHanded(): Promise<void> {
+  const help = await attempt("run", "--rm", image, "dist/import.mjs", "--help");
+  check(
+    "it runs the script it is handed, with its arguments",
+    help.code === 0 && help.output.includes("Usage:"),
+    help.output,
+  );
 }
 
 async function health(template: string): Promise<string> {
@@ -266,8 +333,8 @@ async function reportsHealthy(seconds = 90): Promise<boolean> {
   return false;
 }
 
-async function logs(): Promise<string> {
-  return (await attempt("logs", "--tail", "40", container)).output;
+async function logs(name = container): Promise<string> {
+  return (await attempt("logs", "--tail", "40", name)).output;
 }
 
 if (import.meta.main) {
