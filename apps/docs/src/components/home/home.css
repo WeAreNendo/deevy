@@ -1,0 +1,30 @@
+/*
+ * The landing's own stylesheet, imported by content/index.mdx and so loaded on
+ * that page alone: its typefaces, Geist and Geist Mono (Matt chose them for the
+ * landing, 2026-10-22; every other page keeps @deevy/design's), the width the
+ * workflow graph needs, and its Markdown headings in the same face.
+ */
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
+
+:root:has(.home-hero) {
+  --sl-content-width: 76rem;
+  --home-face: "Geist Variable", var(--face-sans);
+  --home-mono: "Geist Mono Variable", var(--face-mono);
+  /*
+   * Amber as text: --gate is a fill and a border, and in light it reads at 2.4:1
+   * on the page; mixed toward the ink it clears 4.5:1 in light and stays light
+   * in dark.
+   */
+  --gate-ink: color-mix(in oklab, var(--gate) 60%, var(--foreground));
+}
+
+:root:has(.home-hero) .sl-markdown-content > .sl-heading-wrapper.level-h2 {
+  margin-top: clamp(3rem, 8vw, 6rem);
+}
+:root:has(.home-hero) .sl-markdown-content > .sl-heading-wrapper > h2 {
+  font-family: var(--home-face);
+  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}

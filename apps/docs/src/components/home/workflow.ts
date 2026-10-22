@@ -23,7 +23,7 @@ export const box = { width: 180, height: 64 };
 export const viewBox = { width: 1160, height: 452 };
 
 export const nodes: Node[] = [
-  { id: "linear", x: 30, y: 40, title: "Linear", detail: "ENG-12 assigned", kind: "tool" },
+  { id: "linear", x: 30, y: 40, title: "Linear", detail: "ENG-12 to deevy", kind: "tool" },
   { id: "route", x: 260, y: 40, title: "deevy · route", detail: "Project Billing", kind: "deevy" },
   { id: "run", x: 490, y: 40, title: "builder", detail: "run_27gmbk2vhwh8", kind: "agent" },
   {
@@ -141,10 +141,10 @@ export const route = {
 
 /** What the board's status line says while a Run is on each wire. */
 export const status: Record<string, string> = {
-  "linear>route": "assigned in Linear",
+  "linear>route": "handed to deevy in Linear",
   "route>run": "routed to builder",
   "run>check": "builder is working",
-  "check>gate": "waiting at the Gate",
+  "check>gate": "Proposal on its way to the Gate",
   "gate>needs": "approved in deevy",
   "gate>comment": "approved with /approve",
   "gate>slack": "approved from Slack",

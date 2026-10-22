@@ -8,18 +8,18 @@ const events = [
   {
     kind: "issue.assigned",
     color: "var(--human)",
-    title: "Someone gives ENG-12 to builder",
-    text: "In Linear, the way they would assign a colleague.",
+    title: "Someone hands ENG-12 to deevy",
+    text: "In Linear, by assigning it to deevy, which gives it to the Project's default Agent, or with a label that names builder.",
   },
   {
     kind: "run.started",
     color: "var(--agent)",
     title: "builder picks it up",
-    text: "With the repository, the branch to cut and a short-lived credential.",
+    text: "On the runtime you run, with the repository and the branch to cut.",
   },
   {
     kind: "gate.requested",
-    color: "var(--gate)",
+    color: "var(--gate-ink)",
     title: "It stops at the plan Checkpoint",
     text: "A Proposal waits for a Human. A Checkpoint may want two of them.",
   },
@@ -38,8 +38,8 @@ const events = [
   {
     kind: "run.completed",
     color: "var(--state-done)",
-    title: "Linear hears back",
-    text: "With the tokens and cost the Run reported, and how long it worked and waited.",
+    title: "The Run finishes",
+    text: "Where the Project mirrors Runs, Linear gets a “Finished.” comment with the summary. Its tokens, cost and time are on the Run's page.",
   },
 ];
 ---
@@ -70,23 +70,32 @@ const events = [
     list.classList.add("moving");
     const fill = list.querySelector<HTMLElement>("[data-fill]")!;
     const events = [...list.querySelectorAll<HTMLElement>(".event")];
+    // Every read, then every write, so a scroll costs one layout.
     const update = () => {
-      const rect = list.getBoundingClientRect();
+      queued = false;
       const line = window.innerHeight * 0.6;
+      const rect = list.getBoundingClientRect();
+      const tops = events.map((event) => event.getBoundingClientRect().top);
       const progress = Math.min(1, Math.max(0, (line - rect.top) / rect.height));
       fill.style.height = `${progress * 100}%`;
-      for (const event of events) event.classList.toggle("on", event.getBoundingClientRect().top < line);
+      events.forEach((event, i) => event.classList.toggle("on", tops[i]! < line));
+    };
+    let queued = false;
+    const onScroll = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(update);
     };
     update();
-    window.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
-    window.addEventListener("resize", update);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
   }
 </script>
 
 <style>
   .spine {
     margin-top: clamp(3rem, 8vw, 6rem);
-    font-family: "Geist Variable", var(--face-sans);
+    font-family: var(--home-face);
   }
   h2 {
     margin: 0;
@@ -148,7 +157,7 @@ const events = [
     box-shadow: none;
   }
   code {
-    font-family: "Geist Mono Variable", var(--face-mono);
+    font-family: var(--home-mono);
     font-size: 0.8125rem;
     color: var(--c);
   }

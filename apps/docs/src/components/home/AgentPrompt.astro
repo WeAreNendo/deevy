@@ -2,11 +2,12 @@
 /*
  * The landing's hand-off to a coding agent: deevy never runs an Agent (ADR-0003),
  * so the reference runtime is set up by whoever runs it, and the agent they
- * already use can read the guide and do it. A border that turns slowly
- * through the four colours of the graph above.
+ * already use can read the guide and do it. Its border turns once through the
+ * four colours of the graph above, and again while it is hovered.
  */
+// The Agent's key stays out of the coding agent's reach, as the runtime's page says it must.
 const prompt =
-  "Read https://docs.deevy.dev/agents/reference-runtime/, then run deevy's agent runtime with Claude Code for the Agent key I give you, against our Workspace.";
+  "Read https://docs.deevy.dev/agents/reference-runtime/, then help me run deevy's agent runtime with Claude Code against our Workspace. I'll put the Agent's key and the Anthropic key in its environment myself; don't ask me for either.";
 ---
 
 <section class="prompt not-content" aria-labelledby="hand-off">
@@ -21,9 +22,9 @@ const prompt =
   <div class="glow">
     <div class="inner">
       <span class="kicker">Prompt · for your coding agent</span>
-      <p class="say">{prompt}</p>
+      <p class="say" id="agent-prompt">{prompt}</p>
       <div class="row">
-        <button type="button" data-copy={prompt}>Copy prompt</button>
+        <button type="button" data-copy={prompt} data-copy-target="agent-prompt" hidden>Copy prompt</button>
         <a href="/agents/reference-runtime/">Read the guide</a>
       </div>
     </div>
@@ -41,10 +42,10 @@ const prompt =
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     gap: clamp(1.5rem, 4vw, 3rem);
     align-items: center;
-    font-family: "Geist Variable", var(--face-sans);
+    font-family: var(--home-face);
   }
   .kicker {
-    font-family: "Geist Mono Variable", var(--face-mono);
+    font-family: var(--home-mono);
     font-size: 0.75rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -83,7 +84,10 @@ const prompt =
       var(--state-done),
       var(--human)
     );
-    animation: turn 6s linear infinite;
+    animation: turn 4.5s linear 1;
+  }
+  .glow:hover {
+    animation-iteration-count: infinite;
   }
   .glow::after {
     content: "";
@@ -133,7 +137,7 @@ const prompt =
     background: var(--background);
     color: var(--foreground);
     font: inherit;
-    font-family: "Geist Mono Variable", var(--face-mono);
+    font-family: var(--home-mono);
     font-size: 0.8125rem;
     cursor: pointer;
   }

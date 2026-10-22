@@ -13,7 +13,7 @@ import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
  *
  * Nothing on these pages loads from anywhere but this origin: no analytics, no
  * third-party script, and the typefaces are the app's own, self-hosted from
- * @fontsource through @deevy/design (and the landing hero's Geist, through
+ * @fontsource through @deevy/design (and the landing's Geist, through
  * @fontsource too), whose tokens dress the site as the app
  * (src/styles/theme.css, docs/plans/design-system.md). Astro's `security.csp` was tried on
  * 2026-10-09 and left off: with Starlight 0.42 the policy it wrote still
@@ -31,7 +31,7 @@ export default defineConfig({
         "The glue between a team's tools and its Agents: the work stays in GitHub, Linear, GitLab or Notion, and deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on.",
       favicon: "/favicon.svg",
       // The logo drawn from @deevy/design's data in the theme's colours, at the app's size,
-      // and the landing's hero: its title over the workflow graph, animated.
+      // and Starlight's hero on every page but the landing, which draws its own.
       components: {
         SiteTitle: "./src/components/SiteTitle.astro",
         Hero: "./src/components/Hero.astro",

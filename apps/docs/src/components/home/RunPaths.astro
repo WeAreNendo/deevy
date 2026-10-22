@@ -33,14 +33,21 @@ const command =
         Worker.
       </p>
       <div class="cmd">
-        <span class="dollar" aria-hidden="true">$</span><code>{command}</code><button
+        <span class="dollar" aria-hidden="true">$</span><code id="docker-command">{command}</code><button
           type="button"
-          data-copy={command}>Copy</button
+          data-copy={command}
+          data-copy-target="docker-command"
+          aria-label="Copy the docker run command"
+          hidden>Copy</button
         >
       </div>
+      <p class="note">
+        It reads its settings from <code>deevy.env</code>:
+        <a href="/self-hosting/docker/">Run the Docker image</a> says what goes in it.
+      </p>
       <div class="links">
-        <a href="/self-hosting/docker/">Run the Docker image</a>
         <a href="/self-hosting/overview/">Hosting deevy yourself</a>
+        <a href="/self-hosting/cloudflare-workers/">On a Cloudflare Worker</a>
       </div>
     </div>
   </div>
@@ -53,7 +60,7 @@ const command =
 <style>
   .paths {
     margin-top: clamp(3rem, 8vw, 6rem);
-    font-family: "Geist Variable", var(--face-sans);
+    font-family: var(--home-face);
   }
   h2 {
     margin: 0;
@@ -99,7 +106,7 @@ const command =
     position: relative;
   }
   .kicker {
-    font-family: "Geist Mono Variable", var(--face-mono);
+    font-family: var(--home-mono);
     font-size: 0.75rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -125,6 +132,18 @@ const command =
     gap: 0.75rem 1.25rem;
     font-size: 0.9375rem;
   }
+  .links :global(.sl-link-button) {
+    margin: 0;
+  }
+  .note {
+    font-size: 0.875rem;
+  }
+  .note code {
+    font-family: var(--home-mono);
+    font-size: 0.8125rem;
+    color: var(--foreground);
+  }
+  .note a,
   .links a {
     color: var(--link);
     text-underline-offset: 0.25em;
@@ -138,7 +157,7 @@ const command =
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--background);
-    font-family: "Geist Mono Variable", var(--face-mono);
+    font-family: var(--home-mono);
     font-size: 0.8125rem;
   }
   .cmd code {

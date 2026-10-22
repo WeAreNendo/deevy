@@ -15,12 +15,16 @@ hero:
       variant: secondary
 ---
 
-{/* The hero is src/components/Hero.astro; these imports resolve from the copy scripts/sync.ts writes into src/content/docs. */}
+{/* These imports resolve from the copy scripts/sync.ts writes into src/content/docs. */}
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import "../../components/home/home.css";
 import AgentPrompt from "../../components/home/AgentPrompt.astro";
+import HomeHero from "../../components/home/HomeHero.astro";
 import RunPaths from "../../components/home/RunPaths.astro";
 import RunSpine from "../../components/home/RunSpine.astro";
+
+<HomeHero />
 
 <RunPaths />
 
