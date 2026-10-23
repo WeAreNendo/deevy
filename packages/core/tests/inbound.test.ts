@@ -428,6 +428,57 @@ describe("what else a delivery can carry", () => {
     expect(kinds).toContain("socket.installation_added");
   });
 
+  it("lets go of an installation that is gone or suspended, and says which", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { ada, socket } = await workspace(db);
+    const installations = [
+      { id: "i-1", account: "acme" },
+      { id: "i-2", account: "acme-labs" },
+    ];
+    // Each delivery is applied to the Socket as it then stands.
+    const apply = async (events: InboundEvent[]) =>
+      applyInbound({
+        db,
+        workspace: ada.workspace,
+        socket: (await db.query.socket.findFirst({ where: { id: socket.id } })) as Socket,
+        events,
+      });
+    await apply([{ kind: "installation", installations }]);
+
+    const result = await apply([
+      { kind: "installation", installations: [{ id: "i-1", account: "acme" }], removed: "deleted" },
+    ]);
+
+    expect(result.applied).toBe(1);
+    const row = await db.query.socket.findFirst({ where: { id: socket.id } });
+    expect(row?.config).toMatchObject({ installations: [{ id: "i-2", account: "acme-labs" }] });
+    const removed = await db.query.event.findFirst({
+      where: { kind: "socket.installation_removed" },
+    });
+    expect(removed?.payload).toMatchObject({ accounts: ["acme"], why: "deleted" });
+
+    // One it never had is nothing to take off, and says so.
+    const again = await apply([
+      {
+        kind: "installation",
+        installations: [{ id: "i-9", account: "elsewhere" }],
+        removed: "suspended",
+      },
+    ]);
+    expect(again.applied).toBe(0);
+    expect(again.skipped[0]).toBe(
+      "the App was suspended on elsewhere, which this Socket did not list",
+    );
+    // Said in words for an uninstall, and by its id where GitHub named no account.
+    const nameless = await apply([
+      { kind: "installation", installations: [{ id: "i-8", account: "" }], removed: "deleted" },
+    ]);
+    expect(nameless.skipped[0]).toBe(
+      "the App was uninstalled from installation i-8, which this Socket did not list",
+    );
+  });
+
   it("carries the provider's own reason for a delivery that means nothing", async () => {
     const { db, close } = testDb();
     closers.push(close);

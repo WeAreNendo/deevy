@@ -420,6 +420,43 @@ async function applyInstallation(
   const known = Array.isArray(socket.config.installations)
     ? (socket.config.installations as { id: string; account: string }[])
     : [];
+  const write = async (installations: { id: string; account: string }[]) => {
+    const config = { ...socket.config, installations };
+    await db
+      .update(socketTable)
+      .set({ config, updatedAt: applying.now() })
+      .where(eq(socketTable.id, socket.id));
+    // The row this call was handed is what the rest of the delivery reads.
+    applying.socket = { ...socket, config };
+  };
+
+  // Taken off the list: an installation that is gone, or suspended, has no
+  // token to mint and no repository to offer.
+  if (event.removed) {
+    const leaving = new Set(event.installations.map((one) => one.id));
+    const gone = known.filter((one) => leaving.has(one.id));
+    if (gone.length === 0) {
+      const where = event.installations
+        .map((one) => one.account || `installation ${one.id}`)
+        .join(", ");
+      return event.removed === "deleted"
+        ? `the App was uninstalled from ${where}, which this Socket did not list`
+        : `the App was suspended on ${where}, which this Socket did not list`;
+    }
+    await write(known.filter((one) => !leaving.has(one.id)));
+    await appendEvent(source, {
+      kind: "socket.installation_removed",
+      subjectType: "socket",
+      subjectId: socket.id,
+      payload: {
+        name: socket.name,
+        accounts: gone.map((one) => one.account),
+        why: event.removed,
+      },
+    });
+    return null;
+  }
+
   const merged = [...known];
   const added: { id: string; account: string }[] = [];
   for (const installation of event.installations) {
@@ -429,14 +466,7 @@ async function applyInstallation(
       added.push(installation);
     } else merged[at] = installation;
   }
-
-  const config = { ...socket.config, installations: merged };
-  await db
-    .update(socketTable)
-    .set({ config, updatedAt: applying.now() })
-    .where(eq(socketTable.id, socket.id));
-  // The row this call was handed is what the rest of the delivery reads.
-  applying.socket = { ...socket, config };
+  await write(merged);
 
   await appendEvent(source, {
     kind: "socket.installation_added",

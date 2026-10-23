@@ -229,6 +229,17 @@ describe("the Events a Socket causes", () => {
     );
   });
 
+  it("says where a GitHub App stopped working, and whether it can come back", () => {
+    const removed = (why: string) =>
+      describeEvent({
+        kind: "socket.installation_removed",
+        payload: { name: "acme on GitHub", accounts: ["acme"], why },
+      })?.text;
+
+    expect(removed("deleted")).toBe("acme on GitHub was uninstalled from acme");
+    expect(removed("suspended")).toBe("acme on GitHub was suspended on acme");
+  });
+
   it("says a record was routed rather than assigned by hand", () => {
     expect(
       describeEvent({

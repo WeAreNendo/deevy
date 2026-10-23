@@ -5,6 +5,9 @@ import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" 
 import commented from "./fixtures/github/issue_comment.created.json" with { type: "json" };
 import subIssue from "./fixtures/github/sub_issues.added.json" with { type: "json" };
 import installed from "./fixtures/github/installation.created.json" with { type: "json" };
+import uninstalled from "./fixtures/github/installation.deleted.json" with { type: "json" };
+import suspended from "./fixtures/github/installation.suspend.json" with { type: "json" };
+import unsuspended from "./fixtures/github/installation.unsuspend.json" with { type: "json" };
 
 /**
  * What a GitHub delivery means, in deevy's terms (ADR-0024).
@@ -202,5 +205,25 @@ describe("what deevy makes of the rest", () => {
     expect(tracker().normalize("installation", installed)).toEqual([
       { kind: "installation", installations: [{ id: "61892041", account: "acme" }] },
     ]);
+  });
+
+  it("takes an installation off the list when it is deleted or suspended", () => {
+    const acme = [{ id: "61892041", account: "acme" }];
+
+    // Neither mints a token any more, so neither has a repository to offer.
+    expect(tracker().normalize("installation", uninstalled)).toEqual([
+      { kind: "installation", installations: acme, removed: "deleted" },
+    ]);
+    expect(tracker().normalize("installation", suspended)).toEqual([
+      { kind: "installation", installations: acme, removed: "suspended" },
+    ]);
+    // And one unsuspended works again, so it is an installation like any other.
+    expect(tracker().normalize("installation", unsuspended)).toEqual([
+      { kind: "installation", installations: acme },
+    ]);
+    // Repositories taken out of an installation leave the installation itself.
+    expect(
+      tracker().normalize("installation_repositories", { ...installed, action: "removed" }),
+    ).toEqual([{ kind: "installation", installations: acme }]);
   });
 });
