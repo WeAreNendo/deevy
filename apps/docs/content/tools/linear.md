@@ -90,8 +90,11 @@ own page. An account in a different Linear workspace is refused. See
 
 ## Rotate the client secret
 
-Rotating the application's client secret in Linear ends every token deevy made with the old one. Connect
-the Socket again with the new secret.
+Rotating the application's client secret in Linear ends every token deevy made with the old one, and a
+Socket keeps the secret it was connected with. To move to the new one, connect a new Linear Socket with
+it, bind each Project again to the new Socket, under a new slug, and archive the old Project; then
+disconnect the old Socket. The records come back under the new Socket, and the old Projects stay
+readable.
 
 ## Change the webhook signing secret
 

@@ -104,8 +104,10 @@ except the variables you name in `DEEVY_AGENT_PASS_ENV`: add each of those to th
 | `DEEVY_AGENT_REPO`, `DEEVY_AGENT_GIT_TOKEN`, `DEEVY_AGENT_BASE_BRANCH` | none, none, `main`               | Together, a repository to work that no Socket holds. Leave all three unset when your Projects name a repository.                                                             |
 | `DEEVY_AGENT_IMAGE`                                                    | `deevy-agent:latest`             | With deevy's Compose file, the image the runtime runs, and so its coding agent. Read by Compose, not by the runtime.                                                         |
 
-The image sets which coding agent it runs; the runtime refuses to start if that coding agent's credential is
-missing.
+The image sets which coding agent it runs. The `cursor` and `copilot` images refuse to start without their
+credential. The `claude-code` and `opencode` images start without one, since Claude Code may already be
+signed in and OpenCode's key depends on the model you choose; a Run then fails with the coding agent's own
+error until you give it one.
 
 ## Tell it when there is work
 
@@ -148,7 +150,8 @@ The runtime works one Run at a time:
 6. When the coding agent has changed files, the runtime makes sure they are committed and pushed on a branch
    named after the Run, and deevy opens the pull request through the Project's Socket, saying
    `Closes <the record's URL>`. The pull request becomes a Link on the record, carrying the Run's id.
-7. It reports what the Run spent, then the Run finishes, with a summary a Human can act on.
+7. The coding agent finishes the Run, with a summary a Human can act on, and the runtime reports what the
+   Run spent.
 
 Every commit is the Agent's: the clone is given its name and address. Runs that changed nothing attach
 nothing.

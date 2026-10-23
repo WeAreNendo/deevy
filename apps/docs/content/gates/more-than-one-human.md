@@ -50,8 +50,9 @@ work takes somebody else; stopping it does not.
 - **A changed Proposal starts again.** If the Agent changes what it is asking, approvals given to the old
   Proposal do not carry over.
 - **An approval stands for its record.** A later Run on the same record that asks with the same Proposal at
-  the same Checkpoint goes past without asking anybody, as long as the earlier Gate's approvals still meet
-  the Checkpoint as it is set now. Raise **Approvals** and it asks again.
+  the same Checkpoint goes past without asking anybody, as long as the earlier Gate had as many approvals
+  as the Checkpoint asks for now. Raise **Approvals** and it asks again. Who gave them is not checked
+  again, so a change to **Who may rule** applies to new Proposals, not to one already approved.
 
 ## Who is asked
 

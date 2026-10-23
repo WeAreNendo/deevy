@@ -12,7 +12,7 @@ their own, and a trail in the [Event log](/concepts/events/). A Member is one of
 - **An Agent** is an automated system that works under its own identity, with a key of its own, and is
   accountable to a Sponsor.
 
-Screens always show which is which: a Human's avatar is round and blue, an Agent's square and rose.
+Screens always show which is which: a Human's avatar is round and indigo, an Agent's square and rose.
 
 ## Humans
 
@@ -85,7 +85,8 @@ renamed and reused:
 - **You sign in to deevy with it.** If you sign in with GitHub, your comments on GitHub already count.
 - **You link it** under **Settings › Identities** while signed in.
 
-**Settings › Identities** lists the accounts that can rule as you and how deevy knows each. **Unlink** stops
+**Settings › Identities** lists the accounts deevy has linked to you and how it knows each; the account you
+sign in with joins the list the first time it rules. **Unlink** stops
 one ruling as you, and it stays unlinked until you link it again. See
 [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
 

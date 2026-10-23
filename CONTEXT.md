@@ -42,7 +42,7 @@ self-hosted deployment serves one Workspace; a hosted one serves many, each in i
 _Avoid_: organization, tenant, account, instance
 
 **Socket**:
-One connected external tool under one identity: a GitHub App, a Linear app, a GitLab application, a Notion
+One connected external tool under one identity: a GitHub App, a Linear app, a GitLab account, a Notion
 connection, a Slack app. A Socket has capabilities — tracker, forge, docs, chat — and holds the credential
 deevy uses to act there.
 _Avoid_: integration, connector, plugin, provider (for the row; the provider is the kind of tool)

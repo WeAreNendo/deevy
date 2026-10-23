@@ -44,9 +44,10 @@ With a Project granted, a record reaches the Agent when:
 
 - it is labelled with the Project's routing label and the Agent's handle, such as `agent:planner`;
 - a comment mentions the account deevy acts as in that tool and then the Agent, such as
-  `@deevy planner, try again`;
+  `@deevy planner, try again`, unless the Project has **Route by mention** turned off;
 - the Agent is the Project's **Default Agent**, and nothing else named anybody;
-- in Linear, somebody assigns the issue to deevy and the Agent is the Project's default.
+- in Linear, somebody assigns the issue to deevy, or in Notion, adds deevy's connection to the row's people
+  property, and the Agent is the Project's default.
 
 Each of these opens a Run for the Agent, waiting for it to start. In a Project the Agent wasn't granted,
 none of them does: a label or a mention naming it there starts nothing. An Agent has at most one open Run on a

@@ -37,8 +37,9 @@ new Gate, one visit later, and any approvals on the old one are spent.
 
 An approval stands for its record. When a later Run on the same record asks with the same Proposal at the
 same Checkpoint, deevy answers it with the Gate already approved and the Run goes on without asking anybody,
-as long as those approvals still meet the Checkpoint as it is set now. The Run's feed names the Gate it
-went past on.
+as long as that Gate had as many approvals as the Checkpoint asks for now. Who gave them is not checked
+again, so a change to **Who may rule** or **Not the Human the work is for** applies to new Proposals, not
+to one already approved. The Run's feed names the Gate it went past on.
 
 ## Proposal
 

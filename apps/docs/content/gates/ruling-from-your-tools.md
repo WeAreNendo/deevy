@@ -62,7 +62,7 @@ or a login, which can be renamed and reused: it matches the tool's own account i
 | Slack  | You sign in to deevy with Slack, to the Socket's Slack team, or link Slack with a code (below).                                                                                             |
 | Notion | Notion has no account to link. A comment counts only when an admin turns on **Take a verified address as proof** on the Socket's page, and Notion reports an address you verified in deevy. |
 
-A Ruling proved only by an email address is weaker than an account, so wherever it is shown it says
+A Ruling proved only by an email address is weaker than an account, so the Gate's page marks it
 "(email)".
 
 ### Link an account
@@ -77,8 +77,9 @@ Open **Settings › Identities** while signed in to deevy:
   **Check the code**, make sure the account it names is yours, and choose **Link @you to me** (with your
   Slack name).
 
-The table at the top of **Settings › Identities** lists every account that can rule as you, and how deevy
-knows it's yours. **Unlink** stops one ruling as you, and it stays unlinked until you choose **Link again**.
+The table at the top of **Settings › Identities** lists the accounts deevy has linked to you, and how it
+knows each is yours. The account you sign in with already counts, and joins the table the first time it
+rules. **Unlink** stops one ruling as you, and it stays unlinked until you choose **Link again**.
 
 ## When the tool has to reach deevy
 

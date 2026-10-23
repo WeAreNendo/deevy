@@ -92,8 +92,8 @@ Notion Socket under **Documents**. An Agent working the Project can then read a 
 a record links it. Only a page shared with the connection answers.
 
 Where Notion cannot give all of a page, such as a very long page, a child page not shared with the
-connection, or a bookmark or an embed, deevy marks each gap and ends the page with its link, so the Agent
-knows what it has not seen.
+connection, or a bookmark or an embed, Notion marks the gap where it can, and deevy ends the page with a
+note and its link, so the Agent knows something is missing.
 
 ## What deevy writes in Notion
 
@@ -110,7 +110,7 @@ Notion reports for its author. An admin decides whether that is enough: on the S
 commented**, turn on **Take a verified address as proof**.
 
 With it on, a `/approve` or `/reject <why>` comment counts as the Member whose verified address in deevy
-matches, and every Ruling made that way says "(email)" wherever it is shown. With it off, a comment in
+matches, and the Gate's page marks every Ruling made that way "(email)". With it off, a comment in
 Notion rules nothing. See [Ruling from your tools](/gates/ruling-from-your-tools/).
 
 :::note[deevy Cloud]

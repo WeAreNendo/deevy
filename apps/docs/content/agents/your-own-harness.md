@@ -124,7 +124,9 @@ A loop that works one record at a time looks like this:
 5. **Ask at a Checkpoint, and stop.** `gates_request` with the Run, the Checkpoint's name, such as `plan`,
    and a short Proposal in markdown. The Run waits on a Human and never goes stale while it does. When
    somebody rules, the Run is `active` again and the Agent finds a `run_answered` Notification in its
-   inbox; `gates_get` says which way it went and what the Human wrote.
+   inbox; `gates_get` says which way it went and what the Human wrote. Over MCP, a client that declares
+   it takes URL elicitations gets the Gate's page as one instead, an `input_required` answer to retry once
+   the Human has ruled; any other client gets the same URL in a plain answer.
 6. **Deliver.** Push a branch, then `pulls_open` with the Run and a `summary`, which becomes the pull
    request's title and body. deevy opens it through the Project's Socket and attaches it to the record.
 7. **Finish.** `runs_finish` with `status: "completed"` or `"failed"` and a summary a Human can act on.

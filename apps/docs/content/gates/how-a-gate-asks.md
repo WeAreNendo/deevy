@@ -19,14 +19,17 @@ A Gate you may approve shows up in several places at once. Answer it in whicheve
   the Gate beside the list, ready to rule.
 - **Your tracker**, as a comment on the record with the Proposal and how to rule from there, if the Project
   mirrors Gates. See [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
-- **Slack**, in a room your admin routed Gates to, or as a direct message once your Slack account is linked.
+- **Slack**, in a room your admin routed Gates to, or as a direct message once your Slack account is linked
+  under **Settings › Identities**. Signing in to deevy with Slack doesn't link it on its own: it is linked
+  the first time you click **Approve** or **Reject** in a room, or when you type `/deevy link` in Slack.
 - **Email**, at the address your sign-in confirmed. See [Email](/notifications/email/).
 
 The Agent can also hand you the Gate's own link. From a terminal, `deevy gates open acme/deevy#42` opens the
 Gate waiting on that record in your browser.
 
 If a Gate is still waiting four hours later, its Notification comes back unread in the Inbox of everyone it
-asked, and again every four hours until the Gate is decided.
+is still waiting on, which leaves out whoever has already ruled, and again every four hours until the Gate
+is decided. A Run waiting on a plain question is reminded the same way.
 
 :::note[Self-hosted]
 The reminder interval is `DEEVY_GATE_REMINDER_HOURS`, 4 by default. See
@@ -63,12 +66,15 @@ cannot approve or reject anything.
 
 ### When you cannot rule
 
-Where you may not rule, the card says why in place of the keyboard hints, and **Approve** and **Reject** are
-greyed out. The reasons are the server's own, so they are exactly what would refuse you:
+Where you may not rule on a Gate still waiting, the card says why in place of the keyboard hints, and
+**Approve** and **Reject** are greyed out. The reasons are the server's own, so they are exactly what would
+refuse you:
 
 - you have already ruled on this Gate;
-- the Checkpoint names who may rule, and you are not one of them;
-- the Gate was already approved, rejected or superseded.
+- the Checkpoint names who may rule, and you are not one of them.
+
+Once a Gate is decided the buttons are gone, and the card says **This Gate was approved**, **rejected** or
+**superseded**.
 
 ### When you can only reject
 

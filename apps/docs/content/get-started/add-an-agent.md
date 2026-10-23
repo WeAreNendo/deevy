@@ -20,8 +20,8 @@ Any Member can add an Agent. To give it work, you need a Project bound to a repo
    it is how your tools name it, as in `agent:builder`.
 3. Choose **Create**.
 
-You are its Sponsor, the Human accountable for it. You can hand that to another Human later, on the
-Agent's page.
+You are its Sponsor, the Human accountable for it. An admin can hand that to another Human later, on
+the Agent's page.
 
 ## Keep its key
 

@@ -51,8 +51,9 @@ To stop typing the URL, set it once:
 export DEEVY_URL=https://app.deevy.dev/acme
 ```
 
-Every command then talks to that Workspace. `--deevy-url <url>` on a command points that one command
-elsewhere.
+Every command then talks to that Workspace. To point one command elsewhere, give `login`, `logout`,
+`whoami`, `gates open` and `events watch` the URL as their last argument, and any other command
+`--deevy-url <url>`.
 
 ## Check who you are
 

@@ -55,8 +55,8 @@ See [Channels](/notifications/channels/) for the other Notifications you can rou
 
 ## Rule from Slack
 
-A Gate arrives in the channel with its Proposal and two buttons. **Approve** rules at once; **Reject** asks
-why first. When anybody rules, in Slack, in deevy or in the tracker, deevy changes the message to say so:
+A Gate arrives in the channel with its Proposal and three buttons: **Approve**, **Reject** and **Open in
+deevy**. **Approve** rules at once; **Reject** asks why first. When anybody rules, in Slack, in deevy or in the tracker, deevy changes the message to say so:
 the click is answered straight away and the message a moment later.
 
 A click counts only for a Slack account deevy can place as a Member:

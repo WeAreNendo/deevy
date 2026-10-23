@@ -22,8 +22,15 @@ back as it was at a moment within them.
 
 ## The deevy Cloud console
 
-Your deevy Cloud account (your name and email address, as GitHub or Google gave them), the Workspaces
-you asked for, the beta's invitations and the waitlist are kept in a database in the EU too.
+These are kept in a database in the EU too:
+
+- your deevy Cloud account: your name, email address and picture, as GitHub or Google gave them, and
+  the tokens they gave when you signed in, sealed;
+- the sessions you sign in with, each with the browser it was in and, where the request carried it,
+  your IP address;
+- the Workspaces you asked for, and a record of what you did with them in the console: asking for one,
+  exporting it, deleting it and bringing it back;
+- the beta's invitations and the waitlist.
 
 ## What passes outside the EU
 
@@ -33,8 +40,9 @@ you asked for, the beta's invitations and the waitlist are kept in a database in
 - **The directory of addresses.** What turns a Workspace's address into its database is copied
   worldwide. It holds the address, an internal key and whether the Workspace is running, and nothing
   from inside it.
-- **Request logs.** Cloudflare keeps logs of requests for a few days. They name the Workspace a request
-  was for, and carry nothing from its database.
+- **Request logs.** Cloudflare keeps logs of requests for a few days. They name the Workspace and the
+  address a request was for, which can hold a record's key such as `acme/deevy#42`, and carry nothing
+  else from its database.
 - **Signing in.** You sign in with GitHub or Google, so whichever you choose knows that you signed in
   to deevy.
 - **Email.** Your Workspace's email (Notifications, Gates, invitations) is sent through Cloudflare's email

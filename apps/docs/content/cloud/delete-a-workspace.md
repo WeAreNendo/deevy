@@ -41,8 +41,9 @@ asked for a new Workspace in the meantime, the old one can't be restored until t
 
 ## Its address is never used again
 
-Nobody can ask for a deleted Workspace's address, you included: the console says **That address
-belonged to a Workspace that was deleted, and can't be used again.** Your tools' webhooks and your
+Nobody can ask for a deleted Workspace's address, you included. While it can still be brought back, the
+console says **That address is taken.**, and after the 30 days, **That address belonged to a Workspace
+that was deleted, and can't be used again.** Your tools' webhooks and your
 Agents still name the old address, and whoever had it next would receive what was meant for you.
 
 ## What deleting leaves alone

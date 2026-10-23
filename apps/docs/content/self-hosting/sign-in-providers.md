@@ -158,9 +158,10 @@ offers one such provider.
 deevy asks for `openid`, `profile` and `email` only, uses PKCE, and verifies the ID token, so the discovery
 document must name an issuer and a `jwks_uri`.
 
-deevy reads the discovery document **once, when it starts**. If your provider can't be reached at that
-moment, deevy skips it with a line in its log, and the sign-in page offers the other providers without it.
-Its button comes back when deevy starts again: restart deevy, or, on Cloudflare Workers, deploy it again. Because the sign-in page waits for that read, an issuer that hangs delays every button on it, not
+deevy reads the discovery document **once, when it starts**; on Cloudflare Workers, once in each instance
+Cloudflare starts. If your provider can't be reached at that moment, deevy skips it with a line in its log,
+and the sign-in page offers the other providers without it. Its button comes back when deevy starts again:
+restart deevy, or, on Cloudflare Workers, deploy it again or wait for Cloudflare to start a new instance. Because the sign-in page waits for that read, an issuer that hangs delays every button on it, not
 only its own. Point `DEEVY_OIDC_ISSUER` at something reachable, or leave it unset.
 
 ## Which addresses count
@@ -172,7 +173,7 @@ link is the proof.
 
 | Provider               | Verified when                                                        |
 | ---------------------- | -------------------------------------------------------------------- |
-| GitHub, Google         | Always                                                               |
+| GitHub, Google         | The provider says so, as it does for an address you confirmed there  |
 | GitLab                 | The account's address has been confirmed                             |
 | Slack                  | Slack says so                                                        |
 | Microsoft              | One of the optional claims in [Microsoft](#microsoft) step 5 says so |

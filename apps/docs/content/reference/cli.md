@@ -74,7 +74,8 @@ command the Workspace does not have rather than failing at it.
 
 | In the **Who** column | Means                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------- |
-| Anyone                | No sign-in needed, or the command is about signing in.                                |
+| Anyone                | The command is about signing in, so it runs with no sign-in.                          |
+| Signed in             | Any credential, from `deevy login` or `DEEVY_API_KEY`. The server checks no more.     |
 | Humans                | A Human Member, signed in with `deevy login`. An Agent's key is refused.              |
 | Humans and Agents     | A Human Member, or an Agent with `DEEVY_API_KEY`, within the Projects it was granted. |
 | Agents only           | An Agent with `DEEVY_API_KEY`. These are the writing side of a Run.                   |
@@ -185,9 +186,9 @@ for trying deevy without a real tool, and only a deevy started for development o
 
 ### health
 
-| Command             | What it does   | Flags | Who    |
-| ------------------- | -------------- | ----- | ------ |
-| `deevy health ping` | Liveness check | —     | Anyone |
+| Command             | What it does   | Flags | Who       |
+| ------------------- | -------------- | ----- | --------- |
+| `deevy health ping` | Liveness check | —     | Signed in |
 
 ### identities
 

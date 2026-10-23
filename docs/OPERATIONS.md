@@ -1516,10 +1516,11 @@ lets it see the Project. A comment mentioning the App and an Agent — `@<app> b
 for that Agent too. deevy writes its own `deevy:awaiting-approval` label the first time it needs it, and an
 Agent's sub-issues are GitHub's own.
 
-**The code.** A Run clones with an installation token GitHub mints for that one repository, which lives an
-hour and never leaves the runtime's supervisor; a Run resumed after a Gate is given a fresh one. deevy opens
-the pull request through the App, saying `Closes <issue URL>` — so merging it closes the issue on GitHub — and
-signed with the Agent and the Run, as its comments are.
+**The code.** A Run clones with an installation token GitHub mints for the App's whole installation, which
+lives an hour and never leaves the runtime's supervisor. deevy caches it until a minute before it expires and
+shares it with every other call for that installation, so a Run resumed after a Gate is handed whichever token
+is current. deevy opens the pull request through the App, saying `Closes <issue URL>` — so merging it closes
+the issue on GitHub — and signed with the Agent and the Run.
 
 This section was walked against github.com on 2026-09-25: an App made from the manifest on a personal
 account, installed on one private repository, and a record taken from a label to a merged pull request with
@@ -1578,7 +1579,9 @@ account in the Socket's workspace, rules with no linking step: a Linear account 
 the same id on both sides (ADR-0027). Anybody else links theirs once, under **Settings › Identities › Link
 Linear**: Linear asks them to consent on its own page, deevy reads which account and which workspace said
 yes, and gives the token back at once. An account in another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
-deevy minted with the old one; connect the Socket again with the new one.
+deevy minted with the old one, and a connected Socket takes no new credentials (`sockets.connect` refuses one
+already connected, and `sockets.update` takes none): connect a new Socket with the new secret, bind each
+Project again to it under a new slug, archive the old Project, then disconnect the old Socket.
 
 This section has been checked against everything Linear publishes — its GraphQL schema, its SDK's webhook
 verification, its authentication docs and its real endpoints — but **not yet walked in a Linear workspace**
@@ -1622,7 +1625,9 @@ reaches the session or `.git/config`. deevy opens a **merge request** from the R
 with — gitlab.com, or `GITLAB_ISSUER` — takes its accounts from sign-in, so a Human who signs in with GitLab
 rules with no linking step, and one who signs in otherwise links GitLab under **Settings › Identities**. A
 Socket on any other GitLab shares nothing with sign-in. A comment by a project or group access token's bot
-rules nothing. When the token expires, connect the Socket again with a new one.
+rules nothing. A connected Socket takes no new token, so before the token expires, connect a new Socket with a
+new one, bind each Project again to it under a new slug, archive the old Project, then disconnect the old
+Socket.
 
 This section has been checked against what GitLab publishes — its webhook docs' own examples, the Standard
 Webhooks reference implementation, its API docs, and gitlab.com's API answering a public project's reads —
@@ -1673,8 +1678,8 @@ markdown ends saying so, with the page's link.
 **Ruling from Notion** is `/approve` and `/reject <why>` in a comment, as elsewhere, with one difference:
 Notion has no account a Human can link, so the only proof of who wrote a comment is the address Notion reports
 for its author. It counts only on a Socket where an admin turned on **Take a verified address as proof** on
-the Socket's page, only against an address a Member verified in deevy, and every Ruling it makes says
-"(email)" wherever it is shown ([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)).
+the Socket's page, only against an address a Member verified in deevy, and the Gate's page marks every
+Ruling it makes "(email)" ([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)).
 
 This section has been checked against what Notion publishes — its SDK's types, its API reference, its example
 deliveries and its signing helper, and api.notion.com answering a made-up token — but **not yet walked in a
@@ -1737,7 +1742,7 @@ renamed and reused. What it matches is the tool's own account id, against one of
   the only place deevy accepts one.
 - **The address the tool reports**, matched to one a Member has verified — only on a Socket where an admin
   turned it on (`sockets.update` with `identityByEmail`), because it is a weaker proof. It is meant for a tool
-  with nothing better to offer, and every Ruling it makes says "(email)" wherever it is shown.
+  with nothing better to offer, and the Gate's page marks every Ruling it makes "(email)".
 
 A comment by an account deevy cannot place rules nothing, and deevy says so on the record with a link to
 Settings › Identities; so does a comment the Checkpoint refuses, and one on a record with nothing waiting. A

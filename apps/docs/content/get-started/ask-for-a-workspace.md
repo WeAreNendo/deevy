@@ -18,11 +18,12 @@ deevy Cloud is open by invitation for now. If yours hasn't arrived, sign in anyw
 
 1. Go to [app.deevy.dev](https://app.deevy.dev/) and sign in with GitHub or Google. This is your
    deevy Cloud account, which is how you ask for Workspaces and look after them.
-2. Choose **New Workspace**.
+2. Choose **Ask for a Workspace**.
 3. Give it a **Name**, the one your team will see, such as `Acme`.
 4. Choose its **Address**. Your Workspace lives at `app.deevy.dev/` followed by it, so `acme` gives
    `app.deevy.dev/acme`. An address is 3 to 40 lowercase letters, digits and hyphens, and starts and
-   ends with a letter or a digit. It is checked as you type.
+   ends with a letter or a digit. A few words deevy keeps for itself, such as `admin`, `api` and
+   `docs`, are reserved. It is checked as you type.
 5. Choose **Create Workspace**.
 
 deevy sets your Workspace up and takes you to it.

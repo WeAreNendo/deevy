@@ -22,9 +22,11 @@ remembers it in a cookie that holds nothing but the provider's name.
 
 ### GitHub or Google
 
-Either works, and both lead to the same Member as long as they carry the same email address. GitHub and
-Google both confirm your address, so signing in with Google one day and GitHub the next is still you.
-Two different addresses are two different Humans.
+Either works, and both lead to the same Member as long as they carry the same email address. As long as
+GitHub and Google have both confirmed that address, signing in with Google one day and GitHub the next is
+still you. Two different addresses are two different Humans, unless you link the second account: a
+GitHub account you link under **Settings › Identities** signs you in as well, whatever its address
+([Ruling from your tools](/gates/ruling-from-your-tools/)).
 
 Signing in with GitHub asks to read which organizations you belong to. That is how a rule that lets in a
 GitHub organization knows you are in it ([Invite your team](/get-started/invite-your-team/)), so such a
