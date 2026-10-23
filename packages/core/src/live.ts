@@ -113,6 +113,11 @@ export interface SubscribeOptions extends LiveOptions {
   db: Db;
   workspaceId: string;
   projectId?: string | null;
+  /**
+   * Leave out the Events whose subject is an invitation, as `events.list`
+   * does for anyone but an admin: who was invited is an admin's to read.
+   */
+  hideInvitations?: boolean;
   after?: number;
   signal?: AbortSignal;
   heartbeatMs?: number;
@@ -174,13 +179,10 @@ export async function* subscribeToEvents(
 }
 
 async function latestSeq(
-  options: Pick<SubscribeOptions, "db" | "workspaceId" | "projectId">,
+  options: Pick<SubscribeOptions, "db" | "workspaceId" | "projectId" | "hideInvitations">,
 ): Promise<number> {
   const rows = await options.db.query.event.findMany({
-    where: {
-      workspaceId: options.workspaceId,
-      ...(options.projectId ? { projectId: options.projectId } : {}),
-    },
+    where: readable(options),
     orderBy: { seq: "desc" },
     limit: 1,
     columns: { seq: true },
@@ -190,14 +192,24 @@ async function latestSeq(
 
 function readAfter(options: SubscribeOptions, cursor: number) {
   return options.db.query.event.findMany({
-    where: {
-      workspaceId: options.workspaceId,
-      seq: { gt: cursor },
-      ...(options.projectId ? { projectId: options.projectId } : {}),
-    },
+    where: { ...readable(options), seq: { gt: cursor } },
     orderBy: { seq: "asc" },
     limit: 200,
   });
+}
+
+/**
+ * The Events this subscriber may be sent. The cursor is chosen from the same
+ * rows, so it never names an Event the stream would have left out.
+ */
+function readable(
+  options: Pick<SubscribeOptions, "workspaceId" | "projectId" | "hideInvitations">,
+) {
+  return {
+    workspaceId: options.workspaceId,
+    ...(options.projectId ? { projectId: options.projectId } : {}),
+    ...(options.hideInvitations ? { subjectType: { ne: "invitation" } } : {}),
+  };
 }
 
 /** Resolves early when the request is aborted, so nothing keeps the loop alive. */
