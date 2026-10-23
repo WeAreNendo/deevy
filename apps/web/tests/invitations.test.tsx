@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 interface StubInvitation {
@@ -23,7 +23,19 @@ const stub = vi.hoisted(() => ({
   emailNotSent: null as string | null,
   session: null as { user: { email: string; emailVerified?: boolean } } | null,
   member: null as { id: string; role: string } | null,
+  /** What this deployment signs in with, as `health.ping` reports it: GitHub unless a test says. */
+  providers: [{ id: "github", label: "GitHub", kind: "social" }] as Array<{
+    id: string;
+    label: string;
+    kind: "social";
+  }>,
+  /** How many times `health.ping` has answered, so a test can wait for the screen to know. */
+  pinged: 0,
 }));
+
+const github = { id: "github", label: "GitHub", kind: "social" as const };
+const gitlab = { id: "gitlab", label: "GitLab", kind: "social" as const };
+const google = { id: "google", label: "Google", kind: "social" as const };
 
 vi.mock("../src/lib/auth.ts", () => ({
   authClient: {
@@ -38,6 +50,20 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
   const { stubClient } = await import("./stub-client.ts");
   const client = stubClient({
+    health: {
+      ping: async () => {
+        stub.pinged += 1;
+        return {
+          ok: true,
+          time: new Date(0).toISOString(),
+          devSignIn: false,
+          devSockets: false,
+          providers: stub.providers,
+          version: null,
+          live: "stream",
+        };
+      },
+    },
     me: {
       get: async () => ({
         user: { email: stub.session?.user.email ?? "" },
@@ -99,6 +125,7 @@ afterEach(() => {
   stub.emailNotSent = null;
   stub.session = null;
   stub.member = null;
+  stub.providers = [github];
   window.sessionStorage.clear();
   window.history.pushState({}, "", "/");
 });
@@ -295,6 +322,38 @@ describe("signed in, not yet a Member", () => {
     mount(<App />);
     expect(await screen.findByText(/approve your email domain/)).toBeTruthy();
     expect(screen.queryByText(/didn.t confirm/)).toBeNull();
+  });
+
+  /**
+   * A GitHub organization or GitLab group rule is decided by the account
+   * somebody signed in with on that forge, so the screen names one only where
+   * people sign in with it here, as Settings › General offers it: deevy Cloud,
+   * which signs in with GitHub and Google, sent people to ask for a GitLab
+   * group rule it cannot have.
+   */
+  it("names only the rules this deployment can offer", async () => {
+    stub.session = { user: { email: "grace@example.com", emailVerified: true } };
+    const says = async (providers: (typeof stub)["providers"], sentence: string) => {
+      stub.providers = providers;
+      const pinged = stub.pinged;
+      const { unmount } = mount(<App />);
+      // Until the providers are read the screen names only the email domain,
+      // so wait for them, and for the render they cause, before reading it.
+      await waitFor(() => expect(stub.pinged).toBeGreaterThan(pinged));
+      await act(() => new Promise((settled) => setTimeout(settled, 0)));
+      const line = await screen.findByText(new RegExp(`approve your ${sentence} — then sign in`));
+      const text = line.textContent ?? "";
+      unmount();
+      return text;
+    };
+
+    expect(await says([github, google], "email domain or GitHub organization")).not.toMatch(
+      /GitLab/,
+    );
+    expect(await says([google], "email domain")).not.toMatch(/GitHub|GitLab/);
+    expect(await says([github, gitlab], "email domain, GitHub organization or GitLab group")).toBe(
+      "grace@example.com isn't a Member of this Workspace yet. Ask an admin to invite you, or to approve your email domain, GitHub organization or GitLab group — then sign in again.",
+    );
   });
 
   it("asks for an invitation when the provider did not confirm the address", async () => {
