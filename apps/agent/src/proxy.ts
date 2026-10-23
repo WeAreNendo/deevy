@@ -39,6 +39,13 @@ export interface ProxyOptions {
    */
   onDenied?: (name: string) => void | Promise<void>;
   /**
+   * Called with every granted tool call and its arguments, and awaited before
+   * the call is forwarded, so whatever the supervisor owes deevy first reaches
+   * it first: the delivery, before a session's `runs_finish` closes the feed
+   * that delivery is said in (src/work.ts).
+   */
+  onCall?: (name: string, args: Record<string, unknown>) => void | Promise<void>;
+  /**
    * The fetch that reaches deevy. A test hands it the app's own handler, so
    * the forwarded request goes through the same routing and authentication a
    * deployed instance uses.
@@ -96,7 +103,7 @@ export interface JsonRpcMessage {
   jsonrpc?: string;
   id?: string | number | null;
   method?: string;
-  params?: { name?: unknown };
+  params?: { name?: unknown; arguments?: unknown };
   result?: { tools?: Array<{ name: string }> };
   error?: { code: number; message: string };
 }
@@ -195,6 +202,7 @@ export function openProxy(options: ProxyOptions): Promise<Proxy> {
         await refuse(response, message.id, typeof name === "string" ? name : "?");
         return;
       }
+      await options.onCall?.(name, argumentsOf(message.params?.arguments));
     }
 
     const answered = await forward(method, headers, body);
@@ -278,6 +286,24 @@ export function openProxy(options: ProxyOptions): Promise<Proxy> {
       });
     });
   });
+}
+
+/**
+ * A tool call's arguments as the supervisor reads them: the object the
+ * protocol says they are, or one a client sent as a JSON string, or nothing.
+ */
+function argumentsOf(value: unknown): Record<string, unknown> {
+  let args = value;
+  if (typeof args === "string") {
+    try {
+      args = JSON.parse(args) as unknown;
+    } catch {
+      return {};
+    }
+  }
+  return args && typeof args === "object" && !Array.isArray(args)
+    ? (args as Record<string, unknown>)
+    : {};
 }
 
 /** One JSON-RPC message, a batch, or null for a body that is not JSON. */

@@ -2,7 +2,7 @@ import { DeevyError, isOpen, type Checkout, type Deevy, type Ruling, type Run } 
 import { branchFor, deliver, openPull, type Delivery, type DeliverOptions } from "./deliver.ts";
 import { openGitProxy, type GitProxy } from "./git-proxy.ts";
 import type { Proxy } from "./proxy.ts";
-import { branchesPushed, movedRefs, refsFrom, sentenceFor } from "./refs.ts";
+import { branchesPushed, movedRefs, refsFrom, sentenceFor, type MovedRef } from "./refs.ts";
 import type { Session, SessionEvent, Usage } from "./session.ts";
 import { openWorkspace, type RepoConfig, type Workspace } from "./workspace.ts";
 
@@ -36,9 +36,13 @@ export interface WorkOptions {
   /**
    * deevy as the session reaches it: a loopback proxy holding the key and the
    * tool list, opened for one Run and closed after it (src/proxy.ts). The
-   * supervisor hands it what to do with a refusal.
+   * supervisor hands it what to do with a refusal, and what to do before a
+   * call reaches deevy.
    */
-  proxy: (options: { onDenied: (name: string) => Promise<void> }) => Promise<Proxy>;
+  proxy: (options: {
+    onDenied: (name: string) => Promise<void>;
+    onCall: (name: string, args: Record<string, unknown>) => Promise<void>;
+  }) => Promise<Proxy>;
   /**
    * What this Run works in: the repository, the branch and the credential
    * deevy issues from the Project's forge Socket (ADR-0024). Defaults to
@@ -50,9 +54,13 @@ export interface WorkOptions {
    * git as the session reaches it: a loopback proxy that holds the credential
    * and forwards to the real remote (src/git-proxy.ts). Answering null leaves
    * the session's `origin` the remote itself, and only the supervisor can push
-   * to it — which is what a runtime with no repository has anyway.
+   * to it — which is what a runtime with no repository has anyway. The
+   * supervisor hands it what to do once a push has landed.
    */
-  gitProxy?: (checkout: Checkout) => Promise<GitProxy | null>;
+  gitProxy?: (
+    checkout: Checkout,
+    options: { onPushed: () => Promise<void> },
+  ) => Promise<GitProxy | null>;
   /** Aborted when the process is stopping, on top of each Run's own timeout. */
   signal?: AbortSignal;
   runTimeoutMs: number;
@@ -254,9 +262,20 @@ export async function workRun(
   let git: GitProxy | null = null;
   let checkout: Checkout | null = null;
   let workspace: Workspace;
+  // Every ref the Run moves is said in its feed as the supervisor sees it move:
+  // each push the git proxy carries, and the delivery. Set once the clone has
+  // said what the remote held before the Run.
+  let ledger: Ledger | null = null;
   try {
     checkout = await (options.checkout ?? ((one: Run) => deevy.checkout(one.id)))(run);
-    git = checkout ? await (options.gitProxy ?? defaultGitProxy)(checkout) : null;
+    git = checkout
+      ? await (options.gitProxy ?? defaultGitProxy)(checkout, {
+          // Bounded by the Run's own deadline, like everything the session
+          // waits on: a push is not over until this is.
+          onPushed: () =>
+            ledger ? within(ledger.tell(signal), signal).catch(() => undefined) : Promise.resolve(),
+        })
+      : null;
     workspace = await (options.workspace ?? openWorkspace)({
       runId: run.id,
       repo: repoFor(checkout),
@@ -279,7 +298,10 @@ export async function workRun(
   // What the remote had before the Run. An Agent pushes where it likes
   // (ADR-0019), so the account of what it moved is what the runtime owes a
   // Human in place of a refusal.
-  const before = workspace.repo ? await readRefs(workspace) : new Map<string, string>();
+  const before = workspace.repo
+    ? ((await readRefs(workspace)) ?? new Map<string, string>())
+    : new Map<string, string>();
+  if (workspace.repo) ledger = refLedger(deevy, run.id, workspace, before);
 
   const timeout = AbortSignal.timeout(runTimeoutMs);
   const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
@@ -302,9 +324,81 @@ export async function workRun(
       .postActivity(run.id, "error", `Refused ${event.name}: ${event.reason}`)
       .catch(() => undefined);
   }
+  // The branch, the push and the pull request, once per session. When the
+  // session finishes its Run, this runs just before deevy hears the finish,
+  // because a finished Run takes no more Activities and the branch pushed here
+  // is one; a session that ends any other way leaves its Run open, and this
+  // runs once it has ended.
+  //
+  // Whoever is waiting on it waits no longer than its deadline allows, and the
+  // git it runs is stopped there: a hung push or pull request holds neither a
+  // session's `runs_finish` past the Run's timeout nor the runtime after it.
+  let delivery: Promise<void> | null = null;
+  function deliverOnce(bound: AbortSignal, summary?: string): Promise<void> {
+    delivery ??= (async () => {
+      if (!workspace.repo) return;
+      try {
+        // What the session pushed for itself, before the supervisor considers
+        // pushing anything: a session that delivered has delivered, and a
+        // second branch beside its own is noise (ADR-0019).
+        const own = branchesPushed(
+          await movedSince(workspace, before, bound),
+          workspace.repo.baseBranch,
+        );
+        // What the Agent said when it finished, which is what a reviewer
+        // reads: its reasoning is in the feed, and nobody opening a pull
+        // request goes looking there (docs/plans/agent-owns-git.md).
+        const said = summary ?? (await deevy.run(run.id).catch(() => null))?.summary ?? undefined;
+        delivered =
+          own.length > 0
+            ? await attribute(own, options, run, said)
+            : await (options.deliver ?? deliver)({
+                workspace,
+                deevy,
+                issueKey: run.issueKey,
+                runId: run.id,
+                branch: checkout?.headBranch ?? branchFor(run.issueKey, run.id),
+                author: authorOf(options),
+                ...(said ? { summary: said } : {}),
+                signal: bound,
+              });
+      } catch (error) {
+        // The work happened; only the record of it failed. Say so in the feed
+        // and let the Run's own outcome stand.
+        const why = bound.aborted
+          ? "it ran out of time"
+          : error instanceof Error
+            ? error.message
+            : String(error);
+        await deevy
+          .comment(
+            run.issueKey,
+            `The work on Run \`${run.id}\` is done and could not be delivered: ${why}`,
+          )
+          .catch(() => undefined);
+      }
+      // The git proxy said so as it carried the push; this is for an `origin`
+      // with no proxy in front of it.
+      await ledger?.tell(bound);
+    })();
+    return within(delivery, bound);
+  }
+
   const proxy = await options.proxy({
     onDenied: (name) =>
       refused({ type: "denied", name, reason: "not in this runtime's tool list" }),
+    // Any `runs_finish` for this Run, however its id arrives: deevy refuses one
+    // for a Run this Agent may not finish, so a call whose id the proxy could
+    // not read is still this session ending its work. One that plainly names
+    // another of the Agent's Runs is the exception, because delivering this
+    // Run then would cut short a session that is still working it.
+    onCall: async (name, args) => {
+      if (name !== "runs_finish") return;
+      if (typeof args.runId === "string" && args.runId.trim() !== run.id) return;
+      await deliverOnce(signal, typeof args.summary === "string" ? args.summary : undefined).catch(
+        () => undefined,
+      );
+    },
   });
 
   try {
@@ -354,46 +448,32 @@ export async function workRun(
     // acceptance walk said when it did.
     // Before the directory goes: whatever the session left behind is the only
     // evidence there will ever be that this attempt did anything.
-    if (workspace.repo && !failure) {
-      try {
-        // What the session pushed for itself, before the supervisor considers
-        // pushing anything: a session that delivered has delivered, and a
-        // second branch beside its own is noise (ADR-0019).
-        const own = branchesPushed(await movedSince(workspace, before), workspace.repo.baseBranch);
-        // What the Agent said when it finished, which is what a reviewer
-        // reads: its reasoning is in the feed, and nobody opening a pull
-        // request goes looking there (docs/plans/agent-owns-git.md).
-        const said = (await deevy.run(run.id).catch(() => null))?.summary ?? undefined;
-        delivered =
-          own.length > 0
-            ? await attribute(own, options, run, said)
-            : await (options.deliver ?? deliver)({
-                workspace,
-                deevy,
-                issueKey: run.issueKey,
-                runId: run.id,
-                branch: checkout?.headBranch ?? branchFor(run.issueKey, run.id),
-                author: authorOf(options),
-                ...(said ? { summary: said } : {}),
-              });
-      } catch (error) {
-        // The work happened; only the record of it failed. Say so in the feed
-        // and let the Run's own outcome stand.
-        const why = error instanceof Error ? error.message : String(error);
-        await deevy
-          .comment(
-            run.issueKey,
-            `The work on Run \`${run.id}\` is done and could not be delivered: ${why}`,
-          )
-          .catch(() => undefined);
-      }
-    }
-    // After the delivery, so the record covers what the supervisor pushed on
-    // the session's behalf as well as what the session pushed itself.
-    if (workspace.repo) {
-      for (const sentence of await sentencesFor(workspace, before)) {
-        await deevy.postActivity(run.id, "action", sentence).catch(() => undefined);
-      }
+    //
+    // The Run's own deadline may have passed with the session, so what is left
+    // gets a bound of its own, as long as a Run may take and never more than
+    // five minutes: enough for a push and a pull request, and short of holding
+    // the runtime, which works one Run at a time.
+    const settling = AbortSignal.timeout(Math.min(runTimeoutMs, 5 * 60_000));
+    if (workspace.repo && !failure) await deliverOnce(settling).catch(() => undefined);
+    // Whatever moved that nothing has said yet — a session that failed still
+    // pushed what it pushed — for a Run that is still open to hear it.
+    if (ledger) await within(ledger.tell(settling), settling).catch(() => undefined);
+    // And for one that is not. A move deevy would not take is one the feed
+    // will never say: the session finished its Run without the proxy seeing
+    // it, or pushed after it had. Said on the record instead, rather than lost
+    // without a word.
+    const unsaid = ledger?.unsaid() ?? [];
+    if (unsaid.length > 0) {
+      await deevy
+        .comment(
+          run.issueKey,
+          [
+            `Run \`${run.id}\` was finished before its feed could say what it moved:`,
+            "",
+            ...unsaid.map((sentence) => `- ${sentence}`),
+          ].join("\n"),
+        )
+        .catch(() => undefined);
     }
     await workspace.release();
     await git?.close();
@@ -439,20 +519,23 @@ function repoFor(checkout: Checkout | null): RepoConfig | null {
 }
 
 /** git on loopback, in front of whatever the checkout named. */
-function defaultGitProxy(checkout: Checkout): Promise<GitProxy> {
+function defaultGitProxy(
+  checkout: Checkout,
+  options: { onPushed: () => Promise<void> },
+): Promise<GitProxy> {
   return openGitProxy({
     upstream: checkout.cloneUrl,
     token: checkout.token,
     username: checkout.username,
+    ...options,
   });
 }
 
 /**
  * What a Human reads on the record, once there is a branch to name.
  *
- * A comment rather than an Activity, and that is forced rather than chosen: the
- * model finishes its own Run, and a finished Run takes no more Activities, so
- * by the time there is a branch to name the feed is closed. The Link is not
+ * A comment, beside the Activity the push already is in the Run's feed: the
+ * feed is deevy's, and the record is where the team reads. The Link is not
  * written here — `pulls.open` attaches it as it opens the pull request, so
  * evidence is attributed to the attempt that produced it whoever asked for it
  * (packages/core/src/operations/pulls.ts).
@@ -492,13 +575,94 @@ function describe(error: unknown, instead: string | null): string {
   return "The session stopped for a reason it did not give";
 }
 
-/** The refs the remote has now, read through the same origin the session pushes to. */
-async function readRefs(workspace: Workspace): Promise<Map<string, string>> {
-  return refsFrom(await workspace.git(["ls-remote", "origin"]).catch(() => ""));
+/**
+ * The refs the remote has now, read through the same origin the session pushes
+ * to, or null when it did not answer.
+ */
+async function readRefs(
+  workspace: Workspace,
+  signal?: AbortSignal,
+): Promise<Map<string, string> | null> {
+  try {
+    return refsFrom(await workspace.git(["ls-remote", "origin"], { signal }));
+  } catch {
+    return null;
+  }
+}
+
+/** Says in a Run's feed what has moved on the remote since it last said. */
+interface Ledger {
+  /** Reads the remote and says what moved, git stopped when `signal` is. */
+  tell(signal?: AbortSignal): Promise<void>;
+  /** Every sentence deevy would not take, in the order it refused them. */
+  unsaid(): string[];
 }
 
 /**
- * What this Run moved, as sentences for its feed.
+ * The longest a step may hold up whoever waits on it: its own result, or a
+ * refusal once `signal` is aborted. What it started is stopped by the signal
+ * where it was handed one, and left to finish otherwise.
+ */
+function within<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(signal.reason);
+    signal.addEventListener("abort", stop, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
+  });
+}
+
+/**
+ * What a Run moves, said in its feed as it moves rather than when the runtime
+ * lets go. The session finishes its own Run, and a finished Run takes no more
+ * Activities, so a ref said after the session is a ref never said.
+ *
+ * Each telling reads the remote and says what changed since the last, one
+ * Activity per ref, and tellings take turns: a push and the delivery behind it
+ * are each said once, in the order they happened. A remote that did not answer
+ * has said nothing, rather than that every ref on it is gone.
+ */
+function refLedger(
+  deevy: Deevy,
+  runId: string,
+  workspace: Workspace,
+  before: ReadonlyMap<string, string>,
+): Ledger {
+  let told = before;
+  let turn = Promise.resolve();
+  const refused: string[] = [];
+  return {
+    tell(signal) {
+      turn = turn
+        .then(async () => {
+          const now = await readRefs(workspace, signal);
+          if (!now) return;
+          for (const moved of await movedBetween(workspace, told, now, signal)) {
+            const sentence = sentenceFor(moved);
+            await deevy.postActivity(runId, "action", sentence).catch(() => {
+              refused.push(sentence);
+            });
+          }
+          told = now;
+        })
+        .catch(() => undefined);
+      return turn;
+    },
+    unsaid: () => [...refused],
+  };
+}
+
+/** What this Run has moved on the remote so far. */
+async function movedSince(
+  workspace: Workspace,
+  before: ReadonlyMap<string, string>,
+  signal?: AbortSignal,
+): Promise<MovedRef[]> {
+  return movedBetween(workspace, before, (await readRefs(workspace, signal)) ?? before, signal);
+}
+
+/**
+ * What moved between two readings of the remote.
  *
  * `merge-base --is-ancestor` needs both commits in the clone, and the clone is
  * shallow: a ref somebody else moved while the Run was working can leave the
@@ -506,31 +670,60 @@ async function readRefs(workspace: Workspace): Promise<Map<string, string>> {
  * deliberate — a Human told to look at something that turns out to be fine
  * costs a minute, and the other mistake costs the work.
  */
-async function sentencesFor(
+async function movedBetween(
   workspace: Workspace,
   before: ReadonlyMap<string, string>,
-): Promise<string[]> {
-  return (await movedSince(workspace, before)).map(sentenceFor);
-}
-
-/** What this Run has moved on the remote so far. */
-async function movedSince(
-  workspace: Workspace,
-  before: ReadonlyMap<string, string>,
-): Promise<Awaited<ReturnType<typeof movedRefs>>> {
+  after: ReadonlyMap<string, string>,
+  signal?: AbortSignal,
+): Promise<MovedRef[]> {
   return movedRefs({
     before,
-    after: await readRefs(workspace),
+    after,
     isAncestor: async (older, newer) => {
-      // Fetching first, because a commit the session did not make is not in a
-      // shallow clone until it is asked for.
-      await workspace.git(["fetch", "--quiet", "origin", older, newer]).catch(() => undefined);
-      return workspace
-        .git(["merge-base", "--is-ancestor", older, newer])
-        .then(() => true)
-        .catch(() => false);
+      const asked = await ancestry(workspace, older, newer, signal);
+      if (asked !== null) return asked;
+      // A commit the session did not make is not in a shallow clone until it
+      // is asked for. The session may still be working in this clone, as
+      // another user, so the fetch leaves it one pack and nothing else: no
+      // loose objects in directories it could not then write in, and no
+      // FETCH_HEAD it could not replace (src/session-user.ts).
+      await workspace
+        .git(
+          [
+            "-c",
+            "fetch.unpackLimit=1",
+            "fetch",
+            "--quiet",
+            "--no-write-fetch-head",
+            "origin",
+            older,
+            newer,
+          ],
+          { signal },
+        )
+        .catch(() => undefined);
+      return (await ancestry(workspace, older, newer, signal)) ?? false;
     },
   });
+}
+
+/**
+ * Whether one commit is in another's history, as the clone can say without
+ * fetching: null when it is missing either, which is git's exit code other
+ * than 0 or 1.
+ */
+async function ancestry(
+  workspace: Workspace,
+  older: string,
+  newer: string,
+  signal?: AbortSignal,
+): Promise<boolean | null> {
+  try {
+    await workspace.git(["merge-base", "--is-ancestor", older, newer], { signal });
+    return true;
+  } catch (error) {
+    return (error as { code?: unknown }).code === 1 ? false : null;
+  }
 }
 
 /**

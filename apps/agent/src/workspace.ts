@@ -26,8 +26,11 @@ export interface Workspace {
   cwd: string;
   /** The repository it holds, or null when this runtime has none configured. */
   repo: RepoConfig | null;
-  /** Runs git in this working directory, with the credential the session never sees. */
-  git(args: string[]): Promise<string>;
+  /**
+   * Runs git in this working directory, with the credential the session never
+   * sees, stopped when `signal` is.
+   */
+  git(args: string[], options?: { signal?: AbortSignal }): Promise<string>;
   /** Removes the directory, whatever happened in it. */
   release(): Promise<void>;
 }
@@ -89,15 +92,12 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
   // does not: git refuses a repository owned by another user unless told, and
   // the supervisor is the one that has to read what the session left
   // (src/session-user.ts).
-  const git = async (args: string[]): Promise<string> => {
-    const { stdout } = await run("git", [
-      ...auth,
-      "-c",
-      `safe.directory=${cwd}`,
-      "-C",
-      cwd,
-      ...args,
-    ]);
+  const git = async (args: string[], how: { signal?: AbortSignal } = {}): Promise<string> => {
+    const { stdout } = await run(
+      "git",
+      [...auth, "-c", `safe.directory=${cwd}`, "-C", cwd, ...args],
+      how.signal ? { signal: how.signal } : {},
+    );
     return stdout.trim();
   };
 
