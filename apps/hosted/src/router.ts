@@ -70,7 +70,7 @@ export async function route(
 
   const entry = await lookup(bindings.DIRECTORY, first);
   if (!entry) return notFound();
-  if (entry.status === "suspended") return suspended();
+  if (entry.status === "suspended") return suspendedPage();
 
   const base = `/${first}`;
   const inner = underBase(path, base);
@@ -99,7 +99,7 @@ function toWorkspace(
   hosted: HostedEnv,
   entry: DirectoryEntry,
 ): Promise<Response> {
-  if (entry.status === "suspended") return Promise.resolve(suspended());
+  if (entry.status === "suspended") return Promise.resolve(suspendedPage());
   return workspaceStub(bindings, hosted, entry.key).fetch(request);
 }
 
@@ -121,10 +121,26 @@ function notFound(): Response {
   return page(404, "Not found", "There is no Workspace here.");
 }
 
-function suspended(): Response {
+/**
+ * What a suspended Workspace is, in the sentence the console opens its own line
+ * about one with, as apps/docs/content/cloud/support.md quotes it. Short enough
+ * for a WebSocket's close reason, which is where an open tab hears it
+ * (workspace.ts).
+ */
+export const SUSPENDED = "This Workspace is suspended: nobody can use it until it is resumed.";
+
+/**
+ * What a suspended Workspace says to whoever reaches it, here and from its
+ * object (workspace.ts). The directory knows only that it is suspended, not
+ * who did it: its owner deleting it, which they can undo from the console for
+ * 30 days, or deevy Cloud, which only support can undo. So after `SUSPENDED`
+ * it says what is true of both, sending the visitor to the owner and the owner
+ * to the console, whose page on the Workspace says which, or to support.
+ */
+export function suspendedPage(): Response {
   return page(
     403,
     "Workspace suspended",
-    "This Workspace is suspended. Its owner can bring it back from the console.",
+    `${SUSPENDED} Ask its owner, who can see why in <a href="/">the console</a> or write to <a href="mailto:support@deevy.dev">support@deevy.dev</a>.`,
   );
 }
