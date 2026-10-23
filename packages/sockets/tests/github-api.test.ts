@@ -2,6 +2,8 @@ import { generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createGithubSocket, resetGithubTokens } from "../src/github/index.ts";
 import installations from "./fixtures/github/app.installations.json" with { type: "json" };
+import firstHundred from "./fixtures/github/installation.repositories.page-1.json" with { type: "json" };
+import theRest from "./fixtures/github/installation.repositories.page-2.json" with { type: "json" };
 import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" };
 
 /**
@@ -274,6 +276,22 @@ describe("how deevy authenticates", () => {
     expect(listed.every((one) => one.authorization.startsWith("Bearer eyJ"))).toBe(true);
   });
 
+  it("stops learning installations at a hundred pages, whatever the server answers", async () => {
+    const full = Array.from({ length: 100 }, (_, at) => ({
+      id: 1000 + at,
+      account: { login: "a" },
+    }));
+    const { module, asked } = githubReturning({
+      "GET /app": { id: 1284461, slug: "deevy", name: "deevy" },
+      // The same full page for every `page`.
+      "GET /app/installations": full,
+    });
+
+    await module.identity();
+
+    expect(asked.filter((one) => one.url.includes("/app/installations"))).toHaveLength(100);
+  });
+
   it("talks to a GitHub Enterprise Server where one is configured", async () => {
     const apiBase = "https://github.acme.test/api/v3";
     const { module, asked } = githubReturning(
@@ -443,6 +461,49 @@ describe("reading a repository", () => {
     const containers = await module.tracker?.listContainers();
 
     expect(containers?.map((one) => one.scopeKey)).toEqual(["acme/deevy", "acme-labs/site"]);
+  });
+
+  it("offers every page of an installation's repositories, not only the first hundred", async () => {
+    // As GitHub answered for an installation on 101: its largest page, then one more.
+    const { tracker, asked } = githubReturning({
+      "POST /app/installations/61892041/access_tokens": {
+        token: "ghs_token",
+        expires_at: "2026-09-21T11:00:00Z",
+      },
+      "GET /installation/repositories?per_page=100&page=1": firstHundred,
+      "GET /installation/repositories?per_page=100&page=2": theRest,
+    });
+
+    const containers = await tracker.listContainers();
+
+    expect(containers).toHaveLength(101);
+    expect(containers[0]?.scopeKey).toBe("acme/deevy");
+    expect(containers.at(-1)).toEqual({
+      scope: { scopeKey: "acme/ops", baseBranch: "trunk" },
+      scopeKey: "acme/ops",
+      name: "acme/ops",
+    });
+    // A short page is the last one, and both are read with the one token.
+    const listed = asked.filter((one) => one.url.includes("/installation/repositories"));
+    expect(listed).toHaveLength(2);
+    expect(listed.every((one) => one.authorization === "Bearer ghs_token")).toBe(true);
+    expect(asked.filter((one) => one.url.includes("access_tokens"))).toHaveLength(1);
+  });
+
+  it("stops at a hundred pages where a server answers the same full page for every one", async () => {
+    // Every `page` is answered with the first hundred, as a proxy that drops
+    // the query would: read to a short page, the list would never end.
+    const { tracker, asked } = githubReturning({
+      "POST /app/installations/61892041/access_tokens": {
+        token: "ghs_token",
+        expires_at: "2026-09-21T11:00:00Z",
+      },
+      "GET /installation/repositories": firstHundred,
+    });
+
+    await tracker.listContainers();
+
+    expect(asked.filter((one) => one.url.includes("/installation/repositories"))).toHaveLength(100);
   });
 });
 

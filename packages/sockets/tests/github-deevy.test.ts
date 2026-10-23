@@ -245,7 +245,7 @@ function githubApi() {
       token: "ghs_installation_token_for_acme",
       expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
     },
-    "GET /installation/repositories?per_page=100": {
+    "GET /installation/repositories?per_page=100&page=1": {
       repositories: [{ full_name: "acme/deevy", name: "deevy", default_branch: "main" }],
     },
   };
