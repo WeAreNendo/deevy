@@ -73,9 +73,13 @@ export function titleFor(issueKey: string, summary?: string): string {
  * pull request is a worse record than none.
  */
 export async function deliver(options: DeliverOptions): Promise<Delivery | null> {
-  const { branch } = options;
-  const git = (args: string[]) =>
-    options.workspace.git(args, options.signal ? { signal: options.signal } : {});
+  const { branch, workspace } = options;
+  // The remote the supervisor opened, named outright: the clone's `origin` is
+  // the session's, and may point anywhere by now (src/workspace.ts).
+  const { remote } = workspace;
+  if (remote === null) return null;
+  const how = options.signal ? { signal: options.signal } : {};
+  const git = (args: string[]) => workspace.git(args, how);
   const dirty = await git(["status", "--porcelain"]);
   if (dirty === "") return null;
 
@@ -83,13 +87,18 @@ export async function deliver(options: DeliverOptions): Promise<Delivery | null>
   // clone each time. Branching from the base again would push a history the
   // remote's own branch is not part of, which git rejects and which loses the
   // second pass's work; continuing the branch keeps both passes on it
-  // (docs/plans/agent-owns-git.md).
-  const already = await git(["ls-remote", "--heads", "origin", branch]).catch(() => "");
-  if (already.trim() === "") {
+  // (docs/plans/agent-owns-git.md). It continues from the commit the remote
+  // names, fetched by its hash, so whatever answers the fetch can hand over
+  // that commit and no other.
+  const ref = `refs/heads/${branch}`;
+  const already = (await workspace.refs([ref], how).catch(() => new Map<string, string>())).get(
+    ref,
+  );
+  if (already === undefined) {
     await git(["checkout", "-b", branch]);
   } else {
-    await git(["fetch", "--quiet", "origin", branch]);
-    await git(["checkout", "--quiet", "-B", branch, "FETCH_HEAD"]);
+    await git(["fetch", "--quiet", remote, already]);
+    await git(["checkout", "--quiet", "-B", branch, already]);
   }
   await git(["add", "-A"]);
   await git([
@@ -103,7 +112,16 @@ export async function deliver(options: DeliverOptions): Promise<Delivery | null>
     titleFor(options.issueKey, options.summary),
   ]);
   const commit = await git(["rev-parse", "HEAD"]);
-  await git(["push", "--quiet", "origin", branch]);
+  await git(["push", "--quiet", remote, `${commit}:${ref}`]);
+  // The push runs in the clone, whose configuration can still send a URL
+  // named outright somewhere else. What the remote holds is asked from outside
+  // it, so a branch that went elsewhere is a delivery that failed, never one
+  // the record says was pushed. A remote that does not answer the question
+  // says nothing either way, and the push git said it made stands.
+  const landed = await workspace.refs([ref], how).catch(() => null);
+  if (landed && landed.get(ref) !== commit) {
+    throw new Error(`the remote does not have ${branch} at ${commit.slice(0, 7)} after the push`);
+  }
 
   return { branch, commit, pullRequest: await openPull(options, branch) };
 }

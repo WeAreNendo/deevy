@@ -104,26 +104,26 @@ CI never sets it. A milestone whose suite needs a paid key is a milestone nobody
 
 ## The files
 
-| File                         | What it is                                                                                                                        |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `src/config.ts`              | Everything it reads from the environment, once, never at module scope.                                                            |
-| `src/deevy.ts`               | deevy over HTTP, hand-written, narrow: the operations the supervisor itself calls.                                                |
-| `src/proxy.ts`               | deevy's MCP endpoint as the session sees it: loopback, no credential, the tool list enforced.                                     |
-| `src/session.ts`             | The seam, and the five events the supervisor has an opinion about.                                                                |
-| `src/harness/contract.ts`    | What a recipe is: binary, environment, strip list, `prepare`, argv, parser, bounds.                                               |
-| `src/harness/run.ts`         | The one way a harness runs: the subprocess, the session's home, the strip, the timeout, the `done` an exit code implies.          |
-| `src/harness/claude-code.ts` | Claude Code on `claude -p`. Also `opencode.ts`, `cursor.ts`, `copilot.ts`; `index.ts` is the registry.                            |
-| `src/instructions.md`        | What the session is told about working an Issue. The original of the snippet in [`docs/agent-loop.md`](../../docs/agent-loop.md). |
-| `src/work.ts`                | One pass and one Run: discovery, the claim, the envelope, the resume.                                                             |
-| `src/workspace.ts`           | A clone per Run, the credential the session never sees, and the supervisor's git in it, run as the session.                       |
-| `src/deliver.ts`             | The branch, the push, and the pull request deevy opens for it.                                                                    |
-| `src/loop.ts`                | Staying up: a sequential loop, backoff, and a stop that finishes the sentence.                                                    |
-| `src/receiver.ts`            | `/healthz`, and deevy's signed deliveries.                                                                                        |
-| `src/main.ts`                | The process.                                                                                                                      |
-| `src/index.ts`               | What the package exports, for the acceptance script and for anyone embedding it.                                                  |
-| `harness.sh`                 | Installs one CLI at a pinned version; the Dockerfile's `HARNESS` build argument names which.                                      |
-| `scripts/acceptance.ts`      | The milestone's own walk, on both deployments, with nothing outside this machine. CI runs it.                                     |
-| `scripts/boot.ts`            | Starting deevy on either deployment locally, with the outside world stubbed.                                                      |
+| File                         | What it is                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `src/config.ts`              | Everything it reads from the environment, once, never at module scope.                                                              |
+| `src/deevy.ts`               | deevy over HTTP, hand-written, narrow: the operations the supervisor itself calls.                                                  |
+| `src/proxy.ts`               | deevy's MCP endpoint as the session sees it: loopback, no credential, the tool list enforced.                                       |
+| `src/session.ts`             | The seam, and the five events the supervisor has an opinion about.                                                                  |
+| `src/harness/contract.ts`    | What a recipe is: binary, environment, strip list, `prepare`, argv, parser, bounds.                                                 |
+| `src/harness/run.ts`         | The one way a harness runs: the subprocess, the session's home, the strip, the timeout, the `done` an exit code implies.            |
+| `src/harness/claude-code.ts` | Claude Code on `claude -p`. Also `opencode.ts`, `cursor.ts`, `copilot.ts`; `index.ts` is the registry.                              |
+| `src/instructions.md`        | What the session is told about working an Issue. The original of the snippet in [`docs/agent-loop.md`](../../docs/agent-loop.md).   |
+| `src/work.ts`                | One pass and one Run: discovery, the claim, the envelope, the resume.                                                               |
+| `src/workspace.ts`           | A clone per Run, the credential the session never sees, the supervisor's git in it run as the session, and the remote read past it. |
+| `src/deliver.ts`             | The branch, the push, and the pull request deevy opens for it.                                                                      |
+| `src/loop.ts`                | Staying up: a sequential loop, backoff, and a stop that finishes the sentence.                                                      |
+| `src/receiver.ts`            | `/healthz`, and deevy's signed deliveries.                                                                                          |
+| `src/main.ts`                | The process.                                                                                                                        |
+| `src/index.ts`               | What the package exports, for the acceptance script and for anyone embedding it.                                                    |
+| `harness.sh`                 | Installs one CLI at a pinned version; the Dockerfile's `HARNESS` build argument names which.                                        |
+| `scripts/acceptance.ts`      | The milestone's own walk, on both deployments, with nothing outside this machine. CI runs it.                                       |
+| `scripts/boot.ts`            | Starting deevy on either deployment locally, with the outside world stubbed.                                                        |
 
 ## Copying it into your own repository
 

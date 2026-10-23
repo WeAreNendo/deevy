@@ -1939,7 +1939,9 @@ each part does:
   a Gate governs whether a Run goes past a Checkpoint, not a ref (ADR-0019). Keep what it can reach small —
   a GitHub App installed on the repositories it works, a GitLab user who is a Developer on them and nothing
   more — protect the branches that matter, and read the Run's feed: every ref a Run moved is an Activity naming the
-  branch, both commits, and whether history was rewritten.
+  branch, both commits, and whether history was rewritten. The branch and its commits are read from the remote
+  itself, never through the clone, so a session that points its `origin` elsewhere hides no move; whether
+  history was rewritten is read from the clone's objects, which the session can write.
 - **A Gate is the last line.** An Agent can never approve one (ADR-0004), so nothing an agent proposes ships
   without a Human deciding it did.
 

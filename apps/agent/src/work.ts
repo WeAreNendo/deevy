@@ -2,7 +2,7 @@ import { DeevyError, isOpen, type Checkout, type Deevy, type Ruling, type Run } 
 import { branchFor, deliver, openPull, type Delivery, type DeliverOptions } from "./deliver.ts";
 import { openGitProxy, type GitProxy } from "./git-proxy.ts";
 import type { Proxy } from "./proxy.ts";
-import { branchesPushed, movedRefs, refsFrom, sentenceFor, type MovedRef } from "./refs.ts";
+import { branchesPushed, movedRefs, sentenceFor, type MovedRef } from "./refs.ts";
 import type { Session, SessionEvent, Usage } from "./session.ts";
 import { openWorkspace, type RepoConfig, type Workspace } from "./workspace.ts";
 
@@ -263,8 +263,8 @@ export async function workRun(
   let checkout: Checkout | null = null;
   let workspace: Workspace;
   // Every ref the Run moves is said in its feed as the supervisor sees it move:
-  // each push the git proxy carries, and the delivery. Set once the clone has
-  // said what the remote held before the Run.
+  // each push the git proxy carries, and the delivery. Set once the remote has
+  // said what it held before the Run.
   let ledger: Ledger | null = null;
   try {
     checkout = await (options.checkout ?? ((one: Run) => deevy.checkout(one.id)))(run);
@@ -377,7 +377,7 @@ export async function workRun(
           )
           .catch(() => undefined);
       }
-      // The git proxy said so as it carried the push; this is for an `origin`
+      // The git proxy said so as it carried the push; this is for a remote
       // with no proxy in front of it.
       await ledger?.tell(bound);
     })();
@@ -576,15 +576,17 @@ function describe(error: unknown, instead: string | null): string {
 }
 
 /**
- * The refs the remote has now, read through the same origin the session pushes
- * to, or null when it did not answer.
+ * The refs the remote has now, or null when it did not answer. Read from the
+ * remote the supervisor opened and from outside the clone, never through the
+ * clone's `origin`: the session can point that at a repository of its own,
+ * and the feed would say what that one moved (src/workspace.ts).
  */
 async function readRefs(
   workspace: Workspace,
   signal?: AbortSignal,
 ): Promise<Map<string, string> | null> {
   try {
-    return refsFrom(await workspace.git(["ls-remote", "origin"], { signal }));
+    return await workspace.refs([], { signal });
   } catch {
     return null;
   }
@@ -669,6 +671,13 @@ async function movedSince(
  * old commit unfetchable, and that answers "rewritten". Erring that way is
  * deliberate — a Human told to look at something that turns out to be fine
  * costs a minute, and the other mistake costs the work.
+ *
+ * Which refs moved, and from what commit to what, is the remote's word, read
+ * outside the clone. Whether a move kept the old commit's history is read from
+ * the clone's objects, with its replace refs, grafts and commit-graph ignored
+ * (src/workspace.ts); the objects are still the session's to write, so a
+ * session set on it could forge one to make a rewrite read as a move, though
+ * not hide that the ref moved.
  */
 async function movedBetween(
   workspace: Workspace,
@@ -686,8 +695,12 @@ async function movedBetween(
       // is asked for. The session may still be working in this clone, so the
       // fetch leaves it one pack and nothing else: no FETCH_HEAD in place of
       // the one it last fetched, and no loose objects it did not ask for. It
-      // runs as the session's user, as all the supervisor's git here does
-      // (src/workspace.ts).
+      // runs as the session's user, as all the supervisor's git here does,
+      // and asks the remote the supervisor opened rather than `origin`
+      // (src/workspace.ts). It asks by hash, so whatever the clone's
+      // configuration sends it to can hand over those commits and no others.
+      const { remote } = workspace;
+      if (remote === null) return false;
       await workspace
         .git(
           [
@@ -696,7 +709,7 @@ async function movedBetween(
             "fetch",
             "--quiet",
             "--no-write-fetch-head",
-            "origin",
+            remote,
             older,
             newer,
           ],

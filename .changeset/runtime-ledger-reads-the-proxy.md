@@ -1,0 +1,5 @@
+---
+"@deevy/agent": patch
+---
+
+Security: the reference runtime no longer reads what a Run moved through the clone's own `origin`. The clone belongs to the coding agent, which could point `origin` at a repository of its own and have the Run's feed report that repository's branches instead of the real remote's — hiding a force-push of the base branch, or naming a branch nobody pushed — and have the runtime's own push and pull request go to that repository's branch as well. The runtime now reads the remote's branches from its git proxy, with no repository around the git that reads them, pushes to the proxy by its URL, and asks the remote afterwards whether the push landed, so a push the clone's configuration sent somewhere else is reported as not delivered rather than as pushed. When it tells a rewrite from a fast-forward it ignores the clone's replace refs, grafts and commit-graph, any of which could make a force-push read as an ordinary move. Upgrade the image; nothing needs configuring. If you embed the runtime and pass a `workspace` of your own, it now needs the `remote` and `refs` that `openWorkspace` returns.
