@@ -46,7 +46,8 @@ Generate each with `openssl rand -base64 32`, once, and keep them with your back
 different values.
 
 - **`BETTER_AUTH_SECRET`** signs sessions and the links deevy sends, such as an email's unsubscribe link,
-  and seals the sign-in providers' tokens. Changing it signs everybody out.
+  and seals the sign-in providers' tokens. Without it, deevy doesn't run: the Docker image exits at start,
+  and a Worker answers its API and `/healthz` with an error that names it. Changing it signs everybody out.
 - **`DEEVY_SECRET`** seals what deevy holds for the tools you connect, a key saved under **Settings ›
   Email**, and an invitation's link until it is emailed. It must be at least 32 characters. Without it,
   deevy refuses to connect a tool that needs a credential, and doesn't email invitations.

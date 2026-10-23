@@ -23,7 +23,7 @@ import type { EmailSenders } from "@deevy/core/email";
 import { emailSenders } from "@deevy/email";
 import { socketModules } from "@deevy/sockets";
 import type { WorkerBindings, WorkerEnv } from "./env.ts";
-import { readWorkerEnv, workerAuthEnv } from "./env.ts";
+import { authSecretProblem, readWorkerEnv, workerAuthEnv } from "./env.ts";
 
 /** Written by the build from package.json; see vite.config.ts. */
 declare const __DEEVY_VERSION__: string | undefined;
@@ -194,8 +194,25 @@ const cronLimits: DueWorkLimits = {
   socketPageLimit: 5,
 };
 
+/**
+ * What every request is answered with while the bindings carry no
+ * `BETTER_AUTH_SECRET`: the reason, to whoever asked and to `wrangler tail`.
+ * A 503 on `/healthz` too, so a probe that reads only the status sees a
+ * deployment that is not serving — which is how the Node server's refusal to
+ * start looks from outside (src/env.ts).
+ */
+function refusal(problem: string): Response {
+  console.error(problem);
+  return new Response(problem, {
+    status: 503,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
 export default {
   async fetch(request: Request, bindings: WorkerBindings): Promise<Response> {
+    const problem = authSecretProblem(bindings);
+    if (problem) return refusal(problem);
     const isolate = isolateFor(bindings);
     await isolate.ready;
     // Under a path, the SPA is the Worker's to serve: the platform's asset
@@ -226,6 +243,13 @@ export default {
    * hangs on a promise that never settles.
    */
   scheduled(_controller: unknown, bindings: WorkerBindings, ctx: ScheduledContext): void {
+    // Nothing runs without the secret, the sweeps included: the rows wait, and
+    // the first pass after it is set finds them all.
+    const problem = authSecretProblem(bindings);
+    if (problem) {
+      console.error(problem);
+      return;
+    }
     const isolate = isolateFor(bindings);
     ctx.waitUntil(
       isolate.ready.then(() =>
@@ -285,6 +309,10 @@ export default {
    * when `webhook.exhausted` is appended, exactly as it would in a sweep.
    */
   async queue(batch: QueueBatch, bindings: WorkerBindings): Promise<void> {
+    // Thrown, so the whole batch goes back on the queue; if the queue gives up
+    // first, the rows are still there for the Cron pass.
+    const problem = authSecretProblem(bindings);
+    if (problem) throw new Error(problem);
     const isolate = isolateFor(bindings);
     await isolate.ready;
     for (const message of batch.messages) {

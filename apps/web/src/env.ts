@@ -1,5 +1,5 @@
 import type { AssetFetcher } from "@deevy/adapters/workers";
-import { providersFromEnv, signInRelayFromEnv } from "@deevy/core";
+import { MISSING_AUTH_SECRET, providersFromEnv, signInRelayFromEnv } from "@deevy/core";
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { EmailSetup } from "@deevy/core/email";
@@ -198,6 +198,18 @@ function emailFrom(env: WorkerBindings): { email: EmailSetup | null; emailProble
   });
   if (read.problem) console.error(`deevy sends no email: ${read.problem}`);
   return { email: read.setup, emailProblem: read.problem };
+}
+
+/**
+ * Why this Worker serves nothing, or null when it may: no `BETTER_AUTH_SECRET`.
+ * workerd without `nodejs_compat` shows Better Auth no `NODE_ENV`, so it never
+ * refuses the default it falls back to and would sign everybody in on a
+ * published value (`MISSING_AUTH_SECRET`). Asked before the isolate is built,
+ * so nothing is ever signed with it; unlike a half-configured sender, there is
+ * nothing here that may stay up without it.
+ */
+export function authSecretProblem(env: WorkerBindings): string | null {
+  return env.BETTER_AUTH_SECRET?.trim() ? null : MISSING_AUTH_SECRET;
 }
 
 /**

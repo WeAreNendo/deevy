@@ -1,7 +1,14 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createSmtpSender, mountSpa, openDatabase } from "@deevy/adapters/node";
-import { basePathOf, createApp, createAuth, signInProviders, type AuthEnv } from "@deevy/core";
+import {
+  basePathOf,
+  createApp,
+  createAuth,
+  MISSING_AUTH_SECRET,
+  signInProviders,
+  type AuthEnv,
+} from "@deevy/core";
 import { emailSenders, stubOutbox } from "@deevy/email";
 import type { EmailSenders } from "@deevy/core/email";
 import { socketModules } from "@deevy/sockets";
@@ -52,6 +59,12 @@ export function nodeEmailSenders(devStub: boolean): EmailSenders {
 }
 
 export function buildServer(env: ServerEnv) {
+  // Before anything is opened, so the server never comes up at all. Better
+  // Auth would fall back to the default it publishes and refuse it only once a
+  // sign-in reached its context, with `/healthz` answering all the while.
+  // Here rather than in `readEnv`, because the import reads that too, and
+  // converting a dump for D1 needs no secret (MISSING_AUTH_SECRET).
+  if (!env.secret?.trim()) throw new Error(MISSING_AUTH_SECRET);
   if (env.databasePath !== ":memory:")
     mkdirSync(dirname(resolve(env.databasePath)), { recursive: true });
   const { db, close } = openDatabase({

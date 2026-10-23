@@ -25,6 +25,7 @@ export {
   bearerToken,
   bootstrapWorkspace,
   createAuth,
+  MISSING_AUTH_SECRET,
   signInProviders,
   slugify,
   type Auth,

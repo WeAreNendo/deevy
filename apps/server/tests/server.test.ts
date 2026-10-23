@@ -1,5 +1,5 @@
 import { fetchClientMetadataResource as shapeCheckTransport } from "@deevy/core/cimd";
-import { pagePolicy, signInProviders } from "@deevy/core";
+import { MISSING_AUTH_SECRET, pagePolicy, signInProviders } from "@deevy/core";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -127,6 +127,30 @@ describe("server", () => {
     } finally {
       fetch.mockRestore();
     }
+  });
+});
+
+/**
+ * Better Auth falls back to a default it publishes, and refuses that only where
+ * it reads `NODE_ENV=production` — inside its context, once the server is up —
+ * so the image answered `/healthz` and failed every sign-in. The server is
+ * refused before it opens anything instead (MISSING_AUTH_SECRET).
+ */
+describe("the instance secret", () => {
+  it("is required: without BETTER_AUTH_SECRET there is no server, and the error names it", () => {
+    for (const secret of [undefined, "", "   "]) {
+      expect(() => buildServer({ ...testEnv(), secret })).toThrow(MISSING_AUTH_SECRET);
+    }
+    expect(MISSING_AUTH_SECRET).toMatch(/^BETTER_AUTH_SECRET is not set/);
+  });
+
+  it("is the only one: Better Auth's own list is refused rather than read behind deevy's back", () => {
+    expect(() => readEnv({ BETTER_AUTH_SECRETS: "2:a-newer-secret,1:an-older-one" })).toThrow(
+      /BETTER_AUTH_SECRETS .* unset it/,
+    );
+    // The import reads the same environment and signs nothing, so it is not
+    // asked for a secret it would not use.
+    expect(readEnv({}).secret).toBeUndefined();
   });
 });
 
@@ -359,6 +383,7 @@ describe("email on the Node server", () => {
       ...readEnv({ DEEVY_DEV_STUB_EMAIL: "1" }),
       databasePath: ":memory:",
       migrationsFolder,
+      secret: "test-secret-test-secret-test-secret-1234",
     });
     const listed = await stubbed.app.request("/dev/email");
     expect(listed.status).toBe(200);
