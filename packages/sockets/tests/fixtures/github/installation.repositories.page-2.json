@@ -1,0 +1,15 @@
+{
+  "total_count": 101,
+  "repository_selection": "selected",
+  "repositories": [
+    {
+      "id": 856789642,
+      "node_id": "R_kgDOMxK7100",
+      "name": "ops",
+      "full_name": "acme/ops",
+      "private": true,
+      "html_url": "https://github.com/acme/ops",
+      "default_branch": "trunk"
+    }
+  ]
+}

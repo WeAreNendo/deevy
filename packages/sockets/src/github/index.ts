@@ -66,6 +66,13 @@ const TOKEN_SLACK_MS = 60_000;
 /** GitHub's largest page, and how a short one says it was the last. */
 const PAGE_SIZE = 100;
 
+/**
+ * The most pages one list is read to: ten thousand of anything. A server that
+ * ignores `page` answers the first one again and again, and a list read to a
+ * short page would then never end.
+ */
+const MAX_PAGES = 100;
+
 interface Minted {
   token: string;
   expiresAt: number;
@@ -237,7 +244,7 @@ export function createGithubSocket({
    */
   async function installedOn(): Promise<{ id: string; account: string }[]> {
     const found: { id: string; account: string }[] = [];
-    for (let page = 1; ; page += 1) {
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
       const rows = await asApp<
         { id: number; account?: { login?: string } | null; suspended_at?: string | null }[]
       >(`/app/installations?per_page=${String(PAGE_SIZE)}&page=${String(page)}`);
@@ -245,8 +252,9 @@ export function createGithubSocket({
         if (row.suspended_at) continue;
         found.push({ id: String(row.id), account: row.account?.login ?? "" });
       }
-      if (rows.length < PAGE_SIZE) return found;
+      if (rows.length < PAGE_SIZE) break;
     }
+    return found;
   }
 
   /**
@@ -538,7 +546,9 @@ export function createGithubSocket({
       },
 
       /**
-       * Every repository the App can see, one installation at a time.
+       * Every repository the App can see, one installation at a time and every
+       * page of each: an installation can cover more repositories than GitHub
+       * puts on its largest page, and the rest are as bindable as the first.
        *
        * Which installations is GitHub's word rather than the Socket's
        * (`whereInstalled`), so a Socket pasted before `identity` learned them,
@@ -550,20 +560,25 @@ export function createGithubSocket({
         const containers: Container[] = [];
         for (const installation of installations) {
           const token = await tokenForInstallation(installation.id);
-          const page = await call<{
-            repositories: { full_name: string; name: string; default_branch?: string | null }[];
-          }>(`/installation/repositories?per_page=100`, { token });
-          for (const repository of page.repositories) {
-            // With the branch it defaults to, which is what a Run starts from
-            // once the repository is bound as a Project's code (forgeBindingOf).
-            containers.push({
-              scope: {
-                scopeKey: repository.full_name,
-                ...(repository.default_branch ? { baseBranch: repository.default_branch } : {}),
-              },
-              scopeKey: repository.full_name,
-              name: repository.full_name,
+          for (let number = 1; number <= MAX_PAGES; number += 1) {
+            const page = await call<{
+              repositories: { full_name: string; name: string; default_branch?: string | null }[];
+            }>(`/installation/repositories?per_page=${String(PAGE_SIZE)}&page=${String(number)}`, {
+              token,
             });
+            for (const repository of page.repositories) {
+              // With the branch it defaults to, which is what a Run starts from
+              // once the repository is bound as a Project's code (forgeBindingOf).
+              containers.push({
+                scope: {
+                  scopeKey: repository.full_name,
+                  ...(repository.default_branch ? { baseBranch: repository.default_branch } : {}),
+                },
+                scopeKey: repository.full_name,
+                name: repository.full_name,
+              });
+            }
+            if (page.repositories.length < PAGE_SIZE) break;
           }
         }
         return containers;
