@@ -531,7 +531,9 @@ describe("the evidence a Run leaves on the Issue", () => {
         Promise.resolve({
           cwd: "/tmp/unused",
           repo: { url: "https://github.com/owner/repo.git", baseBranch: "main" },
+          remote: "https://github.com/owner/repo.git",
           git: () => Promise.resolve(""),
+          refs: () => Promise.resolve(new Map<string, string>()),
           release: () => Promise.resolve(),
         }),
       delivered,

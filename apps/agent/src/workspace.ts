@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { refsFrom } from "./refs.ts";
 import { handOver, type SessionUser } from "./session-user.ts";
 
 const run = promisify(execFile);
@@ -28,10 +29,24 @@ export interface Workspace {
   /** The repository it holds, or null when this runtime has none configured. */
   repo: RepoConfig | null;
   /**
-   * Runs git in this working directory, with the credential the session never
-   * sees, stopped when `signal` is.
+   * The remote as the supervisor reaches it: the git proxy it opened for the
+   * Run, or the repository itself where there is none, and null with no
+   * repository. Fixed when the workspace is opened and never read back from
+   * the clone, whose `origin` is the session's to point anywhere.
+   */
+  remote: string | null;
+  /**
+   * Runs git in this working directory, as the session's user and with no
+   * credential the session could find, stopped when `signal` is.
    */
   git(args: string[], options?: { signal?: AbortSignal }): Promise<string>;
+  /**
+   * The refs `remote` holds now, as `git ls-remote` reads them, narrowed by
+   * `patterns` the way its own are; none with no repository. Asked by a git
+   * with no repository around it, so nothing in the clone — its `origin`, a
+   * `url.*.insteadOf`, a remote named after the URL — has a say in the answer.
+   */
+  refs(patterns?: string[], options?: { signal?: AbortSignal }): Promise<Map<string, string>>;
   /** Removes the directory, whatever happened in it. */
   release(): Promise<void>;
 }
@@ -69,7 +84,8 @@ export interface WorkspaceOptions {
    * What `origin` points at once the clone is made: the supervisor's own git
    * proxy, so the session pushes to loopback and the credential stays here
    * (src/git-proxy.ts). Absent, `origin` is the remote itself, which is what a
-   * runtime with no repository or no credential has anyway.
+   * runtime with no repository or no credential has anyway. Either way it is
+   * the workspace's `remote`, which stays put whatever `origin` says later.
    */
   originUrl?: string;
   /**
@@ -144,6 +160,29 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
     });
     return stdout.trim();
   };
+  // Where the supervisor reads the remote and pushes, named now: from the
+  // moment the clone is handed over, its `origin` says whatever the session
+  // last wrote there.
+  const remote = repo ? (options.originUrl ?? repo.url) : null;
+  // What the remote holds, asked from `/` rather than in the clone. In the
+  // clone, git reads the clone's configuration before it reads the URL it was
+  // given, and a `url.*.insteadOf` there sends even an explicit one somewhere
+  // else. `/` has no repository and is not somewhere the session can make one,
+  // so this git has no configuration but the environment's, which is none. As
+  // the session's user, like every git here.
+  const refs = async (
+    patterns: string[] = [],
+    how: { signal?: AbortSignal } = {},
+  ): Promise<Map<string, string>> => {
+    if (!remote) return new Map();
+    const { stdout } = await run("git", [...credential, "ls-remote", remote, ...patterns], {
+      cwd: "/",
+      env: isolated(),
+      ...(user ? { uid: user.uid, gid: user.gid } : {}),
+      ...(how.signal ? { signal: how.signal } : {}),
+    });
+    return refsFrom(stdout);
+  };
   // The supervisor's own, for the moments before the clone is anybody else's:
   // a fresh clone of the remote holds no hook and no configuration the remote
   // could have shipped, because git clones neither.
@@ -184,7 +223,9 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
   return {
     cwd,
     repo,
+    remote,
     git,
+    refs,
     release: () => rm(cwd, { recursive: true, force: true }),
   };
 }

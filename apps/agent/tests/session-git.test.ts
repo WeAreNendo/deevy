@@ -444,6 +444,126 @@ describe("a session that runs its own git", () => {
 });
 
 /**
+ * The clone's `origin` is the session's to change, like the rest of its `.git`.
+ * What the Run's feed says it moved is read from the remote the supervisor
+ * opened, and the supervisor's own push goes there, whatever `origin` says by
+ * then.
+ */
+describe("a session that points its origin somewhere else", () => {
+  /**
+   * A repository of the session's own: the clone's history, and a branch the
+   * remote never had. A feed read through it says a push nobody made and
+   * misses the one that happened.
+   */
+  async function decoy(clone: string): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), "deevy-decoy-"));
+    scratch.push(dir);
+    const path = join(dir, "decoy.git");
+    await run("git", ["clone", "--quiet", "--bare", clone, path]);
+    await run("git", ["-C", clone, "push", "--quiet", path, "HEAD:refs/heads/nothing-to-see"]);
+    return path;
+  }
+
+  it("still has its rewrite of the base branch said, and no push it never made", async () => {
+    const deevy = await assigned();
+
+    // The move a Human most needs to read, pushed to the supervisor by its URL
+    // once `origin` names a repository where `main` never moved.
+    const session = scripted([
+      async (input) => {
+        const [mine] = await deevy.deevy.runs("pending");
+        const git = (args: string[]) => run("git", ["-C", input.cwd, ...args]);
+        const supervisor = (await git(["remote", "get-url", "origin"])).stdout.trim();
+        await git(["remote", "set-url", "origin", await decoy(input.cwd)]);
+        await writeFile(join(input.cwd, "README.md"), "# rewritten\n");
+        await git(["add", "-A"]);
+        await git([
+          "-c",
+          "user.name=a",
+          "-c",
+          "user.email=a@b.c",
+          "commit",
+          "-qm",
+          "not the first commit any more",
+          "--amend",
+        ]);
+        await git(["push", "--quiet", "--force", supervisor, "HEAD:refs/heads/main"]);
+        await finishThroughProxy(input.mcpUrl, mine.id, "Rewrote main, and pointed origin away.");
+      },
+      finished,
+    ]);
+
+    const pass = await runOnce({ ...work(deevy), session });
+    const feed = await feedOf(deevy, pass.worked[0].runId);
+
+    expect(pass.worked[0]?.status).toBe("completed");
+    expect(feed).toMatch(
+      /^Rewrote refs\/heads\/main from [0-9a-f]{7} to [0-9a-f]{7}, which is not a fast-forward$/m,
+    );
+    expect(feed).not.toContain("nothing-to-see");
+    // And no pull request for a branch only the session's repository has.
+    expect(deevy.tracker.pulls).toEqual([]);
+  });
+
+  it("still has the supervisor push to the remote, and say so", async () => {
+    const deevy = await assigned();
+    let elsewhere = "";
+
+    // A session that leaves its work for the supervisor to push, with
+    // `origin` naming a repository of its own.
+    const session = scripted([
+      async (input) => {
+        const [mine] = await deevy.deevy.runs("pending");
+        elsewhere = await decoy(input.cwd);
+        await run("git", ["-C", input.cwd, "remote", "set-url", "origin", elsewhere]);
+        await writeFile(join(input.cwd, "left-for-the-supervisor.ts"), "export const s = 8;\n");
+        await finishThroughProxy(input.mcpUrl, mine.id, "Left the push to the supervisor.");
+      },
+      finished,
+    ]);
+
+    const pass = await runOnce({ ...work(deevy), session });
+    const branch = pass.worked[0]?.delivered?.branch ?? "";
+    const feed = await feedOf(deevy, pass.worked[0].runId);
+
+    expect(branch.startsWith("deevy/")).toBe(true);
+    expect(await refsOn(deevy.repo)).toContain(`refs/heads/${branch}`);
+    expect(await refsOn(elsewhere)).not.toContain(`refs/heads/${branch}`);
+    expect(feed).toContain(`Pushed refs/heads/${branch} at `);
+    expect(feed).not.toContain("nothing-to-see");
+  });
+
+  it("says a delivery the clone sent somewhere else was not delivered, never that it was pushed", async () => {
+    const deevy = await assigned();
+
+    // Not `origin` this time, but what git in the clone does with any URL,
+    // the one the supervisor names outright included.
+    const session = scripted([
+      async (input) => {
+        const [mine] = await deevy.deevy.runs("pending");
+        const git = (args: string[]) => run("git", ["-C", input.cwd, ...args]);
+        const supervisor = (await git(["remote", "get-url", "origin"])).stdout.trim();
+        await git(["config", `url.${await decoy(input.cwd)}.insteadOf`, supervisor]);
+        await writeFile(join(input.cwd, "sent-elsewhere.ts"), "export const r = 9;\n");
+        await finishThroughProxy(input.mcpUrl, mine.id, "Sent the supervisor's push away.");
+      },
+      finished,
+    ]);
+
+    const pass = await runOnce({ ...work(deevy), session });
+
+    expect(pass.worked[0]?.delivered).toBeUndefined();
+    expect(await refsOn(deevy.repo)).not.toContain("refs/heads/deevy/");
+    expect(await feedOf(deevy, pass.worked[0].runId)).not.toContain("Pushed");
+    expect(deevy.tracker.pulls).toEqual([]);
+    const said = (deevy.tracker.comments.get("1") ?? []).map((comment) => comment.body);
+    expect(said).toContainEqual(
+      expect.stringContaining("could not be delivered: the remote does not have deevy/"),
+    );
+  });
+});
+
+/**
  * The clone is the session's, `.git` and all: its configuration and its hooks
  * are whatever the session wrote, and git runs what they name as whoever runs
  * git. The supervisor runs git in it too — the delivery, and every reading of

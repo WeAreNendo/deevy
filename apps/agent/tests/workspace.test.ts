@@ -67,6 +67,22 @@ describe("a working directory", () => {
     );
   });
 
+  it("reads the remote it was opened with, whatever the clone says later", async () => {
+    const url = await origin();
+    const elsewhere = await origin({ "elsewhere.md": "# not the remote\n" });
+    await run("git", ["-C", elsewhere, "branch", "only-elsewhere"]);
+    const workspace = await openWorkspace({ runId: "run-1", repo: repoFor(url) });
+    scratch.push(workspace.cwd);
+
+    // `origin`, and what git makes of any URL in the clone, are the session's
+    // to change. Neither is where the supervisor reads the remote.
+    await workspace.git(["remote", "set-url", "origin", elsewhere]);
+    await workspace.git(["config", `url.${elsewhere}.insteadOf`, url]);
+
+    expect(workspace.remote).toBe(url);
+    expect([...(await workspace.refs()).keys()]).toEqual(["refs/heads/main"]);
+  });
+
   it("commits as the Agent, so the session's own commit has somebody to be", async () => {
     const workspace = await openWorkspace({
       runId: "run-1",
