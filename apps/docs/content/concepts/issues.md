@@ -41,9 +41,12 @@ itself:
 | **Gates and rulings** | The default. A comment when a Gate asks, with the Proposal and how to rule; one for each approval and for the decision; a reply when a comment ruled nothing. While a Gate waits, the record carries the label `deevy:awaiting-approval`. |
 | **Runs as well**      | All of that, and a comment when a Run starts and when it finishes or fails, with its summary. Where the tracker cannot see the code, as in Linear and Notion, a comment when an Agent opens a pull request.                               |
 
-Every comment comes from deevy's own identity in the tool and ends with the Agent and the Run it came from,
-like `— builder · run_k3xr8v2m9qpw · via deevy`. A pull request or merge request an Agent opens says
-`Closes` and the issue's URL, so merging it closes the issue.
+Every comment comes from deevy's own identity in the tool. One that reports a Gate or a Run ends with the
+Agent and the Run it came from, like `— builder · run_k3xr8v2m9qpw · via deevy`; one an Agent writes itself
+ends with its handle, like `— builder · via deevy`; and the reply to a comment that ruled nothing ends
+`— deevy`. A pull request or merge request an Agent opens says `Closes` and the issue's URL, so merging it
+closes a GitHub or GitLab issue. A record in Linear or Notion closes only if something in that tool acts on
+it, such as Linear's own GitHub integration.
 
 ## Sub-issues
 

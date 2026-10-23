@@ -145,3 +145,52 @@ stacked on this one, and settling some found more, which are here too:
 - deevy Cloud had no support address beyond `privacy@deevy.dev`. Settled: `support@deevy.dev`, forwarded
   by Email Routing beside it, is on cloud/support.md, the console's suspended notice and the site's
   footer (WeAreNendo/deevy-cloud#13).
+
+## What the second check found
+
+Written on 2026-10-23: five readers checked every page against the code again, about 1,640 claims, and
+found about forty that were wrong, nearly all of them from the first writing rather than from what changed
+since (the one that had moved was a Human's avatar, indigo since the design system). Matt chose which side
+moves for each: where a page promised more than the code did (four-eyes carry-over, a fresh one-repository
+token, "(email)" wherever a Ruling is shown, Slack direct messages for a Slack sign-in, `health ping` with no
+sign-in, a Socket taking new credentials), the pages now say what the code does; where the code was wrong, it
+was fixed, each in its own pull request stacked under the one that corrects the pages:
+
+- **Any Member could read invitations from the live stream**, which `events.list` hides from all but
+  admins; `events.subscribe` now hides them the same way.
+- **A Project created with a Default Agent never granted it**, so no Run ever started there; `projects.create`
+  checks and grants as `projects.update` does.
+- **`routing.mention` was stored and never read**; turned off, a mention now starts nothing, behind a
+  **Route by mention** switch on the Project.
+- **The four-hourly reminder re-asked Humans who had already ruled**; it now asks only those the Gate is still
+  waiting on.
+- **The Event log's Kind filter offered three families of seventeen**; it offers every one, invitations to
+  admins only.
+- **A Worker with no `BETTER_AUTH_SECRET` ran on Better Auth's published default**, seen on workerd; both
+  runtimes now refuse to run without it, and the Node server refuses `BETTER_AUTH_SECRETS`.
+- **deevy Cloud's logs carried a failed query's bound values**, against cloud/support.md; the hosted Worker
+  now logs errors through an allow-list (`describeError`).
+- **A suspended hosted Workspace told visitors its owner could bring it back**, untrue when deevy Cloud
+  suspended it; and **the not-yet-a-Member screen named a GitLab group rule** where nobody signs in with
+  GitLab.
+- **The compose file's `agent` service ran only Claude Code**, passing one credential and overriding the
+  image's harness; it now runs every image and passes every setting the runtime reads.
+- **The runtime's branch Activities were always refused**, posted after the coding agent had finished the
+  Run; they are now posted as each push lands, and the delivery runs before the finish.
+- **A pasted GitHub App listed no repositories** where it was installed before it was pasted; **an installation
+  past 100 repositories listed only the first page**; **an uninstalled or suspended installation broke the
+  whole listing**; and **the guided App creation could not work on GitHub Enterprise Server**, whose Apps
+  are now pasted (the page's `form-action` policy names github.com only). Reviewing these found more,
+  settled in the same pull requests: a single installation delivery switched the pasted App's fallback
+  off, so Bind a Project now always asks GitHub; and a cached installation id outlived an uninstall, so a
+  reinstall broke every call until a restart.
+- **The runtime's supervisor ran git as root in a clone the session owns**, found reviewing the branch
+  Activities: a hook, an fsmonitor or a filter the session planted ran as root with the Agent's key in
+  its environment, and every call carried the git token on its command line. Settled in a pull request of
+  its own: the supervisor's git runs as the session's user, through the proxy, with no credential, and a
+  CI step runs the case as root so it cannot be skipped.
+- **better-call logged an unanswered Better Auth error whole**, found reviewing the hosted logs: a sign-in
+  that failed in a database hook wrote an address, a sign-in state and its PKCE verifier to deevy Cloud's
+  log. The hosted Worker now throws such an error on to its own reporter.
+- **deevy Cloud kept a waitlist entry after its address was invited**, against
+  cloud/where-your-data-lives.md; settled in WeAreNendo/deevy-cloud, where an invitation now removes it.

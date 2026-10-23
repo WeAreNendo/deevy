@@ -72,7 +72,8 @@ deevy keeps the GitLab project's id, so renaming the project or moving it to ano
 ## Hand an issue to an Agent
 
 - **Label it** `agent:<handle>`, such as `agent:planner`, for an Agent granted the Project.
-- **Mention the account and the Agent** in a comment, such as `@deevy planner, try again`.
+- **Mention the account and the Agent** in a comment, such as `@deevy planner, try again`, unless the
+  Project has **Route by mention** turned off.
 - **Set the Project's Default Agent**, which takes any open issue nobody named.
 
 GitLab's issues are open or closed and nothing else. A team's workflow in scoped labels is read as labels.
@@ -108,7 +109,10 @@ as it says.
 
 ## When the token expires
 
-GitLab's access tokens expire. When the Socket's token does, connect the Socket again with a new one.
+GitLab's access tokens expire, and a Socket keeps the token it was connected with. Before it expires,
+connect a new GitLab Socket with a new token, bind each Project again to the new Socket, under a new slug,
+and archive the old Project; then disconnect the old Socket. The records come back under the new Socket,
+and the old Projects stay readable.
 
 :::note[deevy Cloud]
 The webhook URL is under your Workspace's own address, `https://app.deevy.dev/<address>/hooks/…`, which

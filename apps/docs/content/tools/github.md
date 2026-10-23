@@ -72,8 +72,10 @@ An organization that makes its Apps centrally can make one by hand and paste it 
    GitHub before it keeps it.
 4. On the Socket's page, under **Where it delivers**, choose **Point GitHub at this address**. deevy sets the
    App's webhook to your Workspace's address itself.
-5. Install the App on the organization's repositories from the App's own page on GitHub. GitHub tells deevy,
-   and the Socket's page lists the organization under **Where it is installed**.
+5. Install the App on the organization's repositories from the App's own page on GitHub, if it isn't
+   already. GitHub tells deevy, and the Socket's page lists the organization under **Where it is
+   installed**. Where the App was installed before you pasted it, it is listed there as soon as you
+   connect it.
 
 An App has one webhook address, so use one App for one Socket.
 
@@ -94,13 +96,15 @@ GitHub cannot assign an issue to an App, so there are three ways to give one to 
 
 - **Label it** `agent:<handle>`, such as `agent:planner`, for an Agent granted the Project.
 - **Mention the App and the Agent** in a comment. The App's handle is the name the Socket list shows after
-  **as**, without `[bot]`: `@acme-on-github planner, try again` starts a Run for `planner`.
+  **as**, without `[bot]`: `@acme-on-github planner, try again` starts a Run for `planner`, unless the
+  Project has **Route by mention** turned off.
 - **Set the Project's Default Agent**, which takes any open issue nobody named.
 
 ## What deevy writes on GitHub
 
-Everything deevy writes is by the App's own account, `<name>[bot]`, and every comment ends with the Agent
-and the Run it came from.
+Everything deevy writes is by the App's own account, named after the App, such as `acme-on-github[bot]` for
+an App called "acme on GitHub". A comment about a Gate or a Run ends with the Agent and the Run it came
+from; a comment an Agent writes itself ends with its handle.
 
 - **Comments**, as the Project's **Mirror** says: a Gate asking for a Ruling, with the Proposal and how to
   rule; each Ruling; and with **Runs as well**, each Run starting, finishing or failing. See
@@ -110,9 +114,10 @@ and the Run it came from.
 - **Pull requests**, opened through the App from the branch a Run pushed, saying `Closes <the issue's URL>`
   so that merging closes the issue, and naming the Agent and the Run.
 
-A Run clones the repository with a token GitHub mints for that one repository, which lasts an hour. A Run
-resumed after a Gate gets a fresh one. The [reference runtime](/agents/reference-runtime/) keeps the token
-to itself, so the coding agent working the Run never holds it.
+A Run clones the repository with a token GitHub mints for the App's installation, which reaches every
+repository the App is installed on there and lasts an hour. deevy keeps it for that hour, so a Run resumed
+after a Gate is handed the same token while it lasts. The [reference runtime](/agents/reference-runtime/)
+keeps the token to itself, so the coding agent working the Run never holds it.
 
 ## Rule from GitHub
 
@@ -161,12 +166,11 @@ A Workspace's address on deevy Cloud never changes, so you will not need this.
 :::
 
 :::note[Self-hosted]
-deevy builds the address from its `BETTER_AUTH_URL`. A GitHub Enterprise Server works too: set
-`DEEVY_GITHUB_API` to its API root, then make the App on the server and paste it, as in
+deevy builds the address from its `BETTER_AUTH_URL`. A GitHub Enterprise Server, or GHE.com, works too:
+set `DEEVY_GITHUB_API` to its API root, then make the App there and paste it, as in
 [An App the organization already has](#an-app-the-organization-already-has): deevy cannot make it there
-for you, so **Connect GitHub** offers only the paste.
-Its accounts are not github.com's, so signing in to deevy with GitHub
-does not make a Ruling from it yours.
+for you, so **Connect GitHub** offers only the paste. Its accounts are not github.com's, and deevy has no
+way to link one to a Human, so a `/approve` there rules nothing: rule in deevy, or from Slack.
 :::
 
 ## Disconnect

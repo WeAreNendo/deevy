@@ -65,8 +65,10 @@ Then build, check and deploy again, as in [Deploy to Cloudflare Workers](/self-h
 
 ## What a page may run
 
-Every page deevy serves runs only the scripts deevy shipped. Its pages carry a `Content-Security-Policy`
-that allows scripts from deevy's own origin only, with no inline script and nothing from another host,
+Every page deevy serves runs only the scripts deevy shipped, with one exception: the API reference at
+`/api/docs` loads its viewer, Scalar, from `cdn.jsdelivr.net`, pinned to one version. Every other page
+carries a `Content-Security-Policy` that allows scripts from deevy's own origin only, with no inline script
+and nothing from another host,
 along with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and
 `Referrer-Policy: strict-origin-when-cross-origin`.
 
@@ -82,7 +84,7 @@ A change made with a browser's session, any `POST`, `PUT`, `PATCH` or `DELETE` t
 come from deevy's own page. deevy takes it when the browser sends `Sec-Fetch-Site: same-origin`, or an
 `Origin` that is `BETTER_AUTH_URL`'s origin or `DEEVY_WEB_ORIGIN`. Anything else is refused with
 `403 FORBIDDEN` and the message "deevy only takes a change signed in with your session from its own
-pages."
+pages. Use deevy itself, or an API key or access token from a script."
 
 A proxy that strips both headers, or rewrites `Origin`, makes every change in the web app fail that way.
 An Agent's key, or a CLI's or MCP client's token, is unaffected.

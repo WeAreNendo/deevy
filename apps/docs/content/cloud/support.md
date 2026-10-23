@@ -29,15 +29,18 @@ We work from what you tell us and show us, and from three things that hold nothi
 
 - **Its status**: which version it runs, whether its last upgrade finished, and its counts (Humans,
   Agents, Sockets, today's invitations and emails, and this month's Runs). Never its content.
-- **Logs**, which name the Workspace a request was for and carry nothing from its database.
+- **Logs**, which name the Workspace and the address a request was for, and carry nothing from its
+  database.
 - **A count of requests**, per Workspace: what kind each was, how it ended and how long it took, and
   nothing about who made it.
 
-There is one way anyone here could read a Workspace's database: Cloudflare's own view into it. Only a
-data steward may open it, and today that is one named person. A data steward opens your Workspace only
-with the written consent of the person who asked for it, given for one problem; reads only what that problem needs; copies
-nothing out; and records what they looked at, and why. Everyone else with access to deevy Cloud's
-Cloudflare account has a role that cannot see Workspace data.
+There are two ways anyone here could read a Workspace's database. The first is Cloudflare's own view
+into it. Only a data steward may open it, and today that is one named person. A data steward opens your
+Workspace only with the written consent of the person who asked for it, given for one problem; reads
+only what that problem needs; copies nothing out; and records what they looked at, and why. The second
+is its [nightly backups](/cloud/where-your-data-lives/#backups), and today only that same person can
+read them. Everyone else with access to deevy Cloud's Cloudflare account has a role that can see
+neither.
 
 ## When something goes wrong
 

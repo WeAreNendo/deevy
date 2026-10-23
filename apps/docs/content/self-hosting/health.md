@@ -41,8 +41,10 @@ It follows `DEEVY_PORT`, so moving the port keeps it working.
 `GET /api/health/ping` is public too, and says more about how this deevy is set up:
 
 - `version`, as above.
-- `providers`, the sign-in providers it offers, in the order the sign-in page shows them. A provider you
-  meant to configure that is missing here is missing one of its values.
+- `providers`, the sign-in providers it offers, in the order it offers them. The sign-in page follows that
+  order, except that it puts the one a browser used last first and, past four, keeps single sign-on behind
+  **More ways to sign in**. A provider you meant to configure that is missing here is missing one of its
+  values.
 - `devSignIn` and `devSockets`, which are `false` unless a development stand-in is on. Both should be
   `false` in production.
 

@@ -274,7 +274,7 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
   navigation is one Select (`combobox "Settings page"`). Settings leaves the primary sidebar alone. **A label
   element beats an `aria-label`** where a control can have a visible one.
 - **The Event log** (`routes/settings/events.tsx`) reads `events.list` with `order: "desc"`, pages back with
-  `before`, filters by Project and subject on the server and by kind prefix on the page, shows a row's
+  `before`, filters by kind prefix, Project and subject on the server, shows a row's
   payload as JSON when clicked, reads at 12px and names its actors rather than drawing them.
 - **The sign-in buttons wear their providers' brands**, the one place a screen shows colours that are not
   deevy's (`components/sign-in-button.tsx`, Matt, 2026-09-26): GitHub's dark button with the Octocat, light

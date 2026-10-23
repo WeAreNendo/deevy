@@ -51,19 +51,20 @@ read, `x` ticks a row, and `o` opens the record where it lives.
 
 You are never told about something you did yourself, and a suspended Member is told nothing.
 
-If a Gate is still waiting four hours later, its Notification comes back unread for everyone it asked, and
-again every four hours until the Gate is decided.
+If a Gate is still waiting four hours later, its Notification comes back unread for everyone it is still
+waiting on, which leaves out whoever has already ruled, and again every four hours until the Gate is
+decided. A Run waiting on a plain question is reminded the same way.
 
 ## Choose what reaches you
 
 **Settings › Notifications** is yours alone: every kind of Notification against where it can reach you.
 
-| Column             | Where it goes                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------ |
-| **Inbox**          | Your Inbox in deevy.                                                                             |
-| **Slack**          | The Slack rooms your admin routes Notifications to.                                              |
-| **Direct message** | A direct message from your team's Slack app, once your Slack account is linked under Identities. |
-| **Email**          | Your own email address, if your sign-in confirmed it.                                            |
+| Column             | Where it goes                                                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Inbox**          | Your Inbox in deevy.                                                                                                              |
+| **Slack**          | The Slack rooms your admin routes Notifications to.                                                                               |
+| **Direct message** | A direct message from your team's Slack app, once your Slack account is linked under Identities ([how](/gates/how-a-gate-asks/)). |
+| **Email**          | Your own email address, if your sign-in confirmed it.                                                                             |
 
 Tick what you want and choose **Save**. Until you change anything, you get every kind in the Inbox, in Slack
 and by direct message, and by email only a Gate awaiting you and a Run awaiting your answer.

@@ -77,8 +77,10 @@ The kinds are **Mention**, **Assignment**, **Gate awaiting**, **Run awaiting inp
   **Slack** ticked for that kind under **Settings › Notifications**.
 - **A team address gets everything its rules name**, whatever anybody's own settings say: it is the admin's
   choice of mailbox.
-- **Direct messages are personal.** A Human whose Slack account is linked also gets a direct message from the
-  Slack app, unless they untick **Direct message** for that kind.
+- **Direct messages are personal.** A Human whose Slack account is linked under **Settings › Identities**
+  also gets a direct message from the Slack app, unless they untick **Direct message** for that kind.
+  Signing in with Slack doesn't link it on its own; the first click on **Approve** or **Reject** in a room
+  does, and so does `/deevy link`.
 
 If Slack refuses a message, deevy tries it again, and gives up after six attempts.
 

@@ -7,8 +7,8 @@ sidebar:
 
 deevy works in the tools your team already uses. You connect each one once, as a **Socket**: one tool,
 under one identity of deevy's own there, holding the credential deevy acts with. Every Agent works through
-it, so a comment, a label or a pull request an Agent makes is written by the Socket's identity and signed
-with the Agent and the Run it came from.
+it, so a comment, a label or a pull request an Agent makes is written by the Socket's identity, and a
+comment or pull request names the Agent it came from.
 
 A Socket on its own does nothing. You then bind a **Project** to something inside it, such as a repository
 or a Linear team, and that is where deevy takes records from and hands them to Agents.
@@ -78,7 +78,8 @@ deevy hands an open record to an Agent when:
 - a comment on it mentions the account deevy acts as in that tool and then the Agent's handle, such as
   `@deevy planner, try again`, which starts a Run for that Agent, unless the Project has **Route by
   mention** turned off;
-- in Linear, somebody assigns the issue to deevy, and the Project has a default Agent;
+- in Linear, somebody assigns the issue to deevy, or in Notion, adds deevy's connection to the row's people
+  property, and the Project has a default Agent;
 - nothing else named anybody, and the Project has a **Default Agent**.
 
 A closed record is handed to nobody.
@@ -108,7 +109,8 @@ Whatever the Mirror says, an Agent can also, through the Socket:
 - comment on a record it was given;
 - open a sub-issue under it, carrying the routing label for the Agent it is meant for;
 - push a branch and have deevy open a pull request or merge request, on GitHub and GitLab, saying
-  `Closes <the record's URL>` so that merging it closes the record.
+  `Closes <the record's URL>`, so that merging it closes a GitHub or GitLab issue. A Linear or Notion
+  record closes only if something in that tool acts on it, such as Linear's own GitHub integration.
 
 ## What each tool lets deevy do
 

@@ -27,8 +27,9 @@ address the browser actually visits, character for character, including `https:/
 
 Everything follows from it: each sign-in provider's callback, the cookie that keeps you signed in, the
 links deevy puts in Slack messages and emails, the address each tool delivers to, and the address MCP
-clients and the CLI sign in against. deevy never guesses it from the request instead, because then a
-caller could choose whom deevy's tokens are for.
+clients and the CLI sign in against. Left unset, deevy follows the address each request came to, which is
+wrong as soon as a proxy in front of it changes the host, and it signs no tokens for MCP clients or the
+CLI at all, because then a caller could choose whom they are for.
 
 To serve deevy under a path, put the path in it: `https://example.com/deevy`. See
 [Behind a proxy or under a path](/self-hosting/under-a-path/).
@@ -46,13 +47,15 @@ Generate each with `openssl rand -base64 32`, once, and keep them with your back
 different values.
 
 - **`BETTER_AUTH_SECRET`** signs sessions and the links deevy sends, such as an email's unsubscribe link,
-  and seals the sign-in providers' tokens. Without it, deevy doesn't run: the Docker image exits at start,
-  and a Worker answers its API and `/healthz` with an error that names it. Changing it signs everybody out.
+  and seals the sign-in providers' tokens and the keys deevy signs MCP clients' and the CLI's tokens
+  with. Without it, deevy doesn't run: the Docker image exits at start, and a Worker answers its API and
+  `/healthz` with an error that names it. Changing it signs everybody out, and those clients get no new
+  tokens until you delete the old keys (`DELETE FROM jwks;`); each then signs in again.
 - **`DEEVY_SECRET`** seals what deevy holds for the tools you connect, a key saved under **Settings ›
   Email**, and an invitation's link until it is emailed. It must be at least 32 characters. Without it,
   deevy refuses to connect a tool that needs a credential, and doesn't email invitations.
 
-They are separate so that you can sign everybody out without losing anything else. Losing `DEEVY_SECRET`
+They are separate so that you can sign everybody out without losing your tools' credentials. Losing `DEEVY_SECRET`
 does lose something: every tool has to be connected again.
 
 ## Its admin
