@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { SecretInput } from "@/components/secret-input";
@@ -27,6 +27,13 @@ import { appURL } from "@/lib/base";
  * that organization's settings instead and the App is the organization's.
  * Nothing after the redirect cares which: the conversion answers the App's own
  * page either way, and its install page offers whichever account owns it.
+ *
+ * Only on github.com, though: the page's policy lets a form go nowhere else
+ * (packages/core/src/headers.ts), so where this deevy's GitHub is a GitHub
+ * Enterprise Server or GHE.com the server says it will not begin
+ * (`beginRefusal` in `sockets.providers`) and the paste is the only way in.
+ * Which of the two it is, the dialog waits to hear rather than guessing: a
+ * Create offered before the answer would be a form the browser then refuses.
  */
 export interface GithubManifest {
   name: string;
@@ -102,6 +109,12 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
   } | null>(null);
   const owner = organization.trim();
   const ownerInvalid = owner !== "" && !isGithubLogin(owner);
+  // The same answer the Sockets page offered this dialog from, so it is here
+  // already: whether deevy can make the App on this deevy's GitHub at all.
+  const providers = useQuery(orpc.sockets.providers.queryOptions({ input: {} }));
+  const pasteOnly = Boolean(
+    providers.data?.providers.find((provider) => provider.id === "github")?.beginRefusal,
+  );
 
   const begin = useMutation(
     orpc.sockets.begin.mutationOptions({
@@ -121,9 +134,32 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
   );
   const connect = useMutation(orpc.sockets.connect.mutationOptions({ onSuccess: onConnected }));
 
-  if (paste) {
+  // Kept once it has come, so a later refetch that fails changes nothing here.
+  if (!providers.data) {
+    return providers.isError ? (
+      <div className="flex flex-col gap-2">
+        <p role="alert" className="text-sm text-destructive">
+          deevy could not tell which GitHub it works with, so it cannot offer a way to connect it
+          yet.
+        </p>
+        <Button variant="outline" className="w-fit" onClick={() => void providers.refetch()}>
+          Try again
+        </Button>
+      </div>
+    ) : (
+      <p className="text-sm text-muted-foreground">Checking which GitHub deevy works with…</p>
+    );
+  }
+
+  if (paste || pasteOnly) {
     return (
       <div className="flex flex-col gap-4">
+        {pasteOnly ? (
+          <p className="text-sm text-muted-foreground">
+            On GitHub Enterprise Server or GHE.com, deevy cannot make the App for you: make it
+            there, under Developer settings › GitHub Apps, and paste it here.
+          </p>
+        ) : null}
         <Field>
           <FieldLabel htmlFor="github-name">Name</FieldLabel>
           <Input
@@ -185,9 +221,11 @@ export function ConnectGithub({ onConnected }: { onConnected: () => void }) {
           >
             Connect
           </Button>
-          <Button variant="ghost" onClick={() => setPaste(false)}>
-            Make a new App instead
-          </Button>
+          {pasteOnly ? null : (
+            <Button variant="ghost" onClick={() => setPaste(false)}>
+              Make a new App instead
+            </Button>
+          )}
         </div>
       </div>
     );

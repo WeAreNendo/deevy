@@ -7235,13 +7235,20 @@
                               "tool",
                               "handshake"
                             ]
+                          },
+                          "beginRefusal": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "label",
                           "capabilities",
-                          "webhookSecretFrom"
+                          "webhookSecretFrom",
+                          "beginRefusal"
                         ],
                         "additionalProperties": false
                       }

@@ -337,6 +337,24 @@ async function adminOf(db: Db, fetch: typeof globalThis.fetch) {
   });
 }
 
+describe("starting a GitHub App's flow", () => {
+  it("refuses an API address that is not one, rather than failing on it", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const asAda = await adminOf(db, githubApi().fetch);
+
+    // A configuration is the caller's to send, and this module is built from it.
+    await expect(
+      asAda.sockets.begin({ provider: "github", name: "acme on GitHub", config: { apiBase: 42 } }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message:
+        "GitHub cannot be connected with that configuration: That is not the address of a GitHub API: number",
+    });
+    expect(await db.query.socket.findMany({})).toEqual([]);
+  });
+});
+
 describe("an App the organization already has", () => {
   it("is pasted in, and offers the repositories it was installed on before", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });

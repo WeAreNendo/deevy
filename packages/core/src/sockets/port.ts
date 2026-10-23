@@ -473,6 +473,14 @@ export interface SocketModule {
    */
   setup?(input: SetupInput): Promise<SetupResult>;
   /**
+   * Why `sockets.begin` will not start this tool's own flow here, said in
+   * words a screen can show an admin; absent where it may. A GitHub App's
+   * manifest is a form deevy's pages may post only to github.com
+   * (headers.ts), so a GitHub Socket on a GitHub Enterprise Server or
+   * GHE.com is made there and pasted instead.
+   */
+  beginRefusal?: string;
+  /**
    * Where an admin's browser goes to give the tool's app more than pasting
    * its credential could — Linear's install as an agent, which is what lets
    * people assign an issue to it — coming back to `setup` with a code.

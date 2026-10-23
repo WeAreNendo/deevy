@@ -162,7 +162,10 @@ A Workspace's address on deevy Cloud never changes, so you will not need this.
 
 :::note[Self-hosted]
 deevy builds the address from its `BETTER_AUTH_URL`. A GitHub Enterprise Server works too: set
-`DEEVY_GITHUB_API` to its API root. Its accounts are not github.com's, so signing in to deevy with GitHub
+`DEEVY_GITHUB_API` to its API root, then make the App on the server and paste it, as in
+[An App the organization already has](#an-app-the-organization-already-has): deevy cannot make it there
+for you, so **Connect GitHub** offers only the paste.
+Its accounts are not github.com's, so signing in to deevy with GitHub
 does not make a Ruling from it yours.
 :::
 

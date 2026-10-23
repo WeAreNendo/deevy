@@ -297,6 +297,66 @@ describe("a connected tool", () => {
     expect((await asAda.sockets.rotate({ socketId: github.id })).webhookSecret).toMatch(/^whsec_/);
   });
 
+  it("starts no flow the tool says it cannot finish here, and says so first", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    const refusal = "Make the App on the server, and paste it.";
+    // A GitHub whose own flow cannot start against a server of its own: the
+    // deployment's (`DEEVY_GITHUB_API`, here `enterprise`), or the Socket's.
+    const github =
+      (enterprise: boolean): SocketModules["github"] =>
+      (options) => {
+        const module = sockets.stub?.(options);
+        if (!module) throw new Error("the fake is a module");
+        const elsewhere = enterprise || options.config.apiBase !== undefined;
+        return { ...module, provider: "github", ...(elsewhere ? { beginRefusal: refusal } : {}) };
+      };
+    const asAdaOn = (enterprise: boolean) =>
+      createRouterClient(router, {
+        context: {
+          ...ada,
+          sockets: { ...sockets, github: github(enterprise) },
+          socketSecret: testSealingSecret,
+          // What a redirect's state is signed with, which a flow that starts needs.
+          secret: testSealingSecret,
+        },
+      });
+
+    // On github.com the flow may start, unless the Socket names a server of
+    // its own: asked with the configuration it would have, before any row.
+    const onGithub = asAdaOn(false);
+    const offered = (await onGithub.sockets.providers({})).providers;
+    expect(offered.find((one) => one.id === "github")?.beginRefusal).toBeNull();
+    expect(offered.find((one) => one.id === "stub")?.beginRefusal).toBeNull();
+    await expect(
+      onGithub.sockets.begin({
+        provider: "github",
+        name: "acme on GitHub",
+        config: { apiBase: "https://github.example.com/api/v3" },
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: refusal });
+    expect(await db.query.socket.findMany({})).toEqual([]);
+    expect(
+      (await onGithub.sockets.begin({ provider: "github", name: "acme on GitHub" })).status,
+    ).toBe("pending");
+
+    // On a GitHub Enterprise Server the screen hears it before it offers the
+    // button, and a direct call is refused all the same.
+    const onEnterprise = asAdaOn(true);
+    const said = (await onEnterprise.sockets.providers({})).providers;
+    expect(said.find((one) => one.id === "github")?.beginRefusal).toBe(refusal);
+    await expect(
+      onEnterprise.sockets.begin({ provider: "github", name: "acme on GitHub" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: refusal });
+    expect(await db.query.socket.findMany({})).toHaveLength(1);
+    // The paste still connects.
+    expect(
+      (await onEnterprise.sockets.connect({ provider: "github", name: "acme on GHES" })).status,
+    ).toBe("active");
+  });
+
   it("offers the containers a Project can be bound to, and re-asks who deevy is", async () => {
     const { db, close } = testDb();
     closers.push(close);
@@ -433,6 +493,7 @@ describe("what this deevy can speak", () => {
         label: "the stub tracker",
         capabilities: ["tracker", "forge", "docs"],
         webhookSecretFrom: "either",
+        beginRefusal: null,
       },
     ]);
   });
