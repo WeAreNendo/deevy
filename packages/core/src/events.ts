@@ -83,6 +83,11 @@ export type EventKind =
    */
   | "socket.installation_added"
   /**
+   * And where it no longer works: the installation was deleted, or suspended
+   * (`why`), so the Socket stops offering what it covered.
+   */
+  | "socket.installation_removed"
+  /**
    * deevy could not say back in the tracker what happened here, and has
    * stopped trying (ADR-0003's shape, ADR-0024's reason). The Workspace's
    * record and the tracker's have drifted, and this is the line that says so.

@@ -79,6 +79,37 @@ interface Minted {
 }
 
 /**
+ * What GitHub answered when it did not say yes, with the status kept, so a
+ * caller can tell an installation that is gone from a GitHub that is busy.
+ */
+class GithubError extends Error {
+  readonly status: number;
+  /** A 429, or a 403 that says it is a rate limit: "later", never "no". */
+  readonly rateLimited: boolean;
+
+  constructor(message: string, status: number, rateLimited: boolean) {
+    super(message);
+    this.name = "GithubError";
+    this.status = status;
+    this.rateLimited = rateLimited;
+  }
+}
+
+/**
+ * Whether GitHub said no to this installation for good: it is gone (404), or
+ * will not let the App in (401, or a 403 that is not a rate limit). Anything
+ * else — a rate limit, a 5xx, a network that failed — is GitHub not answering,
+ * which says nothing about the installation.
+ */
+function isRefusal(error: unknown): boolean {
+  return (
+    error instanceof GithubError &&
+    !error.rateLimited &&
+    (error.status === 401 || error.status === 403 || error.status === 404)
+  );
+}
+
+/**
  * Installation tokens, shared across requests in one isolate.
  *
  * A module is built per request, so a cache inside it would mint a token for
@@ -184,7 +215,18 @@ export function createGithubSocket({
     });
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 500);
-      throw new Error(`GitHub answered ${String(response.status)} for ${path}: ${detail}`);
+      // GitHub's primary limit is a 403 with no requests left, its secondary
+      // one a 403 or a 429 with a Retry-After, and both say so in words.
+      const rateLimited =
+        response.status === 429 ||
+        response.headers.get("x-ratelimit-remaining") === "0" ||
+        response.headers.has("retry-after") ||
+        /rate limit/i.test(detail);
+      throw new GithubError(
+        `GitHub answered ${String(response.status)} for ${path}: ${detail}`,
+        response.status,
+        rateLimited,
+      );
     }
     return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
   }
@@ -232,8 +274,33 @@ export function createGithubSocket({
     return (await mintedFor(id)).token;
   }
 
+  /**
+   * A token for the installation that covers a repository.
+   *
+   * An id remembered from before the App was uninstalled there and installed
+   * again is a dead one, and GitHub says so by answering 404 for its token.
+   * deevy then forgets it, and any token minted for it, and asks once which
+   * installation covers the repository now. Forgetting it when the removal is
+   * delivered would not be enough: that delivery may reach another isolate.
+   */
+  async function mintedForRepository(scopeKey: string): Promise<Minted> {
+    const prefix = await cachePrefix();
+    const remembered = installations.has(`${prefix}:${scopeKey}`);
+    const id = await installationIdFor(scopeKey);
+    try {
+      return await mintedFor(id);
+    } catch (error) {
+      if (!remembered || !(error instanceof GithubError) || error.status !== 404) throw error;
+      tokens.delete(`${prefix}:${id}`);
+      for (const [key, value] of installations) {
+        if (value === id && key.startsWith(`${prefix}:`)) installations.delete(key);
+      }
+      return mintedFor(await installationIdFor(scopeKey));
+    }
+  }
+
   async function installationToken(scopeKey: string): Promise<string> {
-    return tokenForInstallation(await installationIdFor(scopeKey));
+    return (await mintedForRepository(scopeKey)).token;
   }
 
   /**
@@ -367,14 +434,25 @@ export function createGithubSocket({
       }
 
       if (params.installation_id) {
-        const id = params.installation_id;
-        const installation = await asApp<{ id: number; account?: { login?: string } }>(
-          `/app/installations/${encodeURIComponent(id)}`,
-        );
+        const installation = await asApp<{
+          id: number;
+          account?: { login?: string };
+          suspended_at?: string | null;
+        }>(`/app/installations/${encodeURIComponent(params.installation_id)}`);
+        // GitHub's own id, never the query string's spelling of it, so the
+        // same installation is never kept twice; and not one GitHub has
+        // suspended, which mints no token until it is unsuspended, and whose
+        // unsuspension is delivered as an installation.
+        const id = String(installation.id);
         const account = installation.account?.login ?? "";
-        const known = (settings.installations ?? []).filter((one) => one.id !== String(id));
+        if (installation.suspended_at) {
+          return {
+            summary: `The App is installed on ${account || id}, but GitHub has suspended it there`,
+          };
+        }
+        const known = (settings.installations ?? []).filter((one) => one.id !== id);
         return {
-          config: { installations: [...known, { id: String(installation.id), account }] },
+          config: { installations: [...known, { id, account }] },
           summary: `The App is installed on ${account}`,
         };
       }
@@ -554,33 +632,53 @@ export function createGithubSocket({
        * (`whereInstalled`), so a Socket pasted before `identity` learned them,
        * or one a single delivery has since told of one account of several,
        * still offers everything the App was installed on.
+       *
+       * One GitHub says is gone or refuses (`isRefusal`) — removed or
+       * suspended before deevy heard — costs its own repositories and nobody
+       * else's; only when every installation refuses is that the answer, since
+       * then it is the App. A GitHub that is rate limiting or down is not a
+       * refusal, and is said rather than read as a shorter list.
        */
       async listContainers(): Promise<Container[]> {
         const installations = await whereInstalled();
         const containers: Container[] = [];
+        const refused: GithubError[] = [];
         for (const installation of installations) {
-          const token = await tokenForInstallation(installation.id);
-          for (let number = 1; number <= MAX_PAGES; number += 1) {
-            const page = await call<{
-              repositories: { full_name: string; name: string; default_branch?: string | null }[];
-            }>(`/installation/repositories?per_page=${String(PAGE_SIZE)}&page=${String(number)}`, {
-              token,
-            });
-            for (const repository of page.repositories) {
-              // With the branch it defaults to, which is what a Run starts from
-              // once the repository is bound as a Project's code (forgeBindingOf).
-              containers.push({
-                scope: {
+          // Kept apart until the last page has answered, so an installation
+          // that refuses halfway offers nothing rather than half of itself.
+          const found: Container[] = [];
+          try {
+            const token = await tokenForInstallation(installation.id);
+            for (let number = 1; number <= MAX_PAGES; number += 1) {
+              const page = await call<{
+                repositories: { full_name: string; name: string; default_branch?: string | null }[];
+              }>(
+                `/installation/repositories?per_page=${String(PAGE_SIZE)}&page=${String(number)}`,
+                { token },
+              );
+              for (const repository of page.repositories) {
+                // With the branch it defaults to, which is what a Run starts from
+                // once the repository is bound as a Project's code (forgeBindingOf).
+                found.push({
+                  scope: {
+                    scopeKey: repository.full_name,
+                    ...(repository.default_branch ? { baseBranch: repository.default_branch } : {}),
+                  },
                   scopeKey: repository.full_name,
-                  ...(repository.default_branch ? { baseBranch: repository.default_branch } : {}),
-                },
-                scopeKey: repository.full_name,
-                name: repository.full_name,
-              });
+                  name: repository.full_name,
+                });
+              }
+              if (page.repositories.length < PAGE_SIZE) break;
             }
-            if (page.repositories.length < PAGE_SIZE) break;
+          } catch (error) {
+            if (!isRefusal(error)) throw error;
+            refused.push(error as GithubError);
+            continue;
           }
+          containers.push(...found);
         }
+        const [first] = refused;
+        if (first && refused.length === installations.length) throw first;
         return containers;
       },
     },
@@ -601,7 +699,7 @@ export function createGithubSocket({
     forge: {
       async credential(scope: Scope): Promise<ForgeCredential> {
         const { owner, repo, scopeKey } = repositoryOf(scope);
-        const minted = await mintedFor(await installationIdFor(scopeKey));
+        const minted = await mintedForRepository(scopeKey);
         const repository = await call<{ clone_url: string }>(`/repos/${owner}/${repo}`, {
           token: minted.token,
         });

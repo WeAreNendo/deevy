@@ -200,6 +200,44 @@ describe("how deevy authenticates", () => {
     expect(asked.filter((one) => one.url.endsWith("/installation"))).toHaveLength(2);
   });
 
+  it("asks again which installation covers a repository once the one it remembered is gone", async () => {
+    // acme uninstalled the App and installed it again, a new installation
+    // with a new id, while this isolate remembered the old one. The delivery
+    // that said so may have reached another isolate, so GitHub's 404 is the news.
+    const answers: Record<string, unknown> = {
+      ...credentials,
+      // Short-lived, so the next call mints again rather than reusing it.
+      "POST /app/installations/61892041/access_tokens": {
+        token: "ghs_old",
+        expires_at: "2026-09-21T10:00:30Z",
+      },
+      "GET /repos/acme/deevy/issues/42": labeled.issue,
+    };
+    const { tracker, asked } = githubReturning(answers);
+    await tracker.getIssue(scope, ref);
+
+    delete answers["POST /app/installations/61892041/access_tokens"];
+    answers["GET /repos/acme/deevy/installation"] = { id: 7 };
+    answers["POST /app/installations/7/access_tokens"] = {
+      token: "ghs_new",
+      expires_at: "2026-09-21T11:00:00Z",
+    };
+    asked.length = 0;
+
+    await tracker.getIssue(scope, ref);
+    await tracker.getIssue(scope, ref);
+
+    // The dead id is asked for once, and never again.
+    expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
+      "POST /app/installations/61892041/access_tokens",
+      "GET /repos/acme/deevy/installation",
+      "POST /app/installations/7/access_tokens",
+      "GET /repos/acme/deevy/issues/42",
+      "GET /repos/acme/deevy/issues/42",
+    ]);
+    expect(asked.at(-1)?.authorization).toBe("Bearer ghs_new");
+  });
+
   it("mints for each key, and for each host, rather than sharing one App id's token", async () => {
     const { tracker, asked, connect } = githubReturning({
       ...credentials,
@@ -504,6 +542,115 @@ describe("reading a repository", () => {
     await tracker.listContainers();
 
     expect(asked.filter((one) => one.url.includes("/installation/repositories"))).toHaveLength(100);
+  });
+
+  it("offers what the other installations cover when one will not mint a token", async () => {
+    // acme-labs uninstalled the App while deevy was not listening: GitHub
+    // answers 404 for its token, and acme's repositories are still bindable.
+    const { connect } = githubReturning({
+      "POST /app/installations/61892041/access_tokens": {
+        token: "ghs_token",
+        expires_at: "2026-09-21T11:00:00Z",
+      },
+      "GET /installation/repositories": {
+        repositories: [{ full_name: "acme/deevy", name: "deevy", default_branch: "main" }],
+      },
+    });
+    const both = [
+      { id: "7", account: "acme-labs" },
+      { id: "61892041", account: "acme" },
+    ];
+
+    const containers = await connect({ privateKey, installations: both }).tracker.listContainers();
+
+    expect(containers.map((one) => one.scopeKey)).toEqual(["acme/deevy"]);
+  });
+
+  it("offers nothing of an installation that refuses halfway through its pages", async () => {
+    // acme answers its first hundred, then its token stops working, as an
+    // uninstall halfway through does: half a list would read as all of it, so
+    // acme offers nothing and acme-labs what it has.
+    const tokenFor: Record<string, string> = { "61892041": "ghs_acme", "7": "ghs_labs" };
+    const fetchImpl = ((input: string, init?: RequestInit) => {
+      const url = new URL(input);
+      const token = new Headers(init?.headers).get("authorization")?.replace("Bearer ", "");
+      const minted = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname)?.[1];
+      if (minted) {
+        return Promise.resolve(
+          Response.json({ token: tokenFor[minted], expires_at: "2026-09-21T11:00:00Z" }),
+        );
+      }
+      const page = url.searchParams.get("page");
+      if (url.pathname === "/installation/repositories") {
+        if (token === "ghs_acme" && page === "1")
+          return Promise.resolve(Response.json(firstHundred));
+        if (token === "ghs_labs" && page === "1") return Promise.resolve(Response.json(theRest));
+        return Promise.resolve(Response.json({ message: "Bad credentials" }, { status: 401 }));
+      }
+      // Where the App is installed cannot be asked, so what the Socket keeps is used.
+      return Promise.resolve(Response.json({ message: "Server Error" }, { status: 502 }));
+    }) as typeof fetch;
+    const module = createGithubSocket({
+      config: {
+        appId: "1284461",
+        installations: [
+          { id: "61892041", account: "acme" },
+          { id: "7", account: "acme-labs" },
+        ],
+      },
+      credentials: { privateKey },
+      fetch: fetchImpl,
+      now: () => new Date("2026-09-21T10:00:00Z"),
+    });
+
+    const containers = await module.tracker?.listContainers();
+
+    expect(containers?.map((one) => one.scopeKey)).toEqual(["acme/ops"]);
+  });
+
+  it("says GitHub is busy or down rather than offering a shorter list", async () => {
+    // A rate limit, said either way GitHub says one, or a server error: none
+    // is GitHub saying the installation is gone, so none hides its repositories.
+    for (const [status, headers] of [
+      [429, { "retry-after": "60" }],
+      [403, { "x-ratelimit-remaining": "0" }],
+      [502, {}],
+    ] as const) {
+      resetGithubTokens();
+      const fetchImpl = ((input: string) => {
+        const url = new URL(input);
+        if (url.pathname.endsWith("/access_tokens")) {
+          return Promise.resolve(
+            Response.json({ token: "ghs_token", expires_at: "2026-09-21T11:00:00Z" }),
+          );
+        }
+        if (url.pathname === "/installation/repositories") {
+          return Promise.resolve(Response.json({ message: "Slow down" }, { status, headers }));
+        }
+        return Promise.resolve(Response.json({ message: "Not Found" }, { status: 404 }));
+      }) as typeof fetch;
+      const module = createGithubSocket({
+        config: { appId: "1284461", installations: [{ id: "61892041", account: "acme" }] },
+        credentials: { privateKey },
+        fetch: fetchImpl,
+        now: () => new Date("2026-09-21T10:00:00Z"),
+      });
+
+      await expect(module.tracker?.listContainers()).rejects.toThrow(
+        `GitHub answered ${String(status)}`,
+      );
+    }
+  });
+
+  it("says why when no installation will answer, since then it is the App", async () => {
+    const { connect } = githubReturning({});
+
+    await expect(
+      connect({
+        privateKey,
+        installations: [{ id: "7", account: "acme-labs" }],
+      }).tracker.listContainers(),
+    ).rejects.toThrow(/GitHub answered 404 for \/app\/installations\/7\/access_tokens/);
   });
 });
 

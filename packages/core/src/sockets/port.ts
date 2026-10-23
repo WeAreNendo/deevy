@@ -96,7 +96,16 @@ export type InboundEvent =
       decision: "approved" | "rejected";
       note: string | null;
     }
-  | { kind: "installation"; installations: { id: string; account: string }[] }
+  /**
+   * Where the tool's app is installed, added to what the Socket keeps, or with
+   * `removed` taken off it: deleted, or suspended, where it works nothing
+   * until it is unsuspended and arrives as an installation again.
+   */
+  | {
+      kind: "installation";
+      installations: { id: string; account: string }[];
+      removed?: "deleted" | "suspended";
+    }
   /**
    * A record changed, and the delivery says only which one: Notion's webhooks
    * name what changed and carry none of it. deevy reads the record back

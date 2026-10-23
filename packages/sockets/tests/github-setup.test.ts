@@ -181,6 +181,41 @@ describe("the installation that follows", () => {
     });
   });
 
+  it("keeps one entry for an installation, however the redirect spelled its id", async () => {
+    const { setup } = githubReturning(
+      { "GET /app/installations/061892041": { id: 61892041, account: { login: "acme" } } },
+      {
+        appId: "1284461",
+        credentials: { privateKey },
+        installations: [{ id: "61892041", account: "acme" }],
+      },
+    );
+
+    // The query string is whoever is at the URL; GitHub's own id is the one kept.
+    const result = await setup({ params: { installation_id: "061892041" } });
+
+    expect(result.config).toEqual({ installations: [{ id: "61892041", account: "acme" }] });
+  });
+
+  it("writes down no installation GitHub has suspended", async () => {
+    const { setup } = githubReturning(
+      {
+        "GET /app/installations/7": {
+          id: 7,
+          account: { login: "second-org" },
+          suspended_at: "2026-10-20T09:00:00Z",
+        },
+      },
+      { appId: "1284461", credentials: { privateKey } },
+    );
+
+    const result = await setup({ params: { installation_id: "7" } });
+
+    // It mints no token until it is unsuspended, which GitHub delivers.
+    expect(result.config).toBeUndefined();
+    expect(result.summary).toMatch(/second-org.*suspended/);
+  });
+
   it("says what it cannot finish, rather than doing nothing quietly", async () => {
     const { setup } = githubReturning({}, { appId: "1284461", credentials: { privateKey } });
 

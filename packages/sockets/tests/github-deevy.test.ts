@@ -19,6 +19,9 @@ import { createGithubSocket, resetGithubTokens, socketModules } from "../src/ind
 import installations from "./fixtures/github/app.installations.json" with { type: "json" };
 import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" };
 import installed from "./fixtures/github/installation.created.json" with { type: "json" };
+import uninstalled from "./fixtures/github/installation.deleted.json" with { type: "json" };
+import suspended from "./fixtures/github/installation.suspend.json" with { type: "json" };
+import unsuspended from "./fixtures/github/installation.unsuspend.json" with { type: "json" };
 
 /**
  * GitHub, through the door deevy actually serves (ADR-0024).
@@ -223,6 +226,36 @@ describe("the App being installed somewhere", () => {
     });
     const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
     expect(kinds).toContain("socket.installation_added");
+  });
+
+  it("is let go of when it is suspended or uninstalled, and back when unsuspended", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { socketId } = await workspaceOnGithub(db);
+    const app = deevy(db);
+    const installations = async () =>
+      (await db.query.socket.findFirst({ where: { id: socketId } }))?.config.installations;
+    const deliver = async (payload: unknown, id: string) =>
+      app.request(`/hooks/${socketId}`, await delivery("installation", payload, id));
+
+    await deliver(installed, "delivery-created");
+    // Suspended, it mints no token and has nothing to offer until it is back.
+    await deliver(suspended, "delivery-suspend");
+    expect(await installations()).toEqual([]);
+    await deliver(unsuspended, "delivery-unsuspend");
+    expect(await installations()).toEqual([{ id: "61892041", account: "acme" }]);
+    // Uninstalled, it is gone for good: deevy no longer offers its repositories.
+    await deliver(uninstalled, "delivery-deleted");
+    expect(await installations()).toEqual([]);
+
+    const removed = await db.query.event.findMany({
+      where: { kind: "socket.installation_removed" },
+      orderBy: { seq: "asc" },
+    });
+    expect(removed.map((event) => event.payload)).toMatchObject([
+      { accounts: ["acme"], why: "suspended" },
+      { accounts: ["acme"], why: "deleted" },
+    ]);
   });
 });
 

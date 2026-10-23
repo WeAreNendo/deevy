@@ -378,6 +378,21 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
         true,
       );
     }
+    case "socket.installation_removed": {
+      // The same tool telling deevy where it no longer works: uninstalled, or
+      // suspended until somebody there unsuspends it.
+      const accounts = list(p.accounts);
+      const named = str(p.name) ?? "a Socket";
+      const where = accounts.length > 0 ? join(accounts) : "an account";
+      return say(
+        p.why === "suspended"
+          ? `${named} was suspended on ${where}`
+          : `${named} was uninstalled from ${where}`,
+        null,
+        "muted",
+        true,
+      );
+    }
     case "socket.removed":
       return say(`disconnected ${str(p.name) ?? "a Socket"}`, null, "destructive");
     case "allowlist.rule_added":

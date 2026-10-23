@@ -210,12 +210,22 @@ export function normalizeGithub(eventName: string, payload: unknown): InboundEve
     const account = (installation.account ?? {}) as { login?: unknown };
     const id = num(installation.id);
     if (!id) return [{ kind: "ignored", why: "an installation delivery with no installation" }];
+    const installations = [{ id, account: text(account.login) }];
     // A deleted installation is still news: the config says where the App is,
-    // and an entry that is gone is one deevy should stop offering.
-    if (action === "deleted") {
-      return [{ kind: "ignored", why: `the App was removed from ${text(account.login)}` }];
+    // and an entry that is gone is one deevy should stop offering. So is a
+    // suspended one, which mints no token until `unsuspend` brings it back as
+    // an installation like any other. `installation_repositories` only ever
+    // changes which repositories an installation covers.
+    if (eventName === "installation" && (action === "deleted" || action === "suspend")) {
+      return [
+        {
+          kind: "installation",
+          installations,
+          removed: action === "deleted" ? "deleted" : "suspended",
+        },
+      ];
     }
-    return [{ kind: "installation", installations: [{ id, account: text(account.login) }] }];
+    return [{ kind: "installation", installations }];
   }
 
   return [{ kind: "ignored", why: `a ${eventName} delivery, which deevy does not read` }];
