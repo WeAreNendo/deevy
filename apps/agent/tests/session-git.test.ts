@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { rm, writeFile } from "node:fs/promises";
+import { chmod, chown, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -8,6 +9,7 @@ import { openGitProxy } from "../src/git-proxy.ts";
 import type { Checkout } from "../src/deevy.ts";
 import { mcpEnvelope, mcpProtocolVersion, messagesIn } from "../src/proxy.ts";
 import { runOnce } from "../src/work.ts";
+import { openWorkspace } from "../src/workspace.ts";
 import { bareRepo, finished, instance, scripted } from "./helpers.ts";
 
 const run = promisify(execFile);
@@ -438,5 +440,130 @@ describe("a session that runs its own git", () => {
     expect(deevy.tracker.pulls[0]).toMatchObject({
       title: "acme/deevy#1: Added a health endpoint, and a smoke that proves it answers.",
     });
+  });
+});
+
+/**
+ * The clone is the session's, `.git` and all: its configuration and its hooks
+ * are whatever the session wrote, and git runs what they name as whoever runs
+ * git. The supervisor runs git in it too — the delivery, and every reading of
+ * what moved — and as root that would be the session's code running as root.
+ */
+describe("what a session plants in its clone", () => {
+  async function planting(user: { uid: number; gid: number }) {
+    const deevy = await assigned();
+    // Somewhere the planted command can write whoever it runs as, outside the
+    // clone so the clone's removal does not take the evidence with it.
+    const evidence = await mkdtemp(join(tmpdir(), "deevy-planted-"));
+    scratch.push(evidence);
+    await chmod(evidence, 0o777);
+    const log = join(evidence, "ran");
+    await writeFile(log, "");
+    await chmod(log, 0o666);
+    const command = join(evidence, "planted");
+    await writeFile(
+      command,
+      [
+        "#!/bin/sh",
+        "{",
+        '  printf "%s uid=%s" "$1" "$(id -u)"',
+        '  [ -n "$DEEVY_AGENT_KEY" ] && printf " key"',
+        '  ps -o args= -p "$PPID" 2>/dev/null | grep -q Authorization && printf " token"',
+        "  echo",
+        `} >> "${log}"`,
+        '[ "$1" = filter ] && exec cat',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    await chmod(command, 0o755);
+    const fsmonitor = join(evidence, "fsmonitor");
+    await writeFile(fsmonitor, `#!/bin/sh\nexec "${command}" fsmonitor\n`);
+    await chmod(fsmonitor, 0o755);
+
+    // The supervisor's own environment holds the Agent's key in production;
+    // so does this one, for as long as the test runs.
+    const had = process.env.DEEVY_AGENT_KEY;
+    process.env.DEEVY_AGENT_KEY = "deevy_sk_the_supervisors_own";
+    closers.push(() => {
+      if (had === undefined) delete process.env.DEEVY_AGENT_KEY;
+      else process.env.DEEVY_AGENT_KEY = had;
+    });
+
+    const session = scripted([
+      async (input) => {
+        const [mine] = await deevy.deevy.runs("pending");
+        // Everything here as the session's user, as a real session is: git
+        // refuses a clone somebody else owns, root included, and what the
+        // session writes is its own.
+        const git = (args: string[]) =>
+          run("git", ["-C", input.cwd, ...args], {
+            uid: user.uid,
+            gid: user.gid,
+            env: { ...process.env, HOME: tmpdir() },
+          });
+        const write = async (path: string, body: string, mode = 0o644) => {
+          await writeFile(path, body);
+          await chmod(path, mode);
+          await chown(path, user.uid, user.gid);
+        };
+        await write(join(input.cwd, "work.ts"), "export const t = 7;\n");
+        // A filter every file goes through, an fsmonitor, and a hook on
+        // every step the delivery takes.
+        await write(join(input.cwd, ".gitattributes"), "* filter=planted\n");
+        await git(["config", "filter.planted.clean", `"${command}" filter`]);
+        await git(["config", "core.fsmonitor", fsmonitor]);
+        for (const hook of [
+          "pre-commit",
+          "post-commit",
+          "post-checkout",
+          "pre-push",
+          "reference-transaction",
+        ]) {
+          await write(
+            join(input.cwd, ".git", "hooks", hook),
+            `#!/bin/sh\nexec "${command}" hook\n`,
+            0o755,
+          );
+        }
+        // Finished through the proxy, so the delivery runs while the session
+        // is still alive, which is the case that made this urgent.
+        await finishThroughProxy(input.mcpUrl, mine.id, "Planted, and finished.");
+      },
+      finished,
+    ]);
+
+    const pass = await runOnce({
+      ...work(deevy),
+      workspace: (options: Parameters<typeof openWorkspace>[0]) =>
+        openWorkspace({ ...options, user }),
+      session,
+    });
+
+    const branch = pass.worked[0]?.delivered?.branch ?? "";
+    expect(branch.startsWith("deevy/")).toBe(true);
+    expect(await refsOn(deevy.repo)).toContain(`refs/heads/${branch}`);
+    expect(await feedOf(deevy, pass.worked[0].runId)).toContain(`Pushed refs/heads/${branch} at `);
+
+    const ran = (await readFile(log, "utf8")).split("\n").filter(Boolean);
+    // The hooks and the fsmonitor never ran at all.
+    expect(ran.filter((line) => !line.startsWith("filter "))).toEqual([]);
+    // A filter cannot be turned off without breaking a repository that needs
+    // one, so it ran, and only ever as the session: its user, and nothing of
+    // the supervisor's — not its key, not a credential in git's command line.
+    expect(ran.length).toBeGreaterThan(0);
+    expect([...new Set(ran)]).toEqual([`filter uid=${String(user.uid)}`]);
+  }
+
+  it("runs only as the session, with nothing of the supervisor's", async () => {
+    // This process's own ids: anybody may be themselves, so the path that
+    // becomes the session's user is the one taken.
+    await planting({ uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 });
+  });
+
+  // Where the supervisor is root, which is the image, and where a test can ask
+  // for somebody else: the planted command must never run as uid 0.
+  it.runIf(process.getuid?.() === 0)("never runs as root where the runtime is root", async () => {
+    await planting({ uid: 10002, gid: 10002 });
   });
 });

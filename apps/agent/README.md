@@ -115,7 +115,7 @@ CI never sets it. A milestone whose suite needs a paid key is a milestone nobody
 | `src/harness/claude-code.ts` | Claude Code on `claude -p`. Also `opencode.ts`, `cursor.ts`, `copilot.ts`; `index.ts` is the registry.                            |
 | `src/instructions.md`        | What the session is told about working an Issue. The original of the snippet in [`docs/agent-loop.md`](../../docs/agent-loop.md). |
 | `src/work.ts`                | One pass and one Run: discovery, the claim, the envelope, the resume.                                                             |
-| `src/workspace.ts`           | A clone per Run, and the credential the session never sees.                                                                       |
+| `src/workspace.ts`           | A clone per Run, the credential the session never sees, and the supervisor's git in it, run as the session.                       |
 | `src/deliver.ts`             | The branch, the push, and the pull request deevy opens for it.                                                                    |
 | `src/loop.ts`                | Staying up: a sequential loop, backoff, and a stop that finishes the sentence.                                                    |
 | `src/receiver.ts`            | `/healthz`, and deevy's signed deliveries.                                                                                        |

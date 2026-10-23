@@ -180,6 +180,21 @@ jobs:
           path: node_modules/.vite/task-cache
           key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # The supervisor is root in the runtime image, and its git in a session's
+      # clone must never be (src/workspace.ts). The case that proves it needs
+      # root to ask for another user, and the runner is not root, so it runs
+      # here under sudo, beside the session's user as the image makes it. Last,
+      # because what vitest writes as root nothing after it could rewrite.
+      - name: The supervisor's git in a clone runs as the session, under root
+        if: matrix.shard.name == 'runtime and server'
+        working-directory: apps/agent
+        run: |
+          getent passwd 10002 || sudo useradd --no-create-home --uid 10002 session
+          sudo env "PATH=$PATH" node_modules/.bin/vp test tests/session-git.test.ts \
+            -t "plants in its clone" --reporter=verbose | tee /tmp/as-root.log
+          # Ran, rather than skipped: the case only runs where the tests are root.
+          grep "never runs as root" /tmp/as-root.log | grep -qv "↓"
+
   runtime:
     name: Workers and D1 migrations
     runs-on: ubuntu-latest
