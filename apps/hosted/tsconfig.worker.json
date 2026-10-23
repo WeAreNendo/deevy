@@ -19,5 +19,6 @@
   },
   "include": ["src", "tests"],
   // Reads files and runs tar: a Node test of a Node script (tsconfig.node.json).
-  "exclude": ["tests/artifact.test.ts"]
+  // And a failed query on node:sqlite, played as a Durable Object's storage.
+  "exclude": ["tests/artifact.test.ts", "tests/log.test.ts"]
 }

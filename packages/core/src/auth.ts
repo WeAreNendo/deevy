@@ -5,8 +5,13 @@ import { mcp } from "@better-auth/mcp";
 import { allowlistRule, invitation, member, workspace, type Db } from "@deevy/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { allocateHandle, slugify } from "./handles.ts";
-import { betterAuth, type AuthContext, type BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import {
+  betterAuth,
+  type AuthContext,
+  type BetterAuthOptions,
+  type BetterAuthPlugin,
+} from "better-auth";
+import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { genericOAuth, jwt, lastLoginMethod } from "better-auth/plugins";
 import { fetchClientMetadataResource, type MetadataResourceFetch } from "./cimd.ts";
@@ -190,15 +195,55 @@ export interface AuthEnv {
 export interface CreateAuthOptions {
   db: Db;
   env: AuthEnv;
+  /**
+   * Where Better Auth's own log lines go: its console, unless an entry says
+   * otherwise. A hosted Workspace says otherwise, because a line Better Auth
+   * writes about a failed query carries the values it was bound to, and its
+   * log promises nothing from the database (apps/hosted/src/log.ts).
+   */
+  logger?: AuthLogger;
+  /**
+   * Hand an error Better Auth did not expect — a failed query in one of its
+   * endpoints, or in deevy's own hooks on a new user or session — back to
+   * whoever called its handler. Left to itself, better-call writes such an
+   * error whole to the console (`# SERVER_ERROR`, past any `logger`) and
+   * answers an empty 500; handed back, it reaches the app's error handler,
+   * which reports it through the entry's reporter and answers a 500 too
+   * (app.ts). A refusal Better Auth chose, an `APIError`, is still its own
+   * response, and one that is an internal error is still said through
+   * `logger`. A hosted Workspace asks for this; the image and the Worker keep
+   * Better Auth's own lines (apps/hosted/src/log.ts).
+   */
+  rethrowUnexpected?: boolean;
 }
+
+/** Better Auth's log option, which `createAuth` passes through as it is. */
+export type AuthLogger = NonNullable<BetterAuthOptions["logger"]>;
 
 /**
  * Better Auth is identity for Humans and, from M2, Agents (ADR-0007). Every
  * Member is a Better Auth user; deevy keeps its own workspace and member tables.
  */
-export function createAuth({ db, env }: CreateAuthOptions) {
+export function createAuth({ db, env, logger, rethrowUnexpected = false }: CreateAuthOptions) {
   const base = basePathOf(env.baseURL);
   const auth = betterAuth({
+    ...(logger ? { logger } : {}),
+    // Better Auth's router calls this for every error but a redirect, in place
+    // of its own handling: an internal `APIError` is said through `logger` as
+    // Better Auth says one, any `APIError` is answered as it would be, and
+    // anything else is thrown on, so better-call never reaches the line that
+    // logs it whole.
+    ...(rethrowUnexpected
+      ? {
+          onAPIError: {
+            onError: (error: unknown, context: AuthContext) => {
+              if (!isAPIError(error)) throw error;
+              if (error.status === "INTERNAL_SERVER_ERROR")
+                context.logger.error(error.status, error);
+            },
+          },
+        }
+      : {}),
     // Better Auth routes on the path of its own URL, and keeps a URL that
     // already has one exactly as given, so it is handed `…/api/auth` outright:
     // at the root of a host that is what it worked out before, and under a

@@ -1,5 +1,6 @@
 import { member, user, workspace } from "@deevy/db";
 import { ORPCError, call, createRouterClient } from "@orpc/server";
+import { DrizzleQueryError, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createApp, isDefinedRefusal } from "../src/app.ts";
 import {
@@ -412,6 +413,35 @@ describe("what reaches an operator's log", () => {
     await app.request("/api/members");
 
     expect(reported).toEqual([]);
+  });
+
+  /**
+   * A route outside the operations — a tool's delivery here — throws past oRPC
+   * and its interceptor, and Hono's own handler used to log it with
+   * `console.error`, beside the reporter rather than through it: a hosted
+   * Workspace's reporter, which says nothing from the database, never saw it.
+   */
+  it("reports a failure outside the operations through the same reporter", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const reported: unknown[] = [];
+    const app = createApp({ db, onError: (error) => reported.push(error) });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await db.run(sql`ALTER TABLE "socket" RENAME TO "socket_gone"`);
+      const delivery = await app.request("/hooks/sock_123456789abc", {
+        method: "POST",
+        body: "{}",
+      });
+
+      expect(delivery.status).toBe(500);
+      expect(await delivery.text()).toBe("Internal Server Error");
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toBeInstanceOf(DrizzleQueryError);
+      expect(logged).not.toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("is not fooled by the class, only by what the caller is told", () => {

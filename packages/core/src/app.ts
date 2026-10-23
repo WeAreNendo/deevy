@@ -243,6 +243,22 @@ export function createApp({
     report(error);
   };
   const app = new Hono<{ Variables: { ctx: AppContext } }>();
+  // What a route outside the operations throws — the context a request is
+  // built with, a tool's delivery, an unsubscribe link — goes to the same
+  // reporter as an operation's failure rather than to Hono's own
+  // `console.error`, so an entry that decides what may reach its log decides
+  // it once (a hosted Workspace's says nothing from its database). With the
+  // default reporter this is the line Hono wrote, and the answer is Hono's.
+  app.onError((error: unknown, c) => {
+    // Hono 4.13 hands this only an `Error`, but the type is a promise about
+    // Hono and not about whatever a route threw: `in` on a string throws.
+    if (isResponseError(error)) {
+      const response = error.getResponse();
+      return c.newResponse(response.body, response);
+    }
+    report(error);
+    return c.text("Internal Server Error", 500);
+  });
   // Everything this deployment answers lives under the path of its URL, which
   // is empty at the root of a host. `basePath` shares the router, so `app`
   // still serves all of it, and the few documents RFC 8414 and RFC 9728 put at
@@ -584,6 +600,15 @@ function wellKnown(auth: Auth) {
 
 /** The methods a browser sends from any page without anything changing. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/** Hono's `HTTPException`, or anything else that carries the response to answer with. */
+function isResponseError(error: unknown): error is { getResponse(): Response } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { getResponse?: unknown }).getResponse === "function"
+  );
+}
 
 /** A URL's origin as a browser writes it in `Origin`; null for what is not a URL. */
 function webOrigin(value: string | undefined): string | null {

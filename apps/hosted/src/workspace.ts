@@ -31,6 +31,7 @@ import { emailSenders } from "@deevy/email";
 import { socketModules } from "@deevy/sockets";
 import { count, eq, gte } from "drizzle-orm";
 import { readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
+import { betterAuthLogger, reportFor, throwDescribed } from "./log.ts";
 import { workspaceSecret } from "./secrets.ts";
 import { VERSION } from "./version.ts";
 
@@ -185,7 +186,16 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       this.#app = null;
       throw failure;
     });
-    return (await this.#app).fetch(request);
+    // Caught here rather than left to the runtime, which would log the error
+    // whole — a failed query's bound values included — in this object's
+    // invocation and again in the Worker's that called it (log.ts).
+    const { slug } = this.#config;
+    try {
+      return await (await this.#app).fetch(request);
+    } catch (failure) {
+      reportFor(slug)(failure);
+      return new Response("Internal Server Error", { status: 500 });
+    }
   }
 
   /** An open tab says nothing but its keepalive, which the runtime answers (constructor). */
@@ -223,6 +233,11 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
         secret: await workspaceSecret(this.#hosted.masterSecret, config.key, "auth"),
         workspaceLimits: this.#limits(config),
       });
+    } catch (failure) {
+      // Said rather than thrown, for the reason `fetch` says it: the runtime
+      // logs a thrown error whole. The next pass is set below either way, so
+      // nothing waits on the runtime's retry.
+      reportFor(config.slug)(failure);
     } finally {
       await this.ctx.storage.setAlarm(Date.now() + this.#hosted.passSeconds * 1_000);
     }
@@ -248,7 +263,9 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       status: config?.status ?? "unprovisioned",
       migrations: this.#migrations,
       limits: config ? this.#limits(config) : null,
-      counts: config && !this.#migrations.error ? await this.#counts() : null,
+      // The one question the platform asks that runs a query with values
+      // bound to it; what it throws goes on to the console, which logs it.
+      counts: config && !this.#migrations.error ? await this.#counts().catch(throwDescribed) : null,
       awakeSince: this.#awakeSince,
       openTabs: this.ctx.getWebSockets().length,
     };
@@ -446,7 +463,14 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       signInRelay: { url: `${this.#hosted.origin}/auth`, secret: this.#hosted.relaySecret },
       fetchClientMetadataResource,
     };
-    const auth = createAuth({ db: this.#db, env: identity });
+    const auth = createAuth({
+      db: this.#db,
+      env: identity,
+      logger: betterAuthLogger(config.slug),
+      // What Better Auth did not expect comes back to the app's handler and
+      // its reporter, below, rather than to better-call's console line (log.ts).
+      rethrowUnexpected: true,
+    });
     await auth.$context;
     return createApp({
       ...(VERSION ? { version: VERSION } : {}),
@@ -471,7 +495,7 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       ...(this.#hosted.emailProblem ? { emailProblem: this.#hosted.emailProblem } : {}),
       // What a write owes goes out on this object's alarm, set to now.
       jobs: createAlarmJobQueue(this.ctx.storage),
-      onError: (error) => console.error(`[${config.slug}]`, error),
+      onError: reportFor(config.slug),
     });
   }
 }
