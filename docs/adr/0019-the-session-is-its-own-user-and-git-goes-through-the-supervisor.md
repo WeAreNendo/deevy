@@ -1,5 +1,13 @@
 # The session is its own user, and git goes through the supervisor
 
+> Two things below were not quite so. The supervisor did run untrusted code: the clone, `.git` included, is
+> the session's, git runs whatever a clone's configuration and hooks name, and the supervisor's own git in it —
+> the delivery, and reading what moved — ran as root. It now runs as the session's user, with an environment
+> of its own and no credential, the git proxy holding it, and with hooks and the fsmonitor off
+> (`apps/agent/src/workspace.ts`). And the remote's refs are read at every push the proxy carries and at the
+> delivery too, not only when the Run clones and lets go, because a session finishes its own Run and a
+> finished Run takes no more Activities.
+
 [ADR-0014](./0014-an-agents-input-is-untrusted-and-its-tools-are-not.md) says the container is the sandbox
 and the environment a session gets is an allowlist. Both were true and neither was enough, because the
 session and the supervisor were the same user. This records what that cost, what replaced it, and the

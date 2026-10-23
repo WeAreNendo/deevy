@@ -1899,7 +1899,10 @@ each part does:
   `/proc`, whatever the allowlist below hands it, which is what ADR-0019 was written about. Run it with
   `--cap-drop=ALL --cap-add=SETUID --cap-add=SETGID --cap-add=CHOWN --cap-add=DAC_OVERRIDE` — four, each
   measured: two to become the session, `CHOWN` to hand it its working directory, and `DAC_OVERRIDE` to read
-  and clean up what it wrote. With only the first two the runtime fails at its first Run. A runtime that is not root — a laptop, or a container
+  and clean up what it wrote. With only the first two the runtime fails at its first Run. The supervisor's own
+  git in the clone — the delivery, and reading what a Run moved — runs as that user too, with none of the
+  supervisor's environment and no credential: the clone's `.git` is the session's, and git runs whatever its
+  configuration and hooks name, so as root that would be the session's code running as root. A runtime that is not root — a laptop, or a container
   run with `--user` — keeps its old shape, says so in its first lines, and has no boundary at all: fine for
   trying it out, not a way to run it against a Workspace other people write in.
 - **The tool list is the surface.** Tools are granted by name, never by wildcard, so deevy gaining a

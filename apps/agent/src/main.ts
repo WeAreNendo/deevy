@@ -131,7 +131,15 @@ const work = {
     repo: RepoConfig | null;
     originUrl?: string;
     author?: { name: string; email: string };
-  }) => openWorkspace({ ...options, ...(config.workdir ? { root: config.workdir } : {}) }),
+  }) =>
+    openWorkspace({
+      ...options,
+      ...(config.workdir ? { root: config.workdir } : {}),
+      // The clone is the session's, and so is every git run in it, the
+      // supervisor's included: as root, it would run whatever the session
+      // planted in `.git` (src/workspace.ts).
+      ...(sessionUser ? { user: sessionUser } : {}),
+    }),
 };
 
 if (process.argv.includes("--once")) {

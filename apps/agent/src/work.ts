@@ -683,10 +683,11 @@ async function movedBetween(
       const asked = await ancestry(workspace, older, newer, signal);
       if (asked !== null) return asked;
       // A commit the session did not make is not in a shallow clone until it
-      // is asked for. The session may still be working in this clone, as
-      // another user, so the fetch leaves it one pack and nothing else: no
-      // loose objects in directories it could not then write in, and no
-      // FETCH_HEAD it could not replace (src/session-user.ts).
+      // is asked for. The session may still be working in this clone, so the
+      // fetch leaves it one pack and nothing else: no FETCH_HEAD in place of
+      // the one it last fetched, and no loose objects it did not ask for. It
+      // runs as the session's user, as all the supervisor's git here does
+      // (src/workspace.ts).
       await workspace
         .git(
           [
