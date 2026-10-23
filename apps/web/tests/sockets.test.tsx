@@ -33,8 +33,12 @@ const state = vi.hoisted(() => ({
   lastInboundAt: null as Date | null,
   /** Holds the providers' answer back, as a slow first load does. */
   providersPending: false,
+  /** Makes the providers' answer an error, as a server that cannot be reached gives. */
+  providersFail: false,
   /** What the stub provider says of its webhook secret, for the page to follow. */
   stubSecretFrom: "either" as "either" | "tool" | "handshake",
+  /** Why the GitHub module will not begin here, as it says on a GitHub Enterprise Server. */
+  githubBeginRefusal: null as string | null,
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -43,45 +47,53 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const client = stubClient({
     sockets: {
       providers: async () =>
-        state.providersPending
-          ? new Promise<never>(() => undefined)
-          : {
-              // Who makes each one's webhook secret is the module's word, and
-              // what the Socket's page offers to change it follows it.
-              providers: [
-                {
-                  id: "github",
-                  label: "GitHub",
-                  capabilities: ["tracker", "forge"],
-                  webhookSecretFrom: "either",
-                },
-                {
-                  id: "gitlab",
-                  label: "GitLab",
-                  capabilities: ["tracker", "forge"],
-                  webhookSecretFrom: "either",
-                },
-                {
-                  id: "linear",
-                  label: "Linear",
-                  capabilities: ["tracker"],
-                  webhookSecretFrom: "tool",
-                },
-                {
-                  id: "notion",
-                  label: "Notion",
-                  capabilities: ["tracker", "docs"],
-                  webhookSecretFrom: "handshake",
-                },
-                { id: "slack", label: "Slack", capabilities: ["chat"], webhookSecretFrom: "tool" },
-                {
-                  id: "stub",
-                  label: "the stub tracker",
-                  capabilities: ["tracker"],
-                  webhookSecretFrom: state.stubSecretFrom,
-                },
-              ],
-            },
+        state.providersFail
+          ? Promise.reject(new Error("Failed to fetch"))
+          : state.providersPending
+            ? new Promise<never>(() => undefined)
+            : {
+                // Who makes each one's webhook secret is the module's word, and
+                // what the Socket's page offers to change it follows it.
+                providers: [
+                  {
+                    id: "github",
+                    label: "GitHub",
+                    capabilities: ["tracker", "forge"],
+                    webhookSecretFrom: "either",
+                    beginRefusal: state.githubBeginRefusal,
+                  },
+                  {
+                    id: "gitlab",
+                    label: "GitLab",
+                    capabilities: ["tracker", "forge"],
+                    webhookSecretFrom: "either",
+                  },
+                  {
+                    id: "linear",
+                    label: "Linear",
+                    capabilities: ["tracker"],
+                    webhookSecretFrom: "tool",
+                  },
+                  {
+                    id: "notion",
+                    label: "Notion",
+                    capabilities: ["tracker", "docs"],
+                    webhookSecretFrom: "handshake",
+                  },
+                  {
+                    id: "slack",
+                    label: "Slack",
+                    capabilities: ["chat"],
+                    webhookSecretFrom: "tool",
+                  },
+                  {
+                    id: "stub",
+                    label: "the stub tracker",
+                    capabilities: ["tracker"],
+                    webhookSecretFrom: state.stubSecretFrom,
+                  },
+                ],
+              },
       list: async () => ({ sockets: state.sockets }),
       begin: async (input: { provider: string; name: string }) => {
         void calls.begin(input);
@@ -162,7 +174,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
   return { client, orpc: createTanstackQueryUtils(client) };
 });
 
-const { mountAt } = await import("./mount.tsx");
+const { mount, mountAt } = await import("./mount.tsx");
 
 /**
  * A field that holds a secret: masked, and kept from the browser's and the
@@ -180,7 +192,9 @@ const { stubSocket } = await import("./stub-client.ts");
 
 afterEach(() => {
   state.providersPending = false;
+  state.providersFail = false;
   state.stubSecretFrom = "either";
+  state.githubBeginRefusal = null;
 });
 
 describe("the tools this Workspace is connected to", () => {
@@ -337,6 +351,59 @@ describe("the tools this Workspace is connected to", () => {
       credentials: { privateKey: expect.stringContaining("BEGIN RSA PRIVATE KEY") as unknown },
       webhookSecret: "whsec_pasted_from_github",
     });
+  });
+
+  it("offers only the paste where this deevy's GitHub is a GitHub Enterprise Server", async () => {
+    state.sockets = [];
+    // The server's word rather than a guess from an address: the page's policy
+    // lets the manifest's form go only to github.com, so deevy cannot make it.
+    state.githubBeginRefusal = "deevy can make a GitHub App for you only on github.com.";
+    calls.begin.mockClear();
+    calls.connect.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: /GitHub/ }));
+
+    expect(screen.queryByRole("button", { name: "Create the App on GitHub" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Make a new App instead" })).toBeNull();
+    expect(
+      screen.getByText(/On GitHub Enterprise Server or GHE.com, .* paste it here/),
+    ).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "acme on GHES" } });
+    fireEvent.change(screen.getByLabelText("App id"), { target: { value: "17" } });
+    fireEvent.change(screen.getByLabelText("Private key"), {
+      target: { value: "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
+    expect(calls.connect.mock.calls[0]?.[0]).toMatchObject({
+      provider: "github",
+      config: { appId: "17" },
+    });
+    expect(calls.begin).not.toHaveBeenCalled();
+  });
+
+  it("offers no way in until it knows which GitHub deevy works with", async () => {
+    // Offered before the answer, Create would be a form the browser refuses
+    // on a GitHub Enterprise Server; so nothing is offered until it comes.
+    state.providersPending = true;
+    const { ConnectGithub } = await import("../src/components/connect-github.tsx");
+    mount(<ConnectGithub onConnected={() => undefined} />);
+
+    expect(await screen.findByText(/Checking which GitHub deevy works with/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create the App on GitHub" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Paste an App you already have" })).toBeNull();
+  });
+
+  it("says it could not tell which GitHub, rather than guessing, when the server will not say", async () => {
+    state.providersFail = true;
+    const { ConnectGithub } = await import("../src/components/connect-github.tsx");
+    mount(<ConnectGithub onConnected={() => undefined} />);
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not tell which GitHub/);
+    expect(screen.queryByRole("button", { name: "Create the App on GitHub" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
   it("connects Slack in one trip: the manifest with the real address, then the token", async () => {

@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createGithubSocket, resetGithubTokens } from "../src/github/index.ts";
+import { socketModules } from "../src/index.ts";
 
 /**
  * Finishing a GitHub App off (ADR-0024).
@@ -44,6 +45,46 @@ function githubReturning(answers: Record<string, unknown>, config: Record<string
   const setup = module.setup.bind(module);
   return { setup, asked };
 }
+
+describe("where deevy can make the App", () => {
+  /** The GitHub module as an entry builds it, for a Socket with this configuration. */
+  function github(config: Record<string, unknown>, githubApiBase?: string) {
+    const make = socketModules(githubApiBase ? { githubApiBase } : {}).github;
+    if (!make) throw new Error("every build speaks GitHub");
+    return make({ config, credentials: {}, fetch, now: () => new Date() });
+  }
+
+  it("is github.com, whose manifest form deevy's page may post", () => {
+    expect(github({}).beginRefusal).toBeUndefined();
+    expect(github({ apiBase: "https://api.github.com" }).beginRefusal).toBeUndefined();
+    // A Socket of its own on github.com, on a deployment whose default is not.
+    expect(
+      github({ apiBase: "https://api.github.com" }, "https://github.example.com/api/v3")
+        .beginRefusal,
+    ).toBeUndefined();
+  });
+
+  it("is nowhere on a GitHub Enterprise Server, whose App is made there and pasted", () => {
+    // The deployment's (`DEEVY_GITHUB_API`), or one a Socket carries itself.
+    for (const module of [
+      github({}, "https://github.example.com/api/v3"),
+      github({ apiBase: "https://github.example.com/api/v3" }),
+      // GHE.com is another GitHub too, on a host of its own.
+      github({ apiBase: "https://api.acme.ghe.com" }),
+    ]) {
+      expect(module.beginRefusal).toMatch(/GitHub Enterprise Server or GHE.com/);
+      expect(module.beginRefusal).toMatch(/Paste an App you already have/);
+      // Said to an admin on a screen, so in its words and none of the API's.
+      expect(module.beginRefusal).not.toMatch(/sockets\.|appId|privateKey/);
+    }
+  });
+
+  it("is refused in words when the Socket's API address is not one", () => {
+    for (const apiBase of [42, "not an address", "ftp://github.example.com", { url: "x" }]) {
+      expect(() => github({ apiBase })).toThrow(/^That is not the address of a GitHub API/);
+    }
+  });
+});
 
 describe("the App an operator just made", () => {
   it("is traded for its own credentials, and deevy keeps what it may", async () => {

@@ -167,6 +167,27 @@ export function githubIdentityScope(api: string): IdentityScope {
   return instance === "github.com" ? { instance, signInProvider: "github" } : { instance };
 }
 
+/**
+ * GitHub's REST root: a Socket's own, or github.com's. A Socket's
+ * configuration can come from whoever called the API (`sockets.begin`), so
+ * one that is not an http(s) address is refused in words here, where the
+ * module is built, rather than failing later as a TypeError.
+ */
+function apiRoot(apiBase: unknown): string {
+  if (apiBase === undefined) return DEFAULT_API;
+  let url: URL | null = null;
+  try {
+    url = typeof apiBase === "string" ? new URL(apiBase) : null;
+  } catch {
+    url = null;
+  }
+  if (typeof apiBase !== "string" || !url || !["https:", "http:"].includes(url.protocol)) {
+    const said = typeof apiBase === "string" ? apiBase.slice(0, 200) : typeof apiBase;
+    throw new Error(`That is not the address of a GitHub API: ${said}`);
+  }
+  return apiBase.replace(/\/+$/, "");
+}
+
 export function createGithubSocket({
   config,
   credentials,
@@ -174,7 +195,7 @@ export function createGithubSocket({
   now,
 }: SocketModuleInput): SocketModule {
   const settings = config as unknown as GithubConfig;
-  const api = (settings.apiBase ?? DEFAULT_API).replace(/\/+$/, "");
+  const api = apiRoot(settings.apiBase);
   const secrets = credentials as unknown as GithubCredentials;
   let key: Promise<CryptoKey> | null = null;
   let filed: Promise<string> | null = null;
@@ -341,13 +362,26 @@ export function createGithubSocket({
     }
   }
 
+  const identityScope = githubIdentityScope(api);
+
   return {
     provider: "github",
     capabilities: new Set(["tracker", "forge"] as const),
     // The manifest conversion hands GitHub's own back, and the App's settings
     // take any typed in, so deevy may mint one too.
     webhookSecretFrom: "either",
-    identityScope: githubIdentityScope(api),
+    identityScope,
+    // The manifest is a form the browser posts from deevy's page, whose policy
+    // lets a form go only to github.com (packages/core/src/headers.ts): posted
+    // to any other GitHub — a GitHub Enterprise Server, or GHE.com — it is
+    // refused before it leaves. Said to whoever reads it on a screen, so in
+    // the screen's words.
+    ...(identityScope.instance === "github.com"
+      ? {}
+      : {
+          beginRefusal:
+            "deevy can make a GitHub App for you only on github.com, and this GitHub is a GitHub Enterprise Server or GHE.com. Make the App there, under Developer settings › GitHub Apps, and connect it with Paste an App you already have.",
+        }),
 
     /**
      * Who deevy is on GitHub: the App's own bot account. The loop guard reads

@@ -346,7 +346,10 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   `-notion`, `-slack`), opened from `group "Connect a tool"`, whose buttons are `sockets.providers` — what
   this build can speak, the stub left out. Where the tool wants deevy's addresses written into its own
   settings, the Socket is started first (`sockets.begin`) and the dialog shows them with their real values;
-  a secret is shown once, in mono, and said to be shown once.
+  a secret is shown once, in mono, and said to be shown once. Whether a tool's own flow can start at all is
+  the server's word too (`beginRefusal` in `sockets.providers`): GitHub's dialog waits for it, and on a
+  GitHub Enterprise Server or GHE.com, where the page may not post the manifest's form, offers only the
+  paste.
 - **A Socket's page** (`routes/settings/socket.tsx`) answers what an operator actually asks: is the tool
   talking to deevy or is deevy asking it (`How it is doing`), where it delivers (`region "Where it delivers"`,
   with **Point GitHub at this address** for an App), what it signs with (by the provider's own
@@ -438,7 +441,11 @@ awaiting your answer"`, `region "Your Agents' Runs"`.
 "Selection"`, `Mark read`, `Mark all read`, the All / Unread toggles.
 - **Sockets.** `heading "Sockets"`, `list "Sockets"`, `group "Connect a tool"` with `Connect <tool>`;
   GitHub's `Organization` (an organization's login, or empty for the person's own account), `form "Create
-the App on GitHub"` and `Paste an App you already have`; Slack's `Show the app
+the App on GitHub"` and `Paste an App you already have` — none of it until `sockets.providers` has
+  answered (a muted "Checking which GitHub deevy works with…", or an `alert` with `Try again` if it
+  could not), and where it gives GitHub a `beginRefusal` (a GitHub Enterprise Server or GHE.com) only the
+  paste, with no `Create the App on GitHub` or `Make a new App instead` and one line saying to make the App
+  there; Slack's `Show the app
 manifest` and `App manifest`; Linear's `Show the addresses`, `Callback URLs`, `Client ID`, `Client secret`,
   `Webhook signing secret`, `Install deevy as an agent`; GitLab's `GitLab URL`, `Access token`, `Signing
 token`, `Use the signing token`; Notion's `Installation access token`, link `Notion's Developer portal` and link `Open the Socket's page`;

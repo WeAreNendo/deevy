@@ -1528,8 +1528,12 @@ the ruling made by commenting `/approve` (docs/plans/sockets.md, "The GitHub wal
 **Ruling from GitHub** needs no linking step for a Human who signs in to deevy with GitHub: github.com's
 accounts are the ones deevy signs people in with ([Ruling from the tracker](#ruling-from-the-tracker)). A
 GitHub Enterprise Server is the same module with `DEEVY_GITHUB_API` (or the Socket's own API address) pointing
-at its API root, and shares nothing with sign-in: its Humans link their accounts under **Settings ›
-Identities**.
+at its API root, with two differences. deevy cannot make the App there, because a page's policy lets the
+manifest's form go only to github.com
+([What a page may run](#what-a-page-may-run-and-where-a-change-may-come-from)): **Connect GitHub** offers
+only **Paste an App you already have**, `sockets.begin` refuses, and the App is made on the server and
+pasted. And it shares nothing with sign-in and has no sign-in of its own to link an account through, so a
+comment there is no Human's Ruling.
 
 ### Working in Linear
 

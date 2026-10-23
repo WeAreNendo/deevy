@@ -72,15 +72,18 @@ function inboundUrl(context: Pick<AppContext, "baseURL">, socketId: string): str
 }
 
 /**
- * A provider's module built with nothing in it, to ask what it says of itself:
- * its capabilities, who makes its webhook secret. No Socket row is touched.
+ * A provider's module built with no credential in it, to ask what it says of
+ * itself: its capabilities, who makes its webhook secret, whether its own flow
+ * can start. With the configuration a Socket would have, where that changes
+ * the answer; no Socket row is touched.
  */
 function bareModuleOf(
   context: Pick<AppContext, "sockets">,
   provider: (typeof socketProviders)[number],
+  config: Record<string, unknown> = {},
 ): SocketModule | undefined {
   return context.sockets?.[provider]?.({
-    config: {},
+    config,
     credentials: {},
     fetch: globalThis.fetch,
     now: () => new Date(),
@@ -201,6 +204,13 @@ export const sockets = {
            * decides whether `sockets.rotate` will mint one.
            */
           webhookSecretFrom: z.enum(webhookSecretOrigins),
+          /**
+           * Why `sockets.begin` refuses this tool here, or null where its own
+           * flow may start: a GitHub App on a GitHub Enterprise Server or
+           * GHE.com is made there and connected with `sockets.connect`
+           * instead.
+           */
+          beginRefusal: z.string().nullable(),
         }),
       ),
     }),
@@ -214,6 +224,7 @@ export const sockets = {
             label: providerLabels[id] ?? id,
             capabilities: [...(module?.capabilities ?? [])],
             webhookSecretFrom: module?.webhookSecretFrom ?? "either",
+            beginRefusal: module?.beginRefusal ?? null,
           };
         }),
       });
@@ -274,6 +285,23 @@ export const sockets = {
       state: z.string(),
     }),
     handler: async ({ input, context }) => {
+      // Before there is a row: a flow the tool cannot finish here would leave
+      // a pending Socket nobody can complete. Asked with the configuration the
+      // Socket would have, since a GitHub's own API address is part of it —
+      // and which is the caller's, so a module that cannot be built from it
+      // is a refusal in its own words rather than a 500.
+      let module: SocketModule | undefined;
+      try {
+        module = bareModuleOf(context, input.provider, input.config);
+      } catch (error) {
+        const why = error instanceof Error ? error.message : String(error);
+        throw new ORPCError("BAD_REQUEST", {
+          message: `${providerLabels[input.provider] ?? input.provider} cannot be connected with that configuration: ${why}`,
+        });
+      }
+      if (module?.beginRefusal)
+        throw new ORPCError("BAD_REQUEST", { message: module.beginRefusal });
+
       // A Socket with nothing in it yet: connecting a GitHub App means sending
       // an operator to GitHub and back, and this row is where they land. What
       // it can do is the provider's, and known already: the redirect that
