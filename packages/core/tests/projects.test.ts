@@ -73,6 +73,56 @@ describe("projects.create", () => {
     ]);
   });
 
+  /**
+   * The CLI and the API can name a default as the Project is made, and routing
+   * hands it records from the first delivery; an Agent that cannot see the
+   * Project is never started on them (`workingAgents`).
+   */
+  it("lets the Agent it makes the default see the Project, as projects.update does", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, bind } = await withSocket(db);
+    const builder = await agentContext(db, { name: "Builder", sponsor: admin.member });
+
+    const project = await client.projects.create({
+      slug: "deevy",
+      name: "deevy",
+      tracker: bind("acme/deevy"),
+      defaultAgentMemberId: builder.member.id,
+    });
+
+    expect(project.defaultAgentMemberId).toBe(builder.member.id);
+    const granted = await client.agents.grants.list({ memberId: builder.member.id });
+    expect(granted.projects.map((one) => one.id)).toEqual([project.id]);
+    // In the order it happened: the Project, then the grant it came with.
+    const { events } = await client.events.list({ projectId: project.id });
+    expect(events).toMatchObject([
+      { kind: "project.created", subjectId: project.id },
+      {
+        kind: "agent.project_granted",
+        subjectId: builder.member.id,
+        actorMemberId: admin.member.id,
+      },
+    ]);
+  });
+
+  it("refuses a default that is not one of this Workspace's Agents", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, bind } = await withSocket(db);
+
+    await expect(
+      client.projects.create({
+        slug: "deevy",
+        name: "deevy",
+        tracker: bind("acme/deevy"),
+        defaultAgentMemberId: admin.member.id,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // Refused before anything was written, so the container is still free.
+    expect((await client.projects.list({})).projects).toEqual([]);
+  });
+
   it("refuses a Member who is not an admin", async () => {
     const { db, close } = testDb();
     closers.push(close);
