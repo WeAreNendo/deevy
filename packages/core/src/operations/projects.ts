@@ -112,6 +112,7 @@ export const projects = {
       routing: z
         .object({
           labelPrefix: z.string().trim().max(40),
+          /** Whether a comment that mentions an Agent starts its work (`triggersFor`). */
           mention: z.boolean(),
         })
         .optional(),

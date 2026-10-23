@@ -1,4 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { SettingsSection } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { orpc } from "@/lib/orpc";
 import { providerLabel } from "@/lib/providers";
 
@@ -61,21 +63,38 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
     ),
   });
 
-  const update = useMutation(
-    orpc.projects.update.mutationOptions({
+  const update = useMutation({
+    ...orpc.projects.update.mutationOptions({
       onSuccess: async () => {
         await client.invalidateQueries({ queryKey: orpc.projects.key() });
         // Choosing a default Agent grants it the Project, so its grants moved too.
         await client.invalidateQueries({ queryKey: orpc.agents.key() });
       },
     }),
-  );
+    // One at a time, in the order they were made: the routing label and the
+    // switch each write the whole of `routing`, so two in flight could land
+    // the wrong way round and put back what the other just changed.
+    scope: { id: `project:${projectSlug}` },
+  });
+  // The routing as this screen last set it, which both controls write from,
+  // taken afresh whenever the Project read back says something new: neither
+  // control puts back a value saved elsewhere, nor one the server has yet to
+  // read back to it.
+  const saved = project.data?.routing;
+  const [routing, setRouting] = useState(saved);
+  const [seen, setSeen] = useState(saved);
+  if (saved && (saved.labelPrefix !== seen?.labelPrefix || saved.mention !== seen?.mention)) {
+    setSeen(saved);
+    setRouting(saved);
+  }
 
   if (project.isPending) return null;
   if (project.isError) return <p className="text-sm text-destructive">{project.error.message}</p>;
 
   const bound = project.data;
   const tracker = sockets.data?.sockets.find((one) => one.id === bound.trackerSocketId);
+  // What a Human types to name deevy in that tool, with or without its `@`.
+  const mentionAs = tracker?.identity.mentionHandle.replace(/^@/, "") || "deevy";
   // A scope is whatever its provider decided, so what a screen reads out of one
   // it reads carefully (ADR-0024).
   const text = (scope: unknown, key: string): string => {
@@ -164,14 +183,17 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
           <Input
             id="project-label-prefix"
             className="w-44"
-            defaultValue={bound.routing.labelPrefix}
+            value={(routing ?? bound.routing).labelPrefix}
             placeholder="agent:"
+            onChange={(typed) =>
+              setRouting({ ...(routing ?? bound.routing), labelPrefix: typed.target.value })
+            }
             onBlur={(left) => {
               const next = left.target.value.trim();
               if (next !== bound.routing.labelPrefix) {
                 update.mutate({
                   slug: projectSlug,
-                  routing: { labelPrefix: next, mention: bound.routing.mention },
+                  routing: { labelPrefix: next, mention: (routing ?? bound.routing).mention },
                 });
               }
             }}
@@ -179,6 +201,29 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
           <span className="text-xs text-muted-foreground">
             A record labelled <code className="font-mono">{bound.routing.labelPrefix}planner</code>{" "}
             goes to that Agent.
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="flex h-8 items-center gap-3 text-sm">
+            {/* Named by the label around it, which Base UI points it at. */}
+            <Switch
+              checked={(routing ?? bound.routing).mention}
+              onCheckedChange={(checked) => {
+                const next = {
+                  labelPrefix: (routing ?? bound.routing).labelPrefix.trim(),
+                  mention: checked === true,
+                };
+                setRouting(next);
+                update.mutate({ slug: projectSlug, routing: next });
+              }}
+            />
+            Route by mention
+          </label>
+          <span className="text-xs text-muted-foreground">
+            A comment such as <code className="font-mono">@{mentionAs} planner</code> hands the
+            record to that Agent. Off, a comment hands it to nobody: a label, an assignment in the
+            tool or the Default Agent still does.
           </span>
         </div>
 
