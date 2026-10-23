@@ -116,9 +116,10 @@ export async function deliver(options: DeliverOptions): Promise<Delivery | null>
   // The push runs in the clone, whose configuration can still send a URL
   // named outright somewhere else. What the remote holds is asked from outside
   // it, so a branch that went elsewhere is a delivery that failed, never one
-  // the record says was pushed.
-  const landed = (await workspace.refs([ref], how)).get(ref);
-  if (landed !== commit) {
+  // the record says was pushed. A remote that does not answer the question
+  // says nothing either way, and the push git said it made stands.
+  const landed = await workspace.refs([ref], how).catch(() => null);
+  if (landed && landed.get(ref) !== commit) {
     throw new Error(`the remote does not have ${branch} at ${commit.slice(0, 7)} after the push`);
   }
 

@@ -674,8 +674,10 @@ async function movedSince(
  *
  * Which refs moved, and from what commit to what, is the remote's word, read
  * outside the clone. Whether a move kept the old commit's history is read from
- * the clone's objects, which are the session's to write: a session set on it
- * could make a rewrite read as a move, though not hide that the ref moved.
+ * the clone's objects, with its replace refs, grafts and commit-graph ignored
+ * (src/workspace.ts); the objects are still the session's to write, so a
+ * session set on it could forge one to make a rewrite read as a move, though
+ * not hide that the ref moved.
  */
 async function movedBetween(
   workspace: Workspace,

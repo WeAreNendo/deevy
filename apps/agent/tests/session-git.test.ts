@@ -444,12 +444,12 @@ describe("a session that runs its own git", () => {
 });
 
 /**
- * The clone's `origin` is the session's to change, like the rest of its `.git`.
- * What the Run's feed says it moved is read from the remote the supervisor
- * opened, and the supervisor's own push goes there, whatever `origin` says by
- * then.
+ * The clone's `origin`, its configuration and its history are the session's
+ * to change, like the rest of its `.git`. What the Run's feed says it moved is
+ * read from the remote the supervisor opened, and the supervisor's own push
+ * goes there, whatever the clone says by then.
  */
-describe("a session that points its origin somewhere else", () => {
+describe("a session whose clone says something else about the remote", () => {
   /**
    * A repository of the session's own: the clone's history, and a branch the
    * remote never had. A feed read through it says a push nobody made and
@@ -503,6 +503,75 @@ describe("a session that points its origin somewhere else", () => {
     expect(feed).not.toContain("nothing-to-see");
     // And no pull request for a branch only the session's repository has.
     expect(deevy.tracker.pulls).toEqual([]);
+  });
+
+  it("still calls a rewrite a rewrite when the clone grafts the old history back on", async () => {
+    const deevy = await assigned();
+
+    // A rewrite of `main` whose new commit the clone says descends from the
+    // old one, twice over: a replace ref, and a grafts file.
+    const session = scripted([
+      async (input) => {
+        const git = (args: string[]) => run("git", ["-C", input.cwd, ...args]);
+        const old = (await git(["rev-parse", "HEAD"])).stdout.trim();
+        await writeFile(join(input.cwd, "README.md"), "# rewritten\n");
+        await git(["add", "-A"]);
+        await git([
+          "-c",
+          "user.name=a",
+          "-c",
+          "user.email=a@b.c",
+          "commit",
+          "-qm",
+          "not the first commit any more",
+          "--amend",
+        ]);
+        const rewritten = (await git(["rev-parse", "HEAD"])).stdout.trim();
+        await git(["replace", "--graft", rewritten, old]);
+        await writeFile(join(input.cwd, ".git", "info", "grafts"), `${rewritten} ${old}\n`);
+        await git(["push", "--quiet", "--force", "origin", "HEAD:refs/heads/main"]);
+      },
+      finished,
+    ]);
+
+    const pass = await runOnce({ ...work(deevy), session });
+
+    expect(await feedOf(deevy, pass.worked[0].runId)).toMatch(
+      /^Rewrote refs\/heads\/main from [0-9a-f]{7} to [0-9a-f]{7}, which is not a fast-forward$/m,
+    );
+  });
+
+  it("asks the remote, not the clone's origin, for a commit somebody else pushed", async () => {
+    const deevy = await assigned();
+    // The clone the remote was seeded from, standing in for a teammate's.
+    const teammate = join(dirname(deevy.repo), "seed");
+
+    // `main` moves forward while the Run works, to a commit this clone has
+    // never seen and the session's own repository never will.
+    const session = scripted([
+      async (input) => {
+        await writeFile(join(teammate, "theirs.md"), "# not the Agent's\n");
+        await run("git", ["-C", teammate, "add", "-A"]);
+        await run("git", ["-C", teammate, "commit", "--quiet", "-m", "a teammate's work"]);
+        await run("git", ["-C", teammate, "push", "--quiet", "origin", "main"]);
+
+        const git = (args: string[]) => run("git", ["-C", input.cwd, ...args]);
+        const supervisor = (await git(["remote", "get-url", "origin"])).stdout.trim();
+        await git(["remote", "set-url", "origin", await decoy(input.cwd)]);
+        await git(["checkout", "--quiet", "-b", "a-branch"]);
+        await writeFile(join(input.cwd, "f.ts"), "export const z = 3;\n");
+        await git(["add", "-A"]);
+        await git(["-c", "user.name=a", "-c", "user.email=a@b.c", "commit", "-qm", "work"]);
+        await git(["push", "--quiet", supervisor, "a-branch"]);
+      },
+      finished,
+    ]);
+
+    const pass = await runOnce({ ...work(deevy), session });
+    const feed = await feedOf(deevy, pass.worked[0].runId);
+
+    expect(feed).toMatch(/^Moved refs\/heads\/main from [0-9a-f]{7} to [0-9a-f]{7}$/m);
+    expect(feed).not.toContain("Rewrote");
   });
 
   it("still has the supervisor push to the remote, and say so", async () => {

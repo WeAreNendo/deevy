@@ -36,8 +36,8 @@ export interface Workspace {
    */
   remote: string | null;
   /**
-   * Runs git in this working directory, as the session's user and with no
-   * credential the session could find, stopped when `signal` is.
+   * Runs git in this working directory, as the session's user where there is
+   * one, stopped when `signal` is.
    */
   git(args: string[], options?: { signal?: AbortSignal }): Promise<string>;
   /**
@@ -101,15 +101,27 @@ export interface WorkspaceOptions {
  * What every git the supervisor runs in a session's clone is told, ahead of
  * whatever the clone's own configuration says: no hooks, and no fsmonitor.
  * Not the boundary — that is the user it runs as — but a planted one cannot
- * make the supervisor wait on it either.
+ * make the supervisor wait on it either. And no commit-graph, which is a file
+ * of parents the session could write a history of its own into, so the
+ * supervisor reads a commit's parents from the commit (src/work.ts).
  */
-const unplanted = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
+const unplanted = [
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "core.commitGraph=false",
+];
 
 /**
  * The environment that git runs with: enough to find git, and none of this
  * process's own. A command the clone's configuration names runs with it, so
  * the Agent's key and the git token are not in it, and neither is the
  * operator's or the image's git configuration, nor a terminal to ask on.
+ * Replace refs and grafts are off too: either lets the clone give a commit
+ * parents it does not have, which is all it takes to make a rewrite read as a
+ * fast-forward.
  */
 function isolated(): Record<string, string> {
   return {
@@ -118,6 +130,8 @@ function isolated(): Record<string, string> {
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_TERMINAL_PROMPT: "0",
+    GIT_NO_REPLACE_OBJECTS: "1",
+    GIT_GRAFT_FILE: "/dev/null",
   };
 }
 
@@ -141,8 +155,8 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
   // hooks are whatever the session wrote, and git runs what they name — an
   // fsmonitor, a filter, a hook — as whoever runs git. So the supervisor's own
   // git in it runs as the session, with an environment that holds nothing of
-  // this process's, and without the credential: `origin` is the git proxy,
-  // which adds it on the way out (src/git-proxy.ts). Hooks and the fsmonitor
+  // this process's, and without the credential: the remote it reaches is the
+  // git proxy, which adds it on the way out (src/git-proxy.ts). Hooks and the fsmonitor
   // are turned off as well, so nothing the session planted can stall a push
   // the supervisor makes for it. A clone with no proxy in front of it keeps
   // the credential only where there is no session user to keep it from.
@@ -159,29 +173,6 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
       ...(how.signal ? { signal: how.signal } : {}),
     });
     return stdout.trim();
-  };
-  // Where the supervisor reads the remote and pushes, named now: from the
-  // moment the clone is handed over, its `origin` says whatever the session
-  // last wrote there.
-  const remote = repo ? (options.originUrl ?? repo.url) : null;
-  // What the remote holds, asked from `/` rather than in the clone. In the
-  // clone, git reads the clone's configuration before it reads the URL it was
-  // given, and a `url.*.insteadOf` there sends even an explicit one somewhere
-  // else. `/` has no repository and is not somewhere the session can make one,
-  // so this git has no configuration but the environment's, which is none. As
-  // the session's user, like every git here.
-  const refs = async (
-    patterns: string[] = [],
-    how: { signal?: AbortSignal } = {},
-  ): Promise<Map<string, string>> => {
-    if (!remote) return new Map();
-    const { stdout } = await run("git", [...credential, "ls-remote", remote, ...patterns], {
-      cwd: "/",
-      env: isolated(),
-      ...(user ? { uid: user.uid, gid: user.gid } : {}),
-      ...(how.signal ? { signal: how.signal } : {}),
-    });
-    return refsFrom(stdout);
   };
   // The supervisor's own, for the moments before the clone is anybody else's:
   // a fresh clone of the remote holds no hook and no configuration the remote
@@ -209,6 +200,33 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Workspac
       );
     }
   }
+
+  // Where the supervisor reads the remote and pushes, named now: the git proxy,
+  // or the repository as the clone just wrote it down, before anybody else had
+  // the clone. From the moment it is handed over, its `origin` says whatever
+  // the session last wrote there.
+  const remote = !repo
+    ? null
+    : (options.originUrl ?? (await setUp(["remote", "get-url", "origin"])).stdout.trim());
+  // What the remote holds, asked from `/` rather than in the clone. In the
+  // clone, git reads the clone's configuration before it reads the URL it was
+  // given, and a `url.*.insteadOf` there sends even an explicit one somewhere
+  // else. `/` has no repository and is not somewhere the session can make one,
+  // so this git has no configuration but the environment's, which is none. As
+  // the session's user, like every git here.
+  const refs = async (
+    patterns: string[] = [],
+    how: { signal?: AbortSignal } = {},
+  ): Promise<Map<string, string>> => {
+    if (!remote) return new Map();
+    const { stdout } = await run("git", [...credential, "ls-remote", remote, ...patterns], {
+      cwd: "/",
+      env: isolated(),
+      ...(user ? { uid: user.uid, gid: user.gid } : {}),
+      ...(how.signal ? { signal: how.signal } : {}),
+    });
+    return refsFrom(stdout);
+  };
 
   // The clone was made with the credential; what the session inherits is a
   // loopback address, so a `git remote -v` in the session shows the supervisor

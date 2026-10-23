@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { deliver, branchFor } from "../src/deliver.ts";
@@ -113,6 +113,46 @@ describe("what a Run delivers", () => {
     expect(two?.branch).toBe(one?.branch);
     const { stdout } = await run("git", ["-C", repo.url, "log", "--format=%s", one?.branch ?? ""]);
     expect(stdout.split("\n").filter(Boolean)).toHaveLength(3);
+  });
+
+  it("continues the branch the remote has on the second pass, whatever the clone's origin says", async () => {
+    // Over `file://`, where git honours `--depth`, with a second commit on
+    // `main`: the second pass's clone is as shallow as a real one, and the
+    // branch is fetched into it by the commit the remote names.
+    const repo = await remote();
+    const seed = join(dirname(repo.url), "seed");
+    await writeFile(join(seed, "CHANGELOG.md"), "# changes\n");
+    await run("git", ["-C", seed, "add", "-A"]);
+    await run("git", ["-C", seed, "commit", "--quiet", "-m", "second"]);
+    await run("git", ["-C", seed, "push", "--quiet", "origin", "main"]);
+    const upstream = { ...repo, url: `file://${repo.url}` };
+    const options = {
+      deevy: fakeDeevy(),
+      branch,
+      issueKey: "acme/deevy#42",
+      runId: "run_abcdef123456",
+      author,
+    };
+
+    const first = await openWorkspace({ runId: "run_abcdef12", repo: upstream });
+    scratch.push(first.cwd);
+    await writeFile(join(first.cwd, "before-the-gate.ts"), "export const a = 1;\n");
+    await deliver({ ...options, workspace: first });
+
+    const second = await openWorkspace({ runId: "run_abcdef12", repo: upstream });
+    scratch.push(second.cwd);
+    expect(await second.git(["rev-parse", "--is-shallow-repository"])).toBe("true");
+    // The session pointed `origin` at an empty repository of its own.
+    const elsewhere = await mkdtemp(join(tmpdir(), "deevy-elsewhere-"));
+    scratch.push(elsewhere);
+    await run("git", ["init", "--bare", "--quiet", elsewhere]);
+    await second.git(["remote", "set-url", "origin", elsewhere]);
+    await writeFile(join(second.cwd, "after-the-ruling.ts"), "export const b = 2;\n");
+    await deliver({ ...options, workspace: second });
+
+    const { stdout } = await run("git", ["-C", repo.url, "log", "--format=%s", branch]);
+    expect(stdout.split("\n").filter(Boolean)).toHaveLength(4);
+    expect((await run("git", ["ls-remote", elsewhere])).stdout).toBe("");
   });
 
   it("says what the Agent said, on the commit and in what deevy is given", async () => {

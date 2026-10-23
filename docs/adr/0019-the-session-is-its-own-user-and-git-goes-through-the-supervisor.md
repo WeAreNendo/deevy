@@ -11,8 +11,10 @@
 > git proxy's URL, fixed when the workspace opens, by a git with no repository around it, so nothing in the
 > clone has a say; the delivery pushes to that URL by name and then asks the remote the same way whether the
 > push landed, because the clone's configuration can still send a URL elsewhere. Whether a move kept the old
-> commit's history is still read from the clone's objects, which the session writes: the ref and both commits
-> in a sentence are the remote's word, and "Rewrote" against "Moved" is only as honest as the clone.
+> commit's history is still read from the clone's objects. Replace refs, grafts and the commit-graph are
+> ignored, so none of those can give a commit other parents, but the session writes the objects themselves:
+> the ref and both commits in a sentence are the remote's word, and "Rewrote" against "Moved" is only as
+> honest as the clone.
 
 [ADR-0014](./0014-an-agents-input-is-untrusted-and-its-tools-are-not.md) says the container is the sandbox
 and the environment a session gets is an allowlist. Both were true and neither was enough, because the
