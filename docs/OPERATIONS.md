@@ -1516,11 +1516,13 @@ lets it see the Project. A comment mentioning the App and an Agent — `@<app> b
 for that Agent too. deevy writes its own `deevy:awaiting-approval` label the first time it needs it, and an
 Agent's sub-issues are GitHub's own.
 
-**The code.** A Run clones with an installation token GitHub mints for the App's whole installation, which
-lives an hour and never leaves the runtime's supervisor. deevy caches it until a minute before it expires and
-shares it with every other call for that installation, so a Run resumed after a Gate is handed whichever token
-is current. deevy opens the pull request through the App, saying `Closes <issue URL>` — so merging it closes
-the issue on GitHub — and signed with the Agent and the Run.
+**The code.** A Run clones and pushes with an installation token minted for it alone, narrowed to that one
+repository (by its id, so a renamed repository still works) and to `contents: write`, which lives an hour and
+never leaves the runtime's supervisor. It is never cached and never the token deevy makes its own calls with,
+so a Run resumed after a Gate is given a fresh one (`mintedForRun` in `packages/sockets/src/github/index.ts`).
+An App made by hand with `workflows: write` no longer lends it to a Run, so a Run cannot push a change under
+`.github/workflows`. deevy opens the pull request through the App,
+saying `Closes <issue URL>` — so merging it closes the issue on GitHub — and signed with the Agent and the Run.
 
 This section was walked against github.com on 2026-09-25: an App made from the manifest on a personal
 account, installed on one private repository, and a record taken from a label to a merged pull request with
