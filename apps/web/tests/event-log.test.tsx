@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { pickOption } from "./select.ts";
 
@@ -20,6 +20,10 @@ const stub = vi.hoisted(() => {
   };
   return {
     listed: [] as unknown[],
+    /** Whose log it is: an admin's holds invitations, nobody else's does. */
+    role: "admin",
+    /** Whether the page has asked whose log it is yet. */
+    roleRead: false,
     ada,
     events: [
       {
@@ -52,6 +56,12 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
   const { stubClient, stubProject } = await import("./stub-client.ts");
   const client = stubClient({
+    me: {
+      get: async () => {
+        stub.roleRead = true;
+        return { user: {}, member: { role: stub.role }, workspace: {}, principal: "cookie" };
+      },
+    },
     members: { list: async () => ({ members: [stub.ada] }) },
     projects: {
       list: async () => ({ projects: [stubProject("acme-deevy", "deevy", { id: "p1" })] }),
@@ -129,24 +139,70 @@ describe("the Event log", () => {
 });
 
 describe("what the Event log offers to filter by", () => {
-  it("names only kinds and subjects something can still append", async () => {
+  it("names every family of kinds the core can append, and nothing else", async () => {
     const [{ kindFamilies, subjectFamilies }, source] = await Promise.all([
-      import("../src/routes/settings/events.tsx"),
+      import("../src/lib/event-families.ts"),
       import("../../../packages/core/src/events.ts?raw").then((module) => module.default),
     ]);
     const union = source.slice(
       source.indexOf("export type EventKind ="),
       source.indexOf("export type EventPayload"),
     );
-    const kinds = [...union.matchAll(/\| "([a-z_]+)\.([a-z_]+)"/g)].map((match) => match[1] ?? "");
+    const kinds = [
+      ...new Set([...union.matchAll(/\| "([a-z_]+)\.([a-z_]+)"/g)].map((match) => match[1] ?? "")),
+    ];
 
     // A filter for a prefix nothing appends is a filter that always answers
-    // nothing, which reads as a bug in the log rather than in the list.
+    // nothing, which reads as a bug in the log rather than in the list; and a
+    // family left out is part of the log nobody can pick out.
     const offered = kindFamilies.flatMap((family) => family.prefixes);
     expect(offered.filter((prefix) => !kinds.includes(prefix))).toEqual([]);
+    expect(kinds.filter((family) => !offered.includes(family))).toEqual([]);
+    expect(new Set(offered).size).toBe(offered.length);
     const subjects = subjectFamilies.flatMap((family) => family.types);
     expect(subjects).toContain("socket");
+    expect(subjects).toContain("gate");
     expect(subjects).not.toContain("team");
     expect(subjects).not.toContain("label");
+  });
+
+  it("offers invitations to an admin, whose log is the only one that holds them", async () => {
+    await mountAt("/settings/events");
+    await screen.findByRole("table", { name: "Event log" });
+    const kind = screen.getByLabelText("Kind");
+
+    await pickOption(kind, "gate.*");
+    await waitFor(() => expect(stub.listed.at(-1)).toMatchObject({ kindPrefix: "gate" }));
+    fireEvent.keyDown(kind, { key: "ArrowDown" });
+    expect(await screen.findByRole("option", { name: "invitation.*" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "email.*" })).toBeTruthy();
+  });
+
+  it("leaves invitations out for a Member who is not an admin", async () => {
+    stub.role = "member";
+    stub.roleRead = false;
+    try {
+      await mountAt("/settings/events");
+      await screen.findByRole("table", { name: "Event log" });
+      // Until the role is read nobody is an admin, so a missing option proves
+      // nothing before then: wait for it, and for the render it causes.
+      await waitFor(() => expect(stub.roleRead).toBe(true));
+      await act(() => new Promise((settled) => setTimeout(settled, 0)));
+      const kind = screen.getByLabelText("Kind");
+      const subject = screen.getByLabelText("Subject");
+
+      fireEvent.keyDown(kind, { key: "ArrowDown" });
+      expect(await screen.findByRole("option", { name: "gate.*" })).toBeTruthy();
+      expect(screen.getByRole("option", { name: "member.*" })).toBeTruthy();
+      expect(screen.queryByRole("option", { name: "invitation.*" })).toBeNull();
+      fireEvent.keyDown(screen.getByRole("option", { name: "gate.*" }), { key: "Escape" });
+
+      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+      fireEvent.keyDown(subject, { key: "ArrowDown" });
+      expect(await screen.findByRole("option", { name: "gate" })).toBeTruthy();
+      expect(screen.queryByRole("option", { name: "invitation" })).toBeNull();
+    } finally {
+      stub.role = "admin";
+    }
   });
 });
