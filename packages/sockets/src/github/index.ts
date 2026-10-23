@@ -42,6 +42,8 @@ export interface GithubConfig {
   appId: string;
   /** The App's slug, which is what its bot account is called: `<slug>[bot]`. */
   slug?: string;
+  /** The App's own page on GitHub, as GitHub gave it: where it is installed on more. */
+  htmlUrl?: string;
   /** GitHub's REST root. GitHub Enterprise Server and the acceptance stub set it. */
   apiBase?: string;
   /** Where the App has been installed, learned at connect and from deliveries. */
@@ -60,6 +62,9 @@ const DEFAULT_API = "https://api.github.com";
 
 /** How long a minted installation token is trusted for, less a minute of slack. */
 const TOKEN_SLACK_MS = 60_000;
+
+/** GitHub's largest page, and how a short one says it was the last. */
+const PAGE_SIZE = 100;
 
 interface Minted {
   token: string;
@@ -224,6 +229,43 @@ export function createGithubSocket({
     return tokenForInstallation(await installationIdFor(scopeKey));
   }
 
+  /**
+   * Where GitHub says the App is installed, every page of it, each one written
+   * as the install's redirect writes it. Less any GitHub has suspended: it
+   * mints no token for one, and that refusal would leave every other
+   * installation's repositories unlisted.
+   */
+  async function installedOn(): Promise<{ id: string; account: string }[]> {
+    const found: { id: string; account: string }[] = [];
+    for (let page = 1; ; page += 1) {
+      const rows = await asApp<
+        { id: number; account?: { login?: string } | null; suspended_at?: string | null }[]
+      >(`/app/installations?per_page=${String(PAGE_SIZE)}&page=${String(page)}`);
+      for (const row of rows) {
+        if (row.suspended_at) continue;
+        found.push({ id: String(row.id), account: row.account?.login ?? "" });
+      }
+      if (rows.length < PAGE_SIZE) return found;
+    }
+  }
+
+  /**
+   * Where the App is installed, for listing what it can see: GitHub's answer
+   * every time. What the Socket keeps is written one redirect or delivery at
+   * a time, and one that names one account says nothing of another the Socket
+   * never heard of. What it keeps is the answer only when GitHub cannot be
+   * asked, and keeping nothing is then no answer at all.
+   */
+  async function whereInstalled(): Promise<{ id: string; account: string }[]> {
+    try {
+      return await installedOn();
+    } catch (error) {
+      const kept = settings.installations ?? [];
+      if (kept.length === 0) throw error;
+      return kept;
+    }
+  }
+
   return {
     provider: "github",
     capabilities: new Set(["tracker", "forge"] as const),
@@ -235,13 +277,29 @@ export function createGithubSocket({
     /**
      * Who deevy is on GitHub: the App's own bot account. The loop guard reads
      * this to drop the comments deevy itself wrote (ADR-0025).
+     *
+     * And what a pasted App never said, which the manifest's conversion would
+     * have. Its slug, and its page, which is where it is installed on more and
+     * is a GitHub Enterprise Server's own there. And where it is installed, as
+     * GitHub says it: an App pasted after it was installed missed both the
+     * install's redirect and the `installation` delivery, and would offer no
+     * repository until an installation changed. GitHub's list replaces the one
+     * kept, so asking again (`sockets.test`) also lets go of an installation
+     * that is gone.
      */
     async identity(): Promise<SocketIdentity> {
-      const app = await asApp<{ id: number; slug: string; name: string }>("/app");
+      const app = await asApp<{ id: number; slug: string; name: string; html_url?: string }>(
+        "/app",
+      );
       return {
         login: `${app.slug}[bot]`,
         id: String(app.id),
         mentionHandle: `@${app.slug}`,
+        learned: {
+          slug: app.slug,
+          ...(app.html_url ? { htmlUrl: app.html_url } : {}),
+          installations: await installedOn(),
+        },
       };
     },
 
@@ -479,10 +537,18 @@ export function createGithubSocket({
         }
       },
 
-      /** Every repository the App can see, one installation at a time. */
+      /**
+       * Every repository the App can see, one installation at a time.
+       *
+       * Which installations is GitHub's word rather than the Socket's
+       * (`whereInstalled`), so a Socket pasted before `identity` learned them,
+       * or one a single delivery has since told of one account of several,
+       * still offers everything the App was installed on.
+       */
       async listContainers(): Promise<Container[]> {
+        const installations = await whereInstalled();
         const containers: Container[] = [];
-        for (const installation of settings.installations ?? []) {
+        for (const installation of installations) {
           const token = await tokenForInstallation(installation.id);
           const page = await call<{
             repositories: { full_name: string; name: string; default_branch?: string | null }[];
@@ -507,11 +573,15 @@ export function createGithubSocket({
     /**
      * The repository behind a Project (ADR-0014, ADR-0019).
      *
-     * A Run clones with an installation token that lives an hour and reaches
-     * one repository: it is minted per Run, it never touches `.git/config`,
-     * and a Run resumed after a Gate mints another. The pull request is opened
-     * by deevy rather than by the Agent's session, so the credential never has
-     * to be one that could open one.
+     * A Run clones with the installation's token: minted for the whole
+     * installation, so it reaches every repository the App was installed on
+     * there and not only the Project's, and it is the one every other call for
+     * that installation uses, kept until a minute before its hour is up
+     * (`tokens`). A Run is told when it dies, it never touches `.git/config`,
+     * and a Run resumed after a Gate asks again and is handed whichever token
+     * is current. The pull request is opened by deevy rather than by the
+     * Agent's session, so the credential never has to be one that could open
+     * one.
      */
     forge: {
       async credential(scope: Scope): Promise<ForgeCredential> {

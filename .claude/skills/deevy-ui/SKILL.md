@@ -356,7 +356,10 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   (`table "Deliveries"`). A section that only one tool has — Notion's `region "Verifying the webhook"` and
   "Who commented", Linear's "Assigning issues to deevy", GitHub's "Where it is installed" with a link to
   install the App on more repositories — keys off `socket.provider`; what a tool _can_ do is the server's to
-  say wherever it decides anything.
+  say wherever it decides anything. GitHub's install link is drawn only from the App page GitHub gave
+  (`config.htmlUrl`, from the manifest or learned when a pasted App connects), never built from its slug,
+  which would be github.com's on a GitHub Enterprise Server; and the list is what deevy has been told, while
+  **Bind a Project** asks GitHub, so its empty sentence says so and points at **Ask who deevy is there**.
 - **A Project is a binding** (`routes/settings/projects.tsx`): **Bind a Project** picks a tool, a container
   the tool itself offers, and a name — never a field somebody types, because a typo there is a Project bound
   to nothing — and, for a tool that holds code, binds the same container as its code unless **Its code is
@@ -441,7 +444,7 @@ manifest` and `App manifest`; Linear's `Show the addresses`, `Callback URLs`, `C
 token`, `Use the signing token`; Notion's `Installation access token`, link `Notion's Developer portal` and link `Open the Socket's page`;
   `Connect`, `Done`; every secret field is `type="password"` with `autocomplete="off"`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
 at this address`, `region "Where it is installed"` with link `Install it` or `Install it on more
-repositories`, `Pause`, `region "What it signs with"` with `New secret from <tool>` and `Use the new secret`
+repositories` (only where the Socket holds an `htmlUrl`), `Pause`, `region "What it signs with"` with `New secret from <tool>` and `Use the new secret`
   (not for Notion) and `Mint a webhook secret` (GitHub, GitLab and the stub only), `region "Verifying the
 webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.

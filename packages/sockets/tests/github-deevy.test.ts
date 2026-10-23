@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { openDatabase } from "@deevy/adapters/node";
-import { createApp, newId, sealSecret } from "@deevy/core";
+import { createApp, newId, router, sealSecret } from "@deevy/core";
 import {
   agent as agentTable,
   member as memberTable,
@@ -10,9 +10,13 @@ import {
   user as userTable,
   workspace as workspaceTable,
   type Db,
+  type Member,
+  type Workspace,
 } from "@deevy/db";
+import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { resetGithubTokens, socketModules } from "../src/index.ts";
+import { createGithubSocket, resetGithubTokens, socketModules } from "../src/index.ts";
+import installations from "./fixtures/github/app.installations.json" with { type: "json" };
 import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" };
 import installed from "./fixtures/github/installation.created.json" with { type: "json" };
 
@@ -219,5 +223,114 @@ describe("the App being installed somewhere", () => {
     });
     const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
     expect(kinds).toContain("socket.installation_added");
+  });
+});
+
+/**
+ * GitHub's REST API as an App the organization made by hand sees it: the App,
+ * the one installation it already had before anybody pasted it into deevy, a
+ * token for that installation, and the repository the token can see.
+ */
+function githubApi() {
+  const asked: string[] = [];
+  const answers: Record<string, unknown> = {
+    "GET /app": {
+      id: 1284461,
+      slug: "deevy",
+      name: "deevy",
+      html_url: "https://github.com/apps/deevy",
+    },
+    "GET /app/installations?per_page=100&page=1": installations,
+    "POST /app/installations/61892041/access_tokens": {
+      token: "ghs_installation_token_for_acme",
+      expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+    },
+    "GET /installation/repositories?per_page=100": {
+      repositories: [{ full_name: "acme/deevy", name: "deevy", default_branch: "main" }],
+    },
+  };
+  const fetch: typeof globalThis.fetch = (input, init) => {
+    const request = new Request(input, init);
+    const key = `${request.method} ${request.url.replace("https://api.github.com", "")}`;
+    asked.push(key);
+    const answer = answers[key];
+    return Promise.resolve(
+      answer === undefined
+        ? Response.json({ message: "Not Found" }, { status: 404 })
+        : Response.json(answer),
+    );
+  };
+  return { asked, fetch };
+}
+
+/** Ada, an admin of a Workspace that has connected nothing yet, and what she can ask deevy. */
+async function adminOf(db: Db, fetch: typeof globalThis.fetch) {
+  const workspaceId = newId("workspace");
+  await db.insert(workspaceTable).values({ id: workspaceId, name: "Acme", slug: "acme" });
+  const workspace = (await db.query.workspace.findFirst({
+    where: { id: workspaceId },
+  })) as Workspace;
+  const userId = newId("user");
+  await db.insert(userTable).values({ id: userId, name: "Ada", email: "ada@example.com" });
+  const memberId = newId("member");
+  await db.insert(memberTable).values({
+    id: memberId,
+    workspaceId,
+    userId,
+    handle: "ada",
+    role: "admin",
+    kind: "human",
+  });
+  const ada = (await db.query.member.findFirst({ where: { id: memberId } })) as Member;
+
+  const sockets = {
+    ...socketModules(),
+    github: (input: Parameters<typeof createGithubSocket>[0]) =>
+      createGithubSocket({ ...input, fetch }),
+  };
+  return createRouterClient(router, {
+    context: {
+      db,
+      member: ada,
+      workspace,
+      baseURL: "https://deevy.test",
+      sockets,
+      socketSecret: sealing,
+      session: {
+        session: { id: newId("session"), userId, token: "t", expiresAt: new Date() },
+        user: { id: userId, name: "Ada", email: "ada@example.com", image: null },
+      },
+    } as never,
+  });
+}
+
+describe("an App the organization already has", () => {
+  it("is pasted in, and offers the repositories it was installed on before", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const api = githubApi();
+    const asAda = await adminOf(db, api.fetch);
+
+    // What **Paste an App you already have** sends: the id and the key, and
+    // nothing about where the App is installed, because the install's
+    // redirect and its delivery both happened before deevy knew of the App.
+    const socket = await asAda.sockets.connect({
+      provider: "github",
+      name: "acme on GitHub",
+      config: { appId: "1284461" },
+      credentials: { privateKey },
+      webhookSecret,
+    });
+
+    // And the App's own page, which is where its Socket's page sends somebody
+    // to install it on more.
+    expect(socket.config).toMatchObject({
+      slug: "deevy",
+      htmlUrl: "https://github.com/apps/deevy",
+      installations: [{ id: "61892041", account: "acme" }],
+    });
+    const { containers } = await asAda.sockets.containers({ socketId: socket.id });
+    expect(containers.map((one) => one.scopeKey)).toEqual(["acme/deevy"]);
+    expect(api.asked).toContain("GET /app/installations?per_page=100&page=1");
   });
 });
