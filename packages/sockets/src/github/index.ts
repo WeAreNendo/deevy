@@ -123,6 +123,9 @@ function isRefusal(error: unknown): boolean {
  * somebody else's App id and any key the tokens that App's real owner minted —
  * across Workspaces, once one isolate serves several. The API is in it because
  * two GitHub Enterprise Servers number their Apps independently.
+ *
+ * These are deevy's own, and reach every repository of their installation. A
+ * Run's token is never one of them, and never kept here (`mintedForRun`).
  */
 const tokens = new Map<string, Minted>();
 
@@ -277,16 +280,24 @@ export function createGithubSocket({
     return id;
   }
 
+  /**
+   * A new token from GitHub for an installation: as far as the installation
+   * reaches, or only as far as `narrowed` names (`mintedForRun`).
+   */
+  async function mint(id: string, narrowed?: Record<string, unknown>): Promise<Minted> {
+    const minted = await asApp<{ token: string; expires_at: string }>(
+      `/app/installations/${id}/access_tokens`,
+      { method: "POST", ...(narrowed ? { body: JSON.stringify(narrowed) } : {}) },
+    );
+    return { token: minted.token, expiresAt: new Date(minted.expires_at).getTime() };
+  }
+
   /** A token for an installation deevy already knows the id of. */
   async function mintedFor(id: string): Promise<Minted> {
     const cacheKey = `${await cachePrefix()}:${id}`;
     const held = tokens.get(cacheKey);
     if (held && held.expiresAt - TOKEN_SLACK_MS > now().getTime()) return held;
-    const minted = await asApp<{ token: string; expires_at: string }>(
-      `/app/installations/${id}/access_tokens`,
-      { method: "POST" },
-    );
-    const fresh = { token: minted.token, expiresAt: new Date(minted.expires_at).getTime() };
+    const fresh = await mint(id);
     tokens.set(cacheKey, fresh);
     return fresh;
   }
@@ -296,7 +307,8 @@ export function createGithubSocket({
   }
 
   /**
-   * A token for the installation that covers a repository.
+   * A token for the installation that covers a repository: deevy's own, from
+   * `tokens`, unless `minting` makes another kind (`mintedForRun`).
    *
    * An id remembered from before the App was uninstalled there and installed
    * again is a dead one, and GitHub says so by answering 404 for its token.
@@ -304,24 +316,48 @@ export function createGithubSocket({
    * installation covers the repository now. Forgetting it when the removal is
    * delivered would not be enough: that delivery may reach another isolate.
    */
-  async function mintedForRepository(scopeKey: string): Promise<Minted> {
+  async function mintedForRepository(
+    scopeKey: string,
+    minting: (id: string) => Promise<Minted> = mintedFor,
+  ): Promise<Minted> {
     const prefix = await cachePrefix();
     const remembered = installations.has(`${prefix}:${scopeKey}`);
     const id = await installationIdFor(scopeKey);
     try {
-      return await mintedFor(id);
+      return await minting(id);
     } catch (error) {
       if (!remembered || !(error instanceof GithubError) || error.status !== 404) throw error;
       tokens.delete(`${prefix}:${id}`);
       for (const [key, value] of installations) {
         if (value === id && key.startsWith(`${prefix}:`)) installations.delete(key);
       }
-      return mintedFor(await installationIdFor(scopeKey));
+      return minting(await installationIdFor(scopeKey));
     }
   }
 
   async function installationToken(scopeKey: string): Promise<string> {
     return (await mintedForRepository(scopeKey)).token;
+  }
+
+  /**
+   * A token for one Run: one repository, its code and nothing else.
+   *
+   * GitHub narrows a token as it mints it, to the repositories and the
+   * permissions the request names. Unnarrowed, a Run's token would reach
+   * every repository the App was installed on there, with every permission
+   * deevy holds. A Run clones and pushes, so `contents` is all it is given:
+   * deevy opens the pull request itself (`openPullRequest`). Minted every time
+   * it is asked for and kept nowhere, so a Run resumed after a Gate is given a
+   * new one, and none is ever the token deevy makes its own calls with.
+   *
+   * Named by the repository's id, never its name. A Project keeps the name it
+   * was bound with, GitHub follows a rename for every read, and a token asked
+   * for under the old name would be refused.
+   */
+  async function mintedForRun(scopeKey: string, repositoryId: number): Promise<Minted> {
+    return mintedForRepository(scopeKey, (id) =>
+      mint(id, { repository_ids: [repositoryId], permissions: { contents: "write" } }),
+    );
   }
 
   /**
@@ -720,23 +756,22 @@ export function createGithubSocket({
     /**
      * The repository behind a Project (ADR-0014, ADR-0019).
      *
-     * A Run clones with the installation's token: minted for the whole
-     * installation, so it reaches every repository the App was installed on
-     * there and not only the Project's, and it is the one every other call for
-     * that installation uses, kept until a minute before its hour is up
-     * (`tokens`). A Run is told when it dies, it never touches `.git/config`,
-     * and a Run resumed after a Gate asks again and is handed whichever token
-     * is current. The pull request is opened by deevy rather than by the
-     * Agent's session, so the credential never has to be one that could open
-     * one.
+     * A Run clones with an installation token that lives an hour and reaches
+     * one repository's code (`mintedForRun`): it is minted for every checkout,
+     * it never touches `.git/config`, and a Run resumed after a Gate is given
+     * another. The pull request is opened by deevy rather than by the Agent's
+     * session, so the credential never has to be one that could open one.
      */
     forge: {
       async credential(scope: Scope): Promise<ForgeCredential> {
         const { owner, repo, scopeKey } = repositoryOf(scope);
-        const minted = await mintedForRepository(scopeKey);
-        const repository = await call<{ clone_url: string }>(`/repos/${owner}/${repo}`, {
-          token: minted.token,
-        });
+        // With deevy's own token, which follows a renamed repository to where
+        // it is now and answers with the id the Run's token is minted for.
+        const repository = await asInstallation<{ id: number; clone_url: string }>(
+          scopeKey,
+          `/repos/${owner}/${repo}`,
+        );
+        const minted = await mintedForRun(scopeKey, repository.id);
         return {
           cloneUrl: repository.clone_url,
           // GitHub's own name for an installation token used over HTTPS. The

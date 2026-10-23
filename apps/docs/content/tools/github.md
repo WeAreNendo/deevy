@@ -114,10 +114,12 @@ from; a comment an Agent writes itself ends with its handle.
 - **Pull requests**, opened through the App from the branch a Run pushed, saying `Closes <the issue's URL>`
   so that merging closes the issue, and naming the Agent and the Run.
 
-A Run clones the repository with a token GitHub mints for the App's installation, which reaches every
-repository the App is installed on there and lasts an hour. deevy keeps it for that hour, so a Run resumed
-after a Gate is handed the same token while it lasts. The [reference runtime](/agents/reference-runtime/)
-keeps the token to itself, so the coding agent working the Run never holds it.
+A Run clones the repository and pushes its branch with a token GitHub mints for that Run alone. It reaches
+that one repository and no other the App is installed on, with the App's **Contents** permission and nothing
+else: code, branches, tags and releases, but no issues or pull requests. It lasts an hour, and a Run resumed
+after a Gate gets a fresh one. deevy opens the pull request and writes on the issue with its own token, never
+the Run's. The [reference runtime](/agents/reference-runtime/) keeps the Run's token to itself, so the coding
+agent working the Run never holds it.
 
 ## Rule from GitHub
 

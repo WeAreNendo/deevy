@@ -49,7 +49,11 @@ interface Asked {
   body: unknown;
 }
 
-/** A GitHub that answers what each path is recorded to answer. */
+/**
+ * A GitHub that answers what each path is recorded to answer. An answer that
+ * is a function is asked each time, with the request, for one that depends on
+ * what was sent.
+ */
 function githubReturning(
   answers: Record<string, unknown>,
   options: {
@@ -63,12 +67,13 @@ function githubReturning(
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const headers = new Headers(init?.headers);
     const authorization = headers.get("authorization") ?? "";
-    asked.push({
+    const request: Asked = {
       method: init?.method ?? "GET",
       url,
       authorization,
       body: typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined,
-    });
+    };
+    asked.push(request);
     const jwt = /^Bearer (eyJ\S+)$/.exec(authorization)?.[1];
     if (jwt && options.publicKey && !signedBy(options.publicKey, jwt)) {
       // As GitHub answers a JWT signed by a key the App does not have.
@@ -79,7 +84,9 @@ function githubReturning(
     // Every host this fake stands for answers the same paths.
     const path = url.replace(/^https:\/\/[^/]+(?:\/api\/v3)?/, "");
     const key = `${init?.method ?? "GET"} ${path}`;
-    const answer = answers[key] ?? answers[key.split("?")[0] ?? ""];
+    const recorded = answers[key] ?? answers[key.split("?")[0] ?? ""];
+    const answer =
+      typeof recorded === "function" ? (recorded as (one: Asked) => unknown)(request) : recorded;
     if (answer === undefined) {
       return Promise.resolve(
         new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }),
@@ -737,11 +744,39 @@ describe("writing to a repository", () => {
 });
 
 describe("the repository behind a Project", () => {
-  it("mints a credential a Run can clone with, and says when it dies", async () => {
-    const { module, asked } = githubReturning({
+  /**
+   * As GitHub mints: a token of its own each time, narrowed to what the
+   * request named. A Run's is told apart from deevy's own by its prefix.
+   */
+  function mintingFor(installation: string, answers: Record<string, unknown> = {}) {
+    let minted = 0;
+    return {
+      ...answers,
+      [`POST /app/installations/${installation}/access_tokens`]: (request: Asked) => {
+        minted += 1;
+        const narrowed = typeof request.body === "object" && request.body !== null;
+        return {
+          token: `${narrowed ? "ghs_run" : "ghs_installation"}_${String(minted)}`,
+          expires_at: "2026-09-21T11:00:00Z",
+        };
+      },
+    };
+  }
+
+  const repository = { id: 812745, clone_url: "https://github.com/acme/deevy.git" };
+
+  function minting() {
+    return mintingFor("61892041", {
       ...credentials,
-      "GET /repos/acme/deevy": { clone_url: "https://github.com/acme/deevy.git" },
+      "GET /repos/acme/deevy": repository,
+      "GET /repos/acme/deevy/issues/42": labeled.issue,
     });
+  }
+
+  const narrowed = { repository_ids: [812745], permissions: { contents: "write" } };
+
+  it("mints a credential a Run can clone with, and says when it dies", async () => {
+    const { module, asked } = githubReturning(minting());
     if (!module.forge) throw new Error("a GitHub Socket is a forge");
 
     const credential = await module.forge.credential(scope);
@@ -750,12 +785,88 @@ describe("the repository behind a Project", () => {
       cloneUrl: "https://github.com/acme/deevy.git",
       // GitHub's own name for an installation token used over HTTPS.
       username: "x-access-token",
-      secret: "ghs_installation_token_for_acme",
+      secret: "ghs_run_2",
     });
     expect(credential.expiresAt?.toISOString()).toBe("2026-09-21T11:00:00.000Z");
-    // The same token the API calls use: one mint, kept for its hour, and the
-    // whole installation's rather than this repository's alone.
-    expect(asked.filter((one) => one.url.includes("access_tokens"))).toHaveLength(1);
+    // The repository is read with deevy's own token, and the Run's is minted
+    // as the App for that one repository's code alone: no issues, no pull
+    // requests, and no other repository of the installation.
+    expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
+      "GET /repos/acme/deevy/installation",
+      "POST /app/installations/61892041/access_tokens",
+      "GET /repos/acme/deevy",
+      "POST /app/installations/61892041/access_tokens",
+    ]);
+    expect(asked[2]?.authorization).toBe("Bearer ghs_installation_1");
+    expect(asked[3]?.authorization).toMatch(/^Bearer eyJ/);
+    expect(asked[3]?.body).toEqual(narrowed);
+  });
+
+  it("mints for a renamed repository by its id, which the rename kept", async () => {
+    // The Project was bound to acme/coupons, since renamed acme/deevy: GitHub
+    // follows the old name to the repository, and a token asked for under
+    // that name would be refused.
+    const { module, asked } = githubReturning(
+      mintingFor("61892041", {
+        "GET /repos/acme/coupons/installation": { id: 61892041 },
+        "GET /repos/acme/coupons": repository,
+      }),
+    );
+    if (!module.forge) throw new Error("a GitHub Socket is a forge");
+
+    const credential = await module.forge.credential({ scopeKey: "acme/coupons" });
+
+    expect(credential.cloneUrl).toBe("https://github.com/acme/deevy.git");
+    expect(asked.at(-1)?.body).toEqual(narrowed);
+  });
+
+  it("never hands a Run the token deevy makes its own calls with", async () => {
+    const { module, tracker, asked } = githubReturning(minting());
+    if (!module.forge) throw new Error("a GitHub Socket is a forge");
+
+    // deevy's own token, minted for the installation and kept for its hour.
+    await tracker.getIssue(scope, ref);
+    const first = await module.forge.credential(scope);
+    // A Run resumed after a Gate asks again, and is given another.
+    const resumed = await module.forge.credential(scope);
+    await tracker.getIssue(scope, ref);
+
+    expect(first.secret).toBe("ghs_run_2");
+    expect(resumed.secret).toBe("ghs_run_3");
+    const minted = asked.filter((one) => one.url.includes("access_tokens"));
+    expect(minted.map((one) => one.body)).toEqual([undefined, narrowed, narrowed]);
+    // And a Run's token never takes the cached one's place: every call deevy
+    // makes as the installation is made with the token it minted for itself.
+    const asInstallation = asked.filter((one) => !one.authorization.startsWith("Bearer eyJ"));
+    expect(asInstallation).toHaveLength(4);
+    expect(new Set(asInstallation.map((one) => one.authorization))).toEqual(
+      new Set(["Bearer ghs_installation_1"]),
+    );
+  });
+
+  it("asks again which installation covers the repository when a Run's is gone", async () => {
+    // As deevy's own calls do: an installation id remembered from before acme
+    // reinstalled the App is refused with a 404, and asked for once. Here a
+    // Run resumed after a Gate is the first to find out.
+    const answers: Record<string, unknown> = minting();
+    const { module, asked } = githubReturning(answers);
+    if (!module.forge) throw new Error("a GitHub Socket is a forge");
+    await module.forge.credential(scope);
+
+    delete answers["POST /app/installations/61892041/access_tokens"];
+    Object.assign(answers, mintingFor("7"), { "GET /repos/acme/deevy/installation": { id: 7 } });
+    asked.length = 0;
+
+    const resumed = await module.forge.credential(scope);
+
+    expect(resumed.secret).toBe("ghs_run_1");
+    expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
+      "GET /repos/acme/deevy",
+      "POST /app/installations/61892041/access_tokens",
+      "GET /repos/acme/deevy/installation",
+      "POST /app/installations/7/access_tokens",
+    ]);
+    expect(asked.at(-1)?.body).toEqual(narrowed);
   });
 
   it("opens the pull request, and answers where it is", async () => {

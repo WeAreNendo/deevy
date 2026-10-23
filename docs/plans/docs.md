@@ -151,10 +151,10 @@ stacked on this one, and settling some found more, which are here too:
 Written on 2026-10-23: five readers checked every page against the code again, about 1,640 claims, and
 found about forty that were wrong, nearly all of them from the first writing rather than from what changed
 since (the one that had moved was a Human's avatar, indigo since the design system). Matt chose which side
-moves for each: where a page promised more than the code did (four-eyes carry-over, a fresh one-repository
-token, "(email)" wherever a Ruling is shown, Slack direct messages for a Slack sign-in, `health ping` with no
-sign-in, a Socket taking new credentials), the pages now say what the code does; where the code was wrong, it
-was fixed, each in its own pull request stacked under the one that corrects the pages:
+moves for each: where a page promised more than the code did (four-eyes carry-over, "(email)" wherever a
+Ruling is shown, Slack direct messages for a Slack sign-in, `health ping` with no sign-in, a Socket taking new
+credentials), the pages now say what the code does; where the code was wrong, it was fixed, each in its own
+pull request stacked under the one that corrects the pages:
 
 - **Any Member could read invitations from the live stream**, which `events.list` hides from all but
   admins; `events.subscribe` now hides them the same way.
@@ -194,3 +194,9 @@ was fixed, each in its own pull request stacked under the one that corrects the 
   log. The hosted Worker now throws such an error on to its own reporter.
 - **deevy Cloud kept a waitlist entry after its address was invited**, against
   cloud/where-your-data-lives.md; settled in WeAreNendo/deevy-cloud, where an invitation now removes it.
+- **A Run's GitHub token reached every repository the App was installed on**, against tools/github.md's
+  one repository and fresh token after a Gate: it was the installation's own, with issues and pull requests
+  as well as code, and the one deevy cached for its own calls. The page was first changed to say so; reviewing
+  the GitHub fixes then called that a coding agent's credential for an organization's every repository, and
+  the code moved instead. A Run's token is minted for it alone, narrowed to its repository and
+  `contents: write`, kept nowhere, and minted again after a Gate.
