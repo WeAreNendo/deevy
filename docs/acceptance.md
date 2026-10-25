@@ -1,24 +1,26 @@
-# Sockets acceptance: a record in somebody else's tracker, worked end to end
+# Acceptance: a record in somebody else's tracker, worked end to end
 
-The Sockets milestone is done when a record a team keeps in their own tracker becomes a Run, a Proposal, a
-ruling, a branch, a pull request and a finish — with `apps/agent` driving it rather than a person driving
-Claude Code by hand, on the Node deployment, and then on a Cloudflare Worker built from the same commit with
-nothing changing but `DEEVY_URL`. That last part is the strongest evidence for
+deevy is done with a change when a record a team keeps in their own tracker still becomes a Run, a Proposal,
+a ruling, a branch, a pull request and a finish — with an Agent holding nothing but its key, on the Node
+deployment, and then on a Cloudflare Worker and in a hosted Workspace built from the same commit, with
+nothing changing but the URL. That last part is the strongest evidence for
 [ADR-0006](./adr/0006-runtime-agnostic-core-node-first.md) anyone has produced: a client that cannot tell the
-two deployments apart.
+deployments apart.
 
 **Status: executed, and executed on every commit.** It is a script rather than a runbook, and it needs no
 Cloudflare account, no GitHub OAuth App, no GitHub App, no tunnel and no repository on the internet:
 
 ```bash
-vp run agent#acceptance
+vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#build:hosted
+vp run acceptance#walk
 ```
 
-A hundred and thirty-one checks: thirty-two against each of four deployments, and three comparing each Event
+A hundred and eleven checks: twenty-seven against each of four deployments, and three comparing each Event
 log with Node's. The four are the image, the Worker, the image again under a path (`/deevy`), and a hosted
 Workspace at `/acme` behind the many-Workspaces Worker, provisioned through `Platform` and signed in through
-the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes, which
-leave both Workers built.
+the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes,
+which leave both Workers built. The walk is `tools/acceptance`: `src/walk.ts` is the walk and `src/boot.ts`
+starts each deployment.
 
 ## Why it needs nothing outside this machine
 
@@ -30,91 +32,70 @@ leave both Workers built.
 | A GitHub App, so deevy has a tracker        | The Socket provider that is not a tool (`packages/sockets/src/stub`), registered by `DEEVY_DEV_STUB_SOCKETS=1`     |
 | A public URL, so a delivery can reach deevy | A signed POST to `/hooks/:socketId`, computed by the walk itself over the bytes on the wire                        |
 | A repository the Agent may push to          | A bare git repository in a temporary directory, and real `git`                                                     |
-| A pull-request API                          | The same stub Socket, which is a forge as well as a tracker                                                        |
-| A model, and a coding-agent CLI to drive it | A scripted session — see below                                                                                     |
+| A model, and whatever runs it               | A scripted Agent — see below                                                                                       |
 
 Nothing is mocked on deevy's side. The Worker is the built Worker with its own bindings and asset routing;
 the Node server is the bundle the Docker image runs; sign-in is Better Auth's real OAuth dance with only the
 far end replaced; the delivery goes through the real `/hooks` route, the real signature check and the real
-`applyInbound`; and everything the runtime does goes over HTTP and `/mcp` on a socket.
+`applyInbound`; and everything the Agent does goes over `/mcp` and `/api` on a socket.
 
 The stub is a real tracker with an in-memory store, and it is the deployment's, not the walk's: a store lives
 in the process deevy runs in, so the walk says what the tracker holds before it starts one
-(`DEEVY_DEV_STUB_CONTAINERS=acme/deevy=/tmp/…/origin.git`) and reaches it afterwards only the way anyone
-else would — through deevy.
+(`DEEVY_DEV_STUB_CONTAINERS=acme/deevy`) and reaches it afterwards only the way anyone else would — through
+deevy. It names the container and nothing about the code: deevy never learns where the repository is.
 
 ## What is real, and what is scripted
 
-**The supervisor is real.** Discovery, the claim, the checkout, the envelope, the Gate round trip, the
-working directory, the branch, the push, the pull request and what deevy says back in the tracker are
-`apps/agent/src` and `packages/core` doing their own jobs.
+**deevy is real**: the Human's surface, the hooks, `/mcp` and `/api` as an Agent's key reaches them, the
+Gates and their Checkpoints, the Rulings from the tracker, and what deevy says back there.
 
-**The model's judgement is scripted**, and the scripted session writes over `/mcp` with the Agent's key
-exactly as Claude would — `issues_get`, `runs_post_activity`, `gates_request`, `pulls_open`, `runs_finish`.
-So the surface is the real one even though the reasoning is not.
+**Whatever runs the Agent is scripted.** deevy runs no Agent and manages no access
+([simplify.md](./plans/simplify.md)), so the scripted Agent does exactly what any harness does: it finds its
+work with `inbox_list` and `runs_list`, reads the record with `issues_get`, narrates with
+`runs_post_activity`, asks with `gates_request`, reads the Ruling with `gates_get`, clones and pushes with
+its own `git`, attaches the pull request it opened with `links_add`, and ends with `runs_finish`. It marks its
+inbox read over `/api`, as a loop does rather than a model. Its key is the only thing deevy gave it.
 
-The scripted session reaches deevy the way a real one does, through the supervisor's loopback proxy with no
-credential, and the walk checks that a tool the runtime did not grant is refused there — including
-`runs_checkout`, which is not a tool at all. Which CLI would have been spawned does not enter the walk: the
-supervisor is harness-blind, and each image's smoke in CI is what proves its CLI is there.
-
-**What this cannot stand in for is the model.** A scripted session always calls the right tool in the right
-order; a model may not. That is `apps/agent/tests/live.test.ts`, skipped unless you ask:
-
-```bash
-DEEVY_AGENT_LIVE=1 vp run agent#test tests/live.test.ts
-```
-
-It needs an Anthropic key and spends money, so CI never runs it. **It has not been run.** Pointing it at
-either deployment this script starts is the remaining manual step, and the only one.
+**What this cannot stand in for is a model.** A scripted Agent always calls the right tool in the right
+order; a model may not. Pointing a real coding agent at a deployment this script starts, with an Agent's key
+(apps/docs/content/agents/your-own-harness.md), is the manual step.
 
 ## What it walks
 
 1. **A Human connects a tool**, over the surface the SPA calls, after signing in. Connecting proves the
-   connection by asking who deevy is there. Then a Project bound to that Socket twice — where its records
-   live and where its code lives — its Checkpoints (`plan`, and a `ship` that wants somebody other than the
-   Human the work is for), an Agent, the grant that makes the Project exist to it, and a key shown once.
+   connection by asking who deevy is there. Then a Project bound to that Socket's container, its Checkpoints
+   (`plan`, and a `ship` that wants somebody other than the Human the work is for), an Agent, the grant that
+   makes the Project exist to it, and a key shown once.
 2. **The work arrives as a record**, opened in the tracker through the Socket and projected. Nobody is
    routed yet: it is a record like any other in the team's backlog.
 3. **The tracker says it is for the Planner**, as a signed delivery carrying the record with an
    `agent:planner` label. deevy routes it and opens a Run. The same delivery twice is one delivery; an
    unsigned one is 401 and changes nothing.
-4. **The first pass.** The Run is taken up; the session is refused `runs_checkout` at the proxy and the
-   refusal lands in the Run's feed in the Agent's name; the record it reads is the tracker's, and carries the
-   Checkpoints this Project asks for; it says what it intends to do and stops at the `plan` Gate. Nothing is
-   delivered by a Run that only asked, and the working directory it was given holds a loopback `origin` and
-   no credential.
+4. **The Agent finds its work.** The label put an `assignment` in its inbox and opened one Run in `pending`.
+   The record it reads is the tracker's, and carries the Checkpoints this Project asks for; it says what it
+   intends to do and stops at the `plan` Gate, and its Run is `awaiting_input`.
 5. **deevy says so where the team reads.** The Proposal becomes a comment in the tracker, signed with the
    Agent and the Run id. (The `deevy:awaiting-approval` label that goes with it is the same delivery and is
-   asserted against the tracker's own state in `packages/core/tests/mirror.test.ts`: what `issues.get`
-   answers is deevy's projection, whose labels are whatever the tracker last said, not what deevy last
-   asked for.)
-6. **A pass over a Run nobody has ruled on** reports it and does not work it. A Run waiting on a Human is not
-   the runtime's, however long it waits.
+   asserted against the tracker's own state in `packages/core/tests/mirror.test.ts`.)
+6. **A Run nobody has ruled on stays at its Gate**, whatever the sweeps do meanwhile.
 7. **The Human rules from the tracker**, where they read the Proposal. First an account nobody linked
    comments `/approve`: it rules nothing, the Gate stays open, and deevy answers on the record with where to
    link it. Then the admin comments `/approve` with a note from the GitHub account they signed in to deevy
-   with — no linking step — and the Gate records the Ruling `via: socket`. The next pass resumes the Run,
-   because deevy moved it back to `active` and told the Agent so, and the resumed session's prompt carries
-   the decision and the note. That session pushes its own branch, opens the pull request through deevy, and
-   stops at the `ship` Gate.
+   with — no linking step — and the Gate records the Ruling `via: socket`. A `run_answered` lands in the
+   Agent's inbox, and `gates_get` carries the decision and the note. The Agent pushes its own branch,
+   attaches its pull request, and stops at the `ship` Gate.
 8. **Four eyes, from both doors.** The Human the Run is for is refused at that Checkpoint in deevy, and from
-   the tracker, in the same words. Somebody else rules in deevy, the Run comes back a second time, and it
-   finishes.
-9. **The evidence.** The branch the session pushed is on the remote and `main` is untouched; there is exactly
-   one pull request, opened in the tracker rather than by the runtime, attached to the record and attributed
-   to the Run that produced it; and the ruling is said back in the tracker too. What the Run spent is on it:
-   each of the three sessions reported its usage as it ended, and `runs.get` adds them up under the harness
-   that counted them ([run-usage.md](./plans/run-usage.md)).
+   the tracker, in the same words. Somebody else rules in deevy, the Agent hears it in its inbox, and it
+   finishes its Run.
+9. **The evidence.** The branch the Agent pushed is on the remote and `main` is untouched; there is exactly
+   one pull request on the record, the one the Agent attached, attributed to the Run that produced it; and
+   the ruling is said back in the tracker too.
 10. **The record.** The Event log reads
-    `run.started run.checkout_issued run.activity run.activity gate.requested run.awaiting_input
-run.usage_reported gate.ruling_refused identity.linked gate.approved run.answered run.checkout_issued
-run.activity issue.link_added run.pull_request_opened gate.requested run.awaiting_input run.usage_reported
-comment.created gate.ruling_refused gate.approved run.answered run.checkout_issued run.completed
-run.usage_reported`, with the Agent as actor throughout and the
-    Human exactly one hop away at the Events that are theirs — the label that routed the work, the two
-    rulings, and each ruling reaching the Run — and the tracker's own at the two refusals and the account it
-    came to know.
+    `run.started run.activity gate.requested run.awaiting_input gate.ruling_refused identity.linked
+gate.approved run.answered issue.link_added gate.requested run.awaiting_input gate.ruling_refused
+gate.approved run.answered run.completed`, with the Agent as actor throughout and the Human exactly one hop
+    away at the Events that are theirs — the label that routed the work, the two rulings, and each ruling
+    reaching the Run — and the tracker's own at the two refusals and the account it came to know.
 11. **The same walk on the other deployments**, and each Event log is compared with Node's.
 
 ## Whose account is whose
@@ -128,17 +109,25 @@ A login is never matched, which is why the stranger in step 7 is named by an id 
 ## Running it against something else
 
 ```bash
-vp run agent#acceptance -- --url https://deevy.example.com
+vp run acceptance#walk -- --url https://deevy.example.com
 ```
 
 It walks whatever is there. It connects a Socket, creates a Project `deevy` and an Agent `Planner`, and
 writes records into whatever tracker that Socket reaches — so point it at an instance you do not mind it
 writing to, and expect it to need `DEEVY_DEV_STUB_SOCKETS=1` and a container of its own. Signing in still
 goes through the sign-in stub, so against an instance that was not started this way the sign-in step is the
-one that will fail. Set `DEEVY_ACCEPTANCE_REPO` to the bare repository behind that container if you want the
-branch check to mean anything.
+one that will fail. Set `DEEVY_ACCEPTANCE_REPO` to a bare repository the Agent may clone and push to; the
+walk does not start without one, because the Agent's git is its own and deevy cannot say where the code is.
 
 ## What the walk found
+
+**Moving it out of the runtime** (simplify.md, slice 0) found nothing in deevy. The walk had driven
+`apps/agent`'s supervisor, so what deevy did and what the supervisor did were one story; with the
+supervisor gone, four kinds of Event left it, each one the supervisor's rather than deevy's:
+`run.checkout_issued` (the supervisor's checkout), `run.pull_request_opened` (it opened the pull request),
+`run.usage_reported` (it reported each session's spend) and a `comment.created` (it commented on the record
+when it delivered), along with the Activity it wrote for each ref a session moved. The Event story that
+remains is deevy's own.
 
 Rewriting it around a Socket found five things, and each was a defect rather than a surprise:
 
@@ -163,6 +152,6 @@ deployments shared one bare repository, which made the second push a non-fast-fo
 
 ## Recording the result
 
-The script is the record: a failing check names itself and what it saw. When something is added to the
-milestone, add its check here rather than to a document nobody executes — a walk that runs on every commit is
-the only kind that stays true.
+The script is the record: a failing check names itself and what it saw. When something is added to deevy,
+add its check here rather than to a document nobody executes — a walk that runs on every commit is the only
+kind that stays true.

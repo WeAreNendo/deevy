@@ -547,4 +547,12 @@ Human's own MCP client. Email, as a chat Socket of its own if a team asks for it
 
 ## What it found
 
-Nothing yet. Each slice adds its entry here.
+**Slice 0, the walk without a runtime.** `tools/acceptance` is the walk (792 lines, from the runtime's 947)
+and `boot.ts`, moved unchanged but for a path. The scripted Agent holds only its key: `/mcp` for its tools,
+`/api/inbox/read` for its inbox, its own `git clone` and push against the bare repository, and `links_add`
+for the pull request; the Project is bound to its tracker alone, and the stub names the container without a
+clone URL. It passes on all four deployments with 111 checks, 27 on each and three comparisons, where the
+runtime's walk had 131. The Event story lost four kinds that were the supervisor's rather than deevy's:
+`run.checkout_issued`, `run.pull_request_opened`, `run.usage_reported`, and a `comment.created` that was the
+supervisor commenting on the record when it delivered (`apps/agent/src/deevy.ts`), along with the Activity it
+wrote per ref moved. Nothing in deevy had to change for an Agent with no supervisor to do the whole loop.

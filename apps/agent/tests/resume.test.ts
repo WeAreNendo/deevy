@@ -6,7 +6,7 @@ import type { Run } from "../src/deevy.ts";
  * A Run stopped at a Gate and handed back when a Human rules on it.
  *
  * The walk itself — ask, wait, rule, resume — is the acceptance script's
- * (docs/sockets-acceptance.md); what is here is the half that is pure: the
+ * (docs/acceptance.md); what is here is the half that is pure: the
  * prompt a resumed Run is given.
  */
 describe("the prompt a resumed Run gets", () => {

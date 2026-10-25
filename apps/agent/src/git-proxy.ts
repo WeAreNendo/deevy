@@ -169,7 +169,7 @@ export function repositoryName(upstream: string): string {
  * `git http-backend` is what every git server runs behind its HTTP endpoint, so
  * a path remote and an origin on the internet reach the session as the same
  * protocol — which is what keeps this one code path rather than two, and what
- * lets the acceptance walk stay on this machine (docs/sockets-acceptance.md).
+ * lets the acceptance walk stay on this machine (docs/acceptance.md).
  */
 async function serveLocally(
   upstream: string,

@@ -35,6 +35,7 @@ const packageDirs = [
   "apps/cli",
   "apps/hosted",
   "tools/release",
+  "tools/acceptance",
 ];
 
 /** `@deevy/agent` is the area `agent`; the scope carries no meaning here. */

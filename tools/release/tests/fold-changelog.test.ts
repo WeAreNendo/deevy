@@ -27,6 +27,7 @@ const packages = [
   "apps/cli",
   "apps/hosted",
   "tools/release",
+  "tools/acceptance",
 ];
 
 async function fold(
