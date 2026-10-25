@@ -84,8 +84,8 @@ export interface WorkerBindings {
    * offers (packages/sockets/src/stub). A Worker has no `NODE_ENV` to refuse
    * this by, so what protects a deployment is that both are vars somebody has
    * to set on purpose, and `health.ping` says when they are: the acceptance
-   * walk runs on workerd as well as on Node, and ADR-0006's claim is that the
-   * runtime cannot tell them apart (docs/sockets-acceptance.md).
+   * walk runs on workerd as well as on Node, and ADR-0006's claim is that an
+   * Agent cannot tell them apart (docs/acceptance.md).
    */
   DEEVY_DEV_STUB_SOCKETS?: string;
   /** Email (docs/plans/email-channel.md): the sender, its From, and its key. */

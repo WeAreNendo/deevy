@@ -28,7 +28,8 @@
       "@deevy/agent",
       "@deevy/cli",
       "@deevy/hosted",
-      "@deevy/release"
+      "@deevy/release",
+      "@deevy/acceptance"
     ]
   ],
   "ignore": ["@deevy/docs"],

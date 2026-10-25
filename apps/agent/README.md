@@ -122,8 +122,6 @@ CI never sets it. A milestone whose suite needs a paid key is a milestone nobody
 | `src/main.ts`                | The process.                                                                                                                        |
 | `src/index.ts`               | What the package exports, for the acceptance script and for anyone embedding it.                                                    |
 | `harness.sh`                 | Installs one CLI at a pinned version; the Dockerfile's `HARNESS` build argument names which.                                        |
-| `scripts/acceptance.ts`      | The milestone's own walk, on both deployments, with nothing outside this machine. CI runs it.                                       |
-| `scripts/boot.ts`            | Starting deevy on either deployment locally, with the outside world stubbed.                                                        |
 
 ## Copying it into your own repository
 
@@ -146,7 +144,7 @@ It is meant to be copied. Two things need doing when you do:
 - [`docs/harnesses.md`](../../docs/harnesses.md) — the four recipes, and how to add a fifth.
 - [`docs/plans/m4.md`](../../docs/plans/m4.md) and [`docs/plans/harnesses.md`](../../docs/plans/harnesses.md)
   — the slices this was built in, each with what building it found.
-- [`docs/sockets-acceptance.md`](../../docs/sockets-acceptance.md) — the acceptance walk, which is a script:
-  `vp run agent#acceptance`. A record in a stubbed tracker becomes a Run, a Proposal, a ruling, a branch, a
-  pull request and a finish, on both deployments, with nothing outside this machine. CI runs it on every
-  commit, and what it found is written down there.
+- [`docs/acceptance.md`](../../docs/acceptance.md) — the acceptance walk, which is a script in
+  `tools/acceptance` and no longer drives this runtime: `vp run acceptance#walk`. A record in a stubbed
+  tracker becomes a Run, a Proposal, a ruling, a branch, a pull request and a finish, on every deployment,
+  with a scripted Agent that holds only its key. CI runs it on every commit.

@@ -1,0 +1,15 @@
+{
+  "name": "@deevy/acceptance",
+  "version": "0.11.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "walk": "node src/walk.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

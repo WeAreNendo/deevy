@@ -127,8 +127,11 @@ jobs:
             filters: -F web
           - name: core
             filters: -F core -F db -F adapters -F sockets -F email -F design -F release -F cli -F docs
+          # `acceptance` has no unit suite: its test is the walk, which needs
+          # every deployment built and runs in the `runtime` job below. It is
+          # named here so the workspace-membership test sees every package.
           - name: runtime and server
-            filters: -F agent -F server -F hosted
+            filters: -F agent -F server -F hosted -F acceptance
     steps:
       - uses: actions/checkout@v7
 
@@ -242,13 +245,14 @@ jobs:
       - name: A hosted Workspace's dump goes into D1
         run: vp run server#check:d1-import
 
-      # The milestone's own walk, on every deployment, with nothing outside this
+      # deevy's own walk, on every deployment, with nothing outside this
       # machine: a label in a stubbed tracker becomes a Run, a Proposal, a
-      # ruling, a branch, a pull request and a finish (docs/sockets-acceptance.md).
-      # The image, the Worker, the image under a path, and a hosted Workspace,
-      # whose Worker the hosted smoke above has just built.
-      - name: The reference runtime works a record end to end, on every deployment
-        run: vp run agent#acceptance
+      # ruling, a branch, a pull request and a finish, with a scripted Agent
+      # that holds only its key (docs/acceptance.md). The image, the Worker,
+      # the image under a path, and a hosted Workspace, whose Worker the hosted
+      # smoke above has just built.
+      - name: An Agent works a record end to end, on every deployment
+        run: vp run acceptance#walk
 
   # A gradual deploy runs the previous release on this one's schema, and so does
   # a rollback (ADR-0031). The migration guard in `check` refuses what would
