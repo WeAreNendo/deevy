@@ -5,9 +5,9 @@ import type { Run } from "../src/deevy.ts";
 /**
  * A Run stopped at a Gate and handed back when a Human rules on it.
  *
- * The walk itself — ask, wait, rule, resume — is the acceptance script's
- * (docs/acceptance.md); what is here is the half that is pure: the
- * prompt a resumed Run is given.
+ * The runtime's own resume is no longer walked end to end: the acceptance
+ * walk (docs/acceptance.md) has its own scripted Agent. What is here is the
+ * half that is pure: the prompt a resumed Run is given.
  */
 describe("the prompt a resumed Run gets", () => {
   const run = {
