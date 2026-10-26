@@ -16,8 +16,9 @@ deevy's own tracker out: an Issue is a projection of a record in a Socket (a Git
 application, a GitLab user, a Notion connection, a Slack app), a Project is bound to a Socket's container, a Gate is a request on
 a Run with a Proposal, a Ruling may come from deevy, the tracker or Slack, and Documents, the Workflow,
 Labels, Teams, stored comments and the board are gone. What each slice found is at the end of that plan. The
-acceptance walk is a script (`vp run agent#acceptance`, `docs/sockets-acceptance.md`) that runs a record
-through both deployments on every commit with no account, App or network. Then **usage and time per Run**
+acceptance walk is a script (`vp run acceptance#walk`, `docs/acceptance.md`) that runs a record
+through every deployment on every commit with no account, App or network, with a scripted Agent that holds
+only its key. Then **usage and time per Run**
 (`docs/plans/run-usage.md`): a Run's client reports each session's tokens and cost (`runs.reportUsage`), deevy
 derives how long it worked and waited, and the Run page, the feed and an Agent's page show both. Then
 **email** (`docs/plans/email-channel.md`): a port in `@deevy/core/email` with seven senders — the HTTP ones in
@@ -43,9 +44,10 @@ format, so pnpm 11 is required and pinned twice over: `devEngines.packageManager
 the prompt to wipe `node_modules`, so if an install hangs with no output, check `pnpm --version` first.
 `vp dev`, `vp build`, `vp test`, `vp check` are built-ins that ignore package.json scripts; `vp run <script>`
 runs scripts, `-r` recursively, `pkg#script` for one package (package names are `web`, `server`, `core`, `db`,
-`adapters`, `sockets`, `email`, `design`, `agent`, `cli`, `release`, `hosted`, `docs`; `agent` has its own
-`apps/agent/README.md`, `release` is `tools/release`, which holds the changelog fold and the commit-message
-rules, `hosted` is `apps/hosted`, the many-Workspaces Worker: `vp run web#build:workers` then `vp run
+`adapters`, `sockets`, `email`, `design`, `agent`, `cli`, `release`, `acceptance`, `hosted`, `docs`; `agent`
+has its own `apps/agent/README.md`, `release` is `tools/release`, which holds the changelog fold and the
+commit-message rules, `acceptance` is `tools/acceptance`, the walk, which needs the server, the Worker and
+the hosted Worker built first, `hosted` is `apps/hosted`, the many-Workspaces Worker: `vp run web#build:workers` then `vp run
 hosted#build:hosted`, and `vp run hosted#test:hosted` runs two Workspaces on workerd, `docs` is `apps/docs`,
 the docs.deevy.dev site, and `design` is `packages/design`, the tokens, faces and logo both of them
 wear).

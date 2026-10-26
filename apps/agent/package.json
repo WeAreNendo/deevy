@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vp pack",
-    "start": "node dist/main.mjs",
-    "acceptance": "node scripts/acceptance.ts"
+    "start": "node dist/main.mjs"
   },
   "dependencies": {},
   "devDependencies": {

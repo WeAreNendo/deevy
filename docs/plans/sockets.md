@@ -627,7 +627,7 @@ know, finish — with `docs/agent-loop.md` and `docs/as-yourself.md` following. 
 (refused in production, reported on `health.ping` like `devSignIn`) registers the stub; `seed.ts` connects
 one, binds a Project, projects thirty records, opens Runs and Gates with Proposals, rules some `via: web`
 and some `via: socket`; `acceptance.ts` and `boot.ts` walk the stub; `docs/m4-acceptance.md` becomes
-`docs/sockets-acceptance.md`; the script back in CI.
+`docs/acceptance.md`; the script back in CI.
 
 **Acceptance test.** On Node and on workerd: a signed label delivery opens a Run; the scripted session
 reads the record, narrates, and asks for the `plan` Gate; the Proposal is in the stub's state as a comment
@@ -1199,7 +1199,7 @@ Five things came out differently from the sketch.
 
 **Slice 8, as built.** The walk is the point of this slice, and running it found five defects that every
 test in the tree had missed. They are written up in
-[`docs/sockets-acceptance.md`](../sockets-acceptance.md); the two that matter most are a Run at a Gate being
+[`docs/acceptance.md`](../acceptance.md); the two that matter most are a Run at a Gate being
 un-waited by the supervisor's own narration — which put it under the stale sweep, the exact thing a Gate is
 promised never to suffer — and two pull requests for one attempt, because the instructions tell the Agent to
 open one and the supervisor opens one for any branch a session pushed and left.

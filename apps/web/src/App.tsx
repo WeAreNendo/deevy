@@ -171,7 +171,7 @@ export function SignedOut({ invitation = null }: { invitation?: string | null })
  * (apps/web/scripts/stub-oauth.js). It is Better Auth's real OAuth dance with
  * the consent screen skipped: start the social sign-in to get a `state`, then
  * land on the callback with the email as the `code`, exactly as the acceptance
- * walk does over HTTP (apps/claude-agent/scripts/acceptance.ts).
+ * walk does over HTTP (tools/acceptance/src/walk.ts).
  *
  * It needs no chooser now that a deployment can offer more than one provider:
  * the stub answers for all of them and the address is what decides who signs
