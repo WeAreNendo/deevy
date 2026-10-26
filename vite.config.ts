@@ -76,6 +76,7 @@ export default defineConfig({
           "packages/db/scripts/**",
           "packages/core/scripts/**",
           "tools/release/**",
+          "tools/acceptance/**",
         ],
         env: { node: true },
       },

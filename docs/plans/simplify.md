@@ -547,12 +547,17 @@ Human's own MCP client. Email, as a chat Socket of its own if a team asks for it
 
 ## What it found
 
-**Slice 0, the walk without a runtime.** `tools/acceptance` is the walk (792 lines, from the runtime's 947)
+**Slice 0, the walk without a runtime.** `tools/acceptance` is the walk (817 lines, from the runtime's 947)
 and `boot.ts`, moved unchanged but for a path. The scripted Agent holds only its key: `/mcp` for its tools,
 `/api/inbox/read` for its inbox, its own `git clone` and push against the bare repository, and `links_add`
 for the pull request; the Project is bound to its tracker alone, and the stub names the container without a
-clone URL. It passes on all four deployments with 111 checks, 27 on each and three comparisons, where the
-runtime's walk had 131. The Event story lost four kinds that were the supervisor's rather than deevy's:
+clone URL. It passes on all four deployments with 115 checks, 28 on each and three comparisons, where the
+runtime's walk had 131. The Event story lost four kinds that deevy appended only for the supervisor's calls:
 `run.checkout_issued`, `run.pull_request_opened`, `run.usage_reported`, and a `comment.created` that was the
 supervisor commenting on the record when it delivered (`apps/agent/src/deevy.ts`), along with the Activity it
-wrote per ref moved. Nothing in deevy had to change for an Agent with no supervisor to do the whole loop.
+wrote per ref moved; the core's tests still cover those operations until slices 2 and 3 remove them, so the
+stack ships as one release. Nothing in deevy had to change for an Agent with no supervisor to do the
+whole loop. The review found that the old walk proved one thing of deevy's only in passing — a Ruling puts
+its Run back to `active`, since the supervisor resumed nothing else — and the new walk checks it after each
+Ruling, checks that marking the inbox read marked every row, and checks the four-eyes Ruling on the Gate
+rather than the sign-in that preceded it.

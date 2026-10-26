@@ -318,6 +318,12 @@ function agentAt(origin: string, key: string) {
           body: JSON.stringify({ ids: rows.map((row) => row.id) }),
         });
         if (read.status !== 200) throw new Error(`inbox/read was ${String(read.status)}`);
+        // Every row taken is a row marked, or a later read would find this
+        // one again and pass for something new.
+        const marked = ((await read.json()) as { read?: number }).read;
+        if (marked !== rows.length) {
+          throw new Error(`inbox/read marked ${String(marked)} of ${String(rows.length)}`);
+        }
       }
       return rows.map((row) => ({ kind: row.kind, issueKey: row.issue?.externalKey ?? null }));
     },
@@ -551,6 +557,10 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "the Ruling reaches the Agent's inbox",
     (await agent.unread()).some((one) => one.kind === "run_answered" && one.issueKey === issueKey),
   );
+  check(
+    "and puts its Run back to work",
+    (await agent.tool("runs_get", { runId })).status === "active",
+  );
   const planned = (await agent.tool("gates_get", { requestId: plan.id })) as {
     status: string;
     decisions: Array<{ note: string | null }>;
@@ -632,11 +642,25 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   );
   // Somebody else rules, in deevy: both doors lead to the same Ruling.
   await human(origin, "gates/approve", { requestId: ship.id, note: "Ship it" }, grace);
-  check("and somebody else can rule on it", graceId !== "");
+  const shipped = (await agent.tool("gates_get", { requestId: ship.id })) as {
+    status: string;
+    decisions: Array<{ memberId: string; via: string }>;
+  };
+  check(
+    "and somebody else rules on it, in deevy",
+    graceId !== "" &&
+      shipped.status === "approved" &&
+      shipped.decisions.some((one) => one.memberId === graceId && one.via === "web"),
+    JSON.stringify(shipped.decisions),
+  );
 
   check(
     "the second Ruling reaches the Agent's inbox too",
     (await agent.unread()).some((one) => one.kind === "run_answered" && one.issueKey === issueKey),
+  );
+  check(
+    "and puts its Run back to work again",
+    (await agent.tool("runs_get", { runId })).status === "active",
   );
   await agent.tool("runs_finish", {
     runId,
@@ -648,14 +672,9 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     (await agent.tool("runs_get", { runId })).status === "completed",
   );
 
-  // Part 6: the evidence, on the remote and on the record.
-  const branches = (await git("git", ["-C", repo, "branch", "--list"])).stdout;
-  check(
-    "the branch the Agent pushed is on the remote, and main is untouched",
-    branches.includes("health-endpoint") && !branches.includes("deevy/"),
-    branches.replaceAll("\n", " "),
-  );
-
+  // Part 6: the evidence on the record. What reached the remote is the
+  // Agent's own push and nothing deevy did, so there is nothing of deevy's to
+  // check there.
   const links = (await human(origin, "links/list", { issue: issueKey }, ada)).links as Array<{
     kind: string;
     url: string;

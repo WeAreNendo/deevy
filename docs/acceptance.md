@@ -15,7 +15,7 @@ vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#buil
 vp run acceptance#walk
 ```
 
-A hundred and eleven checks: twenty-seven against each of four deployments, and three comparing each Event
+A hundred and fifteen checks: twenty-eight against each of four deployments, and three comparing each Event
 log with Node's. The four are the image, the Worker, the image again under a path (`/deevy`), and a hosted
 Workspace at `/acme` behind the many-Workspaces Worker, provisioned through `Platform` and signed in through
 the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes,
@@ -82,14 +82,14 @@ order; a model may not. Pointing a real coding agent at a deployment this script
    comments `/approve`: it rules nothing, the Gate stays open, and deevy answers on the record with where to
    link it. Then the admin comments `/approve` with a note from the GitHub account they signed in to deevy
    with — no linking step — and the Gate records the Ruling `via: socket`. A `run_answered` lands in the
-   Agent's inbox, and `gates_get` carries the decision and the note. The Agent pushes its own branch,
-   attaches its pull request, and stops at the `ship` Gate.
+   Agent's inbox, the Run is `active` again, and `gates_get` carries the decision and the note. The Agent
+   pushes its own branch, attaches its pull request, and stops at the `ship` Gate.
 8. **Four eyes, from both doors.** The Human the Run is for is refused at that Checkpoint in deevy, and from
-   the tracker, in the same words. Somebody else rules in deevy, the Agent hears it in its inbox, and it
-   finishes its Run.
-9. **The evidence.** The branch the Agent pushed is on the remote and `main` is untouched; there is exactly
-   one pull request on the record, the one the Agent attached, attributed to the Run that produced it; and
-   the ruling is said back in the tracker too.
+   the tracker, in the same words. Somebody else rules in deevy and the Gate records it `via: web`; the
+   Agent hears it in its inbox, its Run is `active` again, and it finishes.
+9. **The evidence.** There is exactly one pull request on the record, the one the Agent attached,
+   attributed to the Run that produced it, and the ruling is said back in the tracker too. What reached the
+   remote is the Agent's own push, so the walk checks nothing of deevy's there.
 10. **The record.** The Event log reads
     `run.started run.activity gate.requested run.awaiting_input gate.ruling_refused identity.linked
 gate.approved run.answered issue.link_added gate.requested run.awaiting_input gate.ruling_refused
@@ -123,11 +123,13 @@ walk does not start without one, because the Agent's git is its own and deevy ca
 
 **Moving it out of the runtime** (simplify.md, slice 0) found nothing in deevy. The walk had driven
 `apps/agent`'s supervisor, so what deevy did and what the supervisor did were one story; with the
-supervisor gone, four kinds of Event left it, each one the supervisor's rather than deevy's:
-`run.checkout_issued` (the supervisor's checkout), `run.pull_request_opened` (it opened the pull request),
-`run.usage_reported` (it reported each session's spend) and a `comment.created` (it commented on the record
-when it delivered), along with the Activity it wrote for each ref a session moved. The Event story that
-remains is deevy's own.
+supervisor gone, four kinds of Event left it, each one appended by deevy for a call only the supervisor
+made: `run.checkout_issued` (its checkout), `run.pull_request_opened` (it opened the pull request through
+deevy), `run.usage_reported` (it reported each session's spend) and a `comment.created` (it commented on the
+record when it delivered), along with the Activity it wrote for each ref a session moved. Those operations
+are still covered by the core's tests until the slices that remove them. And the old walk proved one thing
+about deevy only in passing: that a Ruling puts its Run back to `active`, because the supervisor resumed
+nothing else. The new walk checks it after each Ruling.
 
 Rewriting it around a Socket found five things, and each was a defect rather than a surprise:
 

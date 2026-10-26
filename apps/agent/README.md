@@ -120,7 +120,7 @@ CI never sets it. A milestone whose suite needs a paid key is a milestone nobody
 | `src/loop.ts`                | Staying up: a sequential loop, backoff, and a stop that finishes the sentence.                                                      |
 | `src/receiver.ts`            | `/healthz`, and deevy's signed deliveries.                                                                                          |
 | `src/main.ts`                | The process.                                                                                                                        |
-| `src/index.ts`               | What the package exports, for the acceptance script and for anyone embedding it.                                                    |
+| `src/index.ts`               | What the package exports, for anyone embedding it.                                                                                  |
 | `harness.sh`                 | Installs one CLI at a pinned version; the Dockerfile's `HARNESS` build argument names which.                                        |
 
 ## Copying it into your own repository
