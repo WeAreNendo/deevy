@@ -15,8 +15,8 @@ supervisor that knows one seam — a `Session` is a function from a prompt and a
 of five events — and a `src/harness/` directory of recipes, one file each, that turn a configuration into a
 command line and a CLI's stdout into those events. `DEEVY_AGENT_HARNESS` selects the recipe; the image is
 built with one CLI installed and tagged by it. Four recipes are in the tree and run on every commit: Claude
-Code, OpenCode, Cursor CLI and GitHub Copilot CLI. The page that lets somebody add a fifth is
-[docs/harnesses.md](../harnesses.md).
+Code, OpenCode, Cursor CLI and GitHub Copilot CLI. The page that let somebody add a fifth was
+`docs/harnesses.md`, removed with the runtime (ADR-0034).
 
 **The Agent's key never enters the session's process tree.** The supervisor serves deevy's MCP endpoint on a
 loopback port it opens for each Run, adds the key on the way out, filters `tools/list` to the tools the

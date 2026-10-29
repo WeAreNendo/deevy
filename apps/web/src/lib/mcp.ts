@@ -12,7 +12,7 @@ export function mcpEndpoint(): string {
   return appURL("/mcp");
 }
 
-/** What the runtime already calls the variable holding an Agent's key. */
+/** What every connect snippet calls the variable holding an Agent's key. */
 export const KEY_ENV = "DEEVY_AGENT_KEY";
 
 /**

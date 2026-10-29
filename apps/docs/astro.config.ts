@@ -22,6 +22,9 @@ import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
  */
 export default defineConfig({
   site: "https://docs.deevy.dev",
+  // Pages that went away, sent where their readers should go now. The runtime's
+  // page was linked from earlier release notes and the landing's old prompt.
+  redirects: { "/agents/reference-runtime/": "/agents/your-own-harness/" },
   // The port the preview launcher hands over (.claude/launch.json), as the SPA's vite.config does.
   server: { port: Number(process.env.PORT) || 4321 },
   integrations: [
