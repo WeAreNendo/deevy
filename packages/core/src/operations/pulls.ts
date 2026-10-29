@@ -51,10 +51,10 @@ export const pulls = {
       const binding = requireForgeBinding(project);
 
       /*
-       * One pull request per Run, whoever asks. Two callers reach here on the
-       * same Run by design: the Agent is told to open it
-       * (apps/agent/src/instructions.md), and the supervisor opens one for a
-       * branch a session pushed and left (apps/agent/src/work.ts). A second
+       * One pull request per Run, whoever asks. Two callers may reach here on
+       * the same Run: the Agent, told to open it (docs/agent-loop.md), and a
+       * loop around it that opens one for a branch a session pushed and left,
+       * as the reference runtime did. A second
        * pull request for one attempt is noise a reviewer has to resolve, and
        * asking twice is not a mistake worth a refusal — so the one that exists
        * is the answer.

@@ -1,5 +1,8 @@
 # A harness is a CLI behind the session seam
 
+> Superseded by [ADR-0034](./0034-deevy-runs-no-agent-and-manages-no-access.md): deevy ships no runtime, and
+> so no harnesses.
+
 [ADR-0013](./0013-the-reference-runtime-is-a-service-not-a-ci-job.md) recorded two decisions about the
 reference runtime. The first, that it is a long-running service and not a CI job, stands. The second, that it
 drives Claude through the Agent SDK rather than the `claude` CLI, is superseded by this one, and this records

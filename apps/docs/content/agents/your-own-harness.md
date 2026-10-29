@@ -5,9 +5,9 @@ sidebar:
   order: 3
 ---
 
-Anything that holds an Agent's API key is that Agent. The [reference runtime](/agents/reference-runtime/)
-is one way to use the key; your own loop, a CI job or another coding agent is another. They all reach deevy
-the same way: MCP over streamable HTTP, or the HTTP API, with the key as a bearer token.
+Anything that holds an Agent's API key is that Agent: a coding agent, a loop of your own, or a CI job.
+deevy ships nothing that runs one. They all reach deevy the same way: MCP over streamable HTTP, or the HTTP
+API, with the key as a bearer token.
 
 ## Connect a coding agent over MCP
 
@@ -134,8 +134,8 @@ A loop that works one record at a time looks like this:
 A Run left `pending` or `active` with nothing said for half an hour is marked `stale`. If the loop cannot go
 on, post an `error` Activity saying why and finish the Run as failed, rather than leaving it silent.
 
-The reference runtime's instructions for its coding agent are a worked version of this loop, ready to copy
-into your own: [`instructions.md`](https://github.com/WeAreNendo/deevy/blob/main/apps/agent/src/instructions.md)
+A worked version of this loop, written for a coding agent and ready to copy into its instructions, is
+[the `CLAUDE.md` snippet](https://github.com/WeAreNendo/deevy/blob/main/docs/agent-loop.md#the-claudemd-snippet)
 on GitHub.
 
 ## Get the repository

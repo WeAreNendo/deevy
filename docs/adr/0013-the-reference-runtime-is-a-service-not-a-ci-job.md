@@ -1,5 +1,8 @@
 # The reference runtime is a service, not a CI job
 
+> Superseded by [ADR-0034](./0034-deevy-runs-no-agent-and-manages-no-access.md): deevy ships no reference
+> runtime, and `apps/agent` is gone.
+
 > The second decision here, the Agent SDK over the `claude` CLI, is superseded by
 > [ADR-0018](./0018-a-harness-is-a-cli-behind-the-session-seam.md); the first stands. The package has since
 > moved to `apps/agent`.

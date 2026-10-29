@@ -90,8 +90,8 @@ GitLab's issues are open or closed and nothing else. A team's workflow in scoped
 - **Merge requests**, from the branch a Run pushed, saying `Closes <the issue's URL>` so that merging closes
   the issue. The branch is deleted when the merge request is merged.
 
-A Run clones over HTTPS with the Socket's token. The [reference runtime](/agents/reference-runtime/) keeps
-it to itself, so the coding agent working the Run never holds it.
+A Run clones over HTTPS with the Socket's token, which whatever runs the Agent gets from `runs.checkout`.
+It is not an MCP tool, so keep the token out of the coding agent's context.
 
 ## Rule from GitLab
 

@@ -561,3 +561,13 @@ whole loop. The review found that the old walk proved one thing of deevy's only 
 its Run back to `active`, since the supervisor resumed nothing else — and the new walk checks it after each
 Ruling, checks that marking the inbox read marked every row, and checks the four-eyes Ruling on the Gate
 rather than the sign-in that preceded it.
+
+**Slice 1, no runtime.** 12,312 lines out and 262 in: `apps/agent` was 11,212 of them, the CI jobs that
+built and smoked four runtime images and ran the supervisor's git test as root were 250, and the release
+workflow publishes one image with no harness tags. Four pending changesets described fixes to the runtime
+alone; two were security fixes merged after 0.11.4 that will now never ship, so they are deleted and the
+release note says to stop running a `deevy-agent` image rather than only that it is gone. The runtime's
+`instructions.md` and the CLAUDE.md snippet in `agent-loop.md` were the same text twice; the snippet is now
+the only copy, and the public harness page points at it. Comments that cited `apps/agent` for a reason keep
+the reason and lose the path. The one place that still names it is PLAN.md's milestone history, where each
+entry now says it was removed; slice 13 rewrites that page.

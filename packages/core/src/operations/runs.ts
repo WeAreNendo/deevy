@@ -228,7 +228,7 @@ export const runs = {
       // Event: that is what a Notification and the live feed hang off. Only
       // where it begins the wait — something said to a Run that is already
       // waiting is not a second question, and a second Notification about one
-      // Gate is a Human told twice (apps/agent/src/work.ts).
+      // Gate is a Human told twice.
       if (status === "awaiting_input" && run.status !== "awaiting_input") {
         await appendEvent(context, {
           kind: "run.awaiting_input",
@@ -304,9 +304,8 @@ export const runs = {
     input: z.object({ runId: z.string() }),
     /**
      * Null where the Project is bound to no repository, which is an ordinary
-     * Project rather than a mistake: the supervisor asks this of every Run it
-     * takes up, and a refusal would put a 404 in an operator's log every pass
-     * (apps/agent/src/work.ts).
+     * Project rather than a mistake: a loop may ask this of every Run it takes
+     * up, and a refusal would put a 404 in an operator's log every pass.
      */
     output: z
       .object({

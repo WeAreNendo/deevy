@@ -242,8 +242,8 @@ describe("what an Agent's own webhook is owed", () => {
       where: { memberId: agent.member.id },
     });
 
-    // What the reference runtime wakes for: work handed to it, and an answer
-    // to the question it stopped on (apps/agent, receiver.ts).
+    // What an Agent's own loop wakes for: work handed to it, and an answer to
+    // the question it stopped on.
     const issue = await asAdmin.issues.create({
       projectSlug: "deevy",
       title: "Checkout rewrite",

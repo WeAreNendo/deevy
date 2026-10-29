@@ -4,7 +4,7 @@
  * The CLI reaches it through `fetch`, and the fetch a test hands over is the
  * app's own handler: the request goes through the same routing, the same
  * middleware and the same audience check a deployed instance uses, with no port
- * to bind. The shape is `apps/agent/tests/helpers.ts`, for the same reasons.
+ * to bind.
  */
 import { createApp } from "@deevy/core/app";
 import type { Auth } from "@deevy/core/auth";

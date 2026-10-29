@@ -117,9 +117,9 @@ describe("what a Run is told to clone", () => {
       code: "FORBIDDEN",
     });
 
-    // A Project bound to a tracker and nothing else is ordinary, and the
-    // supervisor asks this of every Run it takes up: a refusal here would put
-    // a 404 in an operator's log on nothing going wrong (apps/agent/src/work.ts).
+    // A Project bound to a tracker and nothing else is ordinary, and a loop
+    // may ask this of every Run it takes up: a refusal here would put a 404 in
+    // an operator's log on nothing going wrong.
     await db
       .update(projectTable)
       .set({ forgeSocketId: null, forgeScope: null })
@@ -161,9 +161,9 @@ describe("the pull request a Run opens", () => {
     closers.push(close);
     const { asPlanner, run } = await workspace(db);
 
-    // The instructions tell an Agent to open it (apps/agent/src/instructions.md)
-    // and the supervisor opens one for any branch a session pushed and did not
-    // (apps/agent/src/work.ts). Both happen on the same Run, and a reviewer
+    // The instructions tell an Agent to open it (docs/agent-loop.md), and a
+    // loop around it may open one for any branch a session pushed and did not,
+    // as the reference runtime did. Both happen on the same Run, and a reviewer
     // with two pull requests for one attempt has to work out which is real.
     const first = await asPlanner.pulls.open({ runId: run.id, head: "deevy/acme-deevy-42-abcd" });
     const again = await asPlanner.pulls.open({ runId: run.id, head: "deevy/acme-deevy-42-abcd" });
