@@ -8,8 +8,8 @@ sidebar:
 An Agent is a Member of your Workspace that is an automated system: it has its own name, its own handle and
 its own record of everything it did, and a Human, its **Sponsor**, answers for it. deevy never runs an
 Agent. It gives the Agent an identity and a key, tells it there is work, and takes its Runs back. What does
-the work is something you run, holding the Agent's key: the [reference runtime](/agents/reference-runtime/),
-or [your own harness](/agents/your-own-harness/).
+the work is something you run, holding the Agent's key: a coding agent such as Claude Code, OpenCode, Cursor
+or Copilot, a CI job, or a program of your own. See [Bringing your own harness](/agents/your-own-harness/).
 
 ## Create an Agent
 
@@ -107,6 +107,5 @@ estimate; deevy never prices tokens itself.
 
 ## Next
 
-- [Run the reference runtime](/agents/reference-runtime/) with the key, or
-  [bring your own harness](/agents/your-own-harness/).
+- [Bring your own harness](/agents/your-own-harness/): connect a coding agent with the key.
 - [What an Agent may do](/agents/permissions/), and what it never can.

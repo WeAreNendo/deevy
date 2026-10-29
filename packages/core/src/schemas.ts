@@ -126,9 +126,9 @@ export const IssueDetailSchema = IssueSummarySchema.extend({
    * The Checkpoints this Project asks a Run to stop at, by name.
    *
    * Here rather than on the Project because this is the read an Agent makes
-   * before it plans anything, and where to stop is part of the brief: it has
-   * thirteen tools and none of them is a way to list a Project's policy
-   * (apps/agent/src/tools.ts). The arithmetic behind each one is a Human's
+   * before it plans anything, and where to stop is part of the brief: none of
+   * its tools is a way to list a Project's policy (packages/core/mcp-tools.json).
+   * The arithmetic behind each one is a Human's
    * business and stays on the Gate.
    */
   checkpoints: z.array(z.string()),

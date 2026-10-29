@@ -30,9 +30,9 @@ own identity, keys and audit trail, working over MCP. Every change is an Event, 
 webhooks and what deevy writes in the tools all derive from that one log. It is also hosted, as deevy Cloud at
 app.deevy.dev, an invite-only beta.
 
-[`apps/agent`](./apps/agent) is the reference runtime on the other side: a service holding one
-Agent's key that runs a coding-agent CLI (Claude Code, OpenCode, Cursor or Copilot) against the records that
-Agent is given. deevy itself never runs an agent (ADR-0003), and never owns the tracker (ADR-0024).
+deevy never runs an agent (ADR-0003) and never owns the tracker (ADR-0024). An Agent is whatever holds its
+key — Claude Code, OpenCode, Cursor, Copilot or a program of your own — reaching deevy over MCP, with the
+access to its code that you give it.
 
 Using or running deevy is documented at [docs.deevy.dev](https://docs.deevy.dev). For the people building it,
 the vocabulary is in [CONTEXT.md](./CONTEXT.md), the hard-to-reverse decisions in [docs/adr](./docs/adr), the

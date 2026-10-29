@@ -13,11 +13,9 @@ it reads their inbox, and it cannot open a Run, because a Run is one Agent's att
 Nothing a Human drives is ever registered as an Agent; an Agent is only ever something a Sponsor created.
 [as-yourself.md](./as-yourself.md) is that example's own page.
 
-It is an example, not a product, and it is the CLI configuration a person can copy. The runtime that ships is
-`apps/agent`, a service that drives this same CLI, or OpenCode, Cursor or Copilot, from a program
-(docs/harnesses.md, ADR-0018); it points the session at a loopback proxy that holds the key, so the key never
-reaches the session at all, and it carries the same instructions. Every tool named here is in
-`packages/core/mcp-tools.json`.
+It is an example, not a product, and it is the CLI configuration a person can copy. deevy ships nothing that
+runs an Agent (ADR-0034): this loop, a service of your own or a CI job holds the key, and the access to the
+repository is whatever its operator gave it. Every tool named here is in `packages/core/mcp-tools.json`.
 
 ## What the Human sets up first
 
@@ -75,9 +73,8 @@ is display. The refusal is the same one the HTTP API gives, in the same middlewa
 
 ## The `CLAUDE.md` snippet
 
-This is what tells the loop how to work an Issue. Put it in the loop's repository, not in deevy. The original
-is `apps/agent/src/instructions.md`, which the shipped runtime appends to its system prompt; the copy
-below is here to be read.
+This is what tells the loop how to work an Issue. Put it in the loop's repository, not in deevy. It is the
+copy the public docs point a harness at (Agents › Bringing your own harness), so change it here.
 
 ```markdown
 ## Working an Issue in deevy
@@ -157,23 +154,18 @@ Work one Issue at a time, in this order.
    of the same fan-out. It means the work is already split as far as this Workspace wants it split, and what
    is left is to do some of it.
 
-7. **On approval, do what you said you would do.** You will be given a fresh session that tells you which way
-   it went and what the Human said. Approved means build it. Rejected means read the note and write a new
+7. **On approval, do what you said you would do.** A `run_answered` Notification in your inbox says
+   somebody ruled, and `gates_get` says which way it went and what the Human said. Approved means build it. Rejected means read the note and write a new
    Proposal that answers it, then ask again; it does not mean asking the same thing twice.
-8. **Commit and push.** git is yours: your own branch, your own commits, your own messages. `origin` already
-   points where it should and carries no credential you need to think about, so `git push origin <your
-branch>` is all it takes. Say what you did in the commit messages; nobody reads a diff to find out what you
+8. **Commit and push.** git is yours: your own branch, your own commits, your own messages, pushed with the
+   access your operator gave you. Say what you did in the commit messages; nobody reads a diff to find out what you
    meant. Do not push to the default branch: you are able to, and the record will say you did, but what you
    produce is a proposal and a Human decides whether it ships.
 
-   If you push nothing, whatever you changed is committed and pushed for you on a branch named after this
-   Run, so work is never lost by forgetting.
-
 9. **Open the pull request.** `pulls_open` with your `runId` and a `summary` of what you did. deevy opens it
    through the same tool the code lives in, attaches it to the record, and writes `Closes <the record's URL>`
-   into it so merging closes the record where the team reads it. The branch is the one deevy named for this
-   Run; pass `head` only if you pushed a different one. A Project with no repository has no pull request to
-   open, and deevy will say so.
+   into it so merging closes the record where the team reads it. Pass `head`, the branch you pushed. A
+   Project with no repository has no pull request to open, and deevy will say so.
 10. **Ask at the ship Checkpoint, where the Project listed one.** `gates_request` with `checkpoint: "ship"`
     and a Proposal naming what you built and what you want looked at, with the pull request in `links`. Where
     `checkpoints` did not list it, there is nothing to wait for: go on and finish.
