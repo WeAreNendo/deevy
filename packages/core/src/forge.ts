@@ -1,12 +1,11 @@
 /**
  * The code half of a Run (ADR-0014, ADR-0019, ADR-0024).
  *
- * Three names deevy decides and the runtime reads rather than invents: the
- * branch a Run cuts, what its pull request is called, and what its body says.
- * They live here because both sides need them to agree — the core mints the
- * credential and opens the pull request, and the supervisor pushes the branch
- * in between — and a name each of them made up separately would differ the
- * first time somebody changed one.
+ * Three names deevy decides rather than whatever runs the Agent: the branch a
+ * Run cuts, what its pull request is called, and what its body says. They live
+ * here because `runs.checkout` names the branch and `pulls.open` defaults to
+ * it, and a name each of them made up separately would differ the first time
+ * somebody changed one.
  */
 
 /** How much of a summary a pull request title can carry. GitHub's own limit is generous; this is readable. */

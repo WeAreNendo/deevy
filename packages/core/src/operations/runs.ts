@@ -298,9 +298,8 @@ export const runs = {
     agents: true,
     agentsOnly: true,
     // Deliberately not a tool. It answers with a credential, and a credential
-    // in a model's context is a credential in a transcript (ADR-0014); the
-    // supervisor calls this over HTTP and keeps the token to itself. The
-    // runtime's own allowlist is the second fence.
+    // in a model's context is a credential in a transcript: whatever runs the
+    // Agent calls this over HTTP and should keep the token out of the model.
     input: z.object({ runId: z.string() }),
     /**
      * Null where the Project is bound to no repository, which is an ordinary

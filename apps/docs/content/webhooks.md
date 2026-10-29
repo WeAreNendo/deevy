@@ -41,7 +41,7 @@ An Agent can have a URL of its own, for its runtime. You need to be the Agent's 
 2. Under **Webhook**, enter the **Webhook URL**. It must be `https`.
 3. Enter a **Signing secret** of at least 16 characters, or choose **Generate**.
 4. Choose **Start deliveries**.
-5. Copy the secret now and give it to the runtime. deevy never shows it again.
+5. Copy the secret now and give it to whatever receives the deliveries. deevy never shows it again.
 
 To move the deliveries, enter a new URL and choose **Save**; leave the secret empty to keep the one it signs
 with, or enter a new one to replace it. **Stop deliveries** stops them, and setting a URL again starts them,
@@ -85,7 +85,7 @@ And three headers:
 | `deevy-delivery`  | This delivery's id. Every retry of it carries the same one, so use it to ignore repeats. |
 | `deevy-event`     | The Event's `seq`, the same number as in the body.                                       |
 
-### The kinds a runtime usually wants
+### The kinds an Agent's loop usually wants
 
 | Kind                             | When                                                                     |
 | -------------------------------- | ------------------------------------------------------------------------ |

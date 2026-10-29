@@ -45,9 +45,8 @@ solo developer. That is the honest trade: the thing that made the Action attract
 
 **There is no per-Run isolation for free.** A runner is a fresh machine each time; a service is not, so the
 isolation is the runtime's own: a working directory made and removed per Run, and a container around the
-whole thing. What that does and does not bound is written down in
-[OPERATIONS.md](../OPERATIONS.md#what-is-bounded-and-what-is-not) and in
-[ADR-0014](./0014-an-agents-input-is-untrusted-and-its-tools-are-not.md).
+whole thing. What that did and did not bound was written down in OPERATIONS.md, until ADR-0034 removed
+the runtime, and is in [ADR-0014](./0014-an-agents-input-is-untrusted-and-its-tools-are-not.md).
 
 **Somebody who wants an Action still can.** Nothing in the runtime assumes it is long-lived: `--once` makes
 one pass and exits, the queue and the claim are both server-side, and a fresh process is not a fresh start.

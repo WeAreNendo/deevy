@@ -131,7 +131,8 @@ Work one Issue at a time, in this order.
 
    A Run waiting on a Gate does not time out. The stale sweep only touches Runs deevy is waiting on —
    `pending` and `active` — because sweeping one that is waiting on a Human would strand their answer. So
-   there is nothing to reopen and nothing to rescue: stop, and you will be woken when somebody rules.
+   there is nothing to reopen and nothing to rescue: stop. When somebody rules, a `run_answered`
+   Notification lands in your inbox, and on your webhook if your operator registered one.
 
    Where `checkpoints` did not list `plan`, skip this: asking anyway stops your Run for a Human who was
    never told they had to rule on anything.
@@ -155,12 +156,13 @@ Work one Issue at a time, in this order.
    is left is to do some of it.
 
 7. **On approval, do what you said you would do.** A `run_answered` Notification in your inbox says
-   somebody ruled, and `gates_get` says which way it went and what the Human said. Approved means build it. Rejected means read the note and write a new
-   Proposal that answers it, then ask again; it does not mean asking the same thing twice.
+   somebody ruled, and `gates_get` says which way it went and what the Human said. Approved means build it.
+   Rejected means read the note and write a new Proposal that answers it, then ask again; it does not mean
+   asking the same thing twice.
 8. **Commit and push.** git is yours: your own branch, your own commits, your own messages, pushed with the
-   access your operator gave you. Say what you did in the commit messages; nobody reads a diff to find out what you
-   meant. Do not push to the default branch: you are able to, and the record will say you did, but what you
-   produce is a proposal and a Human decides whether it ships.
+   access your operator gave you. Say what you did in the commit messages; nobody reads a diff to find out
+   what you meant. Do not push to the default branch, even where your access lets you: what you produce is a
+   proposal, and a Human decides whether it ships.
 
 9. **Open the pull request.** `pulls_open` with your `runId` and a `summary` of what you did. deevy opens it
    through the same tool the code lives in, attaches it to the record, and writes `Closes <the record's URL>`
@@ -221,8 +223,7 @@ which way it went and what the Human wrote.
 ## What it leaves behind
 
 The Event log tells the whole story with the Agent as the actor and the Human one hop away: `run.started`
-carrying the trigger, `run.checkout_issued` saying a credential was minted and never what it was,
-`run.activity` per Activity, `gate.requested` carrying the Proposal, `run.awaiting_input`, `gate.approved`
+carrying the trigger, `run.activity` per Activity, `gate.requested` carrying the Proposal, `run.awaiting_input`, `gate.approved`
 with the deciding Human, `run.pull_request_opened`, `run.completed` with the summary. The record carries the
 Links the Run attached and the Gates with their Rulings and notes; what was said about it lives in the
 tracker, where the team reads it (ADR-0024).
