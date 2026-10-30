@@ -40,15 +40,14 @@ the plan. A clean break: the first release of this shape starts from an empty da
 ## Domain model in one paragraph
 
 A **Workspace** holds **Members** (Humans and Agents), **Sockets**, **Projects**, and settings. A Socket is a
-connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion), a **forge** (GitHub,
-GitLab), **docs** (Notion) and **chat** (Slack). A **Project** is a binding: the container in a tracker its
-records come from, optionally the repository its code is in and where its documents live, which Agents may
-work it, the default Agent, how a record names an Agent (a label prefix, a mention), its **Checkpoints**, and
+connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion), **docs** (Notion) and
+**chat** (Slack). A **Project** is a binding: the container in a tracker its records come from, optionally
+where its documents live, which Agents may work it, the default Agent, how a record names an Agent (a label prefix, a mention), its **Checkpoints**, and
 how much deevy says back in the tracker. An **Issue** is a projection of a record in a tracker — its key, URL,
 title, body and state as the tool last said them — routed to one Agent; deevy authors none of it. An Agent
 working an Issue produces a **Run** that records who triggered it, posts **Activities** (thought, action,
-elicitation, response, error), asks at Checkpoints for **Gates**, attaches **Links** and opens a pull request,
-and ends in a state. A Gate carries the Agent's **Proposal** and the **Rulings** on it, made in deevy, in the
+elicitation, response, error), asks at Checkpoints for **Gates**, attaches **Links** — the pull request it
+opened among them — and ends in a state. A Gate carries the Agent's **Proposal** and the **Rulings** on it, made in deevy, in the
 tracker or in Slack. A Human's **Identities** are their accounts on the tools, linked so a Ruling made there is
 theirs. Every change becomes an **Event**. **Notifications** derive from Events and are delivered to
 **Channels**: each Human's in-app inbox, a Slack room, a Slack direct message.
@@ -86,9 +85,9 @@ deevy says so on the record in the tracker and in Slack, and a Human rules in de
 `/reject <why>` in a comment where they read it, or with a button in Slack — the same policy and the same
 refusals through all three doors, recorded with where it came from. The Run resumes when the Gate is decided.
 
-**Code.** A Run cloned from a Project's forge gets a credential deevy mints for that attempt, which whatever
-runs the Agent keeps out of the model's context; deevy opens the pull request through the forge, closing the
-record when it merges.
+**Code.** Not deevy's (ADR-0034). The Agent reaches its repository with access its operator gave it, opens its
+own pull request, and attaches it to its Run as a Link; merging it closes the record where the tracker does
+that itself.
 
 **Accountability.** The Run records the Member that triggered it. The accountable Human for any agent action is
 one hop away: the triggering Human, or the Sponsor when routing or an Agent triggered it.
@@ -122,10 +121,10 @@ One typed core, projected three ways (ADR-0005):
   through the fetch adapter, with generated OpenAPI 3.1 and a reference UI. The React SPA uses the typed client
   with TanStack Query (ADR-0009).
 - **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
-  procedures. The set is nineteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
+  procedures. The set is eighteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
   `issues_create`, `comments_create`, `projects_get`, `docs_get`, `links_list`, `links_add`, `links_remove`,
   `inbox_list`, `gates_get`, `runs_list`, `runs_get` for anyone; `runs_start`, `runs_post_activity`,
-  `gates_request`, `pulls_open`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
+  `gates_request`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
   for a Human alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
   rule on, in a browser or from a tool that vouches for them.
 - **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is

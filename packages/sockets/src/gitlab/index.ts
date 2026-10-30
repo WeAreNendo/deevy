@@ -3,7 +3,6 @@ import type {
   ExternalComment,
   ExternalIssue,
   ExternalRef,
-  ForgeCredential,
   IdentityScope,
   InboundCheck,
   InboundEvent,
@@ -11,8 +10,6 @@ import type {
   IssueDraft,
   IssuePage,
   IssueQuery,
-  OpenedPullRequest,
-  PullRequestDraft,
   Scope,
   SocketIdentity,
   SocketModule,
@@ -22,15 +19,12 @@ import { hmacBase64, sameText } from "../signing.ts";
 import { commentOf, issueOf, normalizeGitlab } from "./payloads.ts";
 
 /**
- * GitLab, as a tracker and a forge (ADR-0024).
+ * GitLab, as a tracker (ADR-0024).
  *
  * One GitLab user is one Socket — a dedicated account, or the bot a project or
  * group access token makes — and deevy acts as it through the token the
- * operator pasted: it comments, labels, opens merge requests and pushes as that
- * user. GitLab mints nothing narrower from a token, so the token a Run clones
- * with is the Socket's own, handed to whatever runs the Agent by
- * `runs.checkout`. deevy cannot see where it goes from there, so give its user
- * Developer on the projects it works and nothing more.
+ * operator pasted: it reads issues, comments and labels as that user. Its code
+ * is not deevy's (ADR-0034): an Agent reaches it with access of its own.
  *
  * gitlab.com and a self-managed GitLab are the same module with a different
  * `baseUrl`. Everything here is `fetch` and `crypto.subtle`, for the Worker.
@@ -211,7 +205,7 @@ export function createGitlabSocket(
 
   return {
     provider: "gitlab",
-    capabilities: new Set(["tracker", "forge"] as const),
+    capabilities: new Set(["tracker"] as const),
     // A webhook's secret token is typed into GitLab, so deevy may mint it; its
     // signing token is GitLab's, pasted back.
     webhookSecretFrom: "either",
@@ -382,65 +376,17 @@ export function createGitlabSocket(
         });
       },
 
-      /** The projects its user can push to and comment on: Developer or more. */
+      /** The projects its user can work issues in: Developer or more, as the setup asks. */
       async listContainers(): Promise<Container[]> {
-        const rows = await call<
-          Array<{ id: number; path_with_namespace: string; default_branch?: string | null }>
-        >(
+        const rows = await call<Array<{ id: number; path_with_namespace: string }>>(
           "GET",
           "/projects?membership=true&min_access_level=30&simple=true&per_page=100&order_by=path&sort=asc",
         );
-        // With the branch each defaults to, which is what a Run starts from
-        // once the project is bound as a Project's code (forgeBindingOf).
         return rows.map((row) => ({
-          scope: {
-            scopeKey: String(row.id),
-            path: row.path_with_namespace,
-            ...(row.default_branch ? { baseBranch: row.default_branch } : {}),
-          },
+          scope: { scopeKey: String(row.id), path: row.path_with_namespace },
           scopeKey: String(row.id),
           name: row.path_with_namespace,
         }));
-      },
-    },
-
-    forge: {
-      /**
-       * The project's HTTPS address, and the Socket's token as the password of
-       * GitLab's `oauth2` user, which takes any token as one. It does not expire
-       * on deevy's clock, so deevy says it does not know when it does.
-       */
-      async credential(scope: Scope): Promise<ForgeCredential> {
-        const project = await call<{ http_url_to_repo: string }>(
-          "GET",
-          `/projects/${projectOf(scope)}`,
-        );
-        return {
-          cloneUrl: project.http_url_to_repo,
-          username: "oauth2",
-          secret: token(),
-          expiresAt: null,
-        };
-      },
-
-      /** A merge request, whose branch goes when it is merged: it was the Run's, not the team's. */
-      async openPullRequest(scope: Scope, draft: PullRequestDraft): Promise<OpenedPullRequest> {
-        const opened = await call<{ iid: number; web_url: string }>(
-          "POST",
-          `/projects/${projectOf(scope)}/merge_requests`,
-          {
-            source_branch: draft.head,
-            target_branch: draft.base,
-            title: draft.title,
-            description: draft.body,
-            remove_source_branch: true,
-          },
-        );
-        return {
-          url: opened.web_url,
-          number: opened.iid,
-          label: `Merge request !${String(opened.iid)}`,
-        };
       },
     },
   };

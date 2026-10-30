@@ -16,7 +16,7 @@
 export const socketProviders = ["github", "linear", "gitlab", "notion", "slack", "stub"] as const;
 export type SocketProvider = (typeof socketProviders)[number];
 
-export const socketCapabilities = ["tracker", "forge", "docs", "chat"] as const;
+export const socketCapabilities = ["tracker", "docs", "chat"] as const;
 export type SocketCapability = (typeof socketCapabilities)[number];
 
 /** Where a record lives inside a Socket: the shape a Project's binding stores. */
@@ -189,34 +189,6 @@ export interface TrackerSocket {
   ): Promise<void>;
   /** What the binding picker offers. */
   listContainers(): Promise<Container[]>;
-}
-
-/** What a Run needs to clone, and what it opens when it has pushed. */
-export interface ForgeCredential {
-  cloneUrl: string;
-  username: string;
-  secret: string;
-  expiresAt: Date | null;
-}
-
-export interface PullRequestDraft {
-  head: string;
-  base: string;
-  title: string;
-  body: string;
-}
-
-/** What a forge opened: where it is, its number, and what the forge calls it. */
-export interface OpenedPullRequest {
-  url: string;
-  number: number;
-  /** The forge's own words for it — `Merge request !7` on GitLab. Absent, `Pull request #7`. */
-  label?: string;
-}
-
-export interface ForgeSocket {
-  credential(scope: Scope): Promise<ForgeCredential>;
-  openPullRequest(scope: Scope, draft: PullRequestDraft): Promise<OpenedPullRequest>;
 }
 
 /** Who clicked or typed in a chat tool: one user, in one team. */
@@ -495,7 +467,6 @@ export interface SocketModule {
   /** Present where a Human links an account here through the tool's own OAuth. */
   accountLink?: AccountLink;
   tracker?: TrackerSocket;
-  forge?: ForgeSocket;
   docs?: DocsSocket;
   chat?: ChatSocket;
 }

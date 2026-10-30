@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +48,6 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
   const [socketId, setSocketId] = useState<string | null>(null);
   const [scopeKey, setScopeKey] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [codeHereToo, setCodeHereToo] = useState(true);
 
   const sockets = useQuery(orpc.sockets.list.queryOptions({ input: {} }));
   const containers = useQuery({
@@ -63,7 +61,6 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
         setSocketId(null);
         setScopeKey(null);
         setName("");
-        setCodeHereToo(true);
         await client.invalidateQueries({ queryKey: orpc.projects.key() });
         onBound(project.slug);
       },
@@ -74,8 +71,6 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
     (socket) => socket.capabilities.includes("tracker") && socket.status === "active",
   );
   const chosen = (containers.data?.containers ?? []).find((one) => one.scopeKey === scopeKey);
-  const tool = trackers.find((socket) => socket.id === socketId);
-  const holdsCode = tool?.capabilities.includes("forge") ?? false;
 
   return (
     <>
@@ -167,16 +162,6 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
               </span>
             </div>
 
-            {holdsCode ? (
-              <Label className="flex items-center gap-2 font-normal">
-                <Checkbox
-                  checked={codeHereToo}
-                  onCheckedChange={(checked) => setCodeHereToo(checked === true)}
-                />
-                Its code is here too, so its Agents push to it
-              </Label>
-            ) : null}
-
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="bind-name">Name</Label>
               <Input
@@ -204,9 +189,6 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
                   slug: slugFor(chosen.scopeKey),
                   name: name.trim(),
                   tracker: { socketId, scope: chosen.scope },
-                  // The container's own scope, which carries the branch the
-                  // tool says it defaults to (forgeBindingOf).
-                  ...(holdsCode && codeHereToo ? { forge: { socketId, scope: chosen.scope } } : {}),
                 });
               }}
             >

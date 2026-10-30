@@ -58,9 +58,8 @@ source. It holds no work of its own. It says:
 - how much deevy writes back on the record.
 
 An admin binds one under **Settings › Projects** with **Bind a Project**: choose the **Tool**, then the
-**Container** it offers, then a **Name**. For a tool that also holds code, the same repository is bound as
-the Project's code unless you untick **Its code is here too, so its Agents push to it**. The Project's
-**Binding** section then holds the rest, and its **Checkpoints** section its policy.
+**Container** it offers, then a **Name**. A Project holds nothing about code: an Agent reaches its
+repository with access you give it. The Project's **Binding** section then holds the rest, and its **Checkpoints** section its policy.
 
 To take records from another repository or team, bind it as a Project of its own.
 

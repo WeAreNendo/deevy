@@ -143,7 +143,6 @@ const appRelations = defineRelationsPart(tables, (r) => ({
       to: r.socket.id,
       optional: false,
     }),
-    forgeSocket: r.one.socket({ from: r.project.forgeSocketId, to: r.socket.id }),
     docsSocket: r.one.socket({ from: r.project.docsSocketId, to: r.socket.id }),
     defaultAgent: r.one.member({ from: r.project.defaultAgentMemberId, to: r.member.id }),
     issues: r.many.issue({ from: r.project.id, to: r.issue.projectId }),

@@ -18,9 +18,9 @@ claude mcp login deevy
 
 `login` opens a browser on deevy's consent page; allow it, and Settings, MCP clients lists the client. Tools
 arrive namespaced, `issues_get` as `mcp__deevy__issues_get`. You are offered what you may call and nothing
-else: fourteen tools, which is deevy's set less the five that only an Agent may call — `runs_start`,
-`runs_post_activity`, `gates_request`, `pulls_open` and `runs_finish` — plus `runs_answer`, which is a
-Human answering an Agent.
+else: fourteen tools, which is deevy's set less the four that only an Agent may call — `runs_start`,
+`runs_post_activity`, `gates_request` and `runs_finish` — plus `runs_answer`, which is a Human answering an
+Agent.
 
 ## The `CLAUDE.md` snippet
 

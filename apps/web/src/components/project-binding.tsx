@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { SettingsSection } from "@/components/settings-page";
 import { Badge } from "@/components/ui/badge";
@@ -22,8 +22,6 @@ import { providerLabel } from "@/lib/providers";
 const NOBODY = "__nobody";
 /** And for "nowhere", when a Project keeps its documents in no tool deevy reads. */
 const NOWHERE = "__nowhere";
-/** A repository is a Socket and a container in it, so its value is both. */
-const repositoryValue = (socketId: string, scopeKey: string) => `${socketId}::${scopeKey}`;
 
 /**
  * What each mirror setting is called. A Base UI trigger shows the value it
@@ -39,8 +37,7 @@ const mirrorLabel: Record<string, string> = {
  * What a Project is bound to (ADR-0024).
  *
  * A Project holds no work: it names the tool and the container its records
- * come from, the repository its code is in, which Agent gets a record nobody
- * named, and how much deevy says back where the work lives. That is the whole
+ * come from, which Agent gets a record nobody named, and how much deevy says back where the work lives. That is the whole
  * of what a Project is now, so this is the whole of what there is to set.
  *
  * The tracker itself is stated and not offered: moving a Project to another
@@ -52,16 +49,6 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
   const project = useQuery(orpc.projects.get.queryOptions({ input: { slug: projectSlug } }));
   const sockets = useQuery(orpc.sockets.list.queryOptions({ input: {} }));
   const agents = useQuery(orpc.agents.list.queryOptions({ input: {} }));
-  // Every tool that holds code, and the repositories each offers: the choice
-  // is the tool's own answer, as a container is when a Project is bound.
-  const forges = (sockets.data?.sockets ?? []).filter(
-    (one) => one.capabilities.includes("forge") && one.status === "active",
-  );
-  const repositories = useQueries({
-    queries: forges.map((forge) =>
-      orpc.sockets.containers.queryOptions({ input: { socketId: forge.id } }),
-    ),
-  });
 
   const update = useMutation({
     ...orpc.projects.update.mutationOptions({
@@ -102,19 +89,10 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
     return typeof found[key] === "string" ? found[key] : "";
   };
   const container = text(bound.trackerScope, "scopeKey");
-  const forgeScope = text(bound.forgeScope, "scopeKey");
   // Only a tool that can read a page is somewhere documents can be read from.
   const readers = (sockets.data?.sockets ?? []).filter(
     (one) => one.capabilities.includes("docs") && one.status === "active",
   );
-  const baseBranch = text(bound.forgeScope, "baseBranch");
-  const offered = forges.map((forge, index) => ({
-    forge,
-    containers: repositories[index]?.data?.containers ?? [],
-  }));
-  const repository = bound.forgeSocketId
-    ? repositoryValue(bound.forgeSocketId, forgeScope)
-    : NOWHERE;
 
   return (
     <SettingsSection
@@ -252,90 +230,6 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
             How much deevy writes back where the work lives.
           </span>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="project-repository">Repository</Label>
-          <Select
-            value={repository}
-            onValueChange={(next) => {
-              if (next === NOWHERE) {
-                update.mutate({ slug: projectSlug, forge: null });
-                return;
-              }
-              for (const { forge, containers } of offered) {
-                const found = containers.find(
-                  (one) => repositoryValue(forge.id, one.scopeKey) === next,
-                );
-                // The container's own scope, which carries the branch the
-                // tool says it defaults to (forgeBindingOf).
-                if (found)
-                  update.mutate({
-                    slug: projectSlug,
-                    forge: { socketId: forge.id, scope: found.scope },
-                  });
-              }
-            }}
-          >
-            <SelectTrigger id="project-repository" aria-label="Repository" className="w-72">
-              <SelectValue>
-                {(selected: string) => (selected === NOWHERE ? "Nowhere" : forgeScope || selected)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value={NOWHERE}>Nowhere</SelectItem>
-              </SelectGroup>
-              {offered.map(({ forge, containers }) => (
-                <SelectGroup key={forge.id}>
-                  <SelectSeparator />
-                  <SelectLabel>
-                    {forge.name} ({providerLabel(forge.provider)})
-                  </SelectLabel>
-                  {containers.map((one) => (
-                    <SelectItem key={one.scopeKey} value={repositoryValue(forge.id, one.scopeKey)}>
-                      {one.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground">
-            Where this Project&apos;s code is. An Agent working it clones it, pushes a branch, and
-            deevy opens the pull request; with none, a Run writes no code.
-          </span>
-        </div>
-
-        {bound.forgeSocketId ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="project-base-branch">Base branch</Label>
-            <Input
-              // A new repository brings its own default, so the field starts over.
-              key={repository}
-              id="project-base-branch"
-              className="w-44 font-mono"
-              defaultValue={baseBranch || "main"}
-              onBlur={(left) => {
-                const next = left.target.value.trim();
-                if (next && next !== (baseBranch || "main") && bound.forgeSocketId) {
-                  update.mutate({
-                    slug: projectSlug,
-                    forge: {
-                      socketId: bound.forgeSocketId,
-                      scope: {
-                        ...((bound.forgeScope ?? {}) as Record<string, unknown>),
-                        baseBranch: next,
-                      },
-                    },
-                  });
-                }
-              }}
-            />
-            <span className="text-xs text-muted-foreground">What each Run branches from.</span>
-          </div>
-        ) : null}
       </div>
 
       <div className="flex flex-col gap-1.5">

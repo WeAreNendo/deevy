@@ -68,7 +68,7 @@ export const projects = {
 
   get: defineOperation({
     name: "projects.get",
-    summary: "One Project by its slug: where its Issues come from and where its code is",
+    summary: "One Project by its slug: where its Issues come from and who works them",
     method: "GET",
     path: "/projects/{slug}",
     auth: "member",
@@ -88,7 +88,7 @@ export const projects = {
 
   update: defineOperation({
     name: "projects.update",
-    summary: "Rename a Project, rebind its code or documents, or change what deevy says back",
+    summary: "Rename a Project, rebind its documents, or change what deevy says back",
     method: "PATCH",
     path: "/projects/{slug}",
     auth: "member",
@@ -100,13 +100,12 @@ export const projects = {
       defaultAgentMemberId: z.string().nullish(),
       mirror: z.enum(["off", "gates", "runs"]).optional(),
       /**
-       * Where its code is, or null to say it has none here. The tracker
-       * binding is not changeable: a Project is the container its records come
-       * from, and pointing it at another one would orphan every projection
-       * under it (ADR-0024).
+       * Where its documents are, for an Agent to read (`docs.get`), or null for
+       * nowhere. The tracker binding is not changeable: a Project is the
+       * container its records come from, and pointing it at another one would
+       * orphan every projection under it (ADR-0024). Where its code is, deevy
+       * does not hold (ADR-0034).
        */
-      forge: BindingInput.nullish(),
-      /** Where its documents are, for an Agent to read (`docs.get`), or null for nowhere. */
       docs: BindingInput.nullish(),
       /** How a record says which Agent it is for: a label prefix, a mention, or neither. */
       routing: z
@@ -143,15 +142,6 @@ export const projects = {
       if (input.mirror !== undefined && input.mirror !== found.mirror) {
         changes.mirror = { from: found.mirror, to: input.mirror };
       }
-      if (input.forge !== undefined) {
-        // A forge Socket has to exist and be connected before a Run is sent to
-        // clone from it.
-        if (input.forge) await requireSocket(context, input.forge.socketId);
-        changes.forge = {
-          from: found.forgeSocketId,
-          to: input.forge?.socketId ?? null,
-        };
-      }
       if (input.docs !== undefined) {
         // A Socket that cannot read a page would bind documents nobody can open.
         if (input.docs) {
@@ -178,11 +168,6 @@ export const projects = {
             ? {}
             : { defaultAgentMemberId: input.defaultAgentMemberId ?? null }),
           ...(input.mirror === undefined ? {} : { mirror: input.mirror }),
-          ...(input.forge === undefined
-            ? {}
-            : input.forge
-              ? { forgeSocketId: input.forge.socketId, forgeScope: input.forge.scope }
-              : { forgeSocketId: null, forgeScope: null }),
           ...(input.docs === undefined
             ? {}
             : input.docs
@@ -246,8 +231,6 @@ export const projects = {
       description: z.string().max(4000).nullish(),
       /** Where this Project's Issues come from. Without one it has nothing to work. */
       tracker: BindingInput,
-      /** Where its code is, when an Agent working it should have a checkout. */
-      forge: BindingInput.optional(),
       docs: BindingInput.optional(),
       defaultAgentMemberId: z.string().nullish(),
     }),
@@ -276,7 +259,6 @@ export const projects = {
           message: `${bound.name} is already bound to that container`,
         });
       }
-      if (input.forge) await requireSocket(context, input.forge.socketId);
       if (input.docs) await requireSocket(context, input.docs.socketId);
       if (input.defaultAgentMemberId) {
         await requireDefaultAgent(context, input.defaultAgentMemberId);
@@ -290,8 +272,6 @@ export const projects = {
         trackerSocketId: socket.id,
         trackerScope: input.tracker.scope,
         trackerScopeKey,
-        forgeSocketId: input.forge?.socketId ?? null,
-        forgeScope: input.forge?.scope ?? null,
         docsSocketId: input.docs?.socketId ?? null,
         docsScope: input.docs?.scope ?? null,
         defaultAgentMemberId: input.defaultAgentMemberId,

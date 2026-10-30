@@ -48,9 +48,7 @@ yet**; open it and disconnect it, then start again.
 1. Go to **Settings › Projects** and choose **Bind a Project**.
 2. Choose the **Tool**, then the **Container**: a repository, a team or a database, as the tool itself
    lists them. One container is one Project.
-3. For GitHub and GitLab, leave **Its code is here too, so its Agents push to it** ticked if the code
-   lives in the same repository as the issues. The base branch is the repository's default.
-4. Give the Project a **Name**, and choose **Bind it**.
+3. Give the Project a **Name**, and choose **Bind it**.
 
 A Project stays bound to the container it was made from. To work another container, bind it as a
 Project of its own.
@@ -64,9 +62,6 @@ Each Project's settings, under **Settings › Projects**, say the rest:
 - **Route by mention**: whether a comment that mentions an Agent hands it the record, on unless you turn it
   off; off, a mention still notifies whoever it names and starts no work.
 - **Mirror**: how much deevy writes back where the work lives, below.
-- **Repository** and **Base branch**: where the Project's code is, and what each Run branches from. A
-  Project with its repository set to **Nowhere** is one whose Agents read, plan and comment, and push
-  nothing.
 - **Documents**: a Notion Socket whose pages the Project's Agents may read when a record links one.
 
 ## How a record reaches an Agent
@@ -102,15 +97,17 @@ What deevy says on a record depends on the Project's **Mirror**:
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Nothing**           | Nothing.                                                                                                                                                         |
 | **Gates and rulings** | A comment when an Agent asks at a Gate, with its Proposal and how to rule; one for each Ruling; the `deevy:awaiting-approval` label while it waits. The default. |
-| **Runs as well**      | All of that, and a comment when a Run starts, finishes or fails, and when an Agent opens a pull request, where the tracker is not where the code is.             |
+| **Runs as well**      | All of that, and a comment when a Run starts, finishes or fails.                                                                                                 |
 
 Whatever the Mirror says, an Agent can also, through the Socket:
 
 - comment on a record it was given;
 - open a sub-issue under it, carrying the routing label for the Agent it is meant for;
-- push a branch and have deevy open a pull request or merge request, on GitHub and GitLab, saying
-  `Closes <the record's URL>`, so that merging it closes a GitHub or GitLab issue. A Linear or Notion
-  record closes only if something in that tool acts on it, such as Linear's own GitHub integration.
+- attach the pull request it opened to its Run, as a Link on the record.
+
+Code is never deevy's: an Agent pushes and opens its pull request with access you give it. A pull request
+that says `Closes <the record's URL>` closes a GitHub or GitLab issue when it merges; a Linear or Notion
+record closes only if something in that tool acts on it, such as Linear's own GitHub integration.
 
 ## What each tool lets deevy do
 
@@ -118,7 +115,7 @@ deevy asks each tool for what it needs and nothing more.
 
 | Tool   | What deevy is given                                                                                                                                  |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub | Issues: read and write. Contents: read and write. Pull requests: read and write. Metadata: read. Only on the repositories you install the App on.    |
+| GitHub | Issues: read and write. Metadata: read. Only on the repositories you install the App on.                                                             |
 | Linear | Read and write, as the application itself. Installing it as an agent adds being assigned and being mentioned.                                        |
 | GitLab | Whatever the account behind the token may do, with the `api` scope. Give it **Developer** on the projects it works, and nothing more.                |
 | Notion | Read, update and insert content; read and insert comments; user information with email addresses. Only on the pages and databases you share with it. |

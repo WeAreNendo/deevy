@@ -64,8 +64,11 @@ claude -p "Work your next assigned Issue." \
   --allowedTools "mcp__deevy__inbox_list,mcp__deevy__runs_list,mcp__deevy__runs_get,\
 mcp__deevy__runs_start,mcp__deevy__issues_get,mcp__deevy__docs_get,mcp__deevy__issues_create,\
 mcp__deevy__comments_create,mcp__deevy__runs_post_activity,mcp__deevy__gates_request,\
-mcp__deevy__gates_get,mcp__deevy__pulls_open,mcp__deevy__links_add,mcp__deevy__runs_finish"
+mcp__deevy__gates_get,mcp__deevy__links_add,mcp__deevy__runs_finish,Bash(git:*),Bash(gh pr create:*)"
 ```
+
+The last two are the loop's own git and its own way to open a pull request, with a credential its operator
+gave it: deevy holds no Run's code (ADR-0034). Narrow them to what the loop should be able to do.
 
 deevy filters `tools/list` to what this principal may call, so an Agent never sees `gates_approve` — but that
 is display. The refusal is the same one the HTTP API gives, in the same middleware, whichever surface asked
@@ -164,10 +167,10 @@ Work one Issue at a time, in this order.
    what you meant. Do not push to the default branch, even where your access lets you: what you produce is a
    proposal, and a Human decides whether it ships.
 
-9. **Open the pull request.** `pulls_open` with your `runId` and a `summary` of what you did. deevy opens it
-   through the same tool the code lives in, attaches it to the record, and writes `Closes <the record's URL>`
-   into it so merging closes the record where the team reads it. Pass `head`, the branch you pushed. A
-   Project with no repository has no pull request to open, and deevy will say so.
+9. **Open the pull request** with your own access, in the tool the code lives in, and say
+   `Closes <the record's URL>` in its body so merging it closes the record where the team reads it. Then
+   `links_add` with the record, the pull request's URL, `kind: "pull_request"` and your `runId`, so it is
+   on the record and attributed to this attempt. A Project with nowhere to push has no pull request to open.
 10. **Ask at the ship Checkpoint, where the Project listed one.** `gates_request` with `checkpoint: "ship"`
     and a Proposal naming what you built and what you want looked at, with the pull request in `links`. Where
     `checkpoints` did not list it, there is nothing to wait for: go on and finish.
@@ -176,8 +179,8 @@ Work one Issue at a time, in this order.
     needs telling something in prose — it is written on the record in their own tracker, where they will see
     it.
 
-**What you write is what a reviewer reads.** Your `summary` becomes the title and the body of the pull
-request, where the code review happens; your Proposal is what a Human rules on. Your Activities explain how
+**What you write is what a reviewer reads.** Your pull request's title and body are where the code review
+happens, and your Run's `summary` is what a Human reads in deevy; your Proposal is what a Human rules on. Your Activities explain how
 you got there and nobody opening a pull request goes looking for them. One line saying what changed and why,
 then the detail.
 
@@ -224,7 +227,8 @@ which way it went and what the Human wrote.
 
 The Event log tells the whole story with the Agent as the actor and the Human one hop away: `run.started`
 carrying the trigger, `run.activity` per Activity, `gate.requested` carrying the Proposal, `run.awaiting_input`, `gate.approved`
-with the deciding Human, `run.pull_request_opened`, `run.completed` with the summary. The record carries the
+with the deciding Human, `issue.link_added` for the pull request it attached, `run.completed` with the
+summary. The record carries the
 Links the Run attached and the Gates with their Rulings and notes; what was said about it lives in the
 tracker, where the team reads it (ADR-0024).
 

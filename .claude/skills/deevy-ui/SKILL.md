@@ -456,9 +456,8 @@ repositories` (only where the Socket holds an `htmlUrl`), `Pause`, `region "What
 webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox
-"Container"`, `checkbox "Its code is here too…"`, `Name`, `Bind it`; `region "Binding"` with `combobox
-"Default Agent"`, `Routing label`, `switch "Route by mention"`, `combobox "Mirror"`, `combobox
-"Repository"`, `Base branch`, `combobox "Documents"`; `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
+"Container"`, `Name`, `Bind it`; `region "Binding"` with `combobox "Default Agent"`, `Routing label`, `switch
+"Route by mention"`, `combobox "Mirror"`, `combobox "Documents"`, and no repository or base branch (ADR-0034); `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
   `Approvals`, `checkbox "Not the Human the work is for"`, who may rule, `Save policy`.
 - **Identities.** `heading "Identities"`, `table "Identities"`, `Unlink @<login>`, `Link @<login> again`;
   `Code from Slack`, `Check the code`, `Link @<login> to me`; `region "Link an account"` with `Link

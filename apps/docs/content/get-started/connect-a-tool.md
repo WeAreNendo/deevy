@@ -47,10 +47,10 @@ ask one to connect GitHub with you. [GitHub](/tools/github/#for-an-organizations
 1. Go to **Settings › Projects** and choose **Bind a Project**.
 2. Under **Tool**, choose the Socket you just made.
 3. Under **Container**, choose a repository. deevy asks GitHub which ones the App can see.
-4. Leave **Its code is here too, so its Agents push to it** ticked if Agents should write code here.
-   They then push branches to this repository and open pull requests on it, starting from its default
-   branch.
-5. Give the Project a **Name** (deevy suggests the repository's) and choose **Bind it**.
+4. Give the Project a **Name** (deevy suggests the repository's) and choose **Bind it**.
+
+The Project is the repository's issues. An Agent that writes code here reaches the repository with access you
+give it, such as a deploy key or a fine-grained token, and opens its own pull requests.
 
 Nothing moves. An Issue stays a GitHub issue: deevy hears about it when something happens to it on
 GitHub, such as being opened, labelled or commented on, and lists it under **Work**. What deevy has to

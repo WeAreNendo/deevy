@@ -190,11 +190,6 @@ const dev = await admin.api.projects.create({
   name: "deevy",
   description: "The product itself: Humans and Agents on the same records.",
   tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
-  // Bound to a repository as well, so the binding screen shows both halves and
-  // a Run has somewhere to push. The stub hands out no credential for it, which
-  // is what a Project bound to a tool nobody has connected the code half of
-  // looks like (packages/sockets/src/stub).
-  forge: { socketId: socket.id, scope: { scopeKey: "acme/deevy", baseBranch: "main" } },
 });
 const ops = await admin.api.projects.create({
   slug: "operations",

@@ -125,6 +125,32 @@ describe("links.add", () => {
     }
     expect((await client.links.list({ issue: issue.externalKey })).links).toEqual([]);
   });
+
+  /**
+   * deevy opens no pull request (ADR-0034): the Agent opens its own with the
+   * access its operator gave it, and says so with a Link. That Link is the
+   * whole of deevy's part, attributed to the attempt that produced it, and
+   * nothing is owed to the tracker for it.
+   */
+  it("is how an Agent hands over the pull request it opened itself", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, project, issue } = await withIssue(db);
+    const { context, run, link } = await agentWithLink(db, admin, project.id, {
+      name: "Builder",
+      issue: issue.externalKey,
+      url: "https://github.com/acme/deevy/pull/7",
+    });
+
+    expect(link).toMatchObject({ kind: "pull_request", ref: "7", runId: run.id });
+    expect((await client.links.list({ issue: issue.externalKey })).links).toEqual([link]);
+    const added = (await client.events.list({ subjectType: "issue" })).events.findLast(
+      (event) => event.kind === "issue.link_added",
+    );
+    expect(added?.actorMemberId).toBe(context.member.id);
+    const owed = await db.query.delivery.findMany({ where: { target: "socket" } });
+    expect(owed.filter((row) => row.eventSeq === added?.seq)).toEqual([]);
+  });
 });
 
 describe("links.remove", () => {
