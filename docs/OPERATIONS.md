@@ -584,8 +584,8 @@ bindings arrive with the request.
 | `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume.                                                |
 | `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                                                                           |
 | `DEEVY_SOCKET_CATCHUP_MINUTES` | env         | var                | `30`                     | A connected tool that has said nothing for half an hour is asked what changed. Polling is what keeps an instance no tool can reach working, so lower it on a laptop and leave it alone on a public deployment.                                                                                                                                                |
-| `DEEVY_DEV_STUB_SOCKETS`       | env         | var                | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker and a forge in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on.                                     |
-| `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                | `acme/deevy`             | That stub offers one container and no repository. `name[=cloneUrl]`, separated by commas, names what it holds. Read only when the flag above is set.                                                                                                                                                                                                          |
+| `DEEVY_DEV_STUB_SOCKETS`       | env         | var                | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on.                                                 |
+| `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                | `acme/deevy`             | That stub offers one container. Container names, separated by commas, say what it holds. Read only when the flag above is set.                                                                                                                                                                                                                                |
 | `GITHUB_CLIENT_ID`             | env         | secret             | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                                                                            |
 | `GITHUB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
 | `GOOGLE_CLIENT_ID`             | env         | secret             | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                                                                        |
@@ -1084,8 +1084,7 @@ pins that line and no earlier one. With it the consent page appears, the tool li
 from that session is the Human's in the Event log, and its inbox is the Human's.
 
 What that client is offered is decided by the same registry that authorizes it (ADR-0016): the tool set less
-the five that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request`, `pulls_open` and
-`runs_finish`, and a Human naming one anyway is refused with "Only an Agent can do that" — plus
+the four that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request` and `runs_finish`, and a Human naming one anyway is refused with "Only an Agent can do that" — plus
 `runs_answer`, which is a Human's. `issues_create` and `projects_get` face both.
 [as-yourself.md](./as-yourself.md) is the worked example: the `CLAUDE.md` snippet a person puts in the
 repository they work in, beside the Agent's in [agent-loop.md](./agent-loop.md).
@@ -1479,10 +1478,9 @@ any answer or in `openapi.json`; `secrets.test.ts` asks every `sockets.*` operat
 
 ### Working in GitHub
 
-A GitHub App is a Socket, for a Project's issues and its code at once: connect it under **Settings › Sockets ›
-Connect GitHub**. **Create the App on GitHub** posts a manifest deevy writes — the Socket's own webhook
-address, and exactly the permissions it needs: issues (read and write), contents and pull requests (write),
-metadata (read) — so GitHub makes the App and hands its credentials back without anybody copying a private key
+A GitHub App is a Socket, for a Project's issues: connect it under **Settings › Sockets › Connect GitHub**.
+**Create the App on GitHub** posts a manifest deevy writes — the Socket's own webhook address, and exactly the
+permissions it needs: issues (read and write) and metadata (read) — so GitHub makes the App and hands its credentials back without anybody copying a private key
 out of a browser. Once GitHub has made it, you are sent straight on to its install page: install it on the
 repositories deevy should work, and GitHub sends you back. An App installed nowhere sees no repository, so
 nothing can be bound to it; the Socket's page says where it is installed, under **Where it is installed**,
@@ -1500,11 +1498,9 @@ as `github.com/apps/<slug>` whoever owns it, and its install page offers the acc
 **Paste an App you already have** is the other way in, for an organisation that makes its Apps centrally: its
 id, its private key (PKCS#1 as GitHub gives it, or PKCS#8) and its webhook secret.
 
-Bind a Project to a repository under **Settings › Projects › Bind a Project**. A tool that holds code binds
-the repository as both — where the Project's issues come from, and where its Agents push — unless you untick
-**Its code is here too**, and the base branch a Run starts from is the repository's own default. The
-Project's **Repository** and **Base branch** change either later, or bind code that lives somewhere else. A
-Project with no repository is one whose Agents read, plan and say things, and push nothing.
+Bind a Project to a repository under **Settings › Projects › Bind a Project**: its issues are where the
+Project's records come from. A Project holds nothing about code (ADR-0034); its Agents reach the repository
+with access you give them.
 
 A label `agent:<handle>` routes an issue to that Agent. GitHub cannot assign an App, so the label and the
 Project's **Default Agent** are how "give this to deevy" is said there; choosing an Agent as the default also
@@ -1512,14 +1508,11 @@ lets it see the Project. A comment mentioning the App and an Agent — `@<app> b
 for that Agent too. deevy writes its own `deevy:awaiting-approval` label the first time it needs it, and an
 Agent's sub-issues are GitHub's own.
 
-**The code.** A Run clones and pushes with an installation token minted for it alone, narrowed to that one
-repository (by its id, so a renamed repository still works) and to `contents: write`, which lives an hour and
-is handed only to whatever runs the Agent, through `runs.checkout`, which is not an MCP tool so that it stays
-out of the model's context. It is never cached and never the token deevy makes its own calls with,
-so a Run resumed after a Gate is given a fresh one (`mintedForRun` in `packages/sockets/src/github/index.ts`).
-An App made by hand with `workflows: write` no longer lends it to a Run, so a Run cannot push a change under
-`.github/workflows`. deevy opens the pull request through the App,
-saying `Closes <issue URL>` — so merging it closes the issue on GitHub — and signed with the Agent and the Run.
+**The code** is not deevy's (ADR-0034). The App reads and writes issues and nothing else, so it can neither
+clone nor push. Give the Agent its own access to the repository — a deploy key, a fine-grained token, or an
+App of its own, scoped as narrowly as you like — and it opens its own pull request and attaches it to its Run
+with `links_add`. A pull request that says `Closes <issue URL>` closes the issue when it merges, as GitHub
+does for anyone, and deevy hears the issue close.
 
 This section was walked against github.com on 2026-09-25: an App made from the manifest on a personal
 account, installed on one private repository, and a record taken from a label to a merged pull request with
@@ -1563,8 +1556,7 @@ routes it to that Agent, by the label's name, as on GitHub; deevy makes its `dee
 in the team the first time it needs it. An issue in a state of type _completed_ or _canceled_ is closed,
 whatever the team named the state, and a deleted issue is closed too. An Agent's sub-issues are Linear's
 own. Linear signs the moment it sent a delivery, and one more than a minute old is refused however it is
-signed. A Project that mirrors Runs also gets a comment when an Agent opens a pull request, because Linear
-cannot see a repository it is not; GitHub's issues show one without being told.
+signed.
 
 **Assigning an issue to deevy** needs one more step, taken by a Linear admin: **Install deevy as an agent**,
 on the Socket's page in deevy (or right after connecting). It sends them to Linear's own install page and
@@ -1589,13 +1581,13 @@ changes its API.
 
 ### Working in GitLab
 
-A GitLab instance is a Socket, for a Project's issues and its code at once: connect it under **Settings ›
-Sockets › Connect GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
+A GitLab instance is a Socket, for a Project's issues: connect it under **Settings › Sockets › Connect
+GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
 
 1. A dedicated user called deevy, with a **personal access token**, or the bot user GitLab makes for a
    **project** or **group access token**, where your GitLab tier offers those. The token needs
-   the `api` scope. Give its user **Developer** on each project deevy works, and nothing more: every comment,
-   label, branch and merge request is by that user.
+   the `api` scope. Give its user **Developer** on each project deevy works, and nothing more: every comment
+   and label is by that user.
 2. Paste the token, and the instance's address if it is not gitlab.com. Connecting asks GitLab who the token
    belongs to and what it may do, and a token that cannot answer, or has no `api` scope, is refused rather
    than stored, in GitLab's words.
@@ -1613,11 +1605,9 @@ the first time). GitLab's issues are open or closed and nothing else: a team's w
 which deevy reads as labels. GitLab has no parent for an issue, so an Agent's sub-issue is _related_ to the
 record it came from and deevy keeps the tree itself.
 
-**The code.** A Run clones over HTTPS with the Socket's own token as the password of GitLab's `oauth2` user.
-GitLab mints nothing narrower from a token, which is why its user should be a Developer on the projects it
-works and no more; whatever runs the Agent gets it through `runs.checkout`, which is not an MCP tool, and
-should keep it out of the model's context and out of `.git/config`. deevy opens a **merge request** from the Run's branch, which says
-`Closes <issue URL>` so merging it closes the issue, and deletes the branch on merge.
+**The code** is not deevy's (ADR-0034): the Socket's token is for issues. Give the Agent access to the
+project yourself, and it opens its own merge request and attaches it to its Run with `links_add`; one that
+says `Closes <issue URL>` closes the issue when it merges.
 
 **Ruling from GitLab** is `/approve` and `/reject <why>` in a comment, as on GitHub
 ([Ruling from the tracker](#ruling-from-the-tracker)). A Socket on the instance this deevy signs people in

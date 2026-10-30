@@ -149,14 +149,13 @@ starts.
 ### Running without a GitHub App
 
 `DEEVY_DEV_STUB_SOCKETS=1` registers the Socket provider that is not a tool
-(`packages/sockets/src/stub`): a tracker and a forge deevy talks to exactly as it will talk to GitHub, in
-this process, with no App, no tunnel and no network. Connect it under Settings, Sockets — it needs no
-credential — bind a Project to one of its containers, and everything else works as it will in production:
-deliveries at `/hooks/:socketId`, routing, Gates, mirrored comments, a checkout and a pull request.
+(`packages/sockets/src/stub`): a tracker deevy talks to exactly as it will talk to GitHub, in this process,
+with no App, no tunnel and no network. Connect it under Settings, Sockets — it needs no credential — bind a
+Project to one of its containers, and everything else works as it will in production: deliveries at
+`/hooks/:socketId`, routing, Gates and mirrored comments.
 
-What it holds is `DEEVY_DEV_STUB_CONTAINERS`, `name[=cloneUrl]` separated by commas — `acme/deevy`, or
-`acme/deevy=/tmp/origin.git` for a container a Run can actually clone and push to. The default is one
-container called `acme/deevy` with no repository. A store lives in the process deevy runs in, so this is the
+What it holds is `DEEVY_DEV_STUB_CONTAINERS`, container names separated by commas, such as `acme/deevy`. The
+default is one container called `acme/deevy`. A store lives in the process deevy runs in, so this is the
 only way to say what the tracker contains from outside it; that is also how the acceptance walk fills one
 (`docs/acceptance.md`). `readEnv` refuses the flag under `NODE_ENV=production`, and `health.ping`
 reports it as `devSockets` the way it reports `devSignIn`.

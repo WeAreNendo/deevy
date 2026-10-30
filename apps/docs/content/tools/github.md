@@ -35,12 +35,12 @@ An App installed nowhere sees no repository, so nothing can be bound to it. To a
 
 ### What the App asks for
 
-| Permission    | Access         | Why                                                               |
-| ------------- | -------------- | ----------------------------------------------------------------- |
-| Issues        | Read and write | To read records, comment on them, label them and open sub-issues. |
-| Contents      | Read and write | So an Agent's Run can clone the repository and push a branch.     |
-| Pull requests | Read and write | So deevy can open the pull request for a Run.                     |
-| Metadata      | Read           | GitHub requires it.                                               |
+| Permission | Access         | Why                                                               |
+| ---------- | -------------- | ----------------------------------------------------------------- |
+| Issues     | Read and write | To read records, comment on them, label them and open sub-issues. |
+| Metadata   | Read           | GitHub requires it.                                               |
+
+Nothing about code: an Agent reaches the repository with access you give it, not through the App.
 
 It listens for issues, issue comments, sub-issues, labels and repositories. It is private, so only the
 account that owns it can install it: your own, or the organization you named.
@@ -83,12 +83,10 @@ An App has one webhook address, so use one App for one Socket.
 
 1. Go to **Settings › Projects** and choose **Bind a Project**.
 2. Choose the GitHub Socket as the **Tool**, and a repository as the **Container**.
-3. Leave **Its code is here too, so its Agents push to it** ticked, unless the code lives in another
-   repository.
-4. Name the Project, and choose **Bind it**.
+3. Name the Project, and choose **Bind it**.
 
-A Run starts from the repository's default branch. The Project's **Repository** and **Base branch**
-change either later, or point the code at a different repository than the issues.
+The Project is the repository's issues. Its code is the Agent's to reach: give the coding agent access to the
+repository yourself, with a deploy key, a fine-grained token or an App of its own, as narrow as you like.
 
 ## Hand an issue to an Agent
 
@@ -111,15 +109,8 @@ from; a comment an Agent writes itself ends with its handle.
   [Connecting your tools](/tools/overview/#what-deevy-writes-back).
 - **The `deevy:awaiting-approval` label** while a Gate waits. GitHub creates it the first time deevy uses it.
 - **Sub-issues**, which an Agent opens as GitHub's own sub-issues of the issue it is working.
-- **Pull requests**, opened through the App from the branch a Run pushed, saying `Closes <the issue's URL>`
-  so that merging closes the issue, and naming the Agent and the Run.
-
-A Run clones the repository and pushes its branch with a token GitHub mints for that Run alone. It reaches
-that one repository and no other the App is installed on, with the App's **Contents** permission and nothing
-else: code, branches, tags and releases, but no issues or pull requests. It lasts an hour, and a Run resumed
-after a Gate gets a fresh one. deevy opens the pull request and writes on the issue with its own token, never
-the Run's. Whatever runs the Agent gets the Run's token from `runs.checkout`, which is not an MCP tool, so
-keep it out of the coding agent's context.
+  deevy opens no pull request. The Agent opens its own with the access you gave it and attaches it to its Run;
+  one that says `Closes <the issue's URL>` closes the issue when it merges.
 
 ## Rule from GitHub
 

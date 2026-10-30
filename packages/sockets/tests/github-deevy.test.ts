@@ -88,7 +88,7 @@ async function workspaceOnGithub(db: Db) {
     id: socketId,
     workspaceId,
     provider: "github",
-    capabilities: ["tracker", "forge"],
+    capabilities: ["tracker"],
     name: "acme on GitHub",
     identity: { login: "deevy[bot]", id: "1284461", mentionHandle: "@deevy" },
     config: { appId: "1284461", slug: "deevy", installations: [] },

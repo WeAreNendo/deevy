@@ -136,8 +136,8 @@ or email stand-in on; a Worker can't tell it is in production, so leave them uns
 | Variable                    | Default      | What it does                                                                                                                                 |
 | --------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEEVY_DEV_STUB_OAUTH`      | None         | Docker only. `1` makes every sign-in provider a stand-in that signs in whatever address it is given.                                         |
-| `DEEVY_DEV_STUB_SOCKETS`    | None         | `1` adds a stand-in tool, a tracker and a forge inside deevy itself, that a Socket can connect to with no app and no tunnel.                 |
-| `DEEVY_DEV_STUB_CONTAINERS` | `acme/deevy` | What that stand-in tool holds: `name[=cloneUrl]`, comma-separated. Read only with `DEEVY_DEV_STUB_SOCKETS`.                                  |
+| `DEEVY_DEV_STUB_SOCKETS`    | None         | `1` adds a stand-in tool, a tracker inside deevy itself, that a Socket can connect to with no app and no tunnel.                             |
+| `DEEVY_DEV_STUB_CONTAINERS` | `acme/deevy` | What that stand-in tool holds: container names, comma-separated. Read only with `DEEVY_DEV_STUB_SOCKETS`.                                    |
 | `DEEVY_DEV_STUB_EMAIL`      | None         | `1` sends email to a stand-in instead of a sender, when no sender is set; on the Docker image, what it was asked to send is at `/dev/email`. |
 
 `GET /api/health/ping` reports `devSignIn` and `devSockets`; both are `false` when the stand-ins are off.

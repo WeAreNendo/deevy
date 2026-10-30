@@ -16,8 +16,6 @@ export interface ProjectBinding {
   trackerSocketId: string;
   trackerScope: Scope;
   trackerScopeKey: string;
-  forgeSocketId?: string | null;
-  forgeScope?: Scope | null;
   docsSocketId?: string | null;
   docsScope?: Scope | null;
 }
@@ -43,8 +41,6 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
       trackerSocketId: input.trackerSocketId,
       trackerScope: input.trackerScope,
       trackerScopeKey: input.trackerScopeKey,
-      forgeSocketId: input.forgeSocketId ?? null,
-      forgeScope: input.forgeScope ?? null,
       docsSocketId: input.docsSocketId ?? null,
       docsScope: input.docsScope ?? null,
       defaultAgentMemberId: input.defaultAgentMemberId ?? null,

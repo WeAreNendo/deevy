@@ -491,7 +491,7 @@ describe("what this deevy can speak", () => {
       {
         id: "stub",
         label: "the stub tracker",
-        capabilities: ["tracker", "forge", "docs"],
+        capabilities: ["tracker", "docs"],
         webhookSecretFrom: "either",
         beginRefusal: null,
       },

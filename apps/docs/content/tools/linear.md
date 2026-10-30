@@ -71,8 +71,7 @@ state. So is a deleted issue.
 ## What deevy writes in Linear
 
 - **Comments**, as the Project's **Mirror** says: a Gate asking for a Ruling, each Ruling, and with **Runs as
-  well**, each Run starting, finishing or failing. With **Runs as well**, deevy also comments when an Agent
-  opens a pull request, because Linear cannot see a repository by itself. See
+  well**, each Run starting, finishing or failing. See
   [Connecting your tools](/tools/overview/#what-deevy-writes-back).
 - **The `deevy:awaiting-approval` label** while a Gate waits. deevy makes it in the team the first time it
   needs it.

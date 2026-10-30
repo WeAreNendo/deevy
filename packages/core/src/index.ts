@@ -148,13 +148,7 @@ export {
   type ProjectionInput,
   type ProjectionResult,
 } from "./issues.ts";
-export {
-  requireForge,
-  requireSocket,
-  requireTracker,
-  scopeKeyOf,
-  socketModuleFor,
-} from "./sockets/registry.ts";
+export { requireSocket, requireTracker, scopeKeyOf, socketModuleFor } from "./sockets/registry.ts";
 // What a tracker saying something does inside deevy, so a seed can play a
 // delivery — a Ruling from the tracker included — without a network (seed.ts).
 export {

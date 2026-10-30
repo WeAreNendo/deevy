@@ -37,9 +37,14 @@ export const project = sqliteTable(
      * one indexed read rather than by comparing JSON.
      */
     trackerScopeKey: text("tracker_scope_key").notNull(),
-    /** Where this Project's code lives, when an Agent working it should have a checkout. */
+    /**
+     * Unused since deevy stopped holding a Run's code (ADR-0034): read by
+     * nothing and written as null. Dropped when the migration history starts
+     * afresh (docs/plans/simplify.md, slice 12), because removing a column with
+     * a foreign key is a table rebuild that D1 and a Durable Object would run
+     * with foreign keys on.
+     */
     forgeSocketId: text("forge_socket_id").references(() => socket.id, { onDelete: "set null" }),
-    /** The repository and the base branch a Run is cut from. */
     forgeScope: text("forge_scope", { mode: "json" }).$type<Record<string, unknown>>(),
     docsSocketId: text("docs_socket_id").references(() => socket.id, { onDelete: "set null" }),
     docsScope: text("docs_scope", { mode: "json" }).$type<Record<string, unknown>>(),
