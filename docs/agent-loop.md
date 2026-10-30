@@ -64,11 +64,13 @@ claude -p "Work your next assigned Issue." \
   --allowedTools "mcp__deevy__inbox_list,mcp__deevy__runs_list,mcp__deevy__runs_get,\
 mcp__deevy__runs_start,mcp__deevy__issues_get,mcp__deevy__docs_get,mcp__deevy__issues_create,\
 mcp__deevy__comments_create,mcp__deevy__runs_post_activity,mcp__deevy__gates_request,\
-mcp__deevy__gates_get,mcp__deevy__links_add,mcp__deevy__runs_finish,Bash(git:*),Bash(gh pr create:*)"
+mcp__deevy__gates_get,mcp__deevy__links_add,mcp__deevy__runs_finish,\
+Read,Edit,Write,Bash(git:*),Bash(gh pr create:*)"
 ```
 
-The last two are the loop's own git and its own way to open a pull request, with a credential its operator
-gave it: deevy holds no Run's code (ADR-0034). Narrow them to what the loop should be able to do.
+The file tools are how it changes code; the last two are the loop's own git and its own way to open a pull
+request, with a credential its operator gave it: deevy holds no Run's code (ADR-0034). Narrow them to what
+the loop should be able to do.
 
 deevy filters `tools/list` to what this principal may call, so an Agent never sees `gates_approve` — but that
 is display. The refusal is the same one the HTTP API gives, in the same middleware, whichever surface asked

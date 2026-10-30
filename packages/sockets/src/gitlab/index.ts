@@ -376,11 +376,11 @@ export function createGitlabSocket(
         });
       },
 
-      /** The projects its user can work issues in: Developer or more, as the setup asks. */
+      /** The projects its user can work issues in: Reporter or more, as the setup asks. */
       async listContainers(): Promise<Container[]> {
         const rows = await call<Array<{ id: number; path_with_namespace: string }>>(
           "GET",
-          "/projects?membership=true&min_access_level=30&simple=true&per_page=100&order_by=path&sort=asc",
+          "/projects?membership=true&min_access_level=20&simple=true&per_page=100&order_by=path&sort=asc",
         );
         return rows.map((row) => ({
           scope: { scopeKey: String(row.id), path: row.path_with_namespace },

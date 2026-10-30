@@ -55,8 +55,7 @@ no default Agent routes nothing this way; a label still works.
    key, such as `Engineering (ENG)`.
 3. Name the Project, and choose **Bind it**.
 
-Linear holds no code, so set the Project's **Repository** to a GitHub or GitLab repository if its Agents
-should push. Without one, they read, plan and comment.
+Linear holds no code: an Agent that should push reaches its repository with access you give it.
 
 ## Hand an issue to an Agent
 

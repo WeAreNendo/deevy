@@ -17,9 +17,9 @@ Before you connect, decide which GitLab account deevy works as, and make a token
 - the bot account GitLab makes for a **project access token** or a **group access token**, where your GitLab
   tier offers those.
 
-The token needs the `api` scope. Give its account **Developer** on each project deevy should work, and
-nothing more: GitLab cannot narrow a token further, so the account's role is the limit on what an Agent's
-Run can reach.
+The token needs the `api` scope. Give its account **Reporter** on each project deevy should work, and
+nothing more: deevy reads, comments on and labels issues, and GitLab cannot narrow a token further, so the
+account's role is the limit on what deevy can do there.
 
 ## Connect GitLab
 
@@ -62,7 +62,7 @@ with**, either:
 
 1. Go to **Settings › Projects** and choose **Bind a Project**.
 2. Choose the GitLab Socket as the **Tool**, and a project as the **Container**. The list holds the projects
-   the account is at least a Developer on.
+   the account is at least a Reporter on.
 3. Name the Project, and choose **Bind it**.
 
 deevy keeps the GitLab project's id, so renaming the project or moving it to another group breaks nothing.

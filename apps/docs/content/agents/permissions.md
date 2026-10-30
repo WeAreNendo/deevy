@@ -32,7 +32,7 @@ In the Projects it was granted, an Agent may:
 A Project it was not granted does not exist to it: asking for one answers "No such Project", not a refusal.
 
 Some of these belong to a Run, which is an Agent's attempt: starting one, posting Activities, asking at a
-Gate, opening its pull request, reporting usage and finishing it. Only an Agent may do those, and a Human
+Gate, reporting usage and finishing it. Only an Agent may do those, and a Human
 who tries is told "Only an Agent can do that". A Human is present for their own work and has no Run.
 
 ## What an Agent can never do

@@ -136,10 +136,24 @@ describe("links.add", () => {
     const { db, close } = testDb();
     closers.push(close);
     const { admin, client, project, issue } = await withIssue(db);
-    const { context, run, link } = await agentWithLink(db, admin, project.id, {
+    // A Project that says the most it can on the record, which once included a
+    // comment for every pull request deevy was told of.
+    await client.projects.update({ slug: project.slug, mirror: "runs" });
+    const context = await agentContext(db, {
+      sponsor: admin.member,
       name: "Builder",
+      grants: [project.id],
+    });
+    const asAgent = createRouterClient(router, { context });
+    const run = await asAgent.runs.start({ issue: issue.externalKey });
+    const before = (await db.query.delivery.findMany({ where: { target: "socket" } })).length;
+
+    const link = await asAgent.links.add({
       issue: issue.externalKey,
       url: "https://github.com/acme/deevy/pull/7",
+      kind: "pull_request",
+      title: "Cap the coupon",
+      runId: run.id,
     });
 
     expect(link).toMatchObject({ kind: "pull_request", ref: "7", runId: run.id });
@@ -148,8 +162,8 @@ describe("links.add", () => {
       (event) => event.kind === "issue.link_added",
     );
     expect(added?.actorMemberId).toBe(context.member.id);
-    const owed = await db.query.delivery.findMany({ where: { target: "socket" } });
-    expect(owed.filter((row) => row.eventSeq === added?.seq)).toEqual([]);
+    // Nothing more owed to the tracker than the Run starting already was.
+    expect(await db.query.delivery.findMany({ where: { target: "socket" } })).toHaveLength(before);
   });
 });
 

@@ -194,10 +194,10 @@ describe("the tracker", () => {
         name: "acme/deevy",
       },
     ]);
-    // Only projects its user is a member of with Developer or more: the ones
-    // it could push a branch to and comment on.
+    // Only projects its user is a member of with Reporter or more: the ones
+    // whose issues it can comment on and label.
     expect(asked[0]?.path).toContain("membership=true");
-    expect(asked[0]?.path).toContain("min_access_level=30");
+    expect(asked[0]?.path).toContain("min_access_level=20");
   });
 
   it("reads one record by the number in its URL", async () => {

@@ -121,10 +121,10 @@ One typed core, projected three ways (ADR-0005):
   through the fetch adapter, with generated OpenAPI 3.1 and a reference UI. The React SPA uses the typed client
   with TanStack Query (ADR-0009).
 - **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
-  procedures. The set is eighteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
+  procedures. The set is nineteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
   `issues_create`, `comments_create`, `projects_get`, `docs_get`, `links_list`, `links_add`, `links_remove`,
   `inbox_list`, `gates_get`, `runs_list`, `runs_get` for anyone; `runs_start`, `runs_post_activity`,
-  `gates_request`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
+  `gates_request`, `runs_report_usage`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
   for a Human alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
   rule on, in a browser or from a tool that vouches for them.
 - **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is

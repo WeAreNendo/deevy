@@ -15,15 +15,15 @@ with:
 
 | Tool   | The Socket is              | What deevy uses it for                               |
 | ------ | -------------------------- | ---------------------------------------------------- |
-| GitHub | a GitHub App               | issues as records, and a repository for the code     |
+| GitHub | a GitHub App               | issues as records                                    |
 | Linear | a Linear OAuth application | issues as records                                    |
-| GitLab | a GitLab account           | issues as records, and a repository for the code     |
+| GitLab | a GitLab account           | issues as records                                    |
 | Notion | a Notion connection        | a database's rows as records, and pages as documents |
 | Slack  | a Slack app                | Gates in a channel or a direct message, with buttons |
 
-Every Agent works through the Socket. A comment, a label or a pull request an Agent makes is written by
-deevy's identity in that tool, and signed with the Agent and the Run it came from, so your team can tell
-which Agent did what without opening deevy.
+An Agent's comments and labels go through the Socket: they are written by deevy's identity in that tool,
+and signed with the Agent and the Run they came from, so your team can tell which Agent did what without
+opening deevy. Its code and its pull requests are its own, with access you give it.
 
 An admin connects a tool under **Settings › Sockets**, with **Connect GitHub**, **Connect Linear** and the
 others. Each tool's page walks you through it: start at [Connecting your tools](/tools/overview/).
@@ -51,7 +51,6 @@ A Project binds one container in a tool: a GitHub repository, a Linear team, a G
 source. It holds no work of its own. It says:
 
 - where its records come from, which never changes once it is bound;
-- where its code is, if anywhere, and which branch a Run starts from;
 - where its documents are, for an Agent to read;
 - which Agent takes a record that nobody named, and which label routes one to an Agent;
 - its Checkpoints, and how many Humans each one asks for;
