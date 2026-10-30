@@ -21,8 +21,8 @@ Four things make it different:
 3. **The Event log is the audit trail.** Every change is an immutable Event with actor and timestamp; webhooks,
    the live UI, notifications and what deevy says back in the tools all derive from it.
 4. **deevy never runs agents, and never owns the tracker.** It triggers Agents through events and an MCP
-   inbox and receives Runs back — Claude Code in CI, an Agent SDK service, the reference runtime or a local
-   loop does the running — and the work stays where the team keeps it.
+   inbox and receives Runs back — Claude Code in CI, an Agent SDK service or a local loop does the running,
+   and deevy ships none of them — and the work stays where the team keeps it.
 
 ## What deevy became
 
@@ -86,9 +86,9 @@ deevy says so on the record in the tracker and in Slack, and a Human rules in de
 `/reject <why>` in a comment where they read it, or with a button in Slack — the same policy and the same
 refusals through all three doors, recorded with where it came from. The Run resumes when the Gate is decided.
 
-**Code.** A Run cloned from a Project's forge gets a credential deevy mints for that attempt, which never
-leaves the runtime's supervisor; deevy opens the pull request through the forge, closing the record when it
-merges.
+**Code.** A Run cloned from a Project's forge gets a credential deevy mints for that attempt, which whatever
+runs the Agent keeps out of the model's context; deevy opens the pull request through the forge, closing the
+record when it merges.
 
 **Accountability.** The Run records the Member that triggered it. The accountable Human for any agent action is
 one hop away: the triggering Human, or the Sponsor when routing or an Agent triggered it.
@@ -158,12 +158,12 @@ Repository layout:
 ```
 apps/web          React SPA; also the Cloudflare Worker entry
 apps/server       Node entry (Hono on @hono/node-server), built with vp pack; Docker image
-apps/agent        the reference agent runtime
 apps/cli          the command line, generated from the operation registry
 packages/core     operation registry, Event log, Gates and Checkpoints, the Socket port, MCP tool projection
 packages/sockets  GitHub, Linear, GitLab, Notion and Slack, and the stub
 packages/db       Drizzle schema and migrations (shared by node:sqlite and D1)
 packages/adapters node/ and workers/ implementations of storage, jobs, cron, assets
+tools/acceptance  the acceptance walk: a scripted Agent against every deployment
 ```
 
 ## Notifications
@@ -218,7 +218,9 @@ pins an address to a connection while preserving SNI, so the Workers transport p
 pre-resolution in front of its shape check, and the residual race is written down in
 [OPERATIONS.md](./OPERATIONS.md#client-registration-and-what-is-known-to-be-weak) rather than claimed away.
 
-**M4 Reference runtime.** `apps/agent`: a service holding one Agent's API key that finds the Issues
+**M4 Reference runtime.** Removed again by [simplify.md](./plans/simplify.md), slice 1, with the harness spike
+and the agent owning git below ([ADR-0034](./adr/0034-deevy-runs-no-agent-and-manages-no-access.md)).
+`apps/agent`: a service holding one Agent's API key that finds the Issues
 that Agent is assigned, runs Claude against them through the Claude Agent SDK, stops at Gates, resumes when a
 Human rules, and delivers a branch and a pull request linked back to the Run that produced it. It reaches
 deevy over HTTP and MCP like any third party — no `packages/core` import, no `workspace:*` dependency — which
@@ -245,7 +247,7 @@ not bounded.
 **Harness spike.** After v1, `apps/claude-agent` became `apps/agent`: the supervisor drives a coding-agent
 CLI as a subprocess behind the same session seam, four recipes are in the tree (Claude Code, OpenCode, Cursor
 CLI, GitHub Copilot CLI) and shipped as one image each, the Agent's key never enters a session's process
-tree, and [docs/harnesses.md](./harnesses.md) is how a fifth is added. Built in six slices from
+tree, and `docs/harnesses.md` said how a fifth was added. Built in six slices from
 [harnesses.md](./plans/harnesses.md), recorded in
 [ADR-0018](./adr/0018-a-harness-is-a-cli-behind-the-session-seam.md).
 

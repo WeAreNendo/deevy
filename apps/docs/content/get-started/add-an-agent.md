@@ -45,10 +45,9 @@ An Agent starts with no Projects, and a Project it hasn't been granted doesn't e
 ## Run it
 
 Something has to run the Agent, and it needs two things from you: your Workspace's address,
-`https://app.deevy.dev/<address>`, and the Agent's key. The quickest is deevy's reference runtime, a
-small service that asks deevy for its Agent's work and runs a coding agent on each Run.
-[The reference runtime](/agents/reference-runtime/) shows how to start it;
-[Your own harness](/agents/your-own-harness/) is for running something else.
+`https://app.deevy.dev/<address>`, and the Agent's key. deevy ships nothing that runs one: connect the
+coding agent you already use, such as Claude Code, to the Workspace with the key, and give it access to the
+repository yourself. [Bringing your own harness](/agents/your-own-harness/) shows how.
 
 ## Send it an Issue
 
@@ -56,14 +55,14 @@ On GitHub, add the label `agent:` and the Agent's handle, `agent:builder` here, 
 Project's repository. GitHub can't assign an issue to an App, so the label is how you say "this one is
 for that Agent". Make the label in the repository first if it has none by that name.
 
-deevy hands the issue to the Agent and starts a Run, which waits until the runtime picks it up.
+deevy hands the issue to the Agent and starts a Run, which waits until the Agent picks it up.
 
 To send the Agent every open issue that no label names, choose it as the Project's **Default Agent**,
 under **Settings › Projects**.
 
 ## Watch the Run
 
-Open **Runs** in the sidebar. The Run shows **Waiting to start** until the runtime takes it, then
+Open **Runs** in the sidebar. The Run shows **Waiting to start** until the Agent takes it, then
 **Working**, and its page shows what the Agent does as it goes. When it changes code, it opens a pull
 request on GitHub. It ends **Finished** or **Failed**.
 

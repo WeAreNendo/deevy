@@ -110,8 +110,8 @@ describe("what npm would get", () => {
       "packages/sockets",
       "apps/web",
       "apps/server",
-      "apps/agent",
       "tools/release",
+      "tools/acceptance",
     ];
     const publishable: string[] = [];
     for (const directory of directories) {

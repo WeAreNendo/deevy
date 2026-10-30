@@ -122,7 +122,7 @@ walk does not start without one, because the Agent's git is its own and deevy ca
 ## What the walk found
 
 **Moving it out of the runtime** (simplify.md, slice 0) found nothing in deevy. The walk had driven
-`apps/agent`'s supervisor, so what deevy did and what the supervisor did were one story; with the
+the reference runtime's supervisor, so what deevy did and what the supervisor did were one story; with the
 supervisor gone, four kinds of Event left it, each one appended by deevy for a call only the supervisor
 made: `run.checkout_issued` (its checkout), `run.pull_request_opened` (it opened the pull request through
 deevy), `run.usage_reported` (it reported each session's spend) and a `comment.created` (it commented on the

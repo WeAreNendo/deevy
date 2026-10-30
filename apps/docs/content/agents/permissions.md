@@ -90,8 +90,9 @@ Agent may do outside deevy is up to what runs it:
 - **A Gate is the last line.** Nothing an Agent proposes ships without a Human deciding it should, so put
   Checkpoints where a Human should look, and read the pull requests.
 
-The [reference runtime](/agents/reference-runtime/#what-bounds-it-and-what-does-not) keeps the Agent's key
-and the git credential out of its coding agent's reach. A harness of your own should do the same.
+deevy runs no Agent, so what bounds a coding agent is whatever you run it in. Keep the Agent's key in the
+MCP client's configuration rather than in the model's context, run the coding agent where its shell can do
+no harm, and give it git access no wider than the repositories it works.
 
 ## Who answers for an Agent
 

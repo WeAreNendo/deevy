@@ -1,7 +1,6 @@
 name: Release
 
-# Publishes two images and nothing else: deevy, and the reference agent runtime
-# beside it. The Cloudflare Worker built from the same commit is deployed by hand
+# Publishes one image and nothing else: deevy. The Cloudflare Worker built from the same commit is deployed by hand
 # (docs/OPERATIONS.md), because uploading one needs an account credential this
 # repository does not hold; the many-Workspaces Worker goes on the GitHub
 # Release as an attested archive instead (hosted-release.yml), for the same
@@ -46,7 +45,7 @@ jobs:
   verify:
     uses: ./.github/workflows/ci.yml
 
-  # One job per image per architecture, each on a runner of its own architecture.
+  # One job per architecture, each on a runner of its own architecture.
   #
   # This used to be one job building linux/amd64,linux/arm64 together, which meant
   # the arm64 half ran under QEMU — and the Dockerfile builds the whole workspace
@@ -59,38 +58,13 @@ jobs:
   # Each job pushes an image with no tag, addressed only by digest; `manifest`
   # below collects the digests into one multi-architecture tag.
   build:
-    name: ${{ matrix.image.key }} on ${{ matrix.arch.key }}
+    name: deevy on ${{ matrix.arch.key }}
     needs: verify
     runs-on: ${{ matrix.arch.runner }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        image:
-          # `key` and not the image's name: it is also the artifact name below,
-          # and a `digests-deevy-*` pattern would match `digests-deevy-agent-*`.
-          - key: server
-            suffix: ""
-            dockerfile: apps/server/Dockerfile
-            build_args: ""
-          # The runtime is one image per harness (docs/harnesses.md), all from
-          # one Dockerfile, told apart by the CLI the build argument installs.
-          - key: agent-claude-code
-            suffix: "-agent"
-            dockerfile: apps/agent/Dockerfile
-            build_args: HARNESS=claude-code
-          - key: agent-opencode
-            suffix: "-agent"
-            dockerfile: apps/agent/Dockerfile
-            build_args: HARNESS=opencode
-          - key: agent-cursor
-            suffix: "-agent"
-            dockerfile: apps/agent/Dockerfile
-            build_args: HARNESS=cursor
-          - key: agent-copilot
-            suffix: "-agent"
-            dockerfile: apps/agent/Dockerfile
-            build_args: HARNESS=copilot
         arch:
           - key: amd64
             platform: linux/amd64
@@ -148,14 +122,13 @@ jobs:
         timeout-minutes: 10
         with:
           context: .
-          file: ${{ matrix.image.dockerfile }}
-          build-args: ${{ matrix.image.build_args }}
+          file: apps/server/Dockerfile
           platforms: ${{ matrix.arch.platform }}
-          outputs: type=image,name=${{ env.IMAGE }}${{ matrix.image.suffix }},push-by-digest=true,name-canonical=true,push=true
-          # Scoped per image and architecture: one shared scope would have the
-          # four jobs overwriting each other's cache on every release.
-          cache-from: type=gha,scope=${{ matrix.image.key }}-${{ matrix.arch.key }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image.key }}-${{ matrix.arch.key }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Scoped per architecture: one shared scope would have the two jobs
+          # overwriting each other's cache on every release.
+          cache-from: type=gha,scope=server-${{ matrix.arch.key }}
+          cache-to: type=gha,mode=max,scope=server-${{ matrix.arch.key }}
 
       - name: Hand the digest to the manifest job
         run: |
@@ -165,7 +138,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ matrix.image.key }}-${{ matrix.arch.key }}
+          name: digests-server-${{ matrix.arch.key }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -173,38 +146,10 @@ jobs:
   # The tags everybody pulls are created here, once both architectures exist, so
   # a tag never points at a half-published image.
   manifest:
-    name: ${{ matrix.image.key }} manifest
+    name: deevy manifest
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    strategy:
-      fail-fast: false
-      matrix:
-        # `primary` gets the bare version tags and `latest`; a harness image
-        # gets `<version>-<harness>` and the moving `<harness>` tag. Claude Code
-        # is both, so the compose profile keeps pulling what it did
-        # (docs/harnesses.md).
-        image:
-          - key: server
-            suffix: ""
-            harness: ""
-            primary: true
-          - key: agent-claude-code
-            suffix: "-agent"
-            harness: claude-code
-            primary: true
-          - key: agent-opencode
-            suffix: "-agent"
-            harness: opencode
-            primary: false
-          - key: agent-cursor
-            suffix: "-agent"
-            harness: cursor
-            primary: false
-          - key: agent-copilot
-            suffix: "-agent"
-            harness: copilot
-            primary: false
     steps:
       # Lowercased for the same reason as in the build job above.
       - name: The image name, which GHCR insists is lowercase
@@ -213,7 +158,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
-          pattern: digests-${{ matrix.image.key }}-*
+          pattern: digests-server-*
           merge-multiple: true
 
       - uses: docker/setup-buildx-action@v4
@@ -229,31 +174,28 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.IMAGE }}${{ matrix.image.suffix }}
+          images: ${{ env.IMAGE }}
           # The ref carries a version only on the tag-push route; on a call or a
           # dispatch it is a branch, so the caller passes the version instead.
           # Exactly one of these two pairs is enabled.
           tags: |
-            type=semver,pattern={{version}},enable=${{ inputs.version == '' && matrix.image.primary }}
-            type=semver,pattern=v{{version}},enable=${{ inputs.version == '' && matrix.image.primary }}
-            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' && matrix.image.primary }}
-            type=raw,value=v${{ inputs.version }},enable=${{ inputs.version != '' && matrix.image.primary }}
-            type=semver,pattern={{version}}-${{ matrix.image.harness }},enable=${{ inputs.version == '' && matrix.image.harness != '' }}
-            type=raw,value=${{ inputs.version }}-${{ matrix.image.harness }},enable=${{ inputs.version != '' && matrix.image.harness != '' }}
-            # A prerelease must never move `latest` or a harness's moving tag.
-            # Both routes carry the version in a different place, and a `-` in
-            # it is what marks one: v0.5.0-rc.1 publishes under its own tags.
-            type=raw,value=${{ matrix.image.harness }},enable=${{ matrix.image.harness != '' && !contains(inputs.version || github.ref_name, '-') }}
-            type=raw,value=latest,enable=${{ matrix.image.primary && !contains(inputs.version || github.ref_name, '-') }}
+            type=semver,pattern={{version}},enable=${{ inputs.version == '' }}
+            type=semver,pattern=v{{version}},enable=${{ inputs.version == '' }}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=raw,value=v${{ inputs.version }},enable=${{ inputs.version != '' }}
+            # A prerelease must never move `latest`. Both routes carry the
+            # version in a different place, and a `-` in it is what marks one:
+            # v0.5.0-rc.1 publishes under its own tags.
+            type=raw,value=latest,enable=${{ !contains(inputs.version || github.ref_name, '-') }}
 
       - name: Point the tags at both architectures
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "$IMAGE${{ matrix.image.suffix }}@sha256:%s " *)
+            $(printf "$IMAGE@sha256:%s " *)
 
       - name: Say what it points at
         run: |
           docker buildx imagetools inspect \
-            "$IMAGE${{ matrix.image.suffix }}:$(jq -cr '.tags[0]|split(":")[-1]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
+            "$IMAGE:$(jq -cr '.tags[0]|split(":")[-1]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"

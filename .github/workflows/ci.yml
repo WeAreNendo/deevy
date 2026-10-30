@@ -4,9 +4,9 @@ name: CI
 # reads it, so a pull request (or a push to main) that touches nothing else runs
 # none of the jobs below: about a dozen runner-minutes saved each time. The
 # exceptions are the Markdown something does read: docs/OPERATIONS.md and
-# docs/m3-acceptance.md, which tests in apps/agent, apps/server and
-# tools/release check against the code, and Markdown under a package's src/,
-# such as the Agent's instructions the image ships. prose.yml checks a Markdown
+# docs/m3-acceptance.md, which tests in apps/server and tools/release check
+# against the code, and Markdown under a package's src/, which a build may
+# ship. prose.yml checks a Markdown
 # change instead, formatting and the docs site's build and tests, in one job.
 # Order matters in `paths`: a later pattern wins, so the exceptions come after
 # the exclusions; the list is written once and named.
@@ -113,8 +113,7 @@ jobs:
 
   # Sharded, because six suites on one four-core runner spent most of their time
   # waiting for each other. The groups are balanced on measured time — apps/web
-  # is 73s on its own and sets the floor, so splitting further buys nothing
-  # while the runtime arm sits at ~120s.
+  # is 73s on its own and sets the floor, so splitting further buys nothing.
   test:
     name: Tests (${{ matrix.shard.name }})
     runs-on: ubuntu-latest
@@ -130,8 +129,8 @@ jobs:
           # `acceptance` has no unit suite: its test is the walk, which needs
           # every deployment built and runs in the `runtime` job below. It is
           # named here so the workspace-membership test sees every package.
-          - name: runtime and server
-            filters: -F agent -F server -F hosted -F acceptance
+          - name: server and hosted
+            filters: -F server -F hosted -F acceptance
     steps:
       - uses: actions/checkout@v7
 
@@ -182,21 +181,6 @@ jobs:
         with:
           path: node_modules/.vite/task-cache
           key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
-
-      # The supervisor is root in the runtime image, and its git in a session's
-      # clone must never be (src/workspace.ts). The case that proves it needs
-      # root to ask for another user, and the runner is not root, so it runs
-      # here under sudo, beside the session's user as the image makes it. Last,
-      # because what vitest writes as root nothing after it could rewrite.
-      - name: The supervisor's git in a clone runs as the session, under root
-        if: matrix.shard.name == 'runtime and server'
-        working-directory: apps/agent
-        run: |
-          getent passwd 10002 || sudo useradd --no-create-home --uid 10002 session
-          sudo env "PATH=$PATH" node_modules/.bin/vp test tests/session-git.test.ts \
-            -t "plants in its clone" --reporter=verbose | tee /tmp/as-root.log
-          # Ran, rather than skipped: the case only runs where the tests are root.
-          grep "never runs as root" /tmp/as-root.log | grep -qv "↓"
 
   runtime:
     name: Workers and D1 migrations
@@ -284,17 +268,15 @@ jobs:
       - name: The previous release runs on this schema, and this one on what it wrote
         run: vp run server#test:previous
 
-  # Both images in one job: the runtime smoke needs a deevy to talk to, and
-  # building that image twice in two jobs is the same minute spent twice. This
-  # arm is well inside the tests' shadow either way, so the minutes are the only
-  # thing to save here.
+  # The image deevy ships, built, scanned and asked whether it runs. This arm is
+  # well inside the tests' shadow, so the minutes are the only thing to save.
   #
   # No layer cache, and that is measured rather than assumed: `type=gha` with
   # `mode=max` took `Build deevy` from 40s to 208s, because the image runs
   # `vp install` and a whole workspace build, and exporting every layer of that
   # costs more than repeating it.
   images:
-    name: Docker images and the runtime smoke
+    name: The Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -316,8 +298,7 @@ jobs:
         timeout-minutes: 10
         run: docker build -f apps/server/Dockerfile -t deevy:ci .
 
-      # Here rather than at the end of the job, so a CRITICAL fails before ten
-      # minutes of runtime builds nobody will look at.
+      # Before the smoke, so a CRITICAL fails first.
       #
       # Three things it does not do, worth saying plainly. It reads OS packages
       # out of the distroless base's /var/lib/dpkg/status.d — about a dozen, and
@@ -328,9 +309,6 @@ jobs:
       # with no package.json beside it, so the JS supply chain is guarded by the
       # lockfile. `ignore-unfixed` because a CVE with no fix available reds an
       # unrelated pull request and teaches its author nothing.
-      #
-      # deevy:ci only. The runtime images are node:24-slim plus an npm-installed
-      # harness, which is a much larger surface and a separate decision.
       - name: Scan deevy for known vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -342,144 +320,8 @@ jobs:
 
       # Everything this image is asked is asked by the script, so that the same
       # questions can be asked on a laptop — a Dockerfile change used to be
-      # testable only by pushing. It brings its own container, volume and port,
-      # so it never collides with the long-lived deevy below.
+      # testable only by pushing. It brings its own container, volume and port.
       - name: The deevy image runs deevy
         run: node apps/server/scripts/smoke-image.ts
         env:
           DEEVY_IMAGE: deevy:ci
-
-      # One image per harness (docs/harnesses.md). The build stage is shared
-      # through the local layer cache, so the four differ by one npm or curl —
-      # but four installs on every pull-request push is still four installs,
-      # so a pull request builds the default image only and main, and the
-      # release that calls this, build all four.
-      - name: Which harnesses
-        id: which
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "list=claude-code" >> "$GITHUB_OUTPUT"
-          else
-            echo "list=claude-code opencode cursor copilot" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build the runtime, once per harness
-        timeout-minutes: 20
-        run: |
-          for harness in ${{ steps.which.outputs.list }}; do
-            docker build -f apps/agent/Dockerfile --build-arg HARNESS=$harness -t deevy-agent:ci-$harness .
-          done
-
-      # The long-lived one the runtime images talk to, which is a second job for
-      # the same image and why the step above does not leave this behind.
-      # Readiness is the image's own HEALTHCHECK rather than a curl from the
-      # host, which makes this wait a test of the mechanism compose's
-      # `depends_on: condition: service_healthy` uses for the agent service.
-      - name: A deevy for the runtime images to talk to
-        run: |
-          docker network create deevy-ci
-          docker run -d --name deevy --network deevy-ci -p 3000:3000 \
-            -e BETTER_AUTH_SECRET=ci-secret-ci-secret-ci-secret-ci-secret \
-            -e BETTER_AUTH_URL=http://localhost:3000 \
-            -e DEEVY_DATABASE_PATH=/data/deevy.sqlite deevy:ci
-          for i in $(seq 1 90); do
-            status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' deevy)
-            if [ "$status" = healthy ]; then exit 0; fi
-            if [ "$status" = unhealthy ]; then break; fi
-            sleep 1
-          done
-          docker logs deevy
-          docker inspect -f '{{if .State.Health}}{{json .State.Health}}{{else}}no HEALTHCHECK{{end}}' deevy
-          exit 1
-
-      # A key nobody issued is refused, and the runtime says so and stops rather
-      # than polling an instance it cannot be a Member of. BETTER_AUTH_URL stays
-      # loopback above because Better Auth refuses a plain-http MCP resource
-      # that is not; it is the OAuth issuer, and this authenticates with an API
-      # key, so the two are independent here.
-      # Each image first proves its harness binary runs ("harness <name>: <version>"
-      # is logged before deevy is asked anything), then that a key nobody issued is
-      # refused. Cursor and Copilot refuse earlier still, at the credential their
-      # recipe requires, which is the same guard from the other side.
-      - name: Each runtime image runs its harness and reports what deevy tells it
-        run: |
-          for harness in ${{ steps.which.outputs.list }}; do
-            case $harness in cursor|copilot) continue ;; esac
-            set +e
-            out=$(docker run --rm --network deevy-ci \
-              -e DEEVY_URL=http://deevy:3000 \
-              -e DEEVY_AGENT_KEY=not-a-key deevy-agent:ci-$harness node dist/main.mjs --once 2>&1)
-            code=$?
-            set -e
-            echo "$out"
-            test $code -ne 0
-            echo "$out" | grep -q "harness $harness:"
-            echo "$out" | grep -qE "UNAUTHORIZED|FORBIDDEN"
-          done
-          for harness in ${{ steps.which.outputs.list }}; do
-            case $harness in cursor|copilot) ;; *) continue ;; esac
-            set +e
-            out=$(docker run --rm --network deevy-ci \
-              -e DEEVY_URL=http://deevy:3000 \
-              -e DEEVY_AGENT_KEY=not-a-key deevy-agent:ci-$harness node dist/main.mjs --once 2>&1)
-            code=$?
-            set -e
-            echo "$out"
-            test $code -ne 0
-            echo "$out" | grep -q "refuses to start without it"
-          done
-
-      # The claim the whole boundary rests on, made by a session rather than by
-      # reading the code (docs/plans/agent-owns-git.md, convention 28). On one
-      # user a shell in a session reads the supervisor's environment out of
-      # /proc, and the Agent's key and the git token are in it.
-      - name: A session cannot read the supervisor's environment
-        run: |
-          out=$(docker run --rm --cap-drop=ALL --cap-add=SETUID --cap-add=SETGID --cap-add=CHOWN --cap-add=DAC_OVERRIDE \
-            -e DEEVY_AGENT_KEY=deevy_sk_ci_secret deevy-agent:ci-claude-code node -e '
-              const { spawnSync } = require("child_process");
-              const read = (opts) => spawnSync("sh", ["-c", "cat /proc/" + process.pid + "/environ"],
-                { encoding: "utf8", ...opts });
-              const saw = (r) => String(r.stdout).includes("deevy_sk_ci_secret");
-              console.log("same-user:" + saw(read({})));
-              console.log("session:" + saw(read({ uid: 10002, gid: 10002 })));
-            ')
-          echo "$out"
-          # The first line is the control: without two users there is no bound,
-          # so a run where neither can read it proves nothing.
-          echo "$out" | grep -qx "same-user:true"
-          echo "$out" | grep -qx "session:false"
-
-      # And the other half: a session can actually work in what it was handed.
-      # The capabilities below are the ones OPERATIONS.md tells an operator to
-      # run with, so this step is what keeps that command true — the first
-      # version of it was missing CHOWN, and every Run would have failed.
-      - name: A session can work in the directory it was given
-        run: |
-          out=$(docker run --rm --cap-drop=ALL --cap-add=SETUID --cap-add=SETGID --cap-add=CHOWN --cap-add=DAC_OVERRIDE \
-            deevy-agent:ci-claude-code node -e '
-              const { mkdtempSync, chownSync, rmSync, writeFileSync } = require("fs");
-              const { spawnSync } = require("child_process");
-              const dir = mkdtempSync("/tmp/work-");
-              chownSync(dir, 10002, 10002);
-              const worked = spawnSync("sh", ["-c", "cd " + dir + " && git init -q . && echo x > f && git add -A && echo ok"],
-                { uid: 10002, gid: 10002, encoding: "utf8" });
-              if (worked.stdout.trim() !== "ok") throw new Error("the session could not work in it");
-              writeFileSync(dir + "/from-supervisor", "y");
-              const read = spawnSync("git", ["-c", "safe.directory=" + dir, "-C", dir, "status", "--porcelain"], { encoding: "utf8" });
-              if (read.status !== 0) throw new Error("the supervisor could not read it back");
-              rmSync(dir, { recursive: true, force: true });
-              console.log("session-directory:ok");
-            ')
-          echo "$out"
-          echo "$out" | grep -qx "session-directory:ok"
-
-      - name: Configuration it cannot start without is named
-        run: |
-          set +e
-          out=$(docker run --rm deevy-agent:ci-claude-code node dist/main.mjs --once 2>&1)
-          code=$?
-          set -e
-          echo "$out"
-          test $code -ne 0
-          echo "$out" | grep -q DEEVY_URL

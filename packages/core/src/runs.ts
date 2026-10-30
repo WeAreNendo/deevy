@@ -44,9 +44,9 @@ export async function openRunFor(
  * Human un-waits one — `runs.answer`, or a Ruling on its Gate — because a Run
  * moved back to `active` is a Run the stale sweep may take, and a Gate that
  * went stale would strand the answer a Human was about to give
- * (docs/plans/sockets.md). The supervisor writes such an Activity itself: it
- * says what refs the session moved, after the session that asked for the Gate
- * has ended (apps/agent/src/work.ts).
+ * (docs/plans/sockets.md). A loop may write such an Activity itself, as the
+ * reference runtime did to say what refs a session moved, after the session
+ * that asked for the Gate had ended.
  */
 export function statusAfterActivity(current: RunStatus, kind: ActivityKind): RunStatus {
   if (!isOpen(current)) {

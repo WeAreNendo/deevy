@@ -1,5 +1,8 @@
 # deevy triggers agents; it never runs them
 
+> True again since [ADR-0034](./0034-deevy-runs-no-agent-and-manages-no-access.md): for a while deevy shipped
+> a reference runtime beside it (ADR-0013); it no longer ships anything that runs an Agent.
+
 Assigning an Issue to an Agent must make the agent start, and the obvious way to guarantee that is to run the
 agent inside deevy, which is what Paperclip and It's a Plan do. We decided the opposite: deevy emits an event to
 the URL an Agent registered and exposes an inbox over MCP for agents that poll, and that is all. deevy never
