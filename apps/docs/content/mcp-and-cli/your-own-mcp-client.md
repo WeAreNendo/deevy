@@ -105,7 +105,7 @@ You are offered what you may call and nothing else:
 | `issues_create`                           | Open a record in the tracker a Project is bound to, such as a sub-issue.                        |
 | `comments_create`                         | Comment on the record, in the tracker it lives in.                                              |
 | `docs_get`                                | Read a page of a Project's documents as markdown.                                               |
-| `projects_get`                            | One Project: where its records come from and where its code is.                                 |
+| `projects_get`                            | One Project: where its records come from and who works them.                                    |
 | `links_add`, `links_list`, `links_remove` | Point a record at a pull request or any URL.                                                    |
 | `runs_list`, `runs_get`                   | What Agents have done on a record, and one Run's feed.                                          |
 | `gates_get`                               | What a Gate is waiting for, and what has been ruled.                                            |

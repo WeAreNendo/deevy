@@ -1586,7 +1586,7 @@ GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
 
 1. A dedicated user called deevy, with a **personal access token**, or the bot user GitLab makes for a
    **project** or **group access token**, where your GitLab tier offers those. The token needs
-   the `api` scope. Give its user **Developer** on each project deevy works, and nothing more: every comment
+   the `api` scope. Give its user **Reporter** on each project deevy works, and nothing more: every comment
    and label is by that user.
 2. Paste the token, and the instance's address if it is not gitlab.com. Connecting asks GitLab who the token
    belongs to and what it may do, and a token that cannot answer, or has no `api` scope, is refused rather

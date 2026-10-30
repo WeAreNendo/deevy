@@ -16,8 +16,7 @@ of the Workspace.
 ## Connect GitHub
 
 deevy connects to GitHub as a GitHub App of your own. deevy describes the App to GitHub for you, with
-the permissions it needs and nothing more: issues to read and write, code and pull requests to write,
-and the metadata GitHub requires. GitHub makes the App and hands its credentials straight to deevy, so
+the permissions it needs and nothing more: issues to read and write, and the metadata GitHub requires. GitHub makes the App and hands its credentials straight to deevy, so
 nobody copies a private key anywhere.
 
 1. Go to **Settings › Sockets**, and under **Connect a tool** choose **Connect GitHub**.

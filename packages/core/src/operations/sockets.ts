@@ -58,6 +58,11 @@ function socketOut(row: Socket) {
   } = row;
   return {
     ...rest,
+    // A Socket connected before ADR-0034 may still store `forge`, which names
+    // nothing deevy can be asked for now: what it says is what is left.
+    capabilities: rest.capabilities.filter((one): one is SocketCapability =>
+      (socketCapabilities as readonly string[]).includes(one),
+    ),
     hasCredentials: credentials !== null,
     hasWebhookSecret: webhookSecret !== null,
   };

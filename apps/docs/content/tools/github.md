@@ -1,13 +1,13 @@
 ---
 title: GitHub
-description: Connect GitHub as a GitHub App deevy writes for you, install it on your repositories, and bind a Project to one for its issues and its code.
+description: Connect GitHub as a GitHub App deevy writes for you, install it on your repositories, and bind a Project to one for its issues.
 sidebar:
   order: 2
 ---
 
-A GitHub Socket is a GitHub App, and it covers both halves of a Project: the repository's issues are its
-records, and the same repository is where its Agents push and where deevy opens their pull requests. deevy
-writes the App's settings for you, so GitHub makes it and hands its credentials back without anybody copying
+A GitHub Socket is a GitHub App: a repository's issues are a Project's records. Its code is the Agents' to
+reach, with access you give them, and they open their own pull requests. deevy writes the App's settings for
+you, so GitHub makes it and hands its credentials back without anybody copying
 a private key out of a browser.
 
 ## Create the GitHub App

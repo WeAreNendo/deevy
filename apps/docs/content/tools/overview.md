@@ -6,9 +6,9 @@ sidebar:
 ---
 
 deevy works in the tools your team already uses. You connect each one once, as a **Socket**: one tool,
-under one identity of deevy's own there, holding the credential deevy acts with. Every Agent works through
-it, so a comment, a label or a pull request an Agent makes is written by the Socket's identity, and a
-comment or pull request names the Agent it came from.
+under one identity of deevy's own there, holding the credential deevy acts with. An Agent's comments and
+labels go through it, written by the Socket's identity and naming the Agent they came from; its code and
+pull requests are its own.
 
 A Socket on its own does nothing. You then bind a **Project** to something inside it, such as a repository
 or a Linear team, and that is where deevy takes records from and hands them to Agents.
@@ -117,7 +117,7 @@ deevy asks each tool for what it needs and nothing more.
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GitHub | Issues: read and write. Metadata: read. Only on the repositories you install the App on.                                                             |
 | Linear | Read and write, as the application itself. Installing it as an agent adds being assigned and being mentioned.                                        |
-| GitLab | Whatever the account behind the token may do, with the `api` scope. Give it **Developer** on the projects it works, and nothing more.                |
+| GitLab | Whatever the account behind the token may do, with the `api` scope. Give it **Reporter** on the projects it works, and nothing more.                 |
 | Notion | Read, update and insert content; read and insert comments; user information with email addresses. Only on the pages and databases you share with it. |
 | Slack  | `chat:write`, `im:write` and `commands`. Nothing about people.                                                                                       |
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { InboundEvent } from "@deevy/core/sockets";
 import {
   addContainer,
+  openDevStubStore,
   createStubSocket,
   openStubStore,
   putIssue,
@@ -186,5 +187,17 @@ describe("the tracker it plays", () => {
       limit: 10,
     });
     expect(since.issues.map((issue) => issue.externalId)).toEqual(["2", "3"]);
+  });
+});
+
+describe("what a deployment says it holds", () => {
+  it("is container names, and still starts from a spec that gave a repository as well", () => {
+    resetStubStores();
+    // `name=…` once gave the container a repository a Run could clone. deevy
+    // holds no code now (ADR-0034), and a deployment configured the old way
+    // still starts, with the containers it named.
+    const store = openDevStubStore("acme/deevy=/tmp/origin.git, acme/ops", "spec");
+
+    expect([...store.containers.keys()]).toEqual(["acme/deevy", "acme/ops"]);
   });
 });
