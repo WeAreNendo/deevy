@@ -18,7 +18,9 @@ import {
   type SocketFor,
 } from "../sockets/registry.ts";
 import {
+  socketCapabilities,
   webhookSecretOrigins,
+  type SocketCapability,
   type SocketModule,
   type WebhookSecretFrom,
 } from "../sockets/port.ts";
@@ -56,6 +58,11 @@ function socketOut(row: Socket) {
   } = row;
   return {
     ...rest,
+    // A Socket connected before ADR-0034 may still store `forge`, which names
+    // nothing deevy can be asked for now: what it says is what is left.
+    capabilities: rest.capabilities.filter((one): one is SocketCapability =>
+      (socketCapabilities as readonly string[]).includes(one),
+    ),
     hasCredentials: credentials !== null,
     hasWebhookSecret: webhookSecret !== null,
   };
@@ -94,7 +101,7 @@ function bareModuleOf(
 function capabilitiesOf(
   context: Pick<AppContext, "sockets">,
   provider: (typeof socketProviders)[number],
-): ("tracker" | "forge" | "docs" | "chat")[] {
+): SocketCapability[] {
   return [...(bareModuleOf(context, provider)?.capabilities ?? [])];
 }
 
@@ -196,7 +203,7 @@ export const sockets = {
         z.object({
           id: z.enum(socketProviders),
           label: z.string(),
-          capabilities: z.array(z.enum(["tracker", "forge", "docs", "chat"])),
+          capabilities: z.array(z.enum(socketCapabilities)),
           /**
            * Who makes what its deliveries are signed with: `either` (deevy may
            * mint one, or take the tool's), `tool` (only the tool's), or

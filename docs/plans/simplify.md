@@ -438,8 +438,11 @@ plan restates the ones it leans on and adds the last three.
 
 1. **Test-first, and the red is read.** A cut is proved by the test that fails when the cut thing is called,
    not by the tests that stop compiling.
-2. Schema in `packages/db/src/schema/<area>.ts`, a migration per slice with `vp run db#generate`, until slice
-   12 squashes them; Better Auth's tables only through `vp run db#generate:auth`.
+2. Schema in `packages/db/src/schema/<area>.ts`. A slice that cuts a column or a table stops reading and
+   writing it and leaves it in the schema, marked unused, for slice 12's fresh history to drop: a rebuilt
+   table is refused on D1 and a Durable Object, and ADR-0031's guard refuses a drop (slice 2 found this). A
+   column a slice adds is a migration, with `vp run db#generate`. Better Auth's tables only through
+   `vp run db#generate:auth`.
 3. Operations through `defineOperation`; `vp run core#snapshot:openapi` and the tool snapshot committed in
    every slice that changes them.
 4. A removed `EventKind` leaves with its consumers: the sets in `notifications.ts`, `lib/event-text.ts`, the
@@ -571,3 +574,15 @@ release note says to stop running a `deevy-agent` image rather than only that it
 the only copy, and the public harness page points at it. Comments that cited `apps/agent` for a reason keep
 the reason and lose the path. The one place that still names it is PLAN.md's milestone history, where each
 entry now says it was removed; slice 13 rewrites that page.
+
+**Slice 2, no git, no pull requests.** `runs.checkout`, `pulls.open` and its tool, the forge port and all
+three of its implementations, `forge.ts`, the GitHub token minted per Run (#215), the two Event kinds and the
+SPA's repository picker are gone, and the mirror says nothing about a linked pull request. The GitHub App's
+manifest asks for issues and metadata only: with no clone and no pull request, contents and pull requests
+were permissions deevy no longer used. Two things went differently from the plan. The `forge_socket_id` and
+`forge_scope` columns stay in the schema, unused and hidden from the API: dropping a column with a foreign
+key is a table rebuild, which the migration emitter refuses for D1 and the Durable Object because both run
+it with foreign keys on, and ADR-0031's guard refuses a dropped column anyway. Slice 12's fresh history drops
+them, so every later slice removes columns the same way, in the code first. And the stub's container spec
+keeps reading `name=…`, ignoring what follows, so an older `DEEVY_DEV_STUB_CONTAINERS` still starts. The MCP
+tool set is nineteen; the walk, which already attached its pull request with `links_add`, needed no change.

@@ -89,8 +89,7 @@ an assignment. See [Needs me and the Inbox](/notifications/inbox/).
 
 ### Project
 
-A scope of work bound to Sockets: where its Issues live, where its code lives, optionally where its documents
-are read from, which Agents may work it, its Default Agent and routing label, its Checkpoints, and how much
+A scope of work bound to Sockets: where its Issues live, optionally where its documents are read from, which Agents may work it, its Default Agent and routing label, its Checkpoints, and how much
 deevy writes back. See [Sockets and Projects](/concepts/sockets-and-projects/#projects).
 
 ### Proposal

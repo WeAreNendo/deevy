@@ -39,7 +39,7 @@ itself:
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Nothing**           | Nothing.                                                                                                                                                                                                                                  |
 | **Gates and rulings** | The default. A comment when a Gate asks, with the Proposal and how to rule; one for each approval and for the decision; a reply when a comment ruled nothing. While a Gate waits, the record carries the label `deevy:awaiting-approval`. |
-| **Runs as well**      | All of that, and a comment when a Run starts and when it finishes or fails, with its summary. Where the tracker cannot see the code, as in Linear and Notion, a comment when an Agent opens a pull request.                               |
+| **Runs as well**      | All of that, and a comment when a Run starts and when it finishes or fails, with its summary.                                                                                                                                             |
 
 Every comment comes from deevy's own identity in the tool. One that reports a Gate or a Run ends with the
 Agent and the Run it came from, like `— builder · run_k3xr8v2m9qpw · via deevy`; one an Agent writes itself

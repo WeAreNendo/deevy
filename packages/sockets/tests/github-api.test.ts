@@ -434,12 +434,12 @@ describe("reading a repository", () => {
     // gives its Runs the right base without anybody typing it.
     expect(await tracker.listContainers()).toEqual([
       {
-        scope: { scopeKey: "acme/deevy", baseBranch: "main" },
+        scope: { scopeKey: "acme/deevy" },
         scopeKey: "acme/deevy",
         name: "acme/deevy",
       },
       {
-        scope: { scopeKey: "acme/ops", baseBranch: "trunk" },
+        scope: { scopeKey: "acme/ops" },
         scopeKey: "acme/ops",
         name: "acme/ops",
       },
@@ -524,7 +524,7 @@ describe("reading a repository", () => {
     expect(containers).toHaveLength(101);
     expect(containers[0]?.scopeKey).toBe("acme/deevy");
     expect(containers.at(-1)).toEqual({
-      scope: { scopeKey: "acme/ops", baseBranch: "trunk" },
+      scope: { scopeKey: "acme/ops" },
       scopeKey: "acme/ops",
       name: "acme/ops",
     });
@@ -740,167 +740,5 @@ describe("writing to a repository", () => {
     const writes = asked.filter((one) => one.url.includes("/labels"));
     expect(writes.map((one) => one.method)).toEqual(["POST", "DELETE", "DELETE"]);
     expect(writes[0]?.body).toEqual({ labels: ["deevy:awaiting-approval"] });
-  });
-});
-
-describe("the repository behind a Project", () => {
-  /**
-   * As GitHub mints: a token of its own each time, narrowed to what the
-   * request named. A Run's is told apart from deevy's own by its prefix.
-   */
-  function mintingFor(installation: string, answers: Record<string, unknown> = {}) {
-    let minted = 0;
-    return {
-      ...answers,
-      [`POST /app/installations/${installation}/access_tokens`]: (request: Asked) => {
-        minted += 1;
-        const narrowed = typeof request.body === "object" && request.body !== null;
-        return {
-          token: `${narrowed ? "ghs_run" : "ghs_installation"}_${String(minted)}`,
-          expires_at: "2026-09-21T11:00:00Z",
-        };
-      },
-    };
-  }
-
-  const repository = { id: 812745, clone_url: "https://github.com/acme/deevy.git" };
-
-  function minting() {
-    return mintingFor("61892041", {
-      ...credentials,
-      "GET /repos/acme/deevy": repository,
-      "GET /repos/acme/deevy/issues/42": labeled.issue,
-    });
-  }
-
-  const narrowed = { repository_ids: [812745], permissions: { contents: "write" } };
-
-  it("mints a credential a Run can clone with, and says when it dies", async () => {
-    const { module, asked } = githubReturning(minting());
-    if (!module.forge) throw new Error("a GitHub Socket is a forge");
-
-    const credential = await module.forge.credential(scope);
-
-    expect(credential).toMatchObject({
-      cloneUrl: "https://github.com/acme/deevy.git",
-      // GitHub's own name for an installation token used over HTTPS.
-      username: "x-access-token",
-      secret: "ghs_run_2",
-    });
-    expect(credential.expiresAt?.toISOString()).toBe("2026-09-21T11:00:00.000Z");
-    // The repository is read with deevy's own token, and the Run's is minted
-    // as the App for that one repository's code alone: no issues, no pull
-    // requests, and no other repository of the installation.
-    expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
-      "GET /repos/acme/deevy/installation",
-      "POST /app/installations/61892041/access_tokens",
-      "GET /repos/acme/deevy",
-      "POST /app/installations/61892041/access_tokens",
-    ]);
-    expect(asked[2]?.authorization).toBe("Bearer ghs_installation_1");
-    expect(asked[3]?.authorization).toMatch(/^Bearer eyJ/);
-    expect(asked[3]?.body).toEqual(narrowed);
-  });
-
-  it("mints for a renamed repository by its id, which the rename kept", async () => {
-    // The Project was bound to acme/coupons, since renamed acme/deevy: GitHub
-    // follows the old name to the repository, and a token asked for under
-    // that name would be refused.
-    const { module, asked } = githubReturning(
-      mintingFor("61892041", {
-        "GET /repos/acme/coupons/installation": { id: 61892041 },
-        "GET /repos/acme/coupons": repository,
-      }),
-    );
-    if (!module.forge) throw new Error("a GitHub Socket is a forge");
-
-    const credential = await module.forge.credential({ scopeKey: "acme/coupons" });
-
-    expect(credential.cloneUrl).toBe("https://github.com/acme/deevy.git");
-    expect(asked.at(-1)?.body).toEqual(narrowed);
-  });
-
-  it("never hands a Run the token deevy makes its own calls with", async () => {
-    const { module, tracker, asked } = githubReturning(minting());
-    if (!module.forge) throw new Error("a GitHub Socket is a forge");
-
-    // deevy's own token, minted for the installation and kept for its hour.
-    await tracker.getIssue(scope, ref);
-    const first = await module.forge.credential(scope);
-    // A Run resumed after a Gate asks again, and is given another.
-    const resumed = await module.forge.credential(scope);
-    await tracker.getIssue(scope, ref);
-
-    expect(first.secret).toBe("ghs_run_2");
-    expect(resumed.secret).toBe("ghs_run_3");
-    const minted = asked.filter((one) => one.url.includes("access_tokens"));
-    expect(minted.map((one) => one.body)).toEqual([undefined, narrowed, narrowed]);
-    // And a Run's token never takes the cached one's place: every call deevy
-    // makes as the installation is made with the token it minted for itself.
-    const asInstallation = asked.filter((one) => !one.authorization.startsWith("Bearer eyJ"));
-    expect(asInstallation).toHaveLength(4);
-    expect(new Set(asInstallation.map((one) => one.authorization))).toEqual(
-      new Set(["Bearer ghs_installation_1"]),
-    );
-  });
-
-  it("asks again which installation covers the repository when a Run's is gone", async () => {
-    // As deevy's own calls do: an installation id remembered from before acme
-    // reinstalled the App is refused with a 404, and asked for once. Here a
-    // Run resumed after a Gate is the first to find out.
-    const answers: Record<string, unknown> = minting();
-    const { module, asked } = githubReturning(answers);
-    if (!module.forge) throw new Error("a GitHub Socket is a forge");
-    await module.forge.credential(scope);
-
-    delete answers["POST /app/installations/61892041/access_tokens"];
-    Object.assign(answers, mintingFor("7"), { "GET /repos/acme/deevy/installation": { id: 7 } });
-    asked.length = 0;
-
-    const resumed = await module.forge.credential(scope);
-
-    expect(resumed.secret).toBe("ghs_run_1");
-    expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
-      "GET /repos/acme/deevy",
-      "POST /app/installations/61892041/access_tokens",
-      "GET /repos/acme/deevy/installation",
-      "POST /app/installations/7/access_tokens",
-    ]);
-    expect(asked.at(-1)?.body).toEqual(narrowed);
-  });
-
-  it("opens the pull request, and answers where it is", async () => {
-    const { module, asked } = githubReturning({
-      ...credentials,
-      "POST /repos/acme/deevy/pulls": {
-        html_url: "https://github.com/acme/deevy/pull/7",
-        number: 7,
-      },
-    });
-    if (!module.forge) throw new Error("a GitHub Socket is a forge");
-
-    const opened = await module.forge.openPullRequest(scope, {
-      head: "deevy/acme-deevy-42-run_abc1",
-      base: "main",
-      title: "acme/deevy#42: cap the coupon",
-      body: "Closes https://github.com/acme/deevy/issues/42",
-    });
-
-    expect(opened).toEqual({ url: "https://github.com/acme/deevy/pull/7", number: 7 });
-    expect(asked.at(-1)?.body).toMatchObject({
-      head: "deevy/acme-deevy-42-run_abc1",
-      base: "main",
-    });
-  });
-
-  it("repeats GitHub's own refusal, which is the one a Human can act on", async () => {
-    const { module } = githubReturning(credentials);
-    if (!module.forge) throw new Error("a GitHub Socket is a forge");
-
-    // No `pulls` answer: GitHub 404s, and what comes back says so rather than
-    // "something went wrong".
-    await expect(
-      module.forge.openPullRequest(scope, { head: "x", base: "main", title: "t", body: "b" }),
-    ).rejects.toThrow(/404/);
   });
 });

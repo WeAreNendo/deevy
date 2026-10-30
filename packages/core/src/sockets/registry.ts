@@ -1,7 +1,7 @@
 import type { Db, Socket } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
 import { openSecret } from "../secrets.ts";
-import type { ForgeSocket, Scope, SocketModule, SocketModules, TrackerSocket } from "./port.ts";
+import type { Scope, SocketModule, SocketModules, TrackerSocket } from "./port.ts";
 
 /**
  * Turning a Socket row into something that can be asked a question.
@@ -99,15 +99,6 @@ export function requireTracker(module: SocketModule): TrackerSocket {
     });
   }
   return module.tracker;
-}
-
-export function requireForge(module: SocketModule): ForgeSocket {
-  if (!module.forge) {
-    throw new ORPCError("BAD_REQUEST", {
-      message: `The ${module.provider} Socket is not a repository`,
-    });
-  }
-  return module.forge;
 }
 
 /**

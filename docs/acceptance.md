@@ -126,8 +126,8 @@ the reference runtime's supervisor, so what deevy did and what the supervisor di
 supervisor gone, four kinds of Event left it, each one appended by deevy for a call only the supervisor
 made: `run.checkout_issued` (its checkout), `run.pull_request_opened` (it opened the pull request through
 deevy), `run.usage_reported` (it reported each session's spend) and a `comment.created` (it commented on the
-record when it delivered), along with the Activity it wrote for each ref a session moved. Those operations
-are still covered by the core's tests until the slices that remove them. And the old walk proved one thing
+record when it delivered), along with the Activity it wrote for each ref a session moved. Slice 2 then
+removed the checkout and `pulls.open` themselves, and slice 3 removes Usage. And the old walk proved one thing
 about deevy only in passing: that a Ruling puts its Run back to `active`, because the supervisor resumed
 nothing else. The new walk checks it after each Ruling.
 
@@ -140,9 +140,10 @@ Rewriting it around a Socket found five things, and each was a defect rather tha
 - **And it was said twice.** `run.awaiting_input` was appended whenever an Activity left a Run waiting,
   including one that was already waiting, so a Human got a second Notification about one question.
 - **Two pull requests for one attempt.** The instructions tell the Agent to open it and the supervisor opens
-  one for any branch a session pushed and left. `pulls.open` answers with the one this Run already has.
+  one for any branch a session pushed and left. `pulls.open` answered with the one the Run already had, until
+  slice 2 removed it.
 - **A Project with no repository cost a 404 a pass.** The supervisor asks for a checkout on every Run it
-  takes up, and a Project bound to a tracker and nothing else is ordinary; `runs.checkout` answers null
+  takes up, and a Project bound to a tracker and nothing else is ordinary; `runs.checkout` answered null
   rather than refusing, so nothing lands in an operator's log on nothing going wrong.
 - **The stub handed deliveries back without their clocks.** `normalize` reads a parsed body and answers
   deevy's own types, two of which are Dates; a string reached `getTime` on the first record deevy was told

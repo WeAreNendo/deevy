@@ -4,8 +4,8 @@
  * Every rule deevy has about inbound deliveries, routing, mirroring and
  * rulings is a rule about what happens when a tracker says something. Proving
  * those against GitHub means a network, an App, a tunnel and a clock; proving
- * them against this means a function call. So the stub is a real tracker and a
- * real forge with an in-memory store, it signs its deliveries the way a
+ * them against this means a function call. So the stub is a real tracker with
+ * an in-memory store, it signs its deliveries the way a
  * provider does, and it is what the core's tests, the seed and the acceptance
  * walk play (docs/plans/sockets.md).
  *
@@ -17,14 +17,12 @@ import type {
   ExternalComment,
   ExternalIssue,
   ExternalRef,
-  ForgeCredential,
   InboundCheck,
   InboundEvent,
   InboundInput,
   IssueDraft,
   IssuePage,
   IssueQuery,
-  PullRequestDraft,
   Scope,
   SocketModule,
   SocketModuleInput,
@@ -36,9 +34,6 @@ export interface StubContainer {
   name: string;
   issues: Map<string, ExternalIssue>;
   comments: Map<string, ExternalComment[]>;
-  pulls: { url: string; number: number; head: string; base: string; title: string; body: string }[];
-  /** The bare repository this container's Runs clone, when it stands for code too. */
-  cloneUrl: string | null;
 }
 
 /**
@@ -104,10 +99,10 @@ export function openDevStubStore(spec = "", id: string = DEV_STUB_STORE): StubSt
     .map((entry) => entry.trim())
     .filter(Boolean);
   for (const entry of wanted.length > 0 ? wanted : ["acme/deevy"]) {
-    const [scopeKey = "", cloneUrl] = entry.split("=");
-    if (scopeKey && !store.containers.has(scopeKey)) {
-      addContainer(store, { scopeKey, cloneUrl: cloneUrl ?? null });
-    }
+    // `name=…` was a container with a repository behind it, when deevy held
+    // a Run's code; the name is all that is read now (ADR-0034).
+    const [scopeKey = ""] = entry.split("=");
+    if (scopeKey && !store.containers.has(scopeKey)) addContainer(store, { scopeKey });
   }
   return store;
 }
@@ -115,21 +110,13 @@ export function openDevStubStore(spec = "", id: string = DEV_STUB_STORE): StubSt
 export interface AddContainerOptions {
   scopeKey: string;
   name?: string;
-  cloneUrl?: string | null;
 }
 
 export function addContainer(
   store: StubStore,
-  { scopeKey, name = scopeKey, cloneUrl = null }: AddContainerOptions,
+  { scopeKey, name = scopeKey }: AddContainerOptions,
 ): StubContainer {
-  const container: StubContainer = {
-    scopeKey,
-    name,
-    issues: new Map(),
-    comments: new Map(),
-    pulls: [],
-    cloneUrl,
-  };
+  const container: StubContainer = { scopeKey, name, issues: new Map(), comments: new Map() };
   store.containers.set(scopeKey, container);
   return container;
 }
@@ -255,7 +242,7 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
 
   return {
     provider: "stub",
-    capabilities: new Set(["tracker", "forge"] as const),
+    capabilities: new Set(["tracker"] as const),
     // In the process, so it signs with whatever it is given.
     webhookSecretFrom: "either",
     // Its own accounts, unless its configuration says they are the ones deevy
@@ -367,30 +354,6 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
             name: container.name,
           })),
         );
-      },
-    },
-
-    forge: {
-      credential(scope: Scope): Promise<ForgeCredential> {
-        const container = requireContainer(store, scope);
-        if (!container.cloneUrl) throw new Error(`stub: ${container.scopeKey} has no repository`);
-        return Promise.resolve({
-          cloneUrl: container.cloneUrl,
-          username: "x-access-token",
-          secret: "stub-token",
-          expiresAt: null,
-        });
-      },
-
-      openPullRequest(
-        scope: Scope,
-        draft: PullRequestDraft,
-      ): Promise<{ url: string; number: number }> {
-        const container = requireContainer(store, scope);
-        const number = container.pulls.length + 1;
-        const url = `https://stub.invalid/${container.scopeKey}/pull/${number}`;
-        container.pulls.push({ url, number, ...draft });
-        return Promise.resolve({ url, number });
       },
     },
   };

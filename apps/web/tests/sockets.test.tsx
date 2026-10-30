@@ -58,14 +58,14 @@ vi.mock("../src/lib/orpc.ts", async () => {
                   {
                     id: "github",
                     label: "GitHub",
-                    capabilities: ["tracker", "forge"],
+                    capabilities: ["tracker"],
                     webhookSecretFrom: "either",
                     beginRefusal: state.githubBeginRefusal,
                   },
                   {
                     id: "gitlab",
                     label: "GitLab",
-                    capabilities: ["tracker", "forge"],
+                    capabilities: ["tracker"],
                     webhookSecretFrom: "either",
                   },
                   {
@@ -262,8 +262,6 @@ describe("the tools this Workspace is connected to", () => {
       default_permissions: {
         issues: "write",
         metadata: "read",
-        contents: "write",
-        pull_requests: "write",
       },
     });
     expect(manifest.default_events).toEqual([

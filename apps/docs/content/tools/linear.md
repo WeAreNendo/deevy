@@ -55,8 +55,7 @@ no default Agent routes nothing this way; a label still works.
    key, such as `Engineering (ENG)`.
 3. Name the Project, and choose **Bind it**.
 
-Linear holds no code, so set the Project's **Repository** to a GitHub or GitLab repository if its Agents
-should push. Without one, they read, plan and comment.
+Linear holds no code: an Agent that should push reaches its repository with access you give it.
 
 ## Hand an issue to an Agent
 
@@ -71,8 +70,7 @@ state. So is a deleted issue.
 ## What deevy writes in Linear
 
 - **Comments**, as the Project's **Mirror** says: a Gate asking for a Ruling, each Ruling, and with **Runs as
-  well**, each Run starting, finishing or failing. With **Runs as well**, deevy also comments when an Agent
-  opens a pull request, because Linear cannot see a repository by itself. See
+  well**, each Run starting, finishing or failing. See
   [Connecting your tools](/tools/overview/#what-deevy-writes-back).
 - **The `deevy:awaiting-approval` label** while a Gate waits. deevy makes it in the team the first time it
   needs it.

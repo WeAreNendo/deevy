@@ -15,7 +15,7 @@ export const socketProviders = ["github", "linear", "gitlab", "notion", "slack",
  * What a Socket can be asked for. A provider module implements whichever it
  * can, and a Project's binding names one Socket per capability it uses.
  */
-export const socketCapabilities = ["tracker", "forge", "docs", "chat"] as const;
+export const socketCapabilities = ["tracker", "docs", "chat"] as const;
 
 /**
  * `pending` is a Socket that exists before it has a credential: connecting a

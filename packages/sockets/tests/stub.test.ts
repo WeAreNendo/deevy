@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { InboundEvent } from "@deevy/core/sockets";
 import {
   addContainer,
+  openDevStubStore,
   createStubSocket,
   openStubStore,
   putIssue,
@@ -189,29 +190,14 @@ describe("the tracker it plays", () => {
   });
 });
 
-describe("the forge it plays", () => {
-  it("refuses a container that stands for no repository, and opens a pull request on one that does", async () => {
+describe("what a deployment says it holds", () => {
+  it("is container names, and still starts from a spec that gave a repository as well", () => {
     resetStubStores();
-    const store = openStubStore({ id: "forging" });
-    addContainer(store, { scopeKey: "acme/nothing" });
-    addContainer(store, { scopeKey: "acme/deevy", cloneUrl: "/tmp/acme-deevy.git" });
+    // `name=…` once gave the container a repository a Run could clone. deevy
+    // holds no code now (ADR-0034), and a deployment configured the old way
+    // still starts, with the containers it named.
+    const store = openDevStubStore("acme/deevy=/tmp/origin.git, acme/ops", "spec");
 
-    const forge = socketFor("forging").forge;
-    if (!forge) throw new Error("the stub is a forge");
-
-    expect(() => forge.credential({ scopeKey: "acme/nothing" })).toThrow(/no repository/);
-
-    const credential = await forge.credential({ scopeKey: "acme/deevy" });
-    expect(credential).toMatchObject({
-      cloneUrl: "/tmp/acme-deevy.git",
-      username: "x-access-token",
-    });
-
-    const pull = await forge.openPullRequest(
-      { scopeKey: "acme/deevy" },
-      { head: "deevy/one", base: "main", title: "Sign the delivery id", body: "run_abc" },
-    );
-    expect(pull).toMatchObject({ number: 1 });
-    expect(store.containers.get("acme/deevy")?.pulls[0]).toMatchObject({ head: "deevy/one" });
+    expect([...store.containers.keys()]).toEqual(["acme/deevy", "acme/ops"]);
   });
 });

@@ -41,7 +41,7 @@ export interface SocketModulesOptions {
   /** Whether this deployment may register the in-process stub. */
   devStub?: boolean;
   /**
-   * The containers that stub offers, as `name[=cloneUrl]` separated by commas
+   * The containers that stub offers, as names separated by commas
    * (`DEEVY_DEV_STUB_CONTAINERS`). A store lives in this process, so this is
    * the only way an operator or a walk outside it can say what the stubbed
    * tracker contains (src/stub).

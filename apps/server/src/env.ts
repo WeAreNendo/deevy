@@ -65,7 +65,7 @@ export interface ServerEnv {
    * is silently dropped is a flag somebody will one day believe is on.
    */
   devStubSockets: boolean;
-  /** What that stub's tracker holds: `name[=cloneUrl]`, separated by commas. */
+  /** What that stub's tracker holds: container names, separated by commas. */
   devStubContainers?: string;
   /**
    * The email sender this environment configures (`DEEVY_EMAIL_SENDER` and
