@@ -23,7 +23,6 @@ export const kindLabels: Record<HumanNotificationKind, string> = {
   assignment: "Assignment",
   gate_awaiting: "Gate awaiting",
   run_finished: "Run finished",
-  delegation: "Sub-issues",
 };
 
 /** Six months: about as old as an email anybody acts on. */

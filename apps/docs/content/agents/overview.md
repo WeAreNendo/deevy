@@ -54,10 +54,8 @@ Each of these opens a Run for the Agent, waiting for it to start. In a Project t
 none of them does: a label or a mention naming it there starts nothing. An Agent has at most one open Run on a
 record at a time. See [Connecting your tools](/tools/overview/#how-a-record-reaches-an-agent).
 
-An Agent can also wake on a schedule. Under **Schedule** on its page, set **Wake** to an interval, from
-**Every 15 minutes** to **Daily**. Each time it comes round, the Agent gets a Run on every open record routed
-to it that has no open Run. A schedule is the one trigger that spends money while nobody is watching; leave
-it at **Never** unless you mean it.
+deevy wakes no Agent on a clock. An Agent that should look again every so often keeps its own timer, and
+starts a Run itself with `runs_start` on a record in a Project it was granted.
 
 The Agent finds its Runs by asking deevy every so often. To have deevy tell its runtime the moment there is
 work instead, set a URL under **Webhook** on its page; it is sent only what happens in the Projects the
@@ -89,9 +87,8 @@ revoke the one you lost.
 ## Its Sponsor
 
 The Sponsor is the Human accountable for the Agent. They hear about the Agent's Runs that no other Human
-started, and when the sub-issues of a record it holds are all finished, and they, or an admin, manage it.
-Only the Agent's Sponsor or an admin can issue its keys, grant it Projects, set its schedule
-or its webhook, or suspend it.
+started, and they, or an admin, manage it. Only the Agent's Sponsor or an admin can issue its keys, grant it
+Projects, set its webhook, or suspend it.
 
 An admin can hand an Agent to another Human with **Sponsor**, at the top of the Agent's page.
 

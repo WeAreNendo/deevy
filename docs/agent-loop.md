@@ -166,10 +166,13 @@ Work one Issue at a time, in this order.
    sub-issues say — so say in your summary what you split off and why, because that summary is what you will
    be reading.
 
-   There are limits, and you will be told the number if you reach one: how many sub-issues an Issue may have,
-   how deep they may go, and how many may be open at once. A refusal is not a reason to try a different shape
-   of the same fan-out. It means the work is already split as far as this Workspace wants it split, and what
-   is left is to do some of it.
+   There is one limit: how deep sub-issues may go. A sub-issue nested deeper than the Workspace allows is
+   handed to no Agent: no Run opens on it, by label or mention, and `runs_start` on it is refused with the
+   depth allowed. Link a sub-issue under this one before you label it, because one linked after it was
+   routed is taken back and its Run failed. `runs_list` on a sub-issue that should have a Run and has none
+   is how you can tell, and a webhook hears `delegation.refused`. A refusal is not a reason to try a
+   different shape of the same fan-out. It means the work
+   is already split as far as this Workspace wants it split, and what is left is to do some of it.
 
 7. **On approval, do what you said you would do.** A `run_answered` Notification in your inbox says
    somebody ruled, and `gates_get` says which way it went and what the Human said. Approved means build it.

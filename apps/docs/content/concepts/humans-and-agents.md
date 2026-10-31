@@ -41,8 +41,8 @@ Every Agent has a **Sponsor**: the Human who answers for it. An Agent acts on it
 be accountable for what it does and be told when it needs a person. That is the Sponsor:
 
 - They manage the Agent: its keys, its Projects, where it is told about work, and suspending it.
-- They are told when a Run the Agent started for itself, or that routing started, finishes, and when the
-  sub-issues of a record routed to the Agent are all finished.
+- They are told when a Run the Agent started for itself, or that routing started, finishes. That includes
+  the Run that wakes the Agent when the sub-issues of a record routed to it are all finished.
 - At a Gate, they are the Human the work is for when routing started the Run, which matters to a
   Checkpoint that wants [somebody else's approval](/gates/more-than-one-human/).
 

@@ -1,10 +1,8 @@
 import {
-  agent as agentTable,
   channel as channelTable,
   event as eventTable,
   issue as issueTable,
   socketMirror as socketMirrorTable,
-  member as memberTable,
   notification as notificationTable,
   project as projectTable,
   run as runTable,
@@ -14,7 +12,7 @@ import {
   type Issue,
   type Socket,
 } from "@deevy/db";
-import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 import type { EventKind } from "./events.ts";
 import {
   deriveNotifications,
@@ -23,7 +21,6 @@ import {
   issueOf,
   notificationKindOf,
 } from "./notifications.ts";
-import { openStatuses } from "./runs.ts";
 import { appendEvent } from "./events.ts";
 import { mirrorFor } from "./sockets/mirror.ts";
 import { chatGateMessage } from "./sockets/chat-out.ts";
@@ -78,15 +75,6 @@ export const defaultSweepLimit = 50;
  * Workspace. Adding a column to these rows means lowering this number.
  */
 const eventRowsPerInsert = 20;
-
-/** The same arithmetic for a Run row, which also binds five columns. */
-const runRowsPerInsert = 20;
-
-/**
- * And for a `run.started` Event, which carries a payload as well and so binds
- * six columns rather than five.
- */
-const runStartedRowsPerInsert = 16;
 
 /**
  * Where deevy is waiting on the Agent and silence means something is wrong.
@@ -223,200 +211,6 @@ export async function sweepStaleRuns({
     written.map((row) => ({ ...row, workspaceId })),
   );
 
-  return result;
-}
-
-export interface DueAgentsQueryOptions {
-  workspaceId: string;
-  /** The clock this pass reads. */
-  now: Date;
-  limit: number;
-}
-
-/**
- * The Agents whose schedule has come round: never run, or last run longer ago
- * than their own interval. A suspended Agent is not due, which is the Sponsor
- * cascade doing its job (docs/plans/m2.md).
- *
- * Exported so a test can EXPLAIN it. There is one `agent` row per Agent and a
- * Workspace has a handful, so this is bounded by the Workspace's Agents and by
- * the LIMIT, never by its Issues.
- */
-export function dueAgentsQuery(db: Db, { workspaceId, now, limit }: DueAgentsQueryOptions) {
-  return db
-    .select({ memberId: agentTable.memberId })
-    .from(agentTable)
-    .innerJoin(memberTable, eq(memberTable.id, agentTable.memberId))
-    .where(
-      and(
-        isNotNull(agentTable.scheduleMinutes),
-        eq(memberTable.workspaceId, workspaceId),
-        isNull(memberTable.suspendedAt),
-        or(
-          isNull(agentTable.scheduleRanAt),
-          // Minutes, in the millisecond column the row already holds, so the
-          // comparison is arithmetic SQLite does rather than a row per Agent
-          // read back into JavaScript.
-          sql`${agentTable.scheduleRanAt} <= ${now.getTime()} - ${agentTable.scheduleMinutes} * 60000`,
-        ),
-      ),
-    )
-    .limit(limit);
-}
-
-export interface ScheduledIssuesQueryOptions {
-  agentMemberIds: string[];
-  limit: number;
-}
-
-/**
- * The Issues a due Agent owes a Run: assigned to it, still open, and with no
- * open Run of its own. The "at most one open Run per (issue, agent)" rule is
- * the anti-join rather than a lookup per Issue, which is what keeps this one
- * statement (runs.ts holds the same rule for every other path).
- *
- * A closed Issue is left alone. A schedule is for work still to do, and an
- * Issue that reached a `done` State has none; the plan does not say, and this
- * is the reading that does not wake an Agent hourly for the rest of time.
- *
- * Exported so a test can EXPLAIN it: `issue_assignee_idx` answers the scan and
- * `run_agent_status_idx` answers the anti-join.
- */
-export function scheduledIssuesQuery(
-  db: Db,
-  { agentMemberIds, limit }: ScheduledIssuesQueryOptions,
-) {
-  return db
-    .select({
-      id: issueTable.id,
-      projectId: issueTable.projectId,
-      agentMemberId: issueTable.assigneeMemberId,
-    })
-    .from(issueTable)
-    .leftJoin(
-      runTable,
-      and(
-        eq(runTable.issueId, issueTable.id),
-        eq(runTable.agentMemberId, issueTable.assigneeMemberId),
-        inArray(runTable.status, [...openStatuses]),
-      ),
-    )
-    .where(
-      and(
-        inArray(issueTable.assigneeMemberId, agentMemberIds),
-        eq(issueTable.state, "open"),
-        isNull(runTable.id),
-      ),
-    )
-    .limit(limit);
-}
-
-export interface SweepSchedulesOptions {
-  db: Db;
-  workspaceId: string;
-  /** The clock, so a test does not have to wait an hour. */
-  now?: Date;
-  /** Most Agents to consider, and most Runs to start, in one pass. */
-  limit?: number;
-}
-
-export interface ScheduleSweepResult {
-  /** Agents whose schedule came round this pass. */
-  due: number;
-  /** Runs it started. */
-  started: number;
-  /** The limit was reached, so call again rather than raising the limit. */
-  more: boolean;
-}
-
-/**
- * The schedule trigger (PLAN.md): each Agent whose interval has elapsed gets
- * one Run per Issue assigned to it that has no open Run.
- *
- * Bounded exactly like `sweepStaleRuns`, and for the same reason: two indexed
- * SELECTs with a LIMIT, then batched INSERTs and one UPDATE. Nothing here is a
- * query per row, so a pass costs the limit rather than the Workspace and fits
- * inside a Cloudflare Cron Trigger's CPU budget (M3).
- */
-export async function sweepSchedules({
-  db,
-  workspaceId,
-  now = new Date(),
-  limit = defaultSweepLimit,
-}: SweepSchedulesOptions): Promise<ScheduleSweepResult> {
-  const due = await dueAgentsQuery(db, { workspaceId, now, limit });
-  const result = { due: due.length, started: 0, more: due.length >= limit };
-  if (due.length === 0) return result;
-
-  const owed = await scheduledIssuesQuery(db, {
-    agentMemberIds: due.map((row) => row.memberId),
-    limit,
-  });
-  // Hitting the Issue limit means this pass did not finish the backlog, so the
-  // Agents stay due and the next pass carries on: the Runs just started are
-  // open, so the anti-join above excludes them and every pass makes progress.
-  const drained = owed.length < limit;
-  result.more = result.more || !drained;
-
-  const runs = owed.map((row) => ({
-    id: newId("run"),
-    issueId: row.id,
-    agentMemberId: row.agentMemberId as string,
-    // Nobody asked for it. The clock is not a Member, and a Run with no
-    // trigger of its own belongs to the Agent's Sponsor (notifications.ts).
-    triggeredByMemberId: null,
-    trigger: "schedule" as const,
-    projectId: row.projectId,
-  }));
-  for (let at = 0; at < runs.length; at += runRowsPerInsert) {
-    await db
-      .insert(runTable)
-      .values(
-        runs.slice(at, at + runRowsPerInsert).map(({ projectId: _projectId, ...values }) => values),
-      );
-  }
-  result.started = runs.length;
-
-  // Written straight to the log rather than through `appendEvent`, for the
-  // reasons the stale sweep gives: this is not a request, `run.started` derives
-  // no Notification and triggers nothing, and one append per row would make the
-  // pass cost the Workspace instead of the limit. What it does still owe is
-  // delivery, which is derived in bulk below rather than skipped.
-  const rows = runs.map((run) => ({
-    workspaceId,
-    kind: "run.started" satisfies EventKind,
-    subjectType: "run",
-    subjectId: run.id,
-    projectId: run.projectId,
-    payload: { issueId: run.issueId, trigger: run.trigger, agentMemberId: run.agentMemberId },
-  }));
-  const written: Array<{ seq: number; kind: EventKind; projectId: string | null }> = [];
-  for (let at = 0; at < rows.length; at += runStartedRowsPerInsert) {
-    const inserted = await db
-      .insert(eventTable)
-      .values(rows.slice(at, at + runStartedRowsPerInsert))
-      .returning({ seq: eventTable.seq, kind: eventTable.kind, projectId: eventTable.projectId });
-    written.push(...(inserted as typeof written));
-  }
-  await deriveWebhookDeliveriesForMany(
-    db,
-    workspaceId,
-    written.map((row) => ({ ...row, workspaceId })),
-  );
-
-  // Last, and only once the backlog is drained: an interval that stamped itself
-  // before the work was done would skip whatever the limit cut off.
-  if (drained) {
-    await db
-      .update(agentTable)
-      .set({ scheduleRanAt: now })
-      .where(
-        inArray(
-          agentTable.memberId,
-          due.map((row) => row.memberId),
-        ),
-      );
-  }
   return result;
 }
 
@@ -1471,8 +1265,6 @@ export interface RunDueWorkOptions {
 export interface DueWorkResult {
   /** Runs moved to `stale`. */
   staleRuns: number;
-  /** Runs the schedule trigger started. */
-  scheduled: number;
   /** Messages a Slack Channel accepted. */
   channelMessages: number;
   /** Webhook deliveries a subscribed URL accepted. */
@@ -1493,7 +1285,8 @@ export interface DueWorkResult {
 
 /**
  * One trigger's worth of deevy's background work: the stale sweep, the
- * schedule trigger, both delivery loops and the Gate reminder, in that order.
+ * delivery loops and the Gate reminder, in that order. None of it starts a
+ * Run: routing and the parent wake do (docs/plans/simplify.md, slice 6).
  *
  * It lives here rather than beside a scheduler because the two runtimes own
  * their schedules differently and neither owns this. Node's `startRunner`
@@ -1529,7 +1322,6 @@ export async function runDueWork({
 
   const result: DueWorkResult = {
     staleRuns: 0,
-    scheduled: 0,
     channelMessages: 0,
     webhooks: 0,
     gateReminders: 0,
@@ -1568,14 +1360,6 @@ export async function runDueWork({
     () => sweepStaleRuns({ db, workspaceId, now, silenceMs, ...sweepBound }),
     (of) => {
       result.staleRuns += of.changed;
-    },
-  );
-  // The schedule trigger rides the same trigger: one timer on Node, one Cron
-  // Trigger on Cloudflare, and nothing else to configure or forget.
-  await drain(
-    () => sweepSchedules({ db, workspaceId, now, ...sweepBound }),
-    (of) => {
-      result.scheduled += of.started;
     },
   );
   // And so does what is owed to a Channel. Without an origin a Slack message

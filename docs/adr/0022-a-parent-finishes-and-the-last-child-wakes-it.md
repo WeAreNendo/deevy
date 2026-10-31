@@ -1,5 +1,9 @@
 # A parent finishes, and the last sub-issue wakes it
 
+> Amended by [docs/plans/simplify.md](../plans/simplify.md), slice 6: the Agent opens sub-issues in the
+> tracker, and one ceiling, depth, is left. See "The Agent opens sub-issues in the tracker" at the end; what
+> it changes above is who is woken, the three counts and the wave in an inbox.
+
 An Agent's unit of work is an Issue and its memory is a Run. Both are finite: a Run is one attempt
 ([ADR-0016](./0016-a-run-is-an-agents-and-the-registry-says-which-way-an-operation-faces.md)) and a session
 has a context window. Work larger than either had nowhere to go. An Agent could write a decomposition into a
@@ -105,3 +109,26 @@ and is whole only on its parent's page. And one bent rule about what an ungrante
 down here so that the next person to read it knows it was bent on purpose.
 
 The plan is `docs/plans/sub-issue-delegation.md`, built in six slices, each one test-first.
+
+## The Agent opens sub-issues in the tracker (2026-10-31)
+
+Amended by [docs/plans/simplify.md](../plans/simplify.md), slice 6, after slice 4 took `issues.create` out:
+deevy opens no record, so an Agent opens its sub-issues in the tracker with its own access, each labelled
+for the Agent that should do it, and deevy projects and routes them as it does any record. The parent link
+is the tracker's own parent field.
+
+**The parent wakes the Agent it is routed to.** deevy no longer knows who opened a sub-issue, so the Agent
+woken when the last one closes is the one holding the parent, which is the one the work was cut from.
+
+**One ceiling is left: depth.** The count of sub-issues per record and of open ones in a tree were checked
+when deevy opened a sub-issue, and it opens none, so both went; what an Agent opens is bounded by its access
+to the tracker. Depth is still deevy's to bound, because it is deevy that would hand the work on: a record
+nested deeper than `max_delegation_depth` is handed to no Agent, by label, default, assignment, mention, the
+parent wake or the Agent's own `runs.start`, and its history says `delegation.refused`. A tree is refused at
+the Run, where deevy can refuse it, not at the record, where it cannot. Because GitHub links a sub-issue only
+after opening it, the link can come after routing opened a Run; deevy then takes the record back and fails
+the Run if its Agent has not begun it, and leaves one under way alone rather than pull work out from under
+an Agent.
+
+**A wave of sub-issues is no line in anybody's inbox.** The `delegation` Notification went: the Run that
+wakes the parent's Agent is the news, and its Sponsor hears when that Run finishes, as for any Run.

@@ -55,7 +55,6 @@ export const headlines: Record<HumanNotificationKind, string> = {
   assignment: "An Issue was assigned",
   gate_awaiting: "A Gate is waiting for a Human",
   run_finished: "A Run finished",
-  delegation: "An Agent split work into sub-issues",
 };
 
 /**

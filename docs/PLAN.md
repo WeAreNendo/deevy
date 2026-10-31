@@ -67,8 +67,9 @@ is, and deevy answers the second with the first's approval rather than asking th
 
 **Triggers** that create a Run: routing a record to an Agent (a label `agent:<handle>`, an assignment or
 delegation to deevy in the tool, or the Project's default Agent); mentioning an Agent in a comment on the
-record; the last sub-issue of a record closing, which wakes the Agent the record is routed to; a schedule on an
-Agent.
+record; the last sub-issue of a record closing, which wakes the Agent the record is routed to. Nothing starts
+a Run on a clock, and a record nested deeper than the Workspace's one ceiling, **Levels deep**, is routed to
+no Agent.
 
 **Delivery.** A tool tells deevy what changed at `/hooks/<socket>`, signed, and that is the only way in:
 deevy asks no tool what changed, so an instance no tool can reach hears nothing. A trigger appends an
@@ -167,8 +168,7 @@ tools/acceptance  the acceptance walk: a scripted Agent against every deployment
 
 ## Notifications
 
-Notification kinds: assignment, mention, Gate awaiting you, Run finished or failed, and
-the sub-issues an Agent opened or finished. Channels: each Human's in-app inbox (always), a Slack room through
+Notification kinds: assignment, mention, Gate awaiting you, and Run finished or failed. Channels: each Human's in-app inbox (always), a Slack room through
 an incoming webhook or a connected Slack app, and a Slack direct message for a Human whose Slack account is
 linked. Routing is both Workspace rules (this kind, for this Project, to this Channel) and per-person
 preferences. A Gate in Slack carries Approve and Reject.

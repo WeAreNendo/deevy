@@ -76,5 +76,5 @@ going.
 
 ## Next
 
-- [Agents](/agents/overview/): keys, schedules, and what an Agent may do.
+- [Agents](/agents/overview/): keys, Sponsors, and what an Agent may do.
 - [How a Gate asks](/gates/how-a-gate-asks/), and how a Human answers.

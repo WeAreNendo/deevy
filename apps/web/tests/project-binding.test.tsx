@@ -86,7 +86,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
             user: { id: "u-p", name: "Planner", email: "planner@agents.invalid", image: null },
             sponsor: null,
             webhookUrl: null,
-            scheduleMinutes: null,
             grantedProjectIds: [],
           },
         ],

@@ -15,7 +15,7 @@ vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#buil
 vp run acceptance#walk
 ```
 
-A hundred and thirty-one checks: thirty-two against each of four deployments, and three comparing each Event
+A hundred and forty-seven checks: thirty-six against each of four deployments, and three comparing each Event
 log with Node's. The four are the image, the Worker, the image again under a path (`/deevy`), and a hosted
 Workspace at `/acme` behind the many-Workspaces Worker, provisioned through `Platform` and signed in through
 the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes,
@@ -104,7 +104,14 @@ run.awaiting_input gate.ruling_refused gate.approved run.answered run.completed`
     throughout and the Human exactly one hop away at the Events that are theirs — the label that routed the
     work, the two rulings, and each ruling reaching the Run — and the tracker's own at the reply, the two
     refusals and the account it came to know.
-12. **The same walk on the other deployments**, and each Event log is compared with Node's.
+12. **The work split up.** A sub-issue of the record, labelled `agent:planner` the way the Agent would open
+    one in the tracker with its own access, opens a Run for the Planner by assignment, and its closing, the
+    last part, opens one `children_done` Run on the parent. With **Levels deep** set to 1, a sub-issue of
+    that sub-issue is routed to nobody: one `delegation.refused` naming the Planner and the depth allowed, and
+    no Run. One opened and labelled first and linked under it after, which is GitHub's order, is taken back:
+    its Run, not yet begun, fails. This comes after the Event log is read, so the story above is the first
+    Run's alone.
+13. **The same walk on the other deployments**, and each Event log is compared with Node's.
 
 ## Whose account is whose
 

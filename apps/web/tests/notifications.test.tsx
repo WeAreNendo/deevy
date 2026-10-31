@@ -4,9 +4,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 const stub = vi.hoisted(() => ({
   preferences: [
     { kind: "mention", inbox: true, slack: true, slackDm: true, email: false },
-    { kind: "assignment", inbox: true, slack: true, slackDm: true, email: false },
+    { kind: "assignment", inbox: true, slack: false, slackDm: false, email: true },
     { kind: "gate_awaiting", inbox: true, slack: true, slackDm: true, email: true },
-    { kind: "delegation", inbox: true, slack: false, slackDm: false, email: true },
     { kind: "run_finished", inbox: false, slack: true, slackDm: true, email: false },
   ],
   /** Where deevy would email this Human; null when their sign-in did not verify it. */
@@ -36,7 +35,7 @@ describe("the Notifications settings page", () => {
     await mountAt("/settings/notifications", { memberName: "Ada" });
 
     expect(await screen.findByText("Gate awaiting")).toBeTruthy();
-    expect((screen.getByLabelText("Sub-issues in Slack") as HTMLInputElement).ariaChecked).toBe(
+    expect((screen.getByLabelText("Assignment in Slack") as HTMLInputElement).ariaChecked).toBe(
       "false",
     );
     expect(
@@ -52,7 +51,7 @@ describe("the Notifications settings page", () => {
 
     await waitFor(() => expect(stub.saved).toHaveLength(1));
     const [saved] = stub.saved as [{ preferences: Array<Record<string, unknown>> }];
-    expect(saved.preferences).toHaveLength(5);
+    expect(saved.preferences).toHaveLength(4);
     expect(saved.preferences).toContainEqual({
       kind: "gate_awaiting",
       inbox: true,
@@ -65,7 +64,7 @@ describe("the Notifications settings page", () => {
     stub.saved = [];
     await mountAt("/settings/notifications", { memberName: "Ada" });
 
-    const dm = await screen.findByLabelText("Sub-issues as a Slack direct message");
+    const dm = await screen.findByLabelText("Assignment as a Slack direct message");
     expect((dm as HTMLInputElement).ariaChecked).toBe("false");
     fireEvent.click(dm);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -73,7 +72,7 @@ describe("the Notifications settings page", () => {
     await waitFor(() => expect(stub.saved).toHaveLength(1));
     const [saved] = stub.saved as [{ preferences: Array<Record<string, unknown>> }];
     expect(saved.preferences).toContainEqual({
-      kind: "delegation",
+      kind: "assignment",
       inbox: true,
       slack: false,
       slackDm: true,

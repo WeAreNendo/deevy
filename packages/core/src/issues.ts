@@ -1,5 +1,6 @@
 import { issue as issueTable, type Db, type Issue } from "@deevy/db";
 import { and, eq, sql } from "drizzle-orm";
+import type { EventInput } from "./events.ts";
 import type { ExternalIssue } from "./sockets/port.ts";
 import { newId } from "./ids.ts";
 
@@ -143,4 +144,61 @@ export async function routeIssueTo(
     )
     .returning({ id: issueTable.id });
   return Boolean(row);
+}
+
+/**
+ * The one ceiling left on sub-issues (docs/plans/simplify.md, slice 6): how
+ * deep a tree may go before deevy stops handing its records to Agents. The
+ * Agent opens sub-issues in the tracker, where deevy cannot refuse one, so
+ * what it refuses is the Run. Answers the ceiling this record is past, or null
+ * where it is within it.
+ *
+ * A record with no parent is at the top and costs nothing to ask about. One
+ * with a parent costs the Workspace's ceiling and one walk up its ancestors,
+ * which stops one past the ceiling: how far past it does not change the
+ * answer, and a tree the tracker tied into a loop still ends.
+ */
+export async function pastDepthCeiling(
+  db: Db,
+  issue: { id: string; parentId: string | null },
+  workspaceId: string,
+): Promise<number | null> {
+  if (!issue.parentId) return null;
+  const found = await db.query.workspace.findFirst({
+    where: { id: workspaceId },
+    columns: { maxDelegationDepth: true },
+  });
+  if (!found) return null;
+  const ceiling = found.maxDelegationDepth;
+  const [walked] = (await db.all(sql`
+    with recursive ancestor(id, parent_id, level) as (
+      select id, parent_id, 0 from issue where id = ${issue.id}
+      union all
+      select i.id, i.parent_id, a.level + 1
+        from issue i join ancestor a on i.id = a.parent_id
+       where a.level <= ${ceiling}
+    )
+    select max(level) as depth from ancestor
+  `)) as Array<{ depth: number | null }>;
+  return Number(walked?.depth ?? 0) > ceiling ? ceiling : null;
+}
+
+/** What the log says when a record past the ceiling would have gone to `to`. */
+/** Why a record past the ceiling gets no Run, as a failed Run's summary and a refused start say it. */
+export function tooDeep(allowed: number): string {
+  return `Sub-issues may go only ${String(allowed)} ${allowed === 1 ? "level" : "levels"} deep in this Workspace, and this record is deeper.`;
+}
+
+export function delegationRefused(
+  issue: { id: string; projectId: string | null; externalKey: string },
+  allowed: number,
+  to: string,
+): EventInput {
+  return {
+    kind: "delegation.refused",
+    subjectType: "issue",
+    subjectId: issue.id,
+    projectId: issue.projectId,
+    payload: { limit: "depth", allowed, to, key: issue.externalKey },
+  };
 }

@@ -19,16 +19,14 @@ export const humanNotificationKinds = [
    * an Agent asks that on the record now, and nothing writes the kind.
    */
   "gate_awaiting",
-  /** A Run ended, completed or failed. */
-  "run_finished",
   /**
-   * Every sub-issue under a record an Agent this Human sponsors is routed to
-   * is finished, or, in a row from before docs/plans/simplify.md slice 4, that
-   * Agent split work into sub-issues (docs/plans/sub-issue-delegation.md). One line per parent per wave
-   * rather than one per sub-issue: forty of them that make an inbox useless
-   * have cost more than they bought.
+   * A Run ended, completed or failed. Before docs/plans/simplify.md slice 6 a
+   * Sponsor also heard when an Agent's sub-issues all finished (`delegation`);
+   * the Run that wakes the Agent is that news now, and this says how it ends.
+   * A row of the old kind, or a routing rule naming it, no longer reads, as
+   * with `run_awaiting_input`; slice 12's empty database clears them.
    */
-  "delegation",
+  "run_finished",
 ] as const;
 
 /**

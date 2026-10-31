@@ -30,7 +30,7 @@ function emptyDatabase() {
 }
 
 interface SeedOptions {
-  /** The Agent's schedule trigger, in minutes. Absent is no schedule. */
+  /** A schedule set before deevy dropped them (docs/plans/simplify.md, slice 6). */
   scheduleMinutes?: number;
   /** Whether the record is routed to that Agent. */
   assigned?: boolean;
@@ -202,7 +202,7 @@ describe("the runner", () => {
     await runner.stop();
   });
 
-  it("runs the schedule sweep on the same tick as the stale sweep", async () => {
+  it("keeps one Cron, and starts no Run of its own on it", async () => {
     const db = emptyDatabase();
     await seedWorkspace(db, { scheduleMinutes: 60, assigned: true });
     const { cron, registered, tick } = manualCron();
@@ -210,12 +210,10 @@ describe("the runner", () => {
     const runner = startRunner({ db, cron });
     await tick();
 
-    // One Cron for all of deevy's background work: a second schedule would be
-    // a second thing to configure and a second thing to forget.
+    // One Cron for all of deevy's background work, and none of it is an
+    // Agent's clock: routing and the parent wake are what start a Run.
     expect(registered).toHaveLength(1);
-    const runs = await db.query.run.findMany();
-    expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ trigger: "schedule", status: "pending" });
+    expect(await db.query.run.findMany()).toEqual([]);
     await runner.stop();
   });
 

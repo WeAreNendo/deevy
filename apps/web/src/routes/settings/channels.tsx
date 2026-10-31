@@ -23,7 +23,6 @@ const kinds = [
   { value: "assignment", label: "Assignment" },
   { value: "gate_awaiting", label: "Gate awaiting" },
   { value: "run_finished", label: "Run finished" },
-  { value: "delegation", label: "Sub-issues" },
 ] as const;
 
 type Kind = (typeof kinds)[number]["value"];

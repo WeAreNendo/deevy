@@ -9,8 +9,6 @@ export function startedBy(trigger: string | null | undefined): string {
       return "by assignment";
     case "mention":
       return "by a mention";
-    case "schedule":
-      return "on its schedule";
     case "children_done":
       return "when its sub-issues finished";
     case "retry":

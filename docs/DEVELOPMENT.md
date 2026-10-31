@@ -423,7 +423,7 @@ leak.
 
 Every piece of background work is a bounded function in `packages/core/src/work.ts` — one indexed SELECT with
 a LIMIT, one batched UPDATE, never a query per row — and `runDueWork` there is all of them in order, the
-whole of one trigger: stale Runs, Agents' schedules, Channel and webhook deliveries, Gate reminders, what the
+whole of one trigger: stale Runs, Channel and webhook deliveries, Gate reminders, what the
 tools are owed (a Gate's comments on its record, chat messages), and forgetting old inbound deliveries. Both deployments call it and neither owns it. Node satisfies the `Cron` port in
 `packages/core/src/jobs.ts` with `createTimerCron()` from `@deevy/adapters/node`, and
 `apps/server/src/runner.ts` starts that schedule beside `serve()`, drains while a pass says there is more, and
