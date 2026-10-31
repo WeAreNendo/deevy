@@ -218,7 +218,7 @@ describe("what an Agent costs", () => {
 
     await screen.findByRole("heading", { name: /planner/i });
     expect(screen.queryByRole("region", { name: "Usage" })).toBeNull();
-    expect(screen.queryByText(/\$\d|\d tokens?\b/)).toBeNull();
+    expect(screen.queryByText(/\$\d|\d[KMB]? tokens?\b/)).toBeNull();
   });
 });
 
