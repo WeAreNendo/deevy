@@ -121,10 +121,10 @@ One typed core, projected three ways (ADR-0005):
   through the fetch adapter, with generated OpenAPI 3.1 and a reference UI. The React SPA uses the typed client
   with TanStack Query (ADR-0009).
 - **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
-  procedures. The set is nineteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
+  procedures. The set is eighteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
   `issues_create`, `comments_create`, `projects_get`, `docs_get`, `links_list`, `links_add`, `links_remove`,
   `inbox_list`, `gates_get`, `runs_list`, `runs_get` for anyone; `runs_start`, `runs_post_activity`,
-  `gates_request`, `runs_report_usage`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
+  `gates_request`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
   for a Human alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
   rule on, in a browser or from a tool that vouches for them.
 - **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is
@@ -316,8 +316,8 @@ this shape starts from an empty database. GitHub's setup was walked against gith
 Linear's, GitLab's, Notion's and Slack's, each walked once against the real tool, are still owed.
 
 **After Sockets.** Usage and time per Run came first and is done ([run-usage.md](./plans/run-usage.md),
-2026-09-26): every Run shows the tokens and the cost its client reported and how long it worked and waited,
-the Runs feed shows both, and an Agent's page tells its Sponsor what it costs a month. Email followed
+2026-09-26): every Run shows how long it worked and waited, and so does the Runs feed. The tokens and cost
+its client reported went with the reference runtime that reported them ([simplify.md](./plans/simplify.md)). Email followed
 ([email-channel.md](./plans/email-channel.md), done 2026-10-09): a Human's Notifications at their verified
 address, team addresses as Channels, invitations by email, through whichever of seven senders the operator
 has. Hosted Workspaces followed ([hosted.md](./plans/hosted.md), built 2026-10-09; ADR-0028 to ADR-0032): one
@@ -328,8 +328,7 @@ at app.deevy.dev since 2026-10-14, with what an idle Workspace costs and how man
 measured (hosted.md, "What it found"). The public docs were then rewritten for their two readers
 ([docs.md](./plans/docs.md)) and the app and the docs given one design system
 ([design-system.md](./plans/design-system.md)), on 2026-10-16 and 2026-10-17. Next are the real walks of
-Linear, GitLab, Notion and Slack, which only GitHub has had so far. Then, in rough order: budgets that stop a
-Run or an Agent's month, sized on the Usage Runs are now seen to report; per-Agent identities on a Socket where
+Linear, GitLab, Notion and Slack, which only GitHub has had so far. Then, in rough order: per-Agent identities on a Socket where
 a provider makes them cheap; Jira and Asana; private Projects; Postgres adapter.
 
 ## Risks worth naming

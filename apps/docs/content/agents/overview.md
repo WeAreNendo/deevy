@@ -89,7 +89,7 @@ revoke the one you lost.
 
 The Sponsor is the Human accountable for the Agent. They hear about the Agent's Runs that no other Human
 started, and when it splits work into sub-issues, and they, or an admin, manage it. Only the Agent's Sponsor or an admin can issue its keys, grant it Projects, set its schedule
-or its webhook, suspend it or see what it spent.
+or its webhook, or suspend it.
 
 An admin can hand an Agent to another Human with **Sponsor**, at the top of the Agent's page.
 
@@ -101,9 +101,9 @@ did stays readable. **Reinstate** lets it work again.
 
 ## What it has done
 
-The Agent's page shows its **Recent Runs**, and, to its Sponsor and admins, its **Usage** by month: how many
-Runs, what they cost as its clients reported it, and how long they worked. A cost is the reporting client's
-estimate; deevy never prices tokens itself.
+The Agent's page shows its **Recent Runs**. Each Run says how long it worked and how long it waited on a
+Human, on its own page and in the Runs feed. deevy shows no tokens or cost: whatever runs the Agent keeps
+that account.
 
 ## Next
 

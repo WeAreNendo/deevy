@@ -380,6 +380,36 @@ describe("a tool deevy does not project", () => {
     expect(answer.error?.message).toContain("agents_create");
   });
 
+  /**
+   * deevy runs no Agent, so what a session spent was only ever its client's
+   * word, and deevy stopped taking it (docs/plans/simplify.md, slice 3): the
+   * tool, the route a client reported to and the Agent's monthly totals are
+   * gone rather than answering with a refusal.
+   */
+  it("takes no report of what a session spent, over MCP or HTTP", async () => {
+    const { app, key, agent } = await workspaceWithAgent();
+
+    expect(toolNames(await mcp(app, key, "tools/list", {}))).not.toContain("runs_report_usage");
+    const answer = await mcp(app, key, "tools/call", {
+      name: "runs_report_usage",
+      arguments: { runId: "run_000000000000", report: "s1", harness: "claude-code", models: [] },
+    });
+    expect(answer.result).toBeUndefined();
+    expect(answer.error?.message).toContain("runs_report_usage");
+
+    const authorization = `Bearer ${key}`;
+    const reported = await app.request("/api/runs/run_000000000000/usage", {
+      method: "POST",
+      headers: { authorization, "content-type": "application/json" },
+      body: JSON.stringify({ report: "s1", harness: "claude-code", models: [] }),
+    });
+    expect(reported.status).toBe(404);
+    const months = await app.request(`/api/agents/${agent.member.id}/usage`, {
+      headers: { authorization },
+    });
+    expect(months.status).toBe(404);
+  });
+
   it("does not project connecting a Socket, which is an admin's alone", async () => {
     const { app, key } = await workspaceWithAgent();
 

@@ -79,15 +79,11 @@ _Avoid_: session, job, execution, attempt
 One entry an Agent posts to its Run while working: a thought, an action, an elicitation, a response, or an error.
 _Avoid_: log line, step, message
 
-**Usage**:
-What a Run consumed, as the client that ran its Agent reported it: tokens by model — input, output, and
-prompt cache read and written — and a cost where that client priced them. An estimate, never a bill; deevy
-never prices tokens itself.
-_Avoid_: billing, charges, invoice, spend
-
 **Working time** and **waiting time**:
 How long a Run was active, and how long it waited on a Human at a Gate or a question. With the time before it
-started, they are the whole of a Run's life, and deevy derives them rather than being told.
+started, they are the whole of a Run's life, and deevy derives them rather than being told. They are all deevy
+says about what a Run cost.
+_Avoid_: usage, spend, billing
 _Avoid_: duration (alone), idle time
 
 ### Rulings
@@ -150,8 +146,9 @@ _Avoid_: uuid, guid, primary key (in prose)
 
 ### Retired
 
-Words v1 used that the Sockets milestone removed. Old documents — the plans and ADRs written before it —
-use them; code and new writing do not.
+Words v1 used that the Sockets milestone removed, and words it left that making deevy simpler removed
+(`docs/plans/simplify.md`). Old documents — the plans and ADRs written before them — use them;
+code and new writing do not.
 
 - **Document** — the intent, spec and plan texts a State materialised. What an Agent proposes is a
   Proposal on a Gate; where a team keeps plans is theirs.
@@ -160,3 +157,5 @@ use them; code and new writing do not.
 - **Label** — a Workspace classification. A tracker label is a fact deevy mirrors and a routing input.
 - **Team** — a named group of Members. Mention Members; a tracker's teams are its containers.
 - **Key** as `DEV-42` — deevy's own numbering. An Issue's key is the tracker's.
+- **Usage** — the tokens and cost a Run's client reported. deevy says how long a Run worked and waited,
+  which it saw itself.

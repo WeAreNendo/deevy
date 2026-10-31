@@ -586,3 +586,12 @@ it with foreign keys on, and ADR-0031's guard refuses a dropped column anyway. S
 them, so every later slice removes columns the same way, in the code first. And the stub's container spec
 keeps reading `name=…`, ignoring what follows, so an older `DEEVY_DEV_STUB_CONTAINERS` still starts. The MCP
 tool set is nineteen; the walk, which already attached its pull request with `links_add`, needed no change.
+
+**Slice 3, time, not tokens.** `runs.reportUsage` and its tool, `agents.usage`, `usage.ts`, the
+`run.usage_reported` Event, the `use_` id prefix, the Usage section on a Run's page and on an Agent's, the
+feed's Cost column and the seed's four reports are gone; `run_usage` stays in the schema, unused, by
+convention 2. The Runs feed reads in three statements rather than four. The Agent's month-by-month table went
+whole, its working time with it, since it was the Usage section: a Run's time is on its own page and in the
+feed, and nothing asked for a monthly one without the cost beside it. `duration` moved to `lib/time.ts`, and
+CONTEXT.md retires **Usage** now rather than in slice 13. The tool set is eighteen; the walk needed no
+change, because its scripted Agent never reported.

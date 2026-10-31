@@ -155,17 +155,6 @@ export function stubRun(extra: Record<string, unknown> = {}) {
     activityCount: 0,
     openGateRequestId: null,
     timing: { queuedMs: 0, workingMs: 0, waitingMs: 0 },
-    // Nothing reported: what a Run worked by anything but a reporting client says.
-    usage: {
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      costUsd: null,
-      unpricedTokens: 0,
-      reports: 0,
-      models: [] as Array<Record<string, unknown>>,
-    },
     ...extra,
   };
 }
@@ -231,8 +220,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
     },
     agents: {
       list: async () => ({ agents: [] }),
-      // No months at all: a page that shows them has nothing to say yet.
-      usage: async () => ({ months: [] }),
       create: async () => ({}),
       update: async () => ({}),
       setSponsor: async () => ({}),
