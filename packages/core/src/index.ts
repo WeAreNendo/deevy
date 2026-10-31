@@ -102,7 +102,6 @@ export {
   maxDeliveryAttempts,
   maxWebhookAttempts,
   runDueWork,
-  sweepSchedules,
   remindAboutGates,
   sweepStaleRuns,
   type DeliverDueChannelMessagesOptions,
@@ -112,9 +111,7 @@ export {
   type DueWorkLimits,
   type DueWorkResult,
   type RunDueWorkOptions,
-  type ScheduleSweepResult,
   type SweepResult,
-  type SweepSchedulesOptions,
   type SweepStaleRunsOptions,
 } from "./work.ts";
 export {

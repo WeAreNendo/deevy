@@ -71,6 +71,22 @@ async function workspaceWithTwoAgents() {
           actor: { login: "planner", id: "u-planner", isBot: false },
         },
       ]),
+    /** A Human's comment on a record, as a delivery does. */
+    comment: (externalId: string, body: string) =>
+      seeded.deliver([
+        {
+          kind: "comment",
+          scopeKey: "acme/deevy",
+          issueExternalId: externalId,
+          comment: {
+            externalId: `c-${externalId}`,
+            url: `https://tracker.test/acme/deevy#${externalId}-c`,
+            body,
+            author: { login: "ada", id: "u-ada", isBot: false },
+            createdAt: new Date(),
+          },
+        },
+      ]),
     /** A sub-issue the Agent opened in the tracker, as deevy projects it. */
     child: (title: string) => {
       opened += 1;
@@ -216,15 +232,247 @@ describe("the parent waking when the last child closes", () => {
   });
 });
 
-describe("the delegation ceilings", () => {
-  it("are an admin's to change, and refuse a ceiling of nothing", async () => {
+describe("a sub-issue the Agent labels for another Agent", () => {
+  it("opens a Run for the Agent the label names, as any routed record does", async () => {
+    const { asAdmin, builder, deliver } = await workspaceWithTwoAgents();
+
+    await deliver({
+      externalId: "2",
+      title: "The payment form",
+      parentExternalId: "1",
+      labels: ["agent:builder"],
+    });
+
+    const { runs } = await asAdmin.runs.list({ issue: "acme/deevy#2" });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ agentMemberId: builder.member.id, trigger: "assignment" });
+  });
+});
+
+/**
+ * One ceiling is left (docs/plans/simplify.md, slice 6): how deep a tree of
+ * sub-issues may go before deevy stops handing its records to Agents. The
+ * Agent opens the sub-issues in the tracker, where deevy cannot refuse one,
+ * so what it refuses is the Run: a record past the ceiling is routed to
+ * nobody, whatever names an Agent on it, and the log says why.
+ */
+describe("the depth ceiling", () => {
+  /** Records 2 and 3: a child of record 1, and a child of that, at depth 1 and 2. */
+  async function twoLevels(ceiling: number) {
+    const setup = await workspaceWithTwoAgents();
+    await setup.asAdmin.workspace.update({ maxDelegationDepth: ceiling });
+    await setup.deliver({ externalId: "2", title: "Payments", parentExternalId: "1" });
+    return setup;
+  }
+
+  it("routes a child at the ceiling, and refuses one past it with the reason, opening nothing", async () => {
+    const { db, asAdmin, builder, deliver } = await twoLevels(1);
+
+    await deliver({
+      externalId: "3",
+      title: "The card form",
+      parentExternalId: "2",
+      labels: ["agent:builder"],
+    });
+
+    expect((await asAdmin.runs.list({ issue: "acme/deevy#3" })).runs).toEqual([]);
+    const refused = await db.query.event.findMany({ where: { kind: "delegation.refused" } });
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.payload).toMatchObject({
+      limit: "depth",
+      allowed: 1,
+      to: builder.member.id,
+    });
+    // Routed to nobody: an assignment would be work the Agent may not start.
+    expect(await db.query.event.findMany({ where: { kind: "issue.assigned" } })).toEqual([]);
+    const told = await db.query.notification.findMany({
+      where: { recipientMemberId: builder.member.id },
+    });
+    expect(told).toEqual([]);
+
+    // One level up is within it.
+    await deliver({ externalId: "2", title: "Payments", labels: ["agent:builder"] });
+    expect((await asAdmin.runs.list({ issue: "acme/deevy#2" })).runs).toHaveLength(1);
+  });
+
+  it("refuses a mention on a record past it the same way, since a mention routes too", async () => {
+    const { db, asAdmin, builder, deliver, comment } = await twoLevels(1);
+    await deliver({ externalId: "3", title: "The card form", parentExternalId: "2" });
+
+    await comment("3", "@builder take this one");
+
+    expect((await asAdmin.runs.list({ issue: "acme/deevy#3" })).runs).toEqual([]);
+    const refused = await db.query.event.findMany({ where: { kind: "delegation.refused" } });
+    expect(refused.map((event) => event.payload)).toEqual([
+      expect.objectContaining({ limit: "depth", allowed: 1, to: builder.member.id }),
+    ]);
+    // The comment still names the Builder, so it hears it was named.
+    const told = await db.query.notification.findMany({
+      where: { recipientMemberId: builder.member.id },
+    });
+    expect(told.map((row) => row.kind)).toEqual(["mention"]);
+  });
+
+  it("takes back a record the tracker links too deep after routing it, failing a Run not yet begun", async () => {
+    // GitHub opens a record first and makes it a sub-issue after, so the Run
+    // opens before deevy knows how deep the record is.
+    const { db, asAdmin, builder, deliver } = await twoLevels(1);
+    await deliver({ externalId: "3", title: "The card form", labels: ["agent:builder"] });
+    const [opened] = (await asAdmin.runs.list({ issue: "acme/deevy#3" })).runs;
+    expect(opened?.status).toBe("pending");
+
+    await deliver({
+      externalId: "3",
+      title: "The card form",
+      parentExternalId: "2",
+      labels: ["agent:builder"],
+    });
+    await deliver({
+      externalId: "3",
+      title: "The card form, again",
+      parentExternalId: "2",
+      labels: ["agent:builder"],
+    });
+
+    const run = await db.query.run.findFirst({ where: { id: opened!.id } });
+    expect(run?.status).toBe("failed");
+    expect(run?.summary).toMatch(/1 level deep/);
+    const record = await db.query.issue.findFirst({ where: { externalId: "3" } });
+    expect(record?.assigneeMemberId).toBeNull();
+    const assigned = await db.query.event.findMany({
+      where: { kind: "issue.assigned", subjectId: record!.id },
+    });
+    expect(assigned.map((event) => (event.payload as { to: unknown }).to)).toEqual([
+      builder.member.id,
+      null,
+    ]);
+    // Said once, however many deliveries of it follow.
+    const refused = await db.query.event.findMany({ where: { kind: "delegation.refused" } });
+    expect(refused.map((event) => event.payload)).toEqual([
+      expect.objectContaining({ limit: "depth", allowed: 1, to: builder.member.id }),
+    ]);
+  });
+
+  it("takes back the record but leaves a Run its Agent already began", async () => {
+    const { db, asAdmin, builder, deliver } = await twoLevels(1);
+    await deliver({ externalId: "3", title: "The card form", labels: ["agent:builder"] });
+    const [opened] = (await asAdmin.runs.list({ issue: "acme/deevy#3" })).runs;
+    await clientFor(builder).runs.postActivity({
+      runId: opened!.id,
+      kind: "thought",
+      body: "Reading the form",
+    });
+
+    await deliver({
+      externalId: "3",
+      title: "The card form",
+      parentExternalId: "2",
+      labels: ["agent:builder"],
+    });
+
+    expect((await db.query.run.findFirst({ where: { id: opened!.id } }))?.status).toBe("active");
+    const record = await db.query.issue.findFirst({ where: { externalId: "3" } });
+    expect(record?.assigneeMemberId).toBeNull();
+    expect(await db.query.event.findMany({ where: { kind: "delegation.refused" } })).toHaveLength(
+      1,
+    );
+  });
+
+  it("reads the parent a delivery names, even where deevy had none for the record", async () => {
+    // Linear: one update makes a record a sub-issue and labels it at once.
+    const { db, asAdmin, deliver } = await twoLevels(1);
+    await deliver({ externalId: "3", title: "The card form" });
+
+    await deliver({
+      externalId: "3",
+      title: "The card form",
+      parentExternalId: "2",
+      labels: ["agent:builder"],
+    });
+
+    expect((await asAdmin.runs.list({ issue: "acme/deevy#3" })).runs).toEqual([]);
+    expect(await db.query.event.findMany({ where: { kind: "delegation.refused" } })).toHaveLength(
+      1,
+    );
+  });
+
+  it("refuses an Agent starting a Run itself on a record past it, saying how deep is allowed", async () => {
+    const { builder, deliver } = await twoLevels(1);
+    await deliver({ externalId: "3", title: "The card form", parentExternalId: "2" });
+
+    await expect(clientFor(builder).runs.start({ issue: "acme/deevy#3" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringMatching(/1 level deep/),
+    });
+    await expect(clientFor(builder).runs.start({ issue: "acme/deevy#2" })).resolves.toMatchObject({
+      trigger: "manual",
+    });
+  });
+
+  it("wakes no Agent on a parent past it, when the ceiling came down after it was routed", async () => {
+    const { db, admin, asAdmin, builder, deliver } = await workspaceWithTwoAgents();
+    await deliver({ externalId: "2", title: "Payments", parentExternalId: "1" });
+    await deliver({
+      externalId: "3",
+      title: "The card form",
+      parentExternalId: "2",
+      labels: ["agent:builder"],
+    });
+    await deliver({ externalId: "4", title: "The expiry field", parentExternalId: "3" });
+    // The Builder did its part and split off the rest, so it has no Run open.
+    const asBuilder = clientFor(builder);
+    const [assigned] = (await asAdmin.runs.list({ issue: "acme/deevy#3" })).runs;
+    await asBuilder.runs.postActivity({ runId: assigned!.id, kind: "thought", body: "Split it" });
+    await asBuilder.runs.finish({
+      runId: assigned!.id,
+      status: "completed",
+      summary: "Split off #4",
+    });
+    await asAdmin.workspace.update({ maxDelegationDepth: 1 });
+
+    const four = await db.query.issue.findFirst({ where: { externalId: "4" } });
+    await close(admin, four!);
+
+    const runs = (await asAdmin.runs.list({ issue: "acme/deevy#3" })).runs;
+    expect(runs.map((one) => one.trigger)).toEqual(["assignment"]);
+    // The parts finishing is still said; who it would have woken is refused.
+    expect(
+      await db.query.event.findMany({ where: { kind: "issue.children_closed" } }),
+    ).toHaveLength(1);
+    const refused = await db.query.event.findMany({ where: { kind: "delegation.refused" } });
+    expect(refused.map((event) => event.payload)).toEqual([
+      expect.objectContaining({ limit: "depth", allowed: 1, to: builder.member.id }),
+    ]);
+  });
+
+  it("is the one ceiling left, an admin's to change, and never nothing", async () => {
     const { asAdmin } = await workspaceWithTwoAgents();
 
-    const updated = await asAdmin.workspace.update({ maxChildrenPerIssue: 40 });
-    expect(updated.maxChildrenPerIssue).toBe(40);
+    const updated = await asAdmin.workspace.update({ maxDelegationDepth: 5 });
+    expect(updated.maxDelegationDepth).toBe(5);
+    expect(updated).not.toHaveProperty("maxChildrenPerIssue");
+    expect(updated).not.toHaveProperty("maxOpenDescendants");
+    expect(await asAdmin.workspace.get({})).not.toHaveProperty("maxChildrenPerIssue");
 
-    await expect(asAdmin.workspace.update({ maxChildrenPerIssue: 0 })).rejects.toMatchObject({
+    await expect(asAdmin.workspace.update({ maxDelegationDepth: 0 })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
+  });
+});
+
+describe("the sub-issues finishing", () => {
+  it("puts nothing in anybody's inbox, since the Run the parent wakes is the news", async () => {
+    const { db, admin, asAdmin, child } = await workspaceWithTwoAgents();
+    const one = await child("One");
+
+    await close(admin, one);
+
+    // The Run the parent wakes is the news; the Sponsor hears when it finishes.
+    const told = await db.query.notification.findMany({
+      where: { recipientMemberId: admin.member.id },
+    });
+    expect(told).toEqual([]);
+    const offered = (await asAdmin.preferences.get({})).preferences.map((row) => row.kind);
+    expect(offered).not.toContain("delegation");
   });
 });

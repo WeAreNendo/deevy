@@ -198,6 +198,11 @@ function stated(
   record: { externalId: string; externalKey: string; url: string; title: string },
   labels: string[],
   minutesOn: number,
+  /** The tracker's own parent, for a sub-issue, and whether it is still open. */
+  {
+    parentExternalId = null,
+    state = "open",
+  }: { parentExternalId?: string | null; state?: "open" | "closed" } = {},
 ): unknown {
   return {
     kind: "issue",
@@ -209,11 +214,11 @@ function stated(
       url: record.url,
       title: record.title,
       body: "An operator cannot tell whether the service is alive.",
-      state: "open",
-      stateName: "open",
+      state,
+      stateName: state,
       assignees: [],
       labels,
-      parentExternalId: null,
+      parentExternalId,
       // Later than deevy's own copy, because an older clock is a reordered
       // delivery and deevy is right to drop it (packages/core/src/issues.ts).
       updatedAt: new Date(Date.now() + minutesOn * 60_000).toISOString(),
@@ -830,6 +835,92 @@ export async function walk(deployment: Deployment, label: string, repo: string):
         : event.actorMemberId === plannerId,
     ),
     JSON.stringify(events.map((event) => [event.kind, event.actorMemberId === plannerId])),
+  );
+
+  // Part 8: the work split up (docs/plans/simplify.md, slice 6). The Agent
+  // opens a sub-issue in the tracker with its own access, labelled for whoever
+  // should do it; deevy hears of it as of any record, routes it, and wakes the
+  // Agent on the parent when the last part closes. One level past the
+  // Workspace's ceiling, a part is routed to nobody.
+  const part = {
+    externalId: "2",
+    externalKey: `${CONTAINER}#2`,
+    url: `https://stub.invalid/${CONTAINER}/issues/2`,
+    title: "Add a smoke for the health endpoint",
+  };
+  const runsOn = async (key: string) =>
+    ((await agent.tool("runs_list", { issue: key })).runs ?? []) as Array<{ trigger: string }>;
+  await deliver(
+    origin,
+    socketId,
+    [stated(part, ["agent:planner"], 10, { parentExternalId: record.externalId })],
+    "acceptance-part",
+  );
+  const parted = await runsOn(part.externalKey);
+  check(
+    "a sub-issue the Agent labelled in the tracker opens a Run for that Agent",
+    parted.length === 1 && parted[0]?.trigger === "assignment",
+    JSON.stringify(parted),
+  );
+  await deliver(
+    origin,
+    socketId,
+    [stated(part, ["agent:planner"], 11, { parentExternalId: record.externalId, state: "closed" })],
+    "acceptance-part-closed",
+  );
+  const woken = (await runsOn(issueKey)).filter((one) => one.trigger === "children_done");
+  check(
+    "and its closing, the last part, opens one Run on the parent",
+    woken.length === 1,
+    JSON.stringify(woken),
+  );
+
+  await human(origin, "workspace/update", { maxDelegationDepth: 1 }, ada);
+  const deeper = {
+    externalId: "3",
+    externalKey: `${CONTAINER}#3`,
+    url: `https://stub.invalid/${CONTAINER}/issues/3`,
+    title: "Time the smoke",
+  };
+  await deliver(
+    origin,
+    socketId,
+    [stated(deeper, ["agent:planner"], 12, { parentExternalId: part.externalId })],
+    "acceptance-deeper",
+  );
+  const refusals = (
+    await human(origin, "events/list", { kindPrefix: "delegation", limit: 10 }, ada)
+  ).events as Array<{ payload: { allowed?: unknown; to?: unknown } | null }>;
+  check(
+    "and one a level past the ceiling is refused, and opens nothing",
+    (await runsOn(deeper.externalKey)).length === 0 &&
+      refusals.length === 1 &&
+      refusals[0]?.payload?.allowed === 1 &&
+      refusals[0]?.payload?.to === plannerId,
+    JSON.stringify(refusals),
+  );
+  // GitHub's order: the record is opened, labelled, and only then made a
+  // sub-issue, so its Run opens before deevy knows how deep it is.
+  const late = {
+    externalId: "4",
+    externalKey: `${CONTAINER}#4`,
+    url: `https://stub.invalid/${CONTAINER}/issues/4`,
+    title: "Log the smoke",
+  };
+  await deliver(origin, socketId, [stated(late, ["agent:planner"], 13)], "acceptance-late");
+  await deliver(
+    origin,
+    socketId,
+    [stated(late, ["agent:planner"], 14, { parentExternalId: part.externalId })],
+    "acceptance-late-linked",
+  );
+  const taken = (await agent.tool("runs_list", { issue: late.externalKey })).runs as Array<{
+    status: string;
+  }>;
+  check(
+    "and one linked past it after it was routed is taken back, its Run failed before it began",
+    taken.length === 1 && taken[0]?.status === "failed",
+    JSON.stringify(taken),
   );
 
   return story;

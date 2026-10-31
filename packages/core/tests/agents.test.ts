@@ -275,21 +275,22 @@ describe("agents.update", () => {
     expect(kinds.filter((kind) => kind === "agent.updated")).toEqual(["agent.updated"]);
   });
 
-  it("sets and clears the schedule that wakes an Agent on its assigned Issues", async () => {
+  it("has no schedule to set: routing and the parent wake are what start its Runs", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const asAda = createRouterClient(router, { context: ada });
     const created = await asAda.agents.create({ name: "Planner" });
 
-    const hourly = await asAda.agents.update({ memberId: created.id, scheduleMinutes: 60 });
-    expect(hourly.scheduleMinutes).toBe(60);
+    const updated = await asAda.agents.update({
+      memberId: created.id,
+      scheduleMinutes: 60,
+    } as never);
 
-    // Null is no schedule, which is how an Agent is put back to reacting only.
-    const never = await asAda.agents.update({ memberId: created.id, scheduleMinutes: null });
-    expect(never.scheduleMinutes).toBeNull();
-    const kinds = (await db.query.event.findMany({ orderBy: { seq: "asc" } })).map((e) => e.kind);
-    expect(kinds.filter((kind) => kind === "agent.updated")).toHaveLength(2);
+    expect(updated).not.toHaveProperty("scheduleMinutes");
+    expect(await db.query.agent.findFirst({ where: { memberId: created.id } })).toMatchObject({
+      scheduleMinutes: null,
+    });
   });
 
   it("refuses a Human who neither sponsors the Agent nor administers the Workspace", async () => {

@@ -685,3 +685,43 @@ now says so, and a developer's database from before this slice wants reseeding. 
 Agent's webhook carries every comment in its Projects, mention or not, which agent-loop.md now says; only the
 inbox and a new Run wait for the mention, and a Project's **Route by mention** turned off stops the Run and
 not the row.
+
+**Slice 6, delegation and schedules.** 528 lines of source out and 252 in, 320 of tests out and 435 in (the
+walk's four checks are 94 of them), and 158 out of the OpenAPI snapshot. `sweepSchedules`, its two queries
+and the batched inserts only it used (219 lines of `work.ts`), an Agent's `scheduleMinutes` with its field on
+`agents.update`, the **Schedule** column and section, the `schedule` trigger, and the `delegation`
+Notification with its recipients, `sponsorOf`, its preference, routing, Slack and email entries and its inbox
+text are gone. `runDueWork` is the stale sweep, the Gate reminder and the delivery loops, and a tick of the
+Node runner starts no Run. The two counts went from the Workspace's API, its page and the CLI; their columns,
+and an Agent's two schedule columns, stay unread until slice 12.
+
+The depth ceiling is read in two places, not one. Routing reads it in `sockets/apply.ts`, before the
+assignment, so a record too deep gets no `issue.assigned` and no `assignment` row for work its Agent may not
+start, and the refusal is said once per record however many deliveries follow. A mention reads it in
+`triggers.ts`, since a mention routes work too and an Agent that cut a tree too deep could otherwise mention
+its way past the label; the mention still lands in the inbox, and each one says its own refusal.
+`pastDepthCeiling` walks a record's ancestors in one recursive query bounded by the ceiling, and a top-level
+record costs no statement, so no counted path moved. Nothing in deevy assigns a record but routing, so an
+`issue.assigned` that reaches the trigger is already within the ceiling.
+
+The review found the ceiling did not hold in GitHub's order. GitHub opens a record and makes it a sub-issue
+after, so the open delivery routed it and opened its Run, and the link delivery returned before reading the
+depth because the record already had its Agent; a Project's default Agent did the same in any tracker. And
+a record that one update made a sub-issue and labelled (Linear's order) was routed past the ceiling, since
+the upsert returned the row with its old parent and routing read that. Routing now reads the depth for the
+record's holder on every delivery of a routed sub-issue, from the record as it now stands, and when a late
+link puts it past the ceiling it takes the record back and fails each Run nobody has begun, with the reason
+as its summary, so the Sponsor hears it; a Run under way goes on (the user chose this over documenting the
+order or checking at the Agent's first move). `runs.start` refuses such a record too, as a mention does, and
+the parent wake opens no Run on a parent past it. agent-loop.md tells an Agent to link before it labels, and
+how it can tell a part was refused, since an Agent cannot read the Event log. The walk checks the late link
+on every deployment (147 checks).
+
+What the Sponsor heard went with the kind: the Run that wakes the parent's Agent is the news now, and
+`run_finished` tells that Agent's Sponsor how it ends, since the Agent is what the Run is triggered by. The
+Workers guide checked its Cron by giving an Agent a one-minute schedule; it now checks with a webhook
+delivery, which only the sweep sends. The Event log said "could not open another sub-issue" for a refusal,
+from when deevy opened them; it now names the Agent the record was kept from and the depth allowed. As in
+slice 5, a Run whose trigger was `schedule`, a `delegation` inbox row and a routing rule naming it fail the
+output schema on a database from before this slice; the schema's comments say so, and slice 12's empty
+database clears them.

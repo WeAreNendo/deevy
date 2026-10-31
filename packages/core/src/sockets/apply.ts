@@ -12,7 +12,14 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 import { appendEvent, type EventSource } from "../events.ts";
 import type { JobQueue } from "../jobs.ts";
-import { routeIssueTo, upsertProjection } from "../issues.ts";
+import {
+  delegationRefused,
+  pastDepthCeiling,
+  routeIssueTo,
+  tooDeep,
+  upsertProjection,
+} from "../issues.ts";
+import { setRunStatus } from "../runs.ts";
 import { resolveMentions } from "../mentions.ts";
 import {
   parseRulingCommand,
@@ -240,7 +247,11 @@ async function applyIssue(
     external,
     parentId: named ?? before?.parentId ?? null,
   });
-  if (named && issue.parentId !== named) {
+  // What routing reads is the record as it now stands: the upsert keeps the
+  // parent it had, and a record this delivery first names one for is a
+  // sub-issue now, whatever the row it returned says.
+  const linked = named && issue.parentId !== named ? { ...issue, parentId: named } : issue;
+  if (linked !== issue) {
     await db.update(issueTable).set({ parentId: named }).where(eq(issueTable.id, issue.id));
   }
   if (!applied) return `${external.key} arrived after a newer delivery, so nothing changed`;
@@ -269,7 +280,7 @@ async function applyIssue(
     });
   }
 
-  await route(applying, project, issue, external.delegateId ?? null);
+  await route(applying, project, linked, external.delegateId ?? null);
   return null;
 }
 
@@ -320,6 +331,19 @@ async function route(
   if (issue.state === "closed") return;
 
   const target = await routedMember(applying, project, issue, delegateId);
+  const holder = target ?? issue.assigneeMemberId;
+  if (!holder) return;
+
+  // A sub-issue deeper than the Workspace lets work go is handed to no Agent
+  // (issues.ts). Asked of the record's holder as well as a new one, because
+  // GitHub opens a record before it makes it a sub-issue: the link can arrive
+  // after the record was routed and its Run opened.
+  const past = await pastDepthCeiling(applying.db, issue, applying.source.workspace.id);
+  if (past !== null) {
+    await refuseTooDeep(applying, project, issue, past, holder);
+    return;
+  }
+
   if (!target || target === issue.assigneeMemberId) return;
   if (!(await routeIssueTo(applying.db, issue.id, target))) return;
 
@@ -332,6 +356,52 @@ async function route(
     // `triggersFor`; `byRouting` is how a reader knows nobody clicked.
     payload: { from: issue.assigneeMemberId, to: target, byRouting: true },
   });
+}
+
+/**
+ * A record past the ceiling, handed to nobody. Where routing reads it first,
+ * nothing was handed; where the tracker said it was a sub-issue only after
+ * deevy routed it, this takes it back from its Agent and fails each Run on it
+ * nobody has begun, with the reason as its summary. A Run its Agent already
+ * began goes on: the work is under way, and the Event says the rest. The
+ * refusal is said once per record and Agent, however many deliveries follow.
+ */
+async function refuseTooDeep(
+  applying: Applying,
+  project: Project,
+  issue: Issue,
+  allowed: number,
+  to: string,
+): Promise<void> {
+  const { db, source } = applying;
+  const said = await db.query.event.findMany({
+    where: { subjectType: "issue", subjectId: issue.id, kind: "delegation.refused" },
+    columns: { payload: true },
+  });
+  if (!said.some((one) => (one.payload as { to?: unknown } | null)?.to === to)) {
+    await appendEvent(source, delegationRefused(issue, allowed, to));
+  }
+  if (issue.assigneeMemberId && (await routeIssueTo(db, issue.id, null))) {
+    await appendEvent(source, {
+      kind: "issue.assigned",
+      subjectType: "issue",
+      subjectId: issue.id,
+      projectId: project.id,
+      payload: { from: issue.assigneeMemberId, to: null, byRouting: true },
+    });
+  }
+  const waiting = await db.query.run.findMany({ where: { issueId: issue.id, status: "pending" } });
+  for (const run of waiting) {
+    const summary = tooDeep(allowed);
+    await setRunStatus(db, run, "failed", { summary });
+    await appendEvent(source, {
+      kind: "run.failed",
+      subjectType: "run",
+      subjectId: run.id,
+      projectId: project.id,
+      payload: { issueId: issue.id, summary },
+    });
+  }
 }
 
 async function routedMember(
