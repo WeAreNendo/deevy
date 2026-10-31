@@ -10,7 +10,9 @@ the numbers this one produces.
 Six slices, in dependency order. Each is one PR on `main` and carries its own tests.
 
 **Status: done, 2026-09-26**, in six stacked pull requests (#106, #107, #110, #111, #112 and #113). What each
-slice found is under "What it found", at the end.
+slice found is under "What it found", at the end. The tokens and cost were removed again in
+[simplify.md](./simplify.md), slice 3: only the reference runtime ever reported them, and it went in slice 1.
+The time stays.
 
 Why this and why now. deevy's promise is that a Human can hand work to an Agent and still be in charge of it.
 "In charge" includes the bill. Today an operator running the reference runtime finds out what an Agent spent

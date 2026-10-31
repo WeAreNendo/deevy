@@ -19,8 +19,8 @@ Labels, Teams, stored comments and the board are gone. What each slice found is 
 acceptance walk is a script (`vp run acceptance#walk`, `docs/acceptance.md`) that runs a record
 through every deployment on every commit with no account, App or network, with a scripted Agent that holds
 only its key. Then **usage and time per Run**
-(`docs/plans/run-usage.md`): a Run's client reports each session's tokens and cost (`runs.reportUsage`), deevy
-derives how long it worked and waited, and the Run page, the feed and an Agent's page show both. Then
+(`docs/plans/run-usage.md`): deevy derives how long a Run worked and waited, and the Run page and the feed
+show it; the tokens and cost a Run's client reported (`runs.reportUsage`) were since removed. Then
 **email** (`docs/plans/email-channel.md`): a port in `@deevy/core/email` with seven senders — the HTTP ones in
 `packages/email`, SMTP in `@deevy/adapters/node`, Cloudflare Email Service in `@deevy/adapters/workers` — a
 Human's Notifications at their verified address, team addresses as Channels, invitations by email, and

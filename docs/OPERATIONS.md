@@ -1036,18 +1036,10 @@ manage Members, or rule on a Gate, and neither can anything holding a delegated 
 by a Human, in deevy's browser or from a tool that vouches for them (ADR-0004, ADR-0010, ADR-0025). Which
 operations an Agent may call at all is default-deny, per operation (ADR-0011).
 
-**What a Run spent is the running client's to say**, because deevy runs nothing and so counts nothing
-([run-usage.md](./plans/run-usage.md)). Whatever runs an Agent reports each session with `runs.reportUsage`
-(`POST /runs/{runId}/usage`, or the MCP tool `runs_report_usage`): the harness it ran on, and per model the
-input and output tokens, the prompt cache read and written, and a cost in dollars where the harness priced
-them. A session reports under a key of its own; the same key again replaces what it said, so a retry counts
-once and a session may report its running totals as it goes. Only the Run's own Agent may report, a Run takes
-a hundred reports, and it takes them until a day after it finishes. deevy adds the reports up, stores money in
-whole micro-dollars, and never prices a token itself: a cost is null where nobody reported one, and the
-tokens behind it are counted apart. A report is trusted exactly as far as the Agent's key is — an Agent's own
-client can say anything about its own Runs, which is why every screen says whose estimate a cost is. How long
-a Run took needs no report: deevy works out its working time, its time waiting on a Human and its time queued
-from the Run itself.
+**How long a Run took is what deevy says about what it cost**, because it is the one thing deevy saw: its
+working time, its time waiting on a Human and its time queued, worked out from the Run itself. deevy runs
+nothing and so counts no tokens, and since slice 3 of [simplify.md](./plans/simplify.md) it takes no report
+of them either: whatever runs an Agent keeps its own account of what a session spent.
 
 deevy ships nothing that runs an Agent: whatever does — a coding agent on a laptop, a service of your own, a
 CI job — holds the Agent's key and the access to its code that its operator gives it.

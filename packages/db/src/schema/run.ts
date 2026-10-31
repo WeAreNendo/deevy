@@ -139,14 +139,10 @@ export const usageCostBases = ["list", "managed", "unknown"] as const;
 
 /**
  * What one session of a Run's Agent spent on one model, as the client that ran
- * it reported (docs/plans/run-usage.md). deevy never runs an Agent, so this is
- * the client's word, and deevy never prices tokens itself: a null cost is a
- * cost nobody reported, not a zero.
- *
- * A report is the client's key for one session. It replaces the rows it wrote
- * before, because a harness's totals are running totals and a retried call is
- * the same report, so `(run_id, report, model)` is unique. Money is whole
- * micro-dollars: a sum of floats drifts.
+ * it reported (docs/plans/run-usage.md). Unused since deevy stopped taking
+ * those reports (docs/plans/simplify.md, slice 3): read and written by
+ * nothing. Dropped when the migration history starts afresh (slice 12),
+ * because a dropped table is what ADR-0031's guard refuses.
  */
 export const runUsage = sqliteTable(
   "run_usage",
