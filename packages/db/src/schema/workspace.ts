@@ -11,16 +11,20 @@ export const workspace = sqliteTable("workspace", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   /**
-   * What an Agent may not go past when it cuts work into sub-issues
-   * (docs/plans/sub-issue-delegation.md). A machine that can start other
-   * machines needs a bottom, and these are it: how many children one Issue may
-   * have, how deep a tree may go, and how much of one may be open at once. They
-   * bind Agents and not Humans. The defaults are deliberately small — twenty
-   * children is a large decomposition and three deep is a plan, not a pyramid —
-   * and an admin raises them.
+   * How deep a tree of sub-issues may go before deevy stops handing its
+   * records to Agents (docs/plans/simplify.md, slice 6). A machine that can
+   * start other machines needs a bottom, and this is it: the Agent opens
+   * sub-issues in the tracker, where deevy cannot refuse one, so a record past
+   * it is routed to nobody (issues.ts). Three deep is a plan, not a pyramid,
+   * and an admin raises it.
+   */
+  maxDelegationDepth: integer("max_delegation_depth").default(3).notNull(),
+  /**
+   * Unused since deevy stopped opening sub-issues for an Agent, which was the
+   * only thing they bounded (docs/plans/simplify.md, slices 4 and 6): read by
+   * nothing. Dropped when the migration history starts afresh (slice 12).
    */
   maxChildrenPerIssue: integer("max_children_per_issue").default(20).notNull(),
-  maxDelegationDepth: integer("max_delegation_depth").default(3).notNull(),
   maxOpenDescendants: integer("max_open_descendants").default(50).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
 });

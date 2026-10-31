@@ -288,11 +288,10 @@ function Ceiling({
 }
 
 /**
- * The ceilings on how far an Agent cuts work into sub-issues
- * (docs/plans/sub-issue-delegation.md). They were checked when deevy opened a
- * sub-issue for an Agent, and deevy opens none now (docs/plans/simplify.md,
- * slice 4), so they bound nothing until slice 6 takes two of them out and
- * checks the depth again; the row says so rather than promise a refusal.
+ * The one ceiling on how far an Agent cuts work into sub-issues
+ * (docs/plans/simplify.md, slice 6): how deep a tree may go before deevy
+ * stops handing its records to Agents. The Agent opens sub-issues in the
+ * tracker, where deevy cannot refuse one, so what deevy refuses is the Run.
  */
 export function DelegationRow() {
   const queryClient = useQueryClient();
@@ -305,37 +304,21 @@ export function DelegationRow() {
 
   return (
     <SettingsRow
-      label="How far an Agent may split work"
-      hint="These bound nothing right now: an Agent opens sub-issues in your tracker with its own access, so what it can open is what that access lets it."
+      label="How deep sub-issues may go"
+      hint="An Agent opens sub-issues in your tracker. One nested deeper than this isn't handed to any Agent, and the Event log says why."
     >
       {workspace.isPending ? (
         <Skeleton className="h-9 w-72" />
       ) : workspace.isError ? (
         <p className="text-sm text-destructive">{workspace.error.message}</p>
       ) : (
-        <div className="flex flex-wrap gap-3">
-          <Ceiling
-            id="max-children"
-            label="Sub-issues each"
-            value={workspace.data.maxChildrenPerIssue}
-            saving={update.isPending}
-            onSave={(maxChildrenPerIssue) => update.mutate({ maxChildrenPerIssue })}
-          />
-          <Ceiling
-            id="max-depth"
-            label="Levels deep"
-            value={workspace.data.maxDelegationDepth}
-            saving={update.isPending}
-            onSave={(maxDelegationDepth) => update.mutate({ maxDelegationDepth })}
-          />
-          <Ceiling
-            id="max-open"
-            label="Open in one tree"
-            value={workspace.data.maxOpenDescendants}
-            saving={update.isPending}
-            onSave={(maxOpenDescendants) => update.mutate({ maxOpenDescendants })}
-          />
-        </div>
+        <Ceiling
+          id="max-depth"
+          label="Levels deep"
+          value={workspace.data.maxDelegationDepth}
+          saving={update.isPending}
+          onSave={(maxDelegationDepth) => update.mutate({ maxDelegationDepth })}
+        />
       )}
       {update.error ? (
         <p role="alert" className="mt-2 text-xs text-destructive">

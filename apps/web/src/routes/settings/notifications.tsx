@@ -20,7 +20,6 @@ const labels: Record<string, string> = {
   assignment: "Assignment",
   gate_awaiting: "Gate awaiting",
   run_finished: "Run finished",
-  delegation: "Sub-issues",
 };
 
 interface Preference {

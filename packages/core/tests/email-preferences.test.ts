@@ -76,7 +76,6 @@ describe("a Human's email switches", () => {
       assignment: false,
       gate_awaiting: true,
       run_finished: false,
-      delegation: false,
     });
     expect(emailAddress).toBe("bob@example.com");
   });

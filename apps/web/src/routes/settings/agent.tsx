@@ -17,35 +17,14 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { orpc } from "@/lib/orpc";
 
 /**
- * The intervals a schedule offers. Anything finer than a quarter of an hour is
- * a poll, not a schedule, and the sweep only runs once a minute anyway.
- */
-const NEVER = "never";
-const intervals = [
-  { minutes: 15, label: "Every 15 minutes" },
-  { minutes: 30, label: "Every 30 minutes" },
-  { minutes: 60, label: "Hourly" },
-  { minutes: 240, label: "Every 4 hours" },
-  { minutes: 1440, label: "Daily" },
-];
-
-/**
  * One Agent: who answers for it, the Projects it may see, the keys it reaches
- * deevy with, how often it wakes, and what it has done lately. An Agent starts
- * able to see nothing and reach nothing, so this page is where it is given
- * both (ADR-0004); its Sponsor can be changed here by an admin (ADR-0001).
+ * deevy with, and what it has done lately. An Agent starts able to see nothing
+ * and reach nothing, so this page is where it is given both (ADR-0004); its
+ * Sponsor can be changed here by an admin (ADR-0001).
  */
 export function AgentPage({ memberId }: { memberId: string }) {
   const queryClient = useQueryClient();
@@ -55,7 +34,6 @@ export function AgentPage({ memberId }: { memberId: string }) {
     await queryClient.invalidateQueries({ queryKey: orpc.agents.key() });
     await queryClient.invalidateQueries({ queryKey: orpc.members.key() });
   };
-  const update = useMutation(orpc.agents.update.mutationOptions({ onSuccess: refresh }));
   const suspend = useMutation(orpc.agents.suspend.mutationOptions({ onSuccess: refresh }));
   const reinstate = useMutation(orpc.agents.reinstate.mutationOptions({ onSuccess: refresh }));
 
@@ -102,43 +80,6 @@ export function AgentPage({ memberId }: { memberId: string }) {
       <Keys memberId={memberId} onChanged={refresh} />
       <Connect />
       {answersForIt ? <Webhook memberId={memberId} url={agent.webhookUrl} /> : null}
-
-      <SettingsSection title="Schedule">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="agent-schedule">Wake</Label>
-          {/* shadcn's Base UI Select, as its docs compose it: trigger and value, then a group of items. */}
-          <Select
-            value={agent.scheduleMinutes === null ? NEVER : String(agent.scheduleMinutes)}
-            disabled={update.isPending}
-            onValueChange={(next) => {
-              if (next === null) return;
-              update.mutate({ memberId, scheduleMinutes: next === NEVER ? null : Number(next) });
-            }}
-          >
-            <SelectTrigger id="agent-schedule" className="w-56">
-              <SelectValue>
-                {(selected: string) =>
-                  selected === NEVER
-                    ? "Never"
-                    : (intervals.find((interval) => String(interval.minutes) === selected)?.label ??
-                      selected)
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value={NEVER}>Never</SelectItem>
-                {intervals.map((interval) => (
-                  <SelectItem key={interval.minutes} value={String(interval.minutes)}>
-                    {interval.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-        {update.error ? <p className="text-sm text-destructive">{update.error.message}</p> : null}
-      </SettingsSection>
 
       <RecentRuns memberId={memberId} />
 

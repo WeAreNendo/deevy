@@ -1,6 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { pickOption, selectedLabel } from "./select.ts";
 
 const stub = vi.hoisted(() => ({
   agents: [
@@ -25,7 +24,6 @@ const stub = vi.hoisted(() => ({
         user: { id: "u-ada", name: "Ada Lovelace", email: "ada@example.com", image: null },
       },
       webhookUrl: null,
-      scheduleMinutes: null,
       grantedProjectIds: ["p-dev"],
     },
     {
@@ -37,11 +35,9 @@ const stub = vi.hoisted(() => ({
       user: { id: "u-idle", name: "Idle", email: "idle@agents.deevy.invalid", image: null },
       sponsor: null,
       webhookUrl: "https://example.invalid/hook",
-      scheduleMinutes: 60,
       grantedProjectIds: [],
     },
   ],
-  scheduled: [] as Array<Record<string, unknown>>,
 }));
 
 const calls = vi.hoisted(() => ({
@@ -70,10 +66,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const client = stubClient({
     agents: {
       list: async () => ({ agents: stub.agents }),
-      update: async (input: Record<string, unknown>) => {
-        stub.scheduled.push(input);
-        return stub.agents[0];
-      },
       create: calls.create,
       suspend: calls.suspend,
       reinstate: calls.reinstate,
@@ -108,22 +100,13 @@ describe("the Agents settings page", () => {
   });
 });
 
-describe("an Agent's schedule", () => {
-  it("shows the interval each Agent wakes on, and sets one", async () => {
+describe("an Agent with no schedule", () => {
+  it("offers no interval to wake it on, because deevy wakes no Agent on a clock", async () => {
     await mountAt("/settings/agents");
 
-    const idle = await screen.findByRole("row", { name: /idle/i });
-    expect(selectedLabel(within(idle).getByLabelText(/schedule/i))).toBe("Hourly");
-
     const planner = await screen.findByRole("row", { name: /planner/i });
-    const picker = within(planner).getByLabelText(/schedule/i);
-    // Never is the default: an Agent that only reacts to what happens.
-    expect(selectedLabel(picker)).toBe("Never");
-
-    await pickOption(picker, "Hourly");
-
-    await waitFor(() => expect(stub.scheduled).toHaveLength(1));
-    expect(stub.scheduled[0]).toEqual({ memberId: "m-planner", scheduleMinutes: 60 });
+    expect(within(planner).queryByLabelText(/schedule/i)).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: /schedule/i })).toBeNull();
   });
 });
 

@@ -1,11 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import {
-  agent as agentTable,
-  member as memberTable,
-  project as projectTable,
-  user as userTable,
-} from "@deevy/db";
+import { member as memberTable, project as projectTable, user as userTable } from "@deevy/db";
 import { projectGrant as projectGrantTable } from "@deevy/db";
 import {
   AgentSchema,
@@ -113,7 +108,7 @@ export const agents = {
 
   update: defineOperation({
     name: "agents.update",
-    summary: "Change an Agent's name, handle, delivery URL, or schedule",
+    summary: "Change an Agent's name, handle, or delivery URL",
     method: "PATCH",
     path: "/agents/{memberId}",
     auth: "member",
@@ -129,12 +124,6 @@ export const agents = {
        * invented would sign with a value the receiver could never hold.
        */
       webhookSecret: SubscriptionSecret.optional(),
-      /**
-       * How often the schedule trigger wakes this Agent on the Issues assigned
-       * to it (docs/plans/m2.md). Null is no schedule, which is the default: an
-       * Agent that only reacts.
-       */
-      scheduleMinutes: z.number().int().min(1).max(10_080).nullish(),
     }),
     output: AgentSchema,
     handler: async ({ input, context }) => {
@@ -169,15 +158,6 @@ export const agents = {
         // the subscription's secret never is (slice 5).
         changed.webhookUrl = input.webhookUrl ?? null;
       }
-      const onAgent: { scheduleMinutes?: number | null } = {};
-      if (input.scheduleMinutes !== undefined) {
-        onAgent.scheduleMinutes = input.scheduleMinutes ?? null;
-        changed.scheduleMinutes = input.scheduleMinutes ?? null;
-      }
-      if (Object.keys(onAgent).length > 0) {
-        await context.db.update(agentTable).set(onAgent).where(eq(agentTable.memberId, found.id));
-      }
-
       await appendEvent(context, {
         kind: "agent.updated",
         subjectType: "member",

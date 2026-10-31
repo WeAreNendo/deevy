@@ -42,15 +42,25 @@ deevy wakes nobody when:
 - that Agent already has an open Run on the parent.
 
 A sub-issue of a sub-issue works the same way, one level at a time: each parent wakes when its own sub-issues
-close.
+close. The Run on the parent is the news: its Agent's Sponsor hears when that Run finishes, as for any Run.
 
-The Sponsor of the Agent the parent is routed to hears once, when they are all finished, even when that
-Agent cannot pick the work back up.
+## How deep sub-issues may go
 
-## How far an Agent may split work
+deevy opens no record, so it does not count an Agent's sub-issues: what an Agent can open is what its own
+access to your tracker lets it. To bound how many, bound that access, and grant an Agent only the Projects it
+should work. Bear in mind that every sub-issue routed to an Agent opens a Run.
 
-deevy opens no record, so it does not count an Agent's sub-issues or how deep a tree goes: what an Agent can
-open is what its own access to your tracker lets it. To bound it, bound that access, and grant an Agent only
-the Projects it should work. Bear in mind that every sub-issue routed to an Agent opens a Run.
+What deevy does bound is how deep a tree goes. Under **Settings › General**, **How deep sub-issues may go**
+sets **Levels deep**, 3 unless you change it: a record directly under a top-level one is one level deep. A
+sub-issue nested deeper than that is still taken from your tracker and still shown, but deevy hands it to no
+Agent: not by its routing label, the Project's default Agent or a mention, and an Agent that tries to start
+a Run on it itself is refused. Its history says why, naming the Agent it would have gone to and the depth
+allowed.
 
-The numbers under **Settings › General**, in **How far an Agent may split work**, do not bound anything.
+On GitHub a sub-issue is opened first and linked under its parent a moment later, so deevy may route it
+and open its Run before it knows how deep it is. When the link arrives, deevy takes the record back from
+its Agent, and fails the Run if the Agent hasn't begun it, with the reason as its summary. A Run the Agent
+already began carries on.
+
+Raise the number, or move the record under a shallower parent in your tracker, and the next change the
+tracker delivers routes it.

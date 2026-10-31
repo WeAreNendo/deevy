@@ -67,7 +67,6 @@ export const AgentSchema = MemberSchema.extend({
   user: UserSchema,
   sponsor: MemberSchema.extend({ user: UserSchema }).nullable(),
   webhookUrl: z.string().nullable(),
-  scheduleMinutes: z.number().int().nullable(),
   /** The Projects it may see; an ungranted one does not exist to it (ADR-0004). */
   grantedProjectIds: z.array(z.string()),
 });
@@ -77,7 +76,6 @@ export type AgentView = z.infer<typeof AgentSchema>;
 /** Everything an Agent operation returns beyond the Member row itself. */
 const withAgent = {
   user: true,
-  agent: true,
   sponsor: { with: { user: true } },
   grantedProjects: { columns: { id: true } },
   // The URL lives on the subscription, because that is the row delivery reads.
@@ -106,19 +104,17 @@ export async function listAgents(db: Db, workspaceId: string): Promise<AgentView
 }
 
 /** The Member row as the query above reads it, before it is flattened. */
-type AgentRow = Omit<AgentView, "webhookUrl" | "scheduleMinutes" | "grantedProjectIds"> & {
-  agent: { scheduleMinutes: number | null } | null;
+type AgentRow = Omit<AgentView, "webhookUrl" | "grantedProjectIds"> & {
   grantedProjects: Array<{ id: string }>;
   subscriptions: Array<{ url: string; disabledAt: Date | null }>;
 };
 
 /** An Agent's own row is flattened onto the Member, so a surface reads one thing. */
 function view(row: AgentRow): AgentView {
-  const { agent, grantedProjects, subscriptions, ...member } = row;
+  const { grantedProjects, subscriptions, ...member } = row;
   return {
     ...member,
     webhookUrl: subscriptions.find((row) => !row.disabledAt)?.url ?? null,
-    scheduleMinutes: agent?.scheduleMinutes ?? null,
     grantedProjectIds: grantedProjects.map((project) => project.id),
   };
 }

@@ -214,7 +214,6 @@ async function agent(name: string, projectIds: string[]) {
 
 const planner = await agent("Planner", [dev.id]);
 const builder = await agent("Builder", [dev.id, ops.id]);
-await admin.api.agents.update({ memberId: planner.created.id, scheduleMinutes: 60 });
 await admin.api.projects.update({ slug: dev.slug, defaultAgentMemberId: builder.created.id });
 console.log(`agent       Planner (@${planner.member.handle ?? "?"}), sponsored by the admin`);
 console.log(`agent       Builder (@${builder.member.handle ?? "?"}), sponsored by the admin`);

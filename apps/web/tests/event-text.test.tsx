@@ -171,19 +171,25 @@ describe("describeEvent on a delegation", () => {
     ).toMatchObject({ text: "the sub-issue of this is finished", detail: null });
   });
 
-  it("names the limit a fan-out hit, without quoting it", () => {
+  it("says which Agent a record too deep was kept from, and how deep is allowed", () => {
     expect(
-      describeEvent({ kind: "delegation.refused", payload: { limit: "depth", allowed: 3 } }),
+      describeEvent(
+        { kind: "delegation.refused", payload: { limit: "depth", allowed: 1, to: "mem_builder" } },
+        { memberName: (id) => (id === "mem_builder" ? "Builder" : null) },
+      ),
     ).toMatchObject({
-      text: "could not open another sub-issue: sub-issues may not go deeper here (3)",
+      text: "did not hand it to Builder: sub-issues may go only 1 level deep here",
       detail: null,
     });
+    expect(
+      describeEvent({ kind: "delegation.refused", payload: { limit: "depth", allowed: 3 } })?.text,
+    ).toBe("did not hand it to an Agent: sub-issues may go only 3 levels deep here");
   });
 
-  it("does not call a changed limit a rename", () => {
+  it("does not call a changed ceiling a rename", () => {
     expect(
       describeEvent({ kind: "workspace.updated", payload: { maxDelegationDepth: 5 } }),
-    ).toMatchObject({ text: "set how far an Agent may split work up: 5 levels deep" });
+    ).toMatchObject({ text: "let sub-issues go 5 levels deep" });
     expect(describeEvent({ kind: "workspace.updated", payload: { to: "deevy" } })).toMatchObject({
       text: "renamed the Workspace to deevy",
     });

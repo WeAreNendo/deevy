@@ -64,20 +64,6 @@ function describe(row: DescribableNotification): NotificationText {
         tone: "human",
       };
     }
-    case "delegation":
-      /*
-       * One line for a whole wave of sub-issues, or for the moment they are all
-       * finished (docs/plans/sub-issue-delegation.md). It names the parent,
-       * because the parent is the only place the work is whole — and it does
-       * not say how many, because the row is written when the first of them is
-       * opened and the wave is not finished being opened yet. The excerpt is
-       * that first one's title, which is the most useful thing there is.
-       */
-      // Only a row written before deevy stopped opening sub-issues
-      // (docs/plans/simplify.md, slice 4) is about a wave being opened.
-      return row.event.kind === "issue.children_closed"
-        ? { verb: "finished every sub-issue of this", excerpt: null, tone: "agent" }
-        : { verb: "opened sub-issues under this", excerpt: text(payload.title), tone: "agent" };
     case "gate_awaiting": {
       // A Gate is a request on a Run, and what a Human needs first is which
       // Checkpoint it stopped at and what it is proposing (ADR-0024).

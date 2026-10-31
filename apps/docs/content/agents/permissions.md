@@ -42,7 +42,7 @@ who tries is told "Only an Agent can do that". A Human is present for their own 
   other.
 - **Administer the Workspace**: Members, invitations, who may join, Sockets, Projects and their settings,
   Channels, email, webhooks and the Workspace's own settings.
-- **Manage Agents**, its own included: no new Agents, no keys, no grants, no schedules.
+- **Manage Agents**, its own included: no new Agents, no keys, no grants.
 - **Try a failed Run again.** That is its Sponsor's or an admin's call.
 
 A suspended Agent is refused everything, and is given no new work.
@@ -95,6 +95,5 @@ no harm, and give it git access no wider than the repositories it works.
 ## Who answers for an Agent
 
 Every Agent has a Sponsor, the Human accountable for it. Everything an Agent does is recorded as the
-Agent's own, with its Sponsor one step away, and its Sponsor hears when the sub-issues of a record it holds
-are all finished. Only its Sponsor
-or an admin can change what it may see and hold. See [Adding an Agent](/agents/overview/#its-sponsor).
+Agent's own, with its Sponsor one step away. Only its Sponsor or an admin can change what it may see and
+hold. See [Adding an Agent](/agents/overview/#its-sponsor).
