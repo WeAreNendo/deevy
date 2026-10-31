@@ -90,10 +90,9 @@ Without `DEEVY_EMAIL_SENDER`, deevy sends no email, and an admin may still choos
 
 ## Tools
 
-| Variable                       | Default                  | What it does                                                                                                                                                                 |
-| ------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEEVY_GITHUB_API`             | `https://api.github.com` | The GitHub API a GitHub Socket talks to when it names none of its own. For a GitHub Enterprise Server, its API root, such as `https://github.example.com/api/v3`.            |
-| `DEEVY_SOCKET_CATCHUP_MINUTES` | `30`                     | How long a connected tool may say nothing before deevy asks it what changed. That is what keeps a deevy no tool can reach up to date; leave it alone on a public deployment. |
+| Variable           | Default                  | What it does                                                                                                                                                      |
+| ------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEEVY_GITHUB_API` | `https://api.github.com` | The GitHub API a GitHub Socket talks to when it names none of its own. For a GitHub Enterprise Server, its API root, such as `https://github.example.com/api/v3`. |
 
 ## Timing
 
@@ -101,7 +100,7 @@ Without `DEEVY_EMAIL_SENDER`, deevy sends no email, and an admin may still choos
 | ------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEEVY_RUN_STALE_MINUTES`      | `30`    | How long a Run may be silent before it counts as stale. Its next Activity undoes it.                                                                                                                                        |
 | `DEEVY_GATE_REMINDER_HOURS`    | `4`     | How often a Gate nobody has ruled on asks its approvers again.                                                                                                                                                              |
-| `DEEVY_SWEEP_INTERVAL_SECONDS` | `60`    | Docker only: how often background work runs, such as reminders, email and asking tools what changed. On a Worker, the Cron Trigger in `apps/web/wrangler.jsonc` runs it every minute.                                       |
+| `DEEVY_SWEEP_INTERVAL_SECONDS` | `60`    | Docker only: how often background work runs, such as reminders, email, webhooks and the comments deevy writes in your tools. On a Worker, the Cron Trigger in `apps/web/wrangler.jsonc` runs it every minute.               |
 | `DEEVY_STREAM_SECONDS`         | `60`    | Workers only: how long an open page's stream of updates lasts before it reconnects. The stream asks D1 every two seconds, against a limit on queries per request, so a value much over 90 leaves it none for anything else. |
 
 ## The Docker image

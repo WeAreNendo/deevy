@@ -8,15 +8,17 @@
  * true with five HTTP clients in the tree — a provider module is web-standard
  * (`fetch`, `crypto.subtle`, no `node:`) and the Workers build compiles it.
  *
- * A provider implements whichever capabilities it has. A Project's binding
- * names one Socket per capability it uses, so a tracker without a repository
- * and a repository without a tracker are both ordinary.
+ * A Socket listens and announces (docs/plans/simplify.md, slice 4): it takes
+ * the tool's deliveries and says on the record when a Gate opens and when it
+ * is ruled on. Reading and writing the tool is the Agent's business, with its
+ * own access, so a tracker needs three methods and the rest are for the tools
+ * that cannot do without them.
  */
 
 export const socketProviders = ["github", "linear", "gitlab", "notion", "slack", "stub"] as const;
 export type SocketProvider = (typeof socketProviders)[number];
 
-export const socketCapabilities = ["tracker", "docs", "chat"] as const;
+export const socketCapabilities = ["tracker", "chat"] as const;
 export type SocketCapability = (typeof socketCapabilities)[number];
 
 /** Where a record lives inside a Socket: the shape a Project's binding stores. */
@@ -32,8 +34,7 @@ export interface ExternalIssue {
   title: string;
   /**
    * Markdown. The core caps it on the way in; a provider need not. Absent where
-   * the tool's list does not carry it — Notion's query answers properties, not
-   * content — and then deevy keeps the body it had.
+   * the tool's delivery does not carry it, and then deevy keeps the body it had.
    */
   body?: string | null;
   state: "open" | "closed";
@@ -134,24 +135,6 @@ export interface InboundInput {
   now?: Date;
 }
 
-export interface IssuePage {
-  issues: ExternalIssue[];
-  nextCursor: string | null;
-}
-
-export interface IssueQuery {
-  updatedSince: Date | null;
-  cursor: string | null;
-  limit: number;
-}
-
-export interface IssueDraft {
-  title: string;
-  body: string;
-  parent: ExternalRef | null;
-  labels: string[];
-}
-
 /** A container a Project can be bound to: a repository, a Linear team, a database. */
 export interface Container {
   scope: Scope;
@@ -164,9 +147,13 @@ export interface TrackerSocket {
   verifyInbound(input: InboundInput): Promise<InboundCheck>;
   /** Pure. One delivery may mean several things, or nothing. */
   normalize(eventName: string, payload: unknown): InboundEvent[];
-  getIssue(scope: Scope, ref: ExternalRef): Promise<ExternalIssue>;
-  listIssues(scope: Scope, query: IssueQuery): Promise<IssuePage>;
-  listComments(scope: Scope, ref: ExternalRef, limit: number): Promise<ExternalComment[]>;
+  /** Says something on a record: a Gate waiting, and the Ruling that settled it. */
+  createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef>;
+  /**
+   * One record, for a tool whose deliveries only name it (`changed`): Notion's.
+   * Absent, such a delivery is skipped.
+   */
+  getIssue?(scope: Scope, ref: ExternalRef): Promise<ExternalIssue>;
   /**
    * One comment by its id, for a tool whose deliveries only name it
    * (`commented`). Null when it is gone.
@@ -179,16 +166,11 @@ export interface TrackerSocket {
    * after (sockets/hooks.ts).
    */
   handshake?(rawBody: string): string | null;
-  /** `parentLinked` is false where the provider has no native parent to set. */
-  createIssue(scope: Scope, draft: IssueDraft): Promise<ExternalIssue & { parentLinked: boolean }>;
-  createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef>;
-  setLabels(
-    scope: Scope,
-    ref: ExternalRef,
-    change: { add: string[]; remove: string[] },
-  ): Promise<void>;
-  /** What the binding picker offers. */
-  listContainers(): Promise<Container[]>;
+  /**
+   * What the binding picker offers. Absent, an admin types the container's
+   * key instead (`sockets.containers` answers null).
+   */
+  listContainers?(): Promise<Container[]>;
 }
 
 /** Who clicked or typed in a chat tool: one user, in one team. */
@@ -295,18 +277,10 @@ export interface ChatSocket {
   respond(responseUrl: string, text: string): Promise<void>;
 }
 
-export interface DocsSocket {
-  readPage(ref: { url: string } | { externalId: string }): Promise<{
-    title: string;
-    markdown: string;
-    url: string;
-  }>;
-}
-
 /**
  * Who a Socket is on the tool's side. Recorded at connect, and read by the
- * inbound loop guard: a comment by this login is deevy's own mirror coming
- * back, and it rules nothing (ADR-0025).
+ * inbound loop guard: a comment by this login is deevy's own announcement
+ * coming back, and it rules nothing (ADR-0025).
  */
 export interface SocketIdentity {
   login: string;
@@ -467,7 +441,6 @@ export interface SocketModule {
   /** Present where a Human links an account here through the tool's own OAuth. */
   accountLink?: AccountLink;
   tracker?: TrackerSocket;
-  docs?: DocsSocket;
   chat?: ChatSocket;
 }
 

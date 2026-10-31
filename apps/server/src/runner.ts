@@ -38,14 +38,12 @@ export interface RunnerOptions {
   /** Messages to a Channel one delivery pass may send. */
   deliveryLimit?: number;
   /**
-   * The tools this build can speak, so the pass can ask one what changed
-   * (ADR-0024). This is what keeps an instance no tool can reach working.
+   * The tools this build can speak, so the pass can say on a record what a
+   * Gate is waiting for and what was ruled (ADR-0024).
    */
   sockets?: SocketModules;
   /** What a Socket's credentials are sealed with. */
   socketSecret?: string;
-  /** Silence after which a Socket is asked rather than waited on. */
-  socketCatchupMinutes?: number;
   /** The email senders this runtime can run, and the one in force. */
   emailSenders?: EmailSenders;
   email?: EmailSetup | null;
@@ -70,7 +68,6 @@ export function startRunner({
   deliveryLimit,
   sockets,
   socketSecret,
-  socketCatchupMinutes,
   emailSenders,
   email,
   secret,
@@ -81,7 +78,6 @@ export function startRunner({
     maxPasses: maxPassesPerTick,
     ...(sweepLimit === undefined ? {} : { sweepLimit }),
     ...(deliveryLimit === undefined ? {} : { deliveryLimit }),
-    ...(socketCatchupMinutes === undefined ? {} : { catchupMs: socketCatchupMinutes * 60_000 }),
   };
 
   let inFlight: Promise<unknown> = Promise.resolve();

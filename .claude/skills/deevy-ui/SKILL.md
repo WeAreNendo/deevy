@@ -351,7 +351,7 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   GitHub Enterprise Server or GHE.com, where the page may not post the manifest's form, offers only the
   paste.
 - **A Socket's page** (`routes/settings/socket.tsx`) answers what an operator actually asks: is the tool
-  talking to deevy or is deevy asking it (`How it is doing`), where it delivers (`region "Where it delivers"`,
+  still talking to deevy (`How it is doing`), where it delivers (`region "Where it delivers"`,
   with **Point GitHub at this address** for an App), what it signs with (by the provider's own
   `webhookSecretFrom` in `sockets.providers`, which `sockets.rotate` obeys too: a field for the tool's new
   secret where the tool makes one, **Mint** where deevy may, and no section for Notion, whose verification
@@ -364,11 +364,13 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   which would be github.com's on a GitHub Enterprise Server; and the list is what deevy has been told, while
   **Bind a Project** asks GitHub, so its empty sentence says so and points at **Ask who deevy is there**.
 - **A Project is a binding** (`routes/settings/projects.tsx`): **Bind a Project** picks a tool, a container
-  the tool itself offers, and a name — never a field somebody types, because a typo there is a Project bound
-  to nothing. A Project holds nothing about code (ADR-0034). Its `region "Binding"` states the tracker and
-  will not move it, and sets the Default Agent (which grants that Agent the Project), the routing label,
-  whether a mention routes (**Route by mention**), the Mirror, and **Documents** — where its plans live, for
-  an Agent's `docs_get`. `region
+  the tool itself offers, and a name — not a field somebody types where the tool can list its containers,
+  because a typo there is a Project bound to nothing; a tool that lists none (`sockets.containers` answers
+  null) gets a typed `Container` field instead. A Project holds nothing about code (ADR-0034). Its `region
+"Binding"` states the tracker and will not move it, and sets the Default Agent (which grants that Agent the
+  Project), the routing label, and whether a mention routes (**Route by mention**). What deevy says on a
+  record — a Gate and its Ruling — and where a team keeps its documents are not settings
+  (docs/plans/simplify.md, slice 4). `region
 "Checkpoints"` is the policy (`checkpoint-policy.tsx`).
 - **What a Run cost is how long it took**, the one thing deevy saw itself (docs/plans/simplify.md, slice 3):
   no screen shows a token or a dollar, because those were only ever a client's report. A Run's rail has
@@ -454,7 +456,7 @@ webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox
 "Container"`, `Name`, `Bind it`; `region "Binding"` with `combobox "Default Agent"`, `Routing label`, `switch
-"Route by mention"`, `combobox "Mirror"`, `combobox "Documents"`, and no repository or base branch (ADR-0034); `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
+"Route by mention"`, and no Mirror, Documents, repository or base branch (ADR-0034; simplify.md, slice 4); `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
   `Approvals`, `checkbox "Not the Human the work is for"`, who may rule, `Save policy`.
 - **Identities.** `heading "Identities"`, `table "Identities"`, `Unlink @<login>`, `Link @<login> again`;
   `Code from Slack`, `Check the code`, `Link @<login> to me`; `region "Link an account"` with `Link

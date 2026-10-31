@@ -64,6 +64,8 @@ export const SocketSchema = createSelectSchema(socket)
     webhookSecret: true,
     previousWebhookSecret: true,
     webhookSecretChangedAt: true,
+    // Left behind until the clean break (schema/socket.ts): deevy asks no tool.
+    pollMinutes: true,
   })
   .extend({
     identity: z.object({ login: z.string(), id: z.string(), mentionHandle: z.string() }),
@@ -83,7 +85,14 @@ export const InboundDeliverySchema = createSelectSchema(inboundDelivery);
 
 export const ProjectSchema = createSelectSchema(project)
   // Columns left behind until the clean break (schema/project.ts): not part of a Project.
-  .omit({ forgeSocketId: true, forgeScope: true })
+  .omit({
+    forgeSocketId: true,
+    forgeScope: true,
+    docsSocketId: true,
+    docsScope: true,
+    mirror: true,
+    lastPolledAt: true,
+  })
   .extend({
     /**
      * How a record says which Agent it is for. Declared rather than left as
@@ -94,7 +103,10 @@ export const ProjectSchema = createSelectSchema(project)
     routing: z.object({ labelPrefix: z.string(), mention: z.boolean() }),
   });
 
-export const IssueSchema = createSelectSchema(issue);
+export const IssueSchema = createSelectSchema(issue)
+  // Left behind until the clean break (schema/issue.ts): deevy opens no record,
+  // so it no longer knows who opened one.
+  .omit({ createdBy: true });
 
 /**
  * An Issue as a list shows one: the projection, plus the Member deevy routed it
@@ -112,16 +124,10 @@ export const IssueSummarySchema = IssueSchema.extend({
   hasOpenRun: z.boolean().optional(),
 });
 
-/** An Issue as its own page shows one: the summary plus its family. */
-/** A comment as it stands in the tracker. deevy stores none of them. */
-export const ExternalCommentSchema = z.object({
-  externalId: z.string(),
-  url: z.string(),
-  body: z.string(),
-  author: z.object({ login: z.string(), id: z.string(), isBot: z.boolean() }),
-  createdAt: z.date(),
-});
-
+/**
+ * An Issue as its own page shows one: the summary plus its family. Never its
+ * conversation, which is the tracker's (docs/plans/simplify.md, slice 4).
+ */
 export const IssueDetailSchema = IssueSummarySchema.extend({
   project: ProjectSchema,
   parent: IssueSummarySchema.nullable(),
@@ -136,19 +142,6 @@ export const IssueDetailSchema = IssueSummarySchema.extend({
    * business and stays on the Gate.
    */
   checkpoints: z.array(z.string()),
-  /**
-   * The conversation, read from the tracker at the moment of asking, or null
-   * where the caller did not ask. deevy stores no comments (ADR-0024), so this
-   * is a request to somebody else's API and never a column.
-   */
-  comments: z.array(ExternalCommentSchema).nullable(),
-  /**
-   * Why the conversation is unread, where it was asked for and the tracker did
-   * not answer; absent otherwise. `comments` is null then, never an empty
-   * list: "nobody said anything" and "deevy could not ask" are different
-   * briefs for an Agent about to plan.
-   */
-  commentsUnavailable: z.string().optional(),
 });
 
 export const IssueLinkSchema = createSelectSchema(issueLink);

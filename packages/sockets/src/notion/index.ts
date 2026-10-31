@@ -6,27 +6,16 @@ import type {
   InboundCheck,
   InboundEvent,
   InboundInput,
-  IssueDraft,
-  IssuePage,
-  IssueQuery,
   Scope,
   SocketIdentity,
   SocketModule,
   SocketModuleInput,
 } from "@deevy/core/sockets";
 import { hmacHex, sameText } from "../signing.ts";
-import {
-  issueOf,
-  normalizeNotion,
-  notionScope,
-  pageIdOf,
-  plainText,
-  scopeOf,
-  titleOf,
-} from "./payloads.ts";
+import { issueOf, normalizeNotion, pageIdOf, plainText, scopeOf } from "./payloads.ts";
 
 /**
- * Notion, as a tracker and as where a team's documents live (ADR-0024).
+ * Notion, as a tracker deevy listens to and comments on (ADR-0024).
  *
  * One internal connection (Notion's internal integration, renamed) is one
  * Socket, in the one workspace it was made in, and deevy acts as its bot
@@ -124,24 +113,12 @@ export function createNotionSocket({
     return { page, markdown: gap ? `${markdown}\n\n${gap}` : markdown };
   }
 
-  /** Who a user is, asked once per call however many comments they wrote. */
-  function usersReader() {
-    const known = new Map<string, Promise<NotionUser | null>>();
-    return (id: string): Promise<NotionUser | null> => {
-      let found = known.get(id);
-      if (!found) {
-        found = call<NotionUser>("GET", `/users/${id}`).catch(() => null);
-        known.set(id, found);
-      }
-      return found;
-    };
-  }
-
-  async function commentOf(
-    comment: unknown,
-    url: string,
-    userOf: (id: string) => Promise<NotionUser | null>,
-  ): Promise<ExternalComment | null> {
+  /**
+   * One comment, with who wrote it. A comment names its author by id alone,
+   * so the author is asked for; one Notion will not describe is somebody
+   * deevy cannot place, rather than a comment that cannot be read.
+   */
+  async function commentOf(comment: unknown, url: string): Promise<ExternalComment | null> {
     const found = (comment ?? {}) as {
       id?: string;
       created_time?: string;
@@ -150,7 +127,9 @@ export function createNotionSocket({
     };
     if (!found.id) return null;
     const authorId = found.created_by?.id ?? "";
-    const author = authorId ? await userOf(authorId) : null;
+    const author = authorId
+      ? await call<NotionUser>("GET", `/users/${authorId}`).catch(() => null)
+      : null;
     const email = author?.person?.email;
     return {
       externalId: found.id,
@@ -174,7 +153,7 @@ export function createNotionSocket({
 
   return {
     provider: "notion",
-    capabilities: new Set(["tracker", "docs"] as const),
+    capabilities: new Set(["tracker"] as const),
     // Notion signs with the verification token it sends when its subscription
     // is made (`handshake`), which deevy keeps and an admin pastes back.
     webhookSecretFrom: "handshake",
@@ -256,52 +235,6 @@ export function createNotionSocket({
         return issue;
       },
 
-      /**
-       * What changed since, oldest edit first. A query answers properties and
-       * not content, so the body is left unread and deevy keeps the one it had:
-       * reading twenty pages' content would be twenty more requests a pass.
-       */
-      async listIssues(scope: Scope, query: IssueQuery): Promise<IssuePage> {
-        const binding = notionScope(scope);
-        const answer = await call<{
-          results: unknown[];
-          next_cursor: string | null;
-          has_more: boolean;
-        }>("POST", `/data_sources/${binding.scopeKey}/query`, {
-          ...(query.updatedSince
-            ? {
-                filter: {
-                  timestamp: "last_edited_time",
-                  last_edited_time: { on_or_after: query.updatedSince.toISOString() },
-                },
-              }
-            : {}),
-          sorts: [{ timestamp: "last_edited_time", direction: "ascending" }],
-          page_size: query.limit,
-          ...(query.cursor ? { start_cursor: query.cursor } : {}),
-        });
-        const issues = answer.results
-          .map((page) => issueOf(page, scope))
-          .filter((issue): issue is ExternalIssue => issue !== null);
-        return { issues, nextCursor: answer.has_more ? answer.next_cursor : null };
-      },
-
-      async listComments(
-        _scope: Scope,
-        ref: ExternalRef,
-        limit: number,
-      ): Promise<ExternalComment[]> {
-        const answer = await call<{ results: unknown[] }>(
-          "GET",
-          `/comments?block_id=${pageId(ref)}&page_size=${String(limit)}`,
-        );
-        const userOf = usersReader();
-        const comments = await Promise.all(
-          answer.results.map((comment) => commentOf(comment, ref.url, userOf)),
-        );
-        return comments.filter((comment): comment is ExternalComment => comment !== null);
-      },
-
       async getComment(
         _scope: Scope,
         ref: ExternalRef,
@@ -309,40 +242,11 @@ export function createNotionSocket({
       ): Promise<ExternalComment | null> {
         try {
           const comment = await call<unknown>("GET", `/comments/${commentId}`);
-          return await commentOf(comment, ref.url, usersReader());
+          return await commentOf(comment, ref.url);
         } catch (error) {
           if (error instanceof NotionError && error.status === 404) return null;
           throw error;
         }
-      },
-
-      /** A row, with its labels, its parent where the data source has sub-items, and its content. */
-      async createIssue(
-        scope: Scope,
-        draft: IssueDraft,
-      ): Promise<ExternalIssue & { parentLinked: boolean }> {
-        const binding = notionScope(scope);
-        const parentLinked = Boolean(draft.parent && binding.parentProperty);
-        const page = await call<unknown>("POST", "/pages", {
-          parent: { data_source_id: binding.scopeKey },
-          properties: {
-            [binding.titleProperty ?? "Name"]: { title: [{ text: { content: draft.title } }] },
-            ...(binding.labelsProperty && draft.labels.length > 0
-              ? {
-                  [binding.labelsProperty]: {
-                    multi_select: draft.labels.map((name) => ({ name })),
-                  },
-                }
-              : {}),
-            ...(draft.parent && binding.parentProperty
-              ? { [binding.parentProperty]: { relation: [{ id: pageId(draft.parent) }] } }
-              : {}),
-          },
-          markdown: draft.body,
-        });
-        const issue = issueOf(page, scope, draft.body);
-        if (!issue) throw new Error("Notion answered with no page after creating one");
-        return { ...issue, parentLinked };
       },
 
       /** Markdown, which a Notion comment keeps for its inline marks. */
@@ -352,42 +256,6 @@ export function createNotionSocket({
           markdown: body,
         });
         return { externalId: created.id, url: ref.url };
-      },
-
-      /**
-       * A multi-select holds its whole value, so the change is read, applied
-       * and written back — and not written when it changed nothing. A name
-       * Notion has never seen becomes an option as it is set, which is the lazy
-       * creation the mirror relies on. A data source with no labels property
-       * has nothing to label with.
-       */
-      async setLabels(
-        scope: Scope,
-        ref: ExternalRef,
-        change: { add: string[]; remove: string[] },
-      ): Promise<void> {
-        const property = notionScope(scope).labelsProperty;
-        if (!property) return;
-        const id = pageId(ref);
-        const page = await call<{ properties?: Record<string, { multi_select?: unknown }> }>(
-          "GET",
-          `/pages/${id}`,
-        );
-        const current = (
-          Array.isArray(page.properties?.[property]?.multi_select)
-            ? (page.properties[property].multi_select as { name?: string }[])
-            : []
-        ).map((option) => option.name ?? "");
-        const next = [
-          ...current.filter((name) => !change.remove.includes(name)),
-          ...change.add.filter((name) => !current.includes(name)),
-        ];
-        const same =
-          next.length === current.length && next.every((name, at) => name === current[at]);
-        if (same) return;
-        await call("PATCH", `/pages/${id}`, {
-          properties: { [property]: { multi_select: next.map((name) => ({ name })) } },
-        });
       },
 
       /** Every data source the connection was shared, with what its schema says to read. */
@@ -407,18 +275,6 @@ export function createNotionSocket({
           });
         }
         return containers;
-      },
-    },
-
-    docs: {
-      /** A page as Notion writes it out in markdown, by its URL or its id. */
-      async readPage(ref) {
-        const named = "url" in ref ? ref.url : ref.externalId;
-        const id = pageIdOf(named);
-        if (!id) throw new Error(`That names no Notion page: ${named}`);
-        const { page, markdown } = await pageWithMarkdown(id);
-        const url = (page as { url?: string }).url ?? ("url" in ref ? ref.url : "");
-        return { title: titleOf(page), markdown, url };
       },
     },
   };

@@ -92,11 +92,8 @@ deevy lists only the tools the caller may use. An Agent is offered these:
 | `runs_start`                              | Begin a Run on a record, where the Agent has no open one.                   |
 | `runs_post_activity`                      | Post a thought, an action, an elicitation or an error to the Run.           |
 | `runs_finish`                             | End the Run, completed or failed, with a summary.                           |
-| `issues_get`                              | One record by id, URL or the tracker's key, with its conversation if asked. |
+| `issues_get`                              | One record by id, URL or the tracker's key, with its parent and sub-issues. |
 | `issues_list`                             | The records deevy has projected, newest change first.                       |
-| `issues_create`                           | Open a record in the tracker, such as a sub-issue.                          |
-| `comments_create`                         | Comment on the record, in the tracker it lives in.                          |
-| `docs_get`                                | Read a page of the Project's documents as markdown.                         |
 | `projects_get`                            | One Project: where its records come from and who works them.                |
 | `gates_request`                           | Ask the Humans to let the Run past a Checkpoint, with a Proposal.           |
 | `gates_get`                               | What has been ruled on a Gate.                                              |
@@ -104,6 +101,10 @@ deevy lists only the tools the caller may use. An Agent is offered these:
 
 There is no tool to rule on a Gate, and no tool that administers anything. See
 [What an Agent may do](/agents/permissions/).
+
+None of them reads or writes your tools. To read a record's comments, comment on it, label it, open a
+sub-issue or read a page, the Agent uses its own access to that tool, such as a token or the tool's own MCP
+server beside deevy's, and what it writes there is its own account's.
 
 ## Work a record
 
@@ -114,9 +115,9 @@ A loop that works one record at a time looks like this:
    for each record routed to the Agent.
 2. **Find or open the Run.** Routing already opened a Run in `pending`. If every Run on the record is
    finished, open a new one with `runs_start`. An Agent has at most one open Run on a record.
-3. **Read before writing.** `issues_get` with `comments: true` answers with the record as the tracker last
-   said it and its conversation, read from the tracker as you ask. Its `checkpoints` say where the Project
-   wants the Run to stop. Read a linked page with `docs_get`.
+3. **Read before writing.** `issues_get` answers with the record as the tracker last described it, its
+   parent and its sub-issues. Its `checkpoints` say where the Project wants the Run to stop. Read the
+   conversation, and any page the record links, in the tool itself, with the Agent's own access.
 4. **Narrate.** `runs_post_activity` with `kind: "thought"` or `kind: "action"`. The first Activity moves
    the Run to `active`.
 5. **Ask at a Checkpoint, and stop.** `gates_request` with the Run, the Checkpoint's name, such as `plan`,
@@ -140,9 +141,10 @@ on GitHub.
 
 ## Give it the repository
 
-deevy holds no Run's code. Give the coding agent access to the repository yourself — a deploy key, a
-fine-grained token or an App of its own — scoped to what it works, and keep the credential out of the
-model's context, where it would end up in a transcript.
+deevy holds no Run's code, and does nothing in your tools on an Agent's behalf. Give the coding agent
+access to the repository yourself — a deploy key, a fine-grained token or an App of its own — and to the
+tracker too if it should comment, label or open sub-issues there, each scoped to what it works. Keep the
+credentials out of the model's context, where they would end up in a transcript.
 
 ## Be told rather than ask
 

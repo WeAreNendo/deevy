@@ -36,17 +36,17 @@ export function slugFor(scopeKey: string): string {
  *
  * A Project is not a place work is put any more, so there is nothing to fill
  * in: a tool, a container inside it, and a name. The containers are the tool's
- * own answer rather than a field somebody types, because a typo there is a
- * Project bound to a repository that does not exist. A tool that holds code
- * too — GitHub, GitLab — binds the same container as the Project's code unless
- * told otherwise, because that is nearly always where it is, and a Project
- * with no code bound is one no Agent can push from.
+ * own answer where it gives one, because a typo there is a Project bound to a
+ * repository that does not exist. A tool that lists none — a Socket needs only
+ * to listen and announce (docs/plans/simplify.md, slice 4) — answers null, and
+ * then the container is typed as the tool's deliveries name it.
  */
 export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const [socketId, setSocketId] = useState<string | null>(null);
   const [scopeKey, setScopeKey] = useState<string | null>(null);
+  const [typedKey, setTypedKey] = useState("");
   const [name, setName] = useState("");
 
   const sockets = useQuery(orpc.sockets.list.queryOptions({ input: {} }));
@@ -60,6 +60,7 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
         setOpen(false);
         setSocketId(null);
         setScopeKey(null);
+        setTypedKey("");
         setName("");
         await client.invalidateQueries({ queryKey: orpc.projects.key() });
         onBound(project.slug);
@@ -70,7 +71,15 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
   const trackers = (sockets.data?.sockets ?? []).filter(
     (socket) => socket.capabilities.includes("tracker") && socket.status === "active",
   );
-  const chosen = (containers.data?.containers ?? []).find((one) => one.scopeKey === scopeKey);
+  // Undefined while the tool is being asked, null when it lists none.
+  const offered = containers.data?.containers;
+  const typed = offered === null;
+  const key = typedKey.trim();
+  const chosen = typed
+    ? key
+      ? { scopeKey: key, scope: { scopeKey: key } }
+      : undefined
+    : (offered ?? []).find((one) => one.scopeKey === scopeKey);
 
   return (
     <>
@@ -94,6 +103,7 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
                 onValueChange={(next) => {
                   setSocketId(next as string);
                   setScopeKey(null);
+                  setTypedKey("");
                 }}
               >
                 <SelectTrigger id="bind-socket" aria-label="Tool">
@@ -126,40 +136,62 @@ export function BindProject({ onBound }: { onBound: (slug: string) => void }) {
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="bind-container">Container</Label>
-              <Select
-                value={scopeKey ?? ""}
-                // Disabled only while there is no tool to ask: a select that
-                // goes dead while its answer is in flight loses the click that
-                // opened it, and the answer is one round trip away.
-                disabled={!socketId}
-                onValueChange={(next) => {
-                  setScopeKey(next as string);
-                  if (!name.trim()) setName(String(next).split("/").at(-1) ?? "");
-                }}
-              >
-                <SelectTrigger id="bind-container" aria-label="Container">
-                  <SelectValue
-                    placeholder={containers.isPending ? "Asking the tool…" : "Which container"}
+              {typed ? (
+                <>
+                  <Input
+                    id="bind-container"
+                    value={typedKey}
+                    placeholder="acme/deevy"
+                    onChange={(changed) => setTypedKey(changed.target.value)}
+                    onBlur={(left) => {
+                      const key = left.target.value.trim();
+                      if (key && !name.trim()) setName(key.split("/").at(-1) ?? "");
+                    }}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    This tool doesn&apos;t list its containers, so type the one this Project is for,
+                    the way the tool names it. One container is one Project.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Select
+                    value={scopeKey ?? ""}
+                    // Disabled only while there is no tool to ask: a select
+                    // that goes dead while its answer is in flight loses the
+                    // click that opened it, and the answer is one round trip
+                    // away.
+                    disabled={!socketId}
+                    onValueChange={(next) => {
+                      setScopeKey(next as string);
+                      if (!name.trim()) setName(String(next).split("/").at(-1) ?? "");
+                    }}
                   >
-                    {(selected: string) =>
-                      (containers.data?.containers ?? []).find((one) => one.scopeKey === selected)
-                        ?.name ?? "Which container"
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {(containers.data?.containers ?? []).map((container) => (
-                      <SelectItem key={container.scopeKey} value={container.scopeKey}>
-                        {container.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <span className="text-xs text-muted-foreground">
-                What the tool itself offers. One container is one Project.
-              </span>
+                    <SelectTrigger id="bind-container" aria-label="Container">
+                      <SelectValue
+                        placeholder={containers.isPending ? "Asking the tool…" : "Which container"}
+                      >
+                        {(selected: string) =>
+                          (offered ?? []).find((one) => one.scopeKey === selected)?.name ??
+                          "Which container"
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {(offered ?? []).map((container) => (
+                          <SelectItem key={container.scopeKey} value={container.scopeKey}>
+                            {container.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-muted-foreground">
+                    What the tool itself offers. One container is one Project.
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">

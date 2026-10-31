@@ -1,5 +1,9 @@
 # An Issue is a projection of a record in a Socket
 
+> Amended by [docs/plans/simplify.md](../plans/simplify.md), slice 4: a Socket listens and announces. See
+> "A Socket listens and announces" at the end; what it changes above is the poll, the Project's code,
+> documents and mirror setting, and the comments deevy writes.
+
 deevy v1 was a tracker with an agent layer on top: its own Issues with keys, a Workflow of States and
 Gates per Project, Documents materialised from templates and edited live, Labels, Teams, comments, a
 board, and beside them the part that was actually new — an Agent with its own identity and a Sponsor
@@ -117,3 +121,34 @@ receive a webhook, or lives with polling. The tracker's bot account authors ever
 as fresh as the last delivery or poll, never fresher. Roughly 8,800 lines of production code come out and
 roughly 8,000 go in, so the simplification is in concepts and in the operator's story rather than in size,
 and this ADR says so rather than claiming otherwise.
+
+## A Socket listens and announces (2026-10-31)
+
+Amended by [docs/plans/simplify.md](../plans/simplify.md), slice 4, because each Socket had become a proxy
+for its tool: a tracker implemented nine methods so that deevy could list, open, label and comment on
+records, and read their conversation and a Project's pages, on an Agent's behalf. That made every new tool
+expensive, and none of it was the product. An Agent already has access to the tools a team uses, and it
+reads and writes them itself.
+
+**A tracker is three methods.** `verifyInbound`, `normalize` and `createComment` are all a module must
+answer to. `getIssue` and `getComment` are optional, for a tool whose delivery names a change without
+carrying it (Notion), `handshake` for a tool that verifies its subscription, and `listContainers` for a tool
+that can offer its containers to bind; without it, an admin types the container's key.
+`listIssues`, `listComments`, `createIssue` and `setLabels` are gone, and so are the docs capability and a
+Project's documents.
+
+**deevy hears of a record only when the tool delivers.** The bounded poll above is gone, with its setting
+and a Socket's own interval. An instance no tool can reach needs an address one can; what a tool sent while
+it could not be reached is the tool's to send again. The projection is as fresh as the last delivery.
+
+**What deevy says on a record is a Gate and its Ruling.** A comment when an Agent asks at a Checkpoint, one
+for each approval and the decision, and a reply to a comment that ruled nothing — on every Project, with no
+setting, and nothing about a Run. deevy sets no label. The comments are still signed with the Agent and the
+Run, for the reason above.
+
+**A Project is its tracker's container**, its default Agent, its routing rule and its Checkpoints. Its code
+went with [ADR-0034](./0034-deevy-runs-no-agent-and-manages-no-access.md); its documents and how much deevy
+says back went here.
+
+Sub-issues follow: an Agent opens them in the tracker, deevy links each to its parent from what the tracker
+delivers, and keeps no tree where the tracker has no parent (ADR-0022, amended again in slice 6).

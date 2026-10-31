@@ -6,8 +6,8 @@ sidebar:
 ---
 
 A Linear Socket is one Linear workspace, reached through an OAuth application you make there. deevy acts as
-the application itself, not as whoever connected it, so every comment and label it writes is the
-application's. A Project is bound to one Linear team, and that team's issues are its records.
+the application itself, not as whoever connected it, so every comment it writes is the application's. A
+Project is bound to one Linear team, and that team's issues are its records.
 
 ## Connect Linear
 
@@ -69,12 +69,13 @@ state. So is a deleted issue.
 
 ## What deevy writes in Linear
 
-- **Comments**, as the Project's **Mirror** says: a Gate asking for a Ruling, each Ruling, and with **Runs as
-  well**, each Run starting, finishing or failing. See
-  [Connecting your tools](/tools/overview/#what-deevy-writes-back).
-- **The `deevy:awaiting-approval` label** while a Gate waits. deevy makes it in the team the first time it
-  needs it.
-- **Sub-issues**, which an Agent opens as Linear's own sub-issues of the issue it is working.
+deevy writes about Gates and nothing else, as the application: a comment when an Agent asks at a Gate, with
+the Proposal and how to rule; one for each approval and for the decision; and a reply to a `/approve` or
+`/reject` that ruled nothing. See [Connecting your tools](/tools/overview/#what-deevy-writes-back).
+
+deevy sets no label and opens nothing. Everything else in Linear is the Agent's, with its own access there,
+such as a Linear API key or Linear's MCP server: it reads an issue's comments, comments, labels and opens
+sub-issues. A sub-issue it opens is Linear's own, and deevy links it to its parent the way Linear does.
 
 Linear signs each delivery with the moment it sent it, and deevy refuses one more than a minute old.
 
@@ -109,7 +110,7 @@ OAuth application is yours, in your Linear workspace, and nobody else's Workspac
 :::note[Self-hosted]
 The addresses are built from your deevy's `BETTER_AUTH_URL`, and Linear has to reach the webhook over
 HTTPS. If your deevy's address changes, paste the new webhook URL and callback URLs into the application in
-Linear again. Until then deevy asks Linear what changed, but hears no new comment.
+Linear again. Until then deevy hears nothing from Linear, and what Linear sent in between is not replayed.
 :::
 
 ## Disconnect

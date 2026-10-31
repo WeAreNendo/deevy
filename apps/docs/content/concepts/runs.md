@@ -20,7 +20,7 @@ A Run's page says what started it:
 | by assignment                | the record was routed to the Agent: a label, the tool, or the Project's Default Agent |
 | by a mention                 | somebody mentioned the Agent in a comment on the record                               |
 | on its schedule              | the Agent is set to wake on its records every so often                                |
-| when its sub-issues finished | every sub-issue the Agent opened under the record is closed                           |
+| when its sub-issues finished | every sub-issue under a record routed to the Agent is closed                          |
 | to try again                 | a Human chose **Try again** on a Run that failed or went quiet                        |
 | by the Agent itself          | the Agent started work on the record on its own                                       |
 

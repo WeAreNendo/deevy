@@ -6,8 +6,9 @@ sidebar:
 ---
 
 A GitLab Socket is one GitLab, gitlab.com or your own, reached as one GitLab account through its access
-token. A GitLab project's issues are a Project's records, and every comment and label deevy makes is by that
-account. Its repository is the Agent's to reach, with access you give it.
+token. A GitLab project's issues are a Project's records, and every comment deevy makes is by that
+account. Its repository, and everything an Agent writes on an issue, are the Agent's to reach, with access
+you give it.
 
 ## Choose the account deevy acts as
 
@@ -18,8 +19,8 @@ Before you connect, decide which GitLab account deevy works as, and make a token
   tier offers those.
 
 The token needs the `api` scope. Give its account **Reporter** on each project deevy should work, and
-nothing more: deevy reads, comments on and labels issues, and GitLab cannot narrow a token further, so the
-account's role is the limit on what deevy can do there.
+nothing more: deevy lists the projects and comments on issues at a Gate, and GitLab cannot narrow a token
+further, so the account's role is the limit on what deevy can do there.
 
 ## Connect GitLab
 
@@ -78,15 +79,15 @@ GitLab's issues are open or closed and nothing else. A team's workflow in scoped
 
 ## What deevy writes on GitLab
 
-- **Comments**, as the Project's **Mirror** says: a Gate asking for a Ruling, each Ruling, and with **Runs as
-  well**, each Run starting, finishing or failing. See
-  [Connecting your tools](/tools/overview/#what-deevy-writes-back).
-- **The `deevy:awaiting-approval` label** while a Gate waits. GitLab creates it on the project the first
-  time deevy uses it.
-- **Sub-issues**. GitLab has no parent for an issue, so an Agent's sub-issue is a new issue related to the
-  one it came from, and deevy keeps the tree itself.
-  deevy opens no merge request. The Agent opens its own with the access you gave it and attaches it to its
-  Run; one that says `Closes <the issue's URL>` closes the issue when it merges.
+deevy writes about Gates and nothing else, as the account the token belongs to: a comment when an Agent asks
+at a Gate, with the Proposal and how to rule; one for each approval and for the decision; and a reply to a
+`/approve` or `/reject` that ruled nothing. See
+[Connecting your tools](/tools/overview/#what-deevy-writes-back).
+
+deevy sets no label and opens nothing. Everything else on GitLab is the Agent's, with the access you gave
+it: it reads an issue's comments, comments, labels, opens issues and opens its merge request, then attaches
+the merge request to its Run. One that says `Closes <the issue's URL>` closes the issue when it merges.
+GitLab has no parent for an issue, so an issue an Agent opens is a record of its own, routed like any other.
 
 ## Rule from GitLab
 

@@ -103,7 +103,7 @@ describe("a delivery arriving at a Socket's hook", () => {
       eventName: "events",
       status: "applied",
     });
-    // The Socket's own clock, which is what the catch-up poll reads.
+    // The Socket's own clock, which its page shows.
     const socket = await db.query.socket.findFirst({ where: { id: seeded.socketId } });
     expect(socket?.lastInboundAt).toBeInstanceOf(Date);
   });

@@ -119,15 +119,20 @@ describe("the mention trigger", () => {
 });
 
 describe("a record closing", () => {
-  it("wakes the Agent that opened the sub-issues, once they are all closed", async () => {
+  it("wakes the Agent the parent is routed to, once its sub-issues are all closed", async () => {
     const { db, admin, asAdmin, record, issue, agent } = await workspaceWithAgent();
 
-    // Two children the Agent opened, as a delegation does.
+    // The parent is the Agent's, and two children it opened in the tracker
+    // came back as records under it, as a delegation does.
+    await db
+      .update(issueTable)
+      .set({ assigneeMemberId: agent.member.id })
+      .where(eq(issueTable.id, issue.id));
     const one = await record({ externalId: "2", title: "Part one" });
     const two = await record({ externalId: "3", title: "Part two" });
     await db
       .update(issueTable)
-      .set({ parentId: issue.id, createdBy: agent.member.id })
+      .set({ parentId: issue.id })
       .where(inArray(issueTable.id, [one.id, two.id]));
 
     const close = async (child: { id: string; projectId: string }) => {

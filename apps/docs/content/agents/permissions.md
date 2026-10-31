@@ -20,16 +20,17 @@ Administering is never opened to an Agent at all: that is built into deevy, not 
 
 In the Projects it was granted, an Agent may:
 
-- read records, their conversation in the tracker, and the Project's documents;
-- comment on a record, in the tracker it lives in;
-- open a record in the tracker, such as a sub-issue of the one it is working, within the Workspace's
-  [limits on splitting work](/agents/delegation/);
+- read the records deevy took from the tracker, with their sub-issues, Checkpoints and Links;
 - point a record at a pull request, a commit, a branch or any URL;
 - drive its own Runs: start one, post Activities to it, and finish it;
 - ask at a Checkpoint, with a Proposal, and read what was ruled;
 - read its own inbox, and mark it read.
 
 A Project it was not granted does not exist to it: asking for one answers "No such Project", not a refusal.
+
+Reading a record's conversation, commenting on it, labelling it and opening a record or a
+[sub-issue](/agents/delegation/) are not deevy's to allow: an Agent does them in the tool, with its own
+access there, which you give it and you scope.
 
 Some of these belong to a Run, which is an Agent's attempt: starting one, posting Activities, asking at a
 Gate and finishing it. Only an Agent may do those, and a Human
@@ -80,8 +81,9 @@ instruction to the Agent makes it safe.
 What deevy bounds is what an Agent may do in deevy: the rules on this page, whatever the text says. What the
 Agent may do outside deevy is up to what runs it:
 
-- **Its reach on your code is the access you gave it.** deevy holds none: scope the deploy key, token or App
-  you give the Agent to the repositories it works, and protect the branches that matter.
+- **Its reach on your code and your tools is the access you gave it.** deevy holds none: scope the deploy
+  key, token, App or MCP server you give the Agent to the repositories and the records it works, and
+  protect the branches that matter.
 - **A shell runs what the repository runs.** A coding agent with a shell can run the repository's own build,
   reach the network and spend tokens.
 - **A Gate is the last line.** Nothing an Agent proposes ships without a Human deciding it should, so put
@@ -94,5 +96,6 @@ no harm, and give it git access no wider than the repositories it works.
 ## Who answers for an Agent
 
 Every Agent has a Sponsor, the Human accountable for it. Everything an Agent does is recorded as the
-Agent's own, with its Sponsor one step away, and its Sponsor hears when it splits work up. Only its Sponsor
+Agent's own, with its Sponsor one step away, and its Sponsor hears when the sub-issues of a record it holds
+are all finished. Only its Sponsor
 or an admin can change what it may see and hold. See [Adding an Agent](/agents/overview/#its-sponsor).

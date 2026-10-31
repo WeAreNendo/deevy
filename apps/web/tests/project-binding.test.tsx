@@ -5,10 +5,10 @@ import { pickOption, selectedLabel } from "./select.ts";
 /**
  * A Project is a binding, and a policy (ADR-0024, ADR-0020).
  *
- * What it says is where its records come from, where its code is, which Agent
- * gets one nobody named, and what it asks of a Run before it goes past a
- * Checkpoint. None of that is work — the work is in the tracker — so this
- * screen is the whole of what a Project is.
+ * What it says is where its records come from, which Agent gets one nobody
+ * named, how a record names an Agent, and what it asks of a Run before it goes
+ * past a Checkpoint. None of that is work — the work is in the tracker — so
+ * this screen is the whole of what a Project is.
  */
 const calls = vi.hoisted(() => ({
   update: vi.fn(async (_input: Record<string, unknown>) => ({})),
@@ -49,26 +49,29 @@ vi.mock("../src/lib/orpc.ts", async () => {
           { ...stubSocket, provider: "github", name: "acme on GitHub" },
           {
             ...stubSocket,
-            id: "sock_notion0000",
-            provider: "notion",
-            capabilities: ["tracker", "docs"],
-            name: "Acme's Notion",
+            id: "sock_plain00000",
+            name: "A tool that lists nothing",
           },
         ],
       }),
-      containers: async () => ({
-        containers: [
-          {
-            scope: { scopeKey: "acme/deevy", baseBranch: "main" },
-            scopeKey: "acme/deevy",
-            name: "acme/deevy",
-          },
-          {
-            scope: { scopeKey: "acme/ops", baseBranch: "trunk" },
-            scopeKey: "acme/ops",
-            name: "acme/ops",
-          },
-        ],
+      // A tool that cannot list its containers answers null, and the dialog
+      // asks for the container's key instead (docs/plans/simplify.md, slice 4).
+      containers: async (input: { socketId: string }) => ({
+        containers:
+          input.socketId === "sock_plain00000"
+            ? null
+            : [
+                {
+                  scope: { scopeKey: "acme/deevy", baseBranch: "main" },
+                  scopeKey: "acme/deevy",
+                  name: "acme/deevy",
+                },
+                {
+                  scope: { scopeKey: "acme/ops", baseBranch: "trunk" },
+                  scopeKey: "acme/ops",
+                  name: "acme/ops",
+                },
+              ],
       }),
     },
     agents: {
@@ -153,28 +156,23 @@ describe("what a Project is bound to", () => {
     // A Base UI trigger shows its raw value unless told what it is called,
     // which once put `gates` and a Member id on this screen.
     await waitFor(() =>
-      expect(selectedLabel(within(binding).getByRole("combobox", { name: "Mirror" }))).toBe(
-        "Gates and rulings",
+      expect(selectedLabel(within(binding).getByRole("combobox", { name: "Default Agent" }))).toBe(
+        "Nobody",
       ),
-    );
-    expect(selectedLabel(within(binding).getByRole("combobox", { name: "Default Agent" }))).toBe(
-      "Nobody",
-    );
-    expect(selectedLabel(within(binding).getByRole("combobox", { name: "Documents" }))).toBe(
-      "Nowhere deevy reads",
     );
   });
 
-  it("says how much deevy writes back where the work lives", async () => {
+  it("has nothing to say about what deevy writes back, or where documents live", async () => {
     state.checkpoints = [];
-    calls.update.mockClear();
     await mountAt("/settings/projects?project=acme-deevy");
 
     const binding = await screen.findByRole("region", { name: "Binding" });
-    await pickOption(within(binding).getByRole("combobox", { name: "Mirror" }), "Nothing");
-
-    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
-    expect(calls.update.mock.calls[0]?.[0]).toMatchObject({ mirror: "off" });
+    // Every Project announces a Gate and its Ruling on the record and nothing
+    // else, and an Agent reads a team's documents where the team keeps them
+    // (docs/plans/simplify.md, slice 4): neither is a setting.
+    await within(binding).findByRole("combobox", { name: "Default Agent" });
+    expect(within(binding).queryByRole("combobox", { name: "Mirror" })).toBeNull();
+    expect(within(binding).queryByRole("combobox", { name: "Documents" })).toBeNull();
   });
 
   it("says whether a mention hands a record over, and keeps the label just typed", async () => {
@@ -212,9 +210,9 @@ describe("what a Project is bound to", () => {
     expect(label.value).toBe("agent:");
 
     // Another tab, or the CLI, saves `for:`; this screen reads it back after
-    // its own next change, here the Mirror.
+    // its own next change, here the Default Agent.
     state.routing = { labelPrefix: "for:", mention: true };
-    await pickOption(within(binding).getByRole("combobox", { name: "Mirror" }), "Runs as well");
+    await pickOption(within(binding).getByRole("combobox", { name: "Default Agent" }), "Planner");
     await waitFor(() => expect(label.value).toBe("for:"));
 
     fireEvent.click(within(binding).getByRole("switch", { name: "Route by mention" }));
@@ -236,25 +234,6 @@ describe("where a Project's code lives", () => {
     // and no base branch to set.
     expect(within(binding).queryByRole("combobox", { name: "Repository" })).toBeNull();
     expect(within(binding).queryByLabelText("Base branch")).toBeNull();
-  });
-});
-
-describe("where a Project's documents live", () => {
-  it("is a tool that can read them, or nowhere", async () => {
-    state.checkpoints = [];
-    calls.update.mockClear();
-    await mountAt("/settings/projects?project=acme-deevy");
-
-    const binding = await screen.findByRole("region", { name: "Binding" });
-    const documents = within(binding).getByRole("combobox", { name: "Documents" });
-    await pickOption(documents, "Acme's Notion (Notion)");
-
-    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
-    // The tracker that is only a tracker is not offered: it has no pages to read.
-    expect(calls.update.mock.calls[0]?.[0]).toEqual({
-      slug: "acme-deevy",
-      docs: { socketId: "sock_notion0000", scope: {} },
-    });
   });
 });
 
@@ -340,5 +319,31 @@ describe("binding a new Project", () => {
       tracker: { socketId: "sock_stub00000", scope: { scopeKey: "acme/ops", baseBranch: "trunk" } },
     });
     expect(calls.create.mock.calls[0]?.[0]).not.toHaveProperty("forge");
+  });
+
+  it("takes the container's key, typed, from a tool that lists none", async () => {
+    state.checkpoints = [];
+    calls.create.mockClear();
+    await mountAt("/settings/projects");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Bind a Project" }));
+    const dialog = await screen.findByRole("dialog", { name: /Bind a Project/ });
+    await pickOption(within(dialog).getByRole("combobox", { name: "Tool" }), /lists nothing/);
+
+    // Nothing to pick from, so the container is a field, named as the tool's
+    // deliveries name it.
+    const container = await within(dialog).findByRole("textbox", { name: "Container" });
+    expect(within(dialog).queryByRole("combobox", { name: "Container" })).toBeNull();
+    fireEvent.change(container, { target: { value: "acme/typed" } });
+    fireEvent.blur(container);
+    expect(within(dialog).getByLabelText<HTMLInputElement>("Name").value).toBe("typed");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Bind it" }));
+
+    await waitFor(() => expect(calls.create).toHaveBeenCalledTimes(1));
+    expect(calls.create.mock.calls[0]?.[0]).toMatchObject({
+      name: "typed",
+      slug: "acme-typed",
+      tracker: { socketId: "sock_plain00000", scope: { scopeKey: "acme/typed" } },
+    });
   });
 });

@@ -51,7 +51,7 @@ describe("what an instance says it can do", () => {
   it("is the operationIds in the document it serves", async () => {
     const spec = await generateSpec();
     const operations = operationsIn(spec);
-    expect(operations).toContain("issues.create");
+    expect(operations).toContain("gates.request");
     expect(operations).toContain("events.subscribe");
     // Sorted, so a cached list and a fresh one compare as text.
     expect(operations).toEqual([...operations].sort((a, b) => a.localeCompare(b)));
@@ -87,7 +87,7 @@ describe("what a real instance serves", () => {
     closers.push(deevy.close);
     const found = await fetchCapabilities(baseURL, deevy.fetch);
     expect(found.version).toBe("0.9.0");
-    expect(found.operations).toContain("issues.create");
+    expect(found.operations).toContain("gates.request");
   });
 
   it("says nothing about its version when its entry said nothing", async () => {
@@ -156,14 +156,14 @@ describe("the cache", () => {
 describe("a command this instance does not have", () => {
   it("names the operation, the instance and both versions", () => {
     const said = missingFrom(
-      "issues.create",
-      ["issues", "create"],
+      "gates.request",
+      ["gates", "request"],
       "https://old.example.com",
       { operations: [], version: "0.4.0", readAt: 0 },
       "0.9.0",
     );
-    expect(said).toContain("issues.create");
-    expect(said).toContain("deevy issues create");
+    expect(said).toContain("gates.request");
+    expect(said).toContain("deevy gates request");
     expect(said).toContain("0.9.0");
     expect(said).toContain("deevy 0.4.0");
   });

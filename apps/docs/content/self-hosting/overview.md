@@ -41,8 +41,8 @@ disk.
 **Choose the Worker** if you would rather not keep a server running. A free Cloudflare account is enough,
 with a few trade-offs:
 
-- Background work, such as reminders, email and asking your tools what changed, runs in small passes once a
-  minute, so a backlog takes a few minutes to clear.
+- Background work, such as reminders, email and the comments deevy writes in your tools, runs in small
+  passes once a minute, so a backlog takes a few minutes to clear.
 - A webhook deevy owes goes out at the next pass rather than at once, unless you add a Queue, which is a
   paid Cloudflare feature.
 - D1's free plan limits how many rows can be written in a day. A busy Workspace outgrows it.
@@ -61,9 +61,9 @@ with a few trade-offs:
 - **Optionally, an email sender**, so deevy can email Humans, team addresses and invitations. See
   [Sending email](/self-hosting/email/).
 
-Your tools deliver to deevy at its public address. If they can't reach it, because it sits behind a
-firewall, deevy still asks a tool what changed once it has been quiet for half an hour, so records arrive,
-late; comments and button clicks made in the tool only arrive by delivery.
+Your tools deliver to deevy at its public address, and that is the only way deevy hears from them: it
+never asks a tool what changed. A deevy no tool can reach, on a laptop or behind a firewall, hears nothing
+from its tools until a delivery can reach it, for example through a tunnel.
 
 ## The license
 

@@ -1,14 +1,9 @@
 import type {
   Container,
-  ExternalComment,
-  ExternalIssue,
   ExternalRef,
   InboundCheck,
   InboundEvent,
   InboundInput,
-  IssueDraft,
-  IssuePage,
-  IssueQuery,
   LinkedAccount,
   Scope,
   SetupInput,
@@ -18,14 +13,14 @@ import type {
   SocketModuleInput,
 } from "@deevy/core/sockets";
 import { credentialTag, hmacHex, sameText } from "../signing.ts";
-import { commentOf, issueOf, normalizeLinear } from "./payloads.ts";
+import { normalizeLinear } from "./payloads.ts";
 
 /**
- * Linear, as a tracker deevy projects from (ADR-0024).
+ * Linear, as a tracker deevy listens to and comments on (ADR-0024).
  *
  * One Linear OAuth application is one Socket, in the one Linear workspace it
  * was made in. deevy acts as the application itself — Linear's `app` actor —
- * so every comment and label is the app's, not whichever Human connected it.
+ * so every comment is the app's, not whichever Human connected it.
  * The token for that comes from the client-credentials grant, minted from the
  * client id and secret the operator pasted: Linear's authorization-code tokens
  * live a day and rotate their refresh token on every use, which would need a
@@ -95,29 +90,11 @@ export function resetLinearTokens(): void {
   tokens.clear();
 }
 
-const ISSUE_FIELDS = `
-fragment DeevyIssueFields on Issue {
-  id identifier url title description updatedAt
-  parent { id }
-  delegate { id }
-  assignee { id name displayName }
-  state { name type }
-  labels { nodes { name } }
-  team { id }
-}`;
-
 const WHO = `query DeevyWho { viewer { id name displayName } organization { id name urlKey } }`;
 
 interface Who {
   viewer: { id: string; name: string; displayName?: string };
   organization: { id: string; name: string; urlKey: string };
-}
-
-/** The team a scope names: its id, which is what a Project's binding stores. */
-function teamOf(scope: Scope): string {
-  const team = typeof scope.scopeKey === "string" ? scope.scopeKey : "";
-  if (!team) throw new Error("That scope names no Linear team");
-  return team;
 }
 
 class LinearError extends Error {
@@ -265,42 +242,6 @@ export function createLinearSocket({
     }
   }
 
-  /**
-   * The ids of labels named on a team: its own first, then the workspace's,
-   * and — when asked to — one made on the team for a name nobody has used.
-   * Linear's labels are ids; deevy's routing and its mirror both speak names.
-   */
-  async function labelIds(team: string, names: string[], make: boolean): Promise<string[]> {
-    if (names.length === 0) return [];
-    const found = await asApp<{
-      issueLabels: { nodes: { id: string; name: string; team: { id: string } | null }[] };
-    }>(
-      `query DeevyLabels($names: [String!]) {
-        issueLabels(filter: { name: { in: $names } }, first: 100) { nodes { id name team { id } } }
-      }`,
-      { names },
-    );
-    const ids: string[] = [];
-    for (const name of names) {
-      const named = found.issueLabels.nodes.filter((label) => label.name === name);
-      const label =
-        named.find((one) => one.team?.id === team) ?? named.find((one) => one.team === null);
-      if (label) {
-        ids.push(label.id);
-        continue;
-      }
-      if (!make) continue;
-      const made = await asApp<{ issueLabelCreate: { issueLabel: { id: string } } }>(
-        `mutation DeevyLabelCreate($input: IssueLabelCreateInput!) {
-          issueLabelCreate(input: $input) { success issueLabel { id } }
-        }`,
-        { input: { name, teamId: team } },
-      );
-      ids.push(made.issueLabelCreate.issueLabel.id);
-    }
-    return ids;
-  }
-
   /** Who a token belongs to, and in which workspace. */
   function whoIs(token: string): Promise<Who> {
     return graphql<Who>(token, WHO);
@@ -439,100 +380,6 @@ export function createLinearSocket({
         return normalizeLinear(eventName, payload);
       },
 
-      async getIssue(_scope: Scope, ref: ExternalRef): Promise<ExternalIssue> {
-        const found = await asApp<{ issue: unknown }>(
-          `query DeevyIssue($id: String!) { issue(id: $id) { ...DeevyIssueFields } } ${ISSUE_FIELDS}`,
-          { id: ref.externalId },
-        );
-        const issue = issueOf(found.issue);
-        if (!issue) throw new Error(`Linear answered with no issue for ${ref.url}`);
-        return issue;
-      },
-
-      /**
-       * What changed on a team since deevy last looked, oldest change first.
-       * Linear orders by the newest change, so the oldest page is its last one:
-       * asked for with `last`, turned round here, and continued with `before`.
-       */
-      async listIssues(scope: Scope, query: IssueQuery): Promise<IssuePage> {
-        const found = await asApp<{
-          issues: {
-            nodes: unknown[];
-            pageInfo: { hasPreviousPage: boolean; startCursor: string | null };
-          };
-        }>(
-          `query DeevyIssues($filter: IssueFilter, $last: Int, $before: String) {
-            issues(filter: $filter, last: $last, before: $before, orderBy: updatedAt) {
-              nodes { ...DeevyIssueFields }
-              pageInfo { hasPreviousPage startCursor }
-            }
-          } ${ISSUE_FIELDS}`,
-          {
-            filter: {
-              team: { id: { eq: teamOf(scope) } },
-              ...(query.updatedSince
-                ? { updatedAt: { gt: query.updatedSince.toISOString() } }
-                : {}),
-            },
-            last: query.limit,
-            before: query.cursor,
-          },
-        );
-        const issues = found.issues.nodes
-          .map((node) => issueOf(node))
-          .filter((issue): issue is ExternalIssue => issue !== null)
-          .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
-        const { hasPreviousPage, startCursor } = found.issues.pageInfo;
-        return { issues, nextCursor: hasPreviousPage ? startCursor : null };
-      },
-
-      async listComments(
-        _scope: Scope,
-        ref: ExternalRef,
-        limit: number,
-      ): Promise<ExternalComment[]> {
-        const found = await asApp<{ issue: { comments: { nodes: unknown[] } } | null }>(
-          `query DeevyComments($id: String!, $first: Int) {
-            issue(id: $id) {
-              comments(first: $first) {
-                nodes { id body url createdAt user { id name displayName } botActor { id name type } }
-              }
-            }
-          }`,
-          { id: ref.externalId, first: limit },
-        );
-        return (found.issue?.comments.nodes ?? [])
-          .map((node) => commentOf(node))
-          .filter((comment): comment is ExternalComment => comment !== null)
-          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-      },
-
-      /** Under its parent natively: Linear has sub-issues everywhere. */
-      async createIssue(
-        scope: Scope,
-        draft: IssueDraft,
-      ): Promise<ExternalIssue & { parentLinked: boolean }> {
-        const team = teamOf(scope);
-        const labels = await labelIds(team, draft.labels, true);
-        const created = await asApp<{ issueCreate: { issue: unknown } }>(
-          `mutation DeevyIssueCreate($input: IssueCreateInput!) {
-            issueCreate(input: $input) { success issue { ...DeevyIssueFields } }
-          } ${ISSUE_FIELDS}`,
-          {
-            input: {
-              teamId: team,
-              title: draft.title,
-              description: draft.body,
-              ...(draft.parent ? { parentId: draft.parent.externalId } : {}),
-              ...(labels.length > 0 ? { labelIds: labels } : {}),
-            },
-          },
-        );
-        const issue = issueOf(created.issueCreate.issue);
-        if (!issue) throw new Error("Linear answered with no issue after creating one");
-        return { ...issue, parentLinked: draft.parent !== null };
-      },
-
       async createComment(_scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef> {
         const created = await asApp<{ commentCreate: { comment: { id: string; url: string } } }>(
           `mutation DeevyCommentCreate($input: CommentCreateInput!) {
@@ -544,28 +391,6 @@ export function createLinearSocket({
           externalId: created.commentCreate.comment.id,
           url: created.commentCreate.comment.url,
         };
-      },
-
-      /**
-       * By name. A label added that the team has never had is made on first
-       * use, which is the lazy creation the mirror relies on; one removed that
-       * does not exist is not on the record, which is what was wanted.
-       */
-      async setLabels(
-        scope: Scope,
-        ref: ExternalRef,
-        change: { add: string[]; remove: string[] },
-      ): Promise<void> {
-        const team = teamOf(scope);
-        const added = await labelIds(team, change.add, true);
-        const removed = await labelIds(team, change.remove, false);
-        if (added.length === 0 && removed.length === 0) return;
-        await asApp(
-          `mutation DeevyLabelsChange($id: String!, $input: IssueUpdateInput!) {
-            issueUpdate(id: $id, input: $input) { success }
-          }`,
-          { id: ref.externalId, input: { addedLabelIds: added, removedLabelIds: removed } },
-        );
       },
 
       /** Every team the app can see, which is every public team in the workspace. */

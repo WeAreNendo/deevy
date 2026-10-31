@@ -288,10 +288,11 @@ function Ceiling({
 }
 
 /**
- * What an Agent may not go past when it cuts work into sub-issues
- * (docs/plans/sub-issue-delegation.md). An Agent that decides a task has forty
- * parts will open forty Issues and start forty Runs, and these are the numbers
- * that say it may not. They are about Agents: a Human is never stopped by them.
+ * The ceilings on how far an Agent cuts work into sub-issues
+ * (docs/plans/sub-issue-delegation.md). They were checked when deevy opened a
+ * sub-issue for an Agent, and deevy opens none now (docs/plans/simplify.md,
+ * slice 4), so they bound nothing until slice 6 takes two of them out and
+ * checks the depth again; the row says so rather than promise a refusal.
  */
 export function DelegationRow() {
   const queryClient = useQueryClient();
@@ -305,7 +306,7 @@ export function DelegationRow() {
   return (
     <SettingsRow
       label="How far an Agent may split work"
-      hint="An Agent can open sub-issues and hand them to other Agents. These are the limits on that: past any of them it is refused, and the refusal is in the Workspace's log. They do not apply to you."
+      hint="These bound nothing right now: an Agent opens sub-issues in your tracker with its own access, so what it can open is what that access lets it."
     >
       {workspace.isPending ? (
         <Skeleton className="h-9 w-72" />

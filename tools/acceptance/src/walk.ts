@@ -253,10 +253,20 @@ function rulingComment(
   };
 }
 
-/** What deevy has said on the record so far, read from the tracker through deevy. */
-async function said(origin: string, issue: string, cookie: string): Promise<string[]> {
-  const read = await human(origin, "issues/get", { issue, comments: true }, cookie);
-  return ((read.comments as Array<{ body: string }> | null) ?? []).map((one) => one.body);
+/**
+ * What deevy has said on the record so far, read where it said it: the stubbed
+ * tracker's own comments, through the window a stubbed deployment opens on it
+ * (`/dev/tracker`). deevy keeps no copy of a record's conversation to read
+ * back (docs/plans/simplify.md, slice 4).
+ */
+async function said(origin: string, record: { externalId: string }): Promise<string[]> {
+  const response = await fetch(`${origin}/dev/tracker`);
+  if (!response.ok) throw new Error(`/dev/tracker: ${String(response.status)}`);
+  const view = (await response.json()) as {
+    containers: Array<{ scopeKey: string; comments: Record<string, Array<{ body: string }>> }>;
+  };
+  const container = view.containers.find((one) => one.scopeKey === CONTAINER);
+  return (container?.comments[record.externalId] ?? []).map((one) => one.body);
 }
 
 // ---------------------------------------------------------------- the Agent
@@ -412,21 +422,18 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   await human(origin, "agents/grants/add", { memberId: plannerId, projectId: project.id }, ada);
   const agent = agentAt(origin, String((planner.key as { key?: string } | undefined)?.key ?? ""));
 
-  // Part 2: the work arrives, the way work arrives — as a record in the team's
-  // own tracker, which deevy opens through the Socket and then projects.
-  const record = (await human(
-    origin,
-    "issues/create",
-    {
-      projectSlug: "deevy",
-      title: "Give the service a health endpoint",
-      body: "An operator cannot tell whether the service is alive.",
-    },
-    ada,
-  )) as unknown as { externalId: string; externalKey: string; url: string; title: string };
+  // Part 2: the work arrives, the way work arrives — as a record somebody
+  // opened in the team's own tracker, labelled for the Planner. deevy opens no
+  // record (docs/plans/simplify.md, slice 4): it hears of this one in a
+  // delivery, and that is all it needs.
+  const record = {
+    externalId: "1",
+    externalKey: `${CONTAINER}#1`,
+    url: `https://stub.invalid/${CONTAINER}/issues/1`,
+    title: "Give the service a health endpoint",
+  };
   const issueKey = record.externalKey;
 
-  // And it is labelled for the Planner, which is a delivery and nothing else.
   const labelled = await deliver(
     origin,
     socketId,
@@ -469,7 +476,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   );
   const runId = pending[0]?.id ?? "";
 
-  const read = await agent.tool("issues_get", { issue: issueKey, comments: true });
+  const read = await agent.tool("issues_get", { issue: issueKey });
   check(
     "the record an Agent reads is the tracker's, and says where to stop",
     JSON.stringify(read.checkpoints) === JSON.stringify(["plan", "ship"]),
@@ -493,9 +500,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
 
   // What deevy says back where the team reads: the Proposal, signed.
   const mirrored = await until(deployment, "the Gate reaching the tracker", async () => {
-    return (
-      (await said(origin, issueKey, ada)).find((one) => one.includes("## What I will do")) ?? null
-    );
+    return (await said(origin, record)).find((one) => one.includes("## What I will do")) ?? null;
   });
   check(
     "the Proposal is a comment in the tracker, signed with the Agent and the Run",
@@ -526,7 +531,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   const linkReply = await until(
     deployment,
     "the stranger being answered",
-    async () => (await said(origin, issueKey, ada)).find((one) => one.includes("@mallory")) ?? null,
+    async () => (await said(origin, record)).find((one) => one.includes("@mallory")) ?? null,
   );
   check(
     "an account nobody linked rules nothing, and is told where to link it",
@@ -631,7 +636,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     deployment,
     "the requester being answered",
     async () =>
-      (await said(origin, issueKey, ada)).find((one) =>
+      (await said(origin, record)).find((one) =>
         one.includes("wants somebody other than the Human this Run is for"),
       ) ?? null,
   );
@@ -692,12 +697,31 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   const ruled = await until(
     deployment,
     "the ruling reaching the tracker",
-    async () => (await said(origin, issueKey, ada)).find((one) => one.includes("Ship it")) ?? null,
+    async () => (await said(origin, record)).find((one) => one.includes("Ship it")) ?? null,
   );
   check(
     "the ruling is said back in the tracker too, with the arithmetic",
     ruled.includes("1 of 1") || ruled.toLowerCase().includes("approved"),
     ruled,
+  );
+  // And nothing else: a Gate waiting is one comment, its Ruling another, and a
+  // Ruling the tracker could not count is answered where it was made. A Run
+  // starting, working or finishing says nothing on the record
+  // (docs/plans/simplify.md, slice 4).
+  const spoken = (await said(origin, record)).map((one) =>
+    one.startsWith("**Waiting on a ruling")
+      ? "gate"
+      : one.startsWith("**Approved**") || one.startsWith("**Rejected**")
+        ? "ruling"
+        : one.includes("ruled nothing")
+          ? "refused"
+          : one.split("\n")[0],
+  );
+  check(
+    "and deevy says nothing else there: two Gates, their two Rulings, two Rulings refused",
+    JSON.stringify([...spoken].sort()) ===
+      JSON.stringify(["gate", "gate", "refused", "refused", "ruling", "ruling"]),
+    JSON.stringify(spoken),
   );
 
   // Part 7: what the record has to say.

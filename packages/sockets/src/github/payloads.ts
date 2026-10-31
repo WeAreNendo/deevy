@@ -35,7 +35,6 @@ interface GithubIssue {
   user?: unknown;
   html_url?: unknown;
   updated_at?: unknown;
-  pull_request?: unknown;
 }
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
@@ -97,11 +96,6 @@ export function issueOf(repository: string, issue: unknown): ExternalIssue | nul
     parentExternalId: null,
     updatedAt: new Date(text(found.updated_at) || Date.now()),
   };
-}
-
-/** Whether this is really a pull request, which GitHub lists among its issues. */
-export function isPullRequest(issue: unknown): boolean {
-  return Boolean((issue as GithubIssue | null)?.pull_request);
 }
 
 export function commentOf(comment: unknown): ExternalComment | null {

@@ -459,8 +459,6 @@ export const sockets = {
       credentials: z.record(z.string(), z.string()).optional(),
       /** What the tool signs its deliveries with, where the tool decides it. */
       webhookSecret: z.string().trim().min(8).max(500).optional(),
-      /** Ask this tool every so often, for an instance the tool cannot reach. */
-      pollMinutes: z.number().int().min(1).max(1440).optional(),
       /**
        * A Socket `sockets.begin` started, to complete rather than to connect a
        * second one: Slack wants the request URL in the app's own manifest, and
@@ -505,7 +503,6 @@ export const sockets = {
         name: input.name,
         identity,
         config: { ...config, ...learned },
-        ...(input.pollMinutes === undefined ? {} : { pollMinutes: input.pollMinutes }),
         ...sealed,
       };
       const [row] = pending
@@ -543,7 +540,7 @@ export const sockets = {
 
   update: defineOperation({
     name: "sockets.update",
-    summary: "Rename a tool, rest it, or ask it on a schedule",
+    summary: "Rename a tool, or rest it",
     method: "POST",
     path: "/sockets/{socketId}",
     auth: "admin",
@@ -552,7 +549,6 @@ export const sockets = {
       name: z.string().trim().min(1).max(120).optional(),
       /** `paused` keeps everything and stops acting on what the tool says. */
       status: z.enum(socketStatuses).exclude(["removed"]).optional(),
-      pollMinutes: z.number().int().min(1).max(1440).nullable().optional(),
       /**
        * Take the address a tool reports as proof of which Member commented,
        * matched against one a Member verified. For a tool with nothing better
@@ -578,7 +574,6 @@ export const sockets = {
       const changes = {
         ...(input.name === undefined ? {} : { name: input.name }),
         ...(input.status === undefined ? {} : { status: input.status }),
-        ...(input.pollMinutes === undefined ? {} : { pollMinutes: input.pollMinutes }),
       };
       const config =
         input.identityByEmail === undefined
@@ -679,18 +674,24 @@ export const sockets = {
     auth: "admin",
     input: z.object({ socketId: z.string() }),
     output: z.object({
-      containers: z.array(
-        z.object({
-          scope: z.record(z.string(), z.unknown()),
-          scopeKey: z.string(),
-          name: z.string(),
-        }),
-      ),
+      /**
+       * What the tool offers, or null where it lists none: the admin types the
+       * container's key instead, and the binding is `{ scopeKey }`.
+       */
+      containers: z
+        .array(
+          z.object({
+            scope: z.record(z.string(), z.unknown()),
+            scopeKey: z.string(),
+            name: z.string(),
+          }),
+        )
+        .nullable(),
     }),
     handler: async ({ input, context }) => {
       const row = await requireSocket(context, input.socketId);
       const tracker = requireTracker(await socketModuleFor(context as SocketFor, row));
-      return { containers: await tracker.listContainers() };
+      return { containers: tracker.listContainers ? await tracker.listContainers() : null };
     },
   }),
 

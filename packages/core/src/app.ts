@@ -118,6 +118,14 @@ export interface AppOptions {
    */
   devSockets?: boolean;
   /**
+   * What that stub holds, served as JSON at `/dev/tracker` for a developer and
+   * the acceptance walk: each container's records and every comment on them,
+   * deevy's own among them (docs/acceptance.md). The entry passes it only
+   * where it registered the stub, because the core holds no provider and so
+   * cannot read one's store itself.
+   */
+  devTracker?: () => unknown;
+  /**
    * The providers this deployment can speak, built by the entry from
    * `@deevy/sockets` (ADR-0024). The core holds the port and never a provider,
    * so a build without one refuses the Socket rather than failing to compile.
@@ -225,6 +233,7 @@ export function createApp({
   onError: report = console.error,
   devSignIn = false,
   devSockets = false,
+  devTracker,
   sockets,
   socketSecret,
   emailSenders,
@@ -313,6 +322,10 @@ export function createApp({
     }),
   );
 
+  // The stubbed tracker, as a walk outside this process reads it: what deevy
+  // said on a record is a comment there, and nowhere in deevy (ADR-0024).
+  if (devTracker) routes.get("/dev/tracker", (c) => c.json(devTracker()));
+
   // A provider's callback for another deevy, sent on to it unchanged but for
   // its own state (sign-in-relay.ts). A browser navigation, so no session and
   // no CORS: what decides is the signature on the state and the allowed list.
@@ -354,8 +367,8 @@ export function createApp({
     ...(webURL ? { webURL } : {}),
     secret,
     jobs,
-    // The same registry the operation surfaces get: a tool that opens a record
-    // in a tracker is refused without it (ADR-0024).
+    // The same registry the operation surfaces get: a tool that reads a
+    // Socket's containers, or rules at a Gate it announced, needs it (ADR-0024).
     ...(sockets ? { sockets } : {}),
     ...(socketSecret ? { socketSecret } : {}),
     onError: reportUnexpected,

@@ -27,9 +27,8 @@ import commented from "./fixtures/notion/comment.created.json" with { type: "jso
  * database and replaces only Notion's API — so what is under test is the whole
  * sentence: Notion verifies the webhook, somebody tags a row for an Agent,
  * deevy reads the row back because Notion only said which one, the Proposal is
- * the integration's comment on it, a Human approves by commenting once an admin
- * has allowed their address to vouch for them, and the Agent reads the plan
- * where the team keeps it.
+ * the integration's comment on it, and a Human approves by commenting once an
+ * admin has allowed their address to vouch for them.
  */
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -45,16 +44,10 @@ const PAGE = page.id;
 const BOT = "2f4e6a8c-0b1d-4e3f-a5b7-c9d1e3f5a7b9";
 const GRACE = "c7c11cca-1d73-471d-9b6e-bdef51470190";
 const STRANGER = "9f8e7d6c-0000-4000-8000-00000000abcd";
-const PLAN = "3c5d7e9f-1a2b-4c3d-8e4f-5a6b7c8d9e0f";
 
 /** Notion's API, as far as deevy can tell: pages, comments, users, and what was asked. */
 function notionApi() {
   const calls: Array<{ method: string; path: string; body: Record<string, unknown> }> = [];
-  const row = structuredClone(page) as Omit<typeof page, "properties"> & {
-    properties: Omit<typeof page.properties, "Tags"> & {
-      Tags: { id: string; type: string; multi_select: { name: string }[] };
-    };
-  };
   const remarks = new Map<string, { author: string; text: string }>();
   let made = 0;
   const users: Record<string, object> = {
@@ -83,17 +76,12 @@ function notionApi() {
     >;
     calls.push({ method, path, body });
 
-    if (method === "GET" && path === `/pages/${PAGE}`) return Response.json(row);
+    if (method === "GET" && path === `/pages/${PAGE}`) return Response.json(page);
     if (method === "GET" && path === `/pages/${PAGE}/markdown`) {
       return Response.json({
         object: "page_markdown",
         markdown: "A 10% coupon takes it below zero.",
       });
-    }
-    if (method === "PATCH" && path === `/pages/${PAGE}`) {
-      const tags = (body.properties as { Tags?: { multi_select: { name: string }[] } }).Tags;
-      if (tags) row.properties.Tags.multi_select = tags.multi_select;
-      return Response.json(row);
     }
     if (method === "POST" && path === "/comments") {
       return Response.json({ object: "comment", id: `mine-${String(++made)}` });
@@ -111,23 +99,12 @@ function notionApi() {
     }
     const user = /^\/users\/(.+)$/.exec(path)?.[1];
     if (method === "GET" && user && users[user]) return Response.json(users[user]);
-    if (method === "GET" && path === `/pages/${PLAN}`) {
-      return Response.json({
-        object: "page",
-        id: PLAN,
-        url: "https://www.notion.so/acme/Checkout-plan-3c5d7e9f1a2b4c3d8e4f5a6b7c8d9e0f",
-        properties: { title: { type: "title", title: [{ plain_text: "Checkout plan" }] } },
-      });
-    }
-    if (method === "GET" && path === `/pages/${PLAN}/markdown`) {
-      return Response.json({ object: "page_markdown", markdown: "# Checkout plan\n\nCap it." });
-    }
     return Response.json(
       { object: "error", status: 404, code: "object_not_found", message: "Could not find it." },
       { status: 404 },
     );
   };
-  return { calls, fetch, remarks, row };
+  return { calls, fetch, remarks };
 }
 
 function contextFor(db: Db, member: Member, workspace: Workspace, extra: object = {}) {
@@ -196,7 +173,7 @@ async function workspaceOnNotion(db: Db) {
     id: socketId,
     workspaceId,
     provider: "notion",
-    capabilities: ["tracker", "docs"],
+    capabilities: ["tracker"],
     name: "Acme's Notion",
     identity: { login: "deevy", id: BOT, mentionHandle: "@deevy" },
     config: { workspaceId: WORKSPACE, workspaceName: "Acme" },
@@ -221,8 +198,6 @@ async function workspaceOnNotion(db: Db) {
       keyProperty: "ID",
     },
     trackerScopeKey: `notion:${DATA_SOURCE}`,
-    docsSocketId: socketId,
-    docsScope: {},
   });
   await db.insert(projectGrant).values({ memberId: plannerId, projectId });
 
@@ -341,8 +316,9 @@ describe("somebody tags a row in Notion", () => {
       parent: { page_id: PAGE },
       markdown: expect.stringContaining("Cap the coupon"),
     });
-    expect(api.row.properties.Tags.multi_select.map((tag) => tag.name)).toContain(
-      "deevy:awaiting-approval",
+    // And that comment is all deevy writes: the row itself is left as it was.
+    expect(api.calls.filter((call) => call.method !== "GET" && call.path !== "/comments")).toEqual(
+      [],
     );
   });
 
@@ -396,28 +372,5 @@ describe("somebody tags a row in Notion", () => {
     // The integration's own comment coming back rules nothing either.
     await app.request(`/hooks/${socketId}`, await delivery(comment(api, BOT, "/approve")));
     expect(await db.query.gateDecision.findMany({})).toHaveLength(1);
-  });
-});
-
-describe("an Agent reading the plan", () => {
-  it("gets a page's markdown through the Project's documents, and nothing from a Project without", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { asPlanner, asAda } = await workspaceOnNotion(db);
-
-    const plan = await asPlanner.docs.get({
-      project: "tasks",
-      page: "https://www.notion.so/acme/Checkout-plan-3c5d7e9f1a2b4c3d8e4f5a6b7c8d9e0f",
-    });
-    expect(plan).toEqual({
-      title: "Checkout plan",
-      markdown: "# Checkout plan\n\nCap it.",
-      url: "https://www.notion.so/acme/Checkout-plan-3c5d7e9f1a2b4c3d8e4f5a6b7c8d9e0f",
-    });
-
-    await asAda.projects.update({ slug: "tasks", docs: null });
-    await expect(asPlanner.docs.get({ project: "tasks", page: PLAN })).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
   });
 });

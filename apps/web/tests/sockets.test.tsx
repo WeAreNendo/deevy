@@ -77,7 +77,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
                   {
                     id: "notion",
                     label: "Notion",
-                    capabilities: ["tracker", "docs"],
+                    capabilities: ["tracker"],
                     webhookSecretFrom: "handshake",
                   },
                   {
@@ -791,7 +791,7 @@ describe("one Socket's own page", () => {
     expect(within(deliveries).getByText("issues")).toBeTruthy();
   });
 
-  it("says deevy is asking when the tool has gone quiet", async () => {
+  it("says to check the webhook when the tool has gone quiet, and never that deevy asks", async () => {
     state.sockets = [
       {
         ...stubSocket,
@@ -804,10 +804,11 @@ describe("one Socket's own page", () => {
 
     await mountAt(`/settings/sockets/${stubSocket.id}`);
 
-    // Silence is not an error — polling is the fallback that keeps an instance
-    // no tool can reach working — but a Human should know which one is
-    // happening (docs/plans/sockets.md, slice 1).
-    expect(await screen.findByText(/deevy is asking it/)).toBeTruthy();
+    // deevy asks no tool what changed (docs/plans/simplify.md, slice 4), so a
+    // tool gone quiet may be one whose deliveries no longer arrive, and only
+    // its webhook settings and its own redelivery can put that right.
+    expect(await screen.findByText(/deevy hears only what it delivers/)).toBeTruthy();
+    expect(screen.queryByText(/asks? the tool|asking it/)).toBeNull();
   });
 
   it("mints a webhook secret and shows it exactly once", async () => {

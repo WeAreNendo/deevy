@@ -29,6 +29,7 @@
       "/hooks/*",
       "/.well-known/*",
       "/relay/*",
+      "/dev/tracker",
     ],
   },
   "d1_databases": [

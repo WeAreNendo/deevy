@@ -5,13 +5,13 @@ import { member, workspace } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
-/** How much deevy says back in the tracker it took the work from. */
+/** What `mirror` once held. The column is unused (see below). */
 export const projectMirrors = ["off", "gates", "runs"] as const;
 
 /**
- * A scope of work bound to Sockets (CONTEXT.md, ADR-0024): where its Issues
- * live, where its code lives, which Agent gets a record nobody named, and how
- * much deevy says back. It holds no Issues of its own and no Workflow.
+ * A scope of work bound to a Socket (CONTEXT.md, ADR-0024): where its Issues
+ * live, which Agent gets a record nobody named, and how a record names an
+ * Agent. It holds no Issues of its own and no Workflow.
  */
 export const project = sqliteTable(
   "project",
@@ -46,6 +46,11 @@ export const project = sqliteTable(
      */
     forgeSocketId: text("forge_socket_id").references(() => socket.id, { onDelete: "set null" }),
     forgeScope: text("forge_scope", { mode: "json" }).$type<Record<string, unknown>>(),
+    /**
+     * Unused since deevy stopped reading a Project's documents
+     * (docs/plans/simplify.md, slice 4): the Agent reads them where the team
+     * keeps them. Dropped with the forge columns, for the same reason.
+     */
     docsSocketId: text("docs_socket_id").references(() => socket.id, { onDelete: "set null" }),
     docsScope: text("docs_scope", { mode: "json" }).$type<Record<string, unknown>>(),
     /** Who gets an open record no label and no mention named. */
@@ -57,12 +62,13 @@ export const project = sqliteTable(
       .$type<{ labelPrefix: string; mention: boolean }>()
       .notNull()
       .default(sql`'{"labelPrefix":"agent:","mention":true}'`),
-    mirror: text("mirror", { enum: projectMirrors }).notNull().default("gates"),
     /**
-     * When deevy last asked this Project's tracker what changed. Polling is
-     * what keeps an instance no tool can reach working, and this is what makes
-     * one pass ask about one Project rather than all of them (work.ts).
+     * Unused since a Socket announces a Gate and its Ruling and nothing else,
+     * with no setting (docs/plans/simplify.md, slice 4), and `last_polled_at`
+     * since deevy stopped asking a tool what changed. Both are read by nothing
+     * and dropped when the migration history starts afresh (slice 12).
      */
+    mirror: text("mirror", { enum: projectMirrors }).notNull().default("gates"),
     lastPolledAt: integer("last_polled_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
     archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
@@ -72,7 +78,7 @@ export const project = sqliteTable(
     /** One container is one Project, and the inbound route's lookup. */
     uniqueIndex("project_tracker_uidx").on(table.trackerSocketId, table.trackerScopeKey),
     index("project_workspaceId_idx").on(table.workspaceId),
-    /** The poll's own scan: the Project that has gone longest without asking. */
+    /** What the poll scanned, kept until the clean break with its column. */
     index("project_lastPolledAt_idx").on(table.lastPolledAt),
   ],
 );

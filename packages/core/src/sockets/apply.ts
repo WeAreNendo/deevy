@@ -1,4 +1,5 @@
 import {
+  issue as issueTable,
   member as memberTable,
   projectGrant,
   socket as socketTable,
@@ -25,10 +26,9 @@ import { applyRuling } from "./rulings.ts";
 /**
  * What a tracker saying something does inside deevy (ADR-0024).
  *
- * One function, because a delivery and a poll must mean the same thing: a
- * webhook arrives on a public instance and a poll catches up on a laptop, and a
- * team should not have two behaviours depending on which one their instance
- * has. The route verifies and records; this decides.
+ * The one inbound path: deevy hears of a record only when its tool delivers,
+ * and asks no tool what changed (docs/plans/simplify.md, slice 4). The route
+ * verifies and records; this decides.
  *
  * Nothing here throws for an event it cannot use. A container nobody bound, a
  * record nobody projected, a delivery that arrived late — each is a sentence
@@ -154,6 +154,7 @@ async function readBack(
     const project = await projectFor(applying, event.scopeKey);
     if (!project) return `No Project is bound to ${event.scopeKey}`;
     if (project.archivedAt) return archivedSkip(project);
+    if (!tracker.getIssue) return `${applying.socket.name} cannot read a record back`;
     const known = await applying.db.query.issue.findFirst({
       where: { socketId: applying.socket.id, externalId: event.issueExternalId },
       columns: { url: true },
@@ -192,8 +193,8 @@ async function readBack(
 
 /**
  * Why a delivery for an archived Project changes nothing. Archiving closes a
- * Project down: polling already passes it by (work.ts), and a delivery that
- * went on projecting and routing its records kept starting Runs for it.
+ * Project down, and a delivery that went on projecting and routing its records
+ * kept starting Runs for it.
  */
 function archivedSkip(project: Project): string {
   return `${project.name} is archived, so deevy takes nothing more from it`;
@@ -224,18 +225,24 @@ async function applyIssue(
   const before = await db.query.issue.findFirst({
     where: { socketId: socket.id, externalId: external.externalId },
   });
-  // Where the tracker cannot link a sub-issue natively, deevy keeps the tree
-  // itself, so the parent is looked up once — when the record is first seen.
-  const parentId = before
-    ? before.parentId
-    : ((await parentRow(db, socket.id, external.parentExternalId))?.id ?? null);
+  // The tracker's own parent field is the link, from any delivery that names
+  // one (docs/plans/simplify.md, slice 4). GitHub opens a record first and
+  // makes it a sub-issue after, so that delivery is seldom the record's first,
+  // and it is taken even when a newer one beat it here: the link is a fact of
+  // its own, not part of the snapshot the reordering guard protects. One that
+  // names no parent keeps the link deevy has, because most of GitHub's never
+  // say what the parent is.
+  const named = (await parentRow(db, socket.id, external.parentExternalId))?.id ?? null;
 
   const { issue, created, applied } = await upsertProjection(db, {
     projectId: project.id,
     socketId: socket.id,
     external,
-    parentId,
+    parentId: named ?? before?.parentId ?? null,
   });
+  if (named && issue.parentId !== named) {
+    await db.update(issueTable).set({ parentId: named }).where(eq(issueTable.id, issue.id));
+  }
   if (!applied) return `${external.key} arrived after a newer delivery, so nothing changed`;
 
   const actor = event.actor?.login ?? null;
@@ -378,9 +385,9 @@ async function applyComment(
 ): Promise<string | null> {
   const { db, socket, source } = applying;
   const author = event.comment.author;
-  // The loop guard, and the whole of it: deevy's own mirrored comment comes
-  // back as a delivery, and a mention inside it was already acted on when it
-  // was written (operations/comments.ts).
+  // The loop guard, and the whole of it: deevy's own comment — a Gate waiting,
+  // a Ruling — comes back as a delivery, and acting on it would be deevy
+  // answering itself.
   if (author.id === socket.identity.id || author.login === socket.identity.login) {
     return `${socket.name} wrote this comment itself`;
   }

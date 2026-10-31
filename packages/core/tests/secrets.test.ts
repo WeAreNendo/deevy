@@ -1,3 +1,4 @@
+import type { Issue, Socket } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createAuth } from "../src/auth.ts";
@@ -5,7 +6,15 @@ import { openSecret, requireSealingSecret, sealSecret } from "../src/secrets.ts"
 import { betterAuthKeys } from "../src/keys.ts";
 import { generateSpec } from "../src/openapi.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, fakeSockets, memberContext, testDb, testSealingSecret } from "./helpers.ts";
+import { applyInbound } from "../src/sockets/apply.ts";
+import {
+  agentContext,
+  externalIssue,
+  fakeSockets,
+  memberContext,
+  testDb,
+  testSealingSecret,
+} from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -78,10 +87,22 @@ describe("the read surface", () => {
       tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
     });
     const agent = await agentContext(db, { sponsor: ada.member, grants: [project.id] });
-    const issue = await asAda.issues.create({
-      projectSlug: "deevy",
-      title: "Something to read back",
+    // A record the tracker announced on that Socket, so `issues.list` and
+    // `issues.get` below have an Issue to answer with.
+    await applyInbound({
+      db,
+      workspace: ada.workspace,
+      socket: sealed as Socket,
+      events: [
+        {
+          kind: "issue",
+          scopeKey: "acme/deevy",
+          issue: externalIssue({ externalId: "7", title: "Something to read back" }),
+          actor: { login: "ada", id: "u-ada", isBot: false },
+        },
+      ],
     });
+    const issue = (await db.query.issue.findFirst({ where: { externalId: "7" } })) as Issue;
 
     const issued = await betterAuthKeys(auth, db).issue({
       userId: agent.member.userId,

@@ -28,7 +28,7 @@ import type { EmailSenders } from "@deevy/core/email";
 import { member, run, socket } from "@deevy/db";
 import { migrations } from "@deevy/db/durable-migrations";
 import { emailSenders } from "@deevy/email";
-import { socketModules } from "@deevy/sockets";
+import { devTrackerView, socketModules } from "@deevy/sockets";
 import { count, eq, gte } from "drizzle-orm";
 import { readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
 import { betterAuthLogger, reportFor, throwDescribed } from "./log.ts";
@@ -103,7 +103,6 @@ const passLimits: DueWorkLimits = {
   maxPasses: 5,
   sweepLimit: 100,
   deliveryLimit: 50,
-  socketPageLimit: 25,
 };
 const CONFIG = "deevy:config";
 
@@ -228,7 +227,6 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
           ...passLimits,
           silenceMs: this.#hosted.runStaleMinutes * 60_000,
           gateSilenceMs: this.#hosted.gateReminderHours * 3_600_000,
-          catchupMs: this.#hosted.socketCatchupMinutes * 60_000,
         },
         baseUrl: this.#urlOf(config),
         sockets: this.#sockets(),
@@ -494,6 +492,8 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       liveSocket: { accept: (_request, reader) => this.#accept(reader) },
       signInProviders: signInProviders(identity),
       sockets: this.#sockets(),
+      // What the stub holds, at `/dev/tracker`, wherever it is registered.
+      ...(this.#hosted.devStubSockets ? { devTracker: () => devTrackerView() } : {}),
       socketSecret: await workspaceSecret(this.#hosted.masterSecret, config.key, "seal"),
       emailSenders: this.#senders(),
       email: this.#hosted.email,

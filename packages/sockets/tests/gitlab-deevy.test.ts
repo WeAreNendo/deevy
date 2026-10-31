@@ -57,7 +57,6 @@ function gitlabApi() {
     if (method === "POST" && path === "/projects/4211/issues/42/notes") {
       return Response.json({ id: 1990442800 + ++notes, body: body.body }, { status: 201 });
     }
-    if (method === "PUT" && path === "/projects/4211/issues/42") return Response.json({});
     return Response.json({ message: "404 Not found" }, { status: 404 });
   };
   return { calls, fetch };
@@ -225,8 +224,8 @@ describe("somebody labels an issue on GitLab", () => {
     expect(issue).toMatchObject({ url: ISSUE_URL, state: "open", assigneeMemberId: planner.id });
     expect(run).toMatchObject({ status: "pending", trigger: "assignment" });
 
-    // The Proposal becomes the bot's comment on the issue, with the label that
-    // says it waits — which GitLab makes on the project as it adds it.
+    // The Proposal becomes the bot's comment on the issue, and that comment is
+    // all deevy writes there: the issue itself is left as it was.
     const gate = await asPlanner.gates.request({
       runId: run.id,
       checkpoint: "plan",
@@ -236,9 +235,7 @@ describe("somebody labels an issue on GitLab", () => {
     expect(api.calls.find((call) => call.path.endsWith("/notes"))?.body.body).toContain(
       "Cap the coupon",
     );
-    expect(api.calls.find((call) => call.method === "PUT")?.body).toEqual({
-      add_labels: "deevy:awaiting-approval",
-    });
+    expect(api.calls.filter((call) => !call.path.endsWith("/notes"))).toEqual([]);
 
     // Grace signs in to deevy with GitLab, so her comment is hers with no
     // linking step: GitLab's account id is what Better Auth recorded.
@@ -263,10 +260,14 @@ describe("somebody labels an issue on GitLab", () => {
       verifiedBy: "sign_in",
     });
 
+    // And the Ruling is said there too, as another comment.
     await sweep();
-    expect(
-      api.calls.filter((call) => call.method === "PUT").map((call) => call.body),
-    ).toContainEqual({ remove_labels: "deevy:awaiting-approval" });
+    const said = api.calls.filter((call) => call.path.endsWith("/notes"));
+    expect(said.map((call) => String(call.body.body))).toEqual([
+      expect.stringContaining("Cap the coupon"),
+      expect.stringContaining("Approved"),
+    ]);
+    expect(api.calls.filter((call) => !call.path.endsWith("/notes"))).toEqual([]);
   });
 
   it("but a comment from an account nobody can place rules nothing, and is told where to link it", async () => {
@@ -321,8 +322,3 @@ describe("somebody labels an issue on GitLab", () => {
     expect(await db.query.inboundDelivery.findMany({})).toEqual([]);
   });
 });
-
-/**
- * Slice 6's forge half, against GitLab: what a Run clones with, and the merge
- * request deevy opens for it (ADR-0014, ADR-0019).
- */

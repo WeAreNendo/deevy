@@ -6,6 +6,7 @@ import type { OperationMeta } from "../src/operations/registry.ts";
 import { getOperationMeta } from "../src/operations/registry.ts";
 import {
   agentContext,
+  externalIssue,
   fakeApiKeys,
   fakeSockets,
   memberContext,
@@ -59,12 +60,10 @@ describe("the Agent capability rule", () => {
       .sort();
 
     expect(allowed).toEqual([
-      // Saying something goes to the tracker the Project is bound to; deevy
-      // stores no comments and an Agent authors none of the record (ADR-0024).
-      "comments.create",
-      // Reading a page of its Project's documents where the team keeps them,
-      // never writing one (ADR-0024).
-      "docs.get",
+      // No comment, no record and no page: the tracker is the Agent's to read
+      // and write with its own access, and deevy only hears what happened
+      // there (docs/plans/simplify.md, slice 4).
+      //
       // Asking to pass a Checkpoint, reading what was ruled, and seeing what
       // it has asked for: an Agent asks and never decides (ADR-0004, ADR-0020).
       // `gates.approve` and `gates.reject` are not here, and could not be:
@@ -78,9 +77,6 @@ describe("the Agent capability rule", () => {
       // (docs/plans/m4.md). Not projected as a tool: the loop keeps its books,
       // not the model.
       "inbox.markRead",
-      // Opening a record in the tracker, which is how an Agent splits work
-      // (docs/plans/sub-issue-delegation.md).
-      "issues.create",
       "issues.get",
       "issues.list",
       "links.add",
@@ -557,7 +553,8 @@ describe("an Agent's own webhook", () => {
     const asAdmin = createRouterClient(router, { context: { ...admin, sockets } });
     // Granted, because an Agent's webhook is owed only what happens in the
     // Projects it may see (webhooks.ts).
-    const { project } = await seedProject(db, admin.workspace.id);
+    const seeded = await seedProject(db, admin.workspace.id);
+    const { project } = seeded;
     const created = await asAdmin.agents.create({ name: "Planner" });
     await asAdmin.agents.grants.add({ memberId: created.id, projectId: project.id });
 
@@ -572,7 +569,14 @@ describe("an Agent's own webhook", () => {
     expect((await asAdmin.agents.list({})).agents[0]?.webhookUrl).toBe(
       "https://runner.example/deevy",
     );
-    await asAdmin.issues.create({ projectSlug: "deevy", title: "Something to hear about" });
+    await seeded.deliver([
+      {
+        kind: "issue",
+        scopeKey: "acme/deevy",
+        issue: externalIssue({ externalId: "7", title: "Something to hear about" }),
+        actor: { login: "ada", id: "u-ada", isBot: false },
+      },
+    ]);
 
     const owed = await db.query.delivery.findMany({ where: { target: "webhook" } });
     expect(owed.length).toBeGreaterThan(0);
@@ -653,8 +657,6 @@ describe("every door into an ungranted Project", () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const { sockets } = fakeSockets();
-    const asAda = createRouterClient(router, { context: { ...ada, sockets } });
     const { project: dev } = await seedProject(db, ada.workspace.id);
     const ops = await seedProject(db, ada.workspace.id, { slug: "ops", scopeKey: "acme/ops" });
 
@@ -666,15 +668,6 @@ describe("every door into an ungranted Project", () => {
     await expect(asAgent.projects.get({ slug: "ops" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-
-    // deevy will not hand it a record there: it could never see the Run.
-    await expect(
-      asAda.issues.create({
-        projectSlug: "ops",
-        title: "Rotate the keys",
-        assignAgent: agent.member.id,
-      }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     // And the inbox is a door too: a Notification names an Issue, and reading
     // it back is reading a projection in a Project the Agent cannot see. A
