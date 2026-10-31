@@ -37,8 +37,8 @@ const runner = startRunner({
   // The origin a Slack message's link is built on: the SPA's when it has one
   // of its own, else this instance's (docs/plans/sign-in.md).
   ...((env.webOrigin ?? env.baseURL) ? { baseUrl: env.webOrigin ?? env.baseURL } : {}),
-  // The same registry the app was built with, so the pass can ask a tool what
-  // changed on an instance no tool can reach (ADR-0024).
+  // The same registry the app was built with, so the pass can say on a record
+  // what a Gate is waiting for (ADR-0024).
   sockets: socketModules({
     devStub: env.devStubSockets,
     ...(env.devStubContainers ? { devStubContainers: env.devStubContainers } : {}),
@@ -46,7 +46,6 @@ const runner = startRunner({
     ...(env.providers.gitlab?.issuer ? { gitlabSignInIssuer: env.providers.gitlab.issuer } : {}),
   }),
   ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
-  socketCatchupMinutes: env.socketCatchupMinutes,
   // How email leaves this instance: the senders Node can run, and the one the
   // environment chose (docs/plans/email-channel.md).
   emailSenders: nodeEmailSenders(env.devStubEmail),

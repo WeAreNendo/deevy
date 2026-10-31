@@ -87,15 +87,14 @@ Without a sender, deevy emails nobody, and the inbox and Slack work as before. T
 
 The rest have defaults that suit most teams:
 
-| If you want to…                                          | Set                            |
-| -------------------------------------------------------- | ------------------------------ |
-| Connect a GitHub Enterprise Server instead of github.com | `DEEVY_GITHUB_API`             |
-| Change how long a quiet tool waits before deevy asks it  | `DEEVY_SOCKET_CATCHUP_MINUTES` |
-| Change how long a silent Run takes to count as stale     | `DEEVY_RUN_STALE_MINUTES`      |
-| Change how often an undecided Gate reminds its approvers | `DEEVY_GATE_REMINDER_HOURS`    |
-| Change the order of the sign-in buttons                  | `DEEVY_SIGN_IN_ORDER`          |
-| Share sign-in apps with other deevys                     | `DEEVY_SIGN_IN_RELAY_*`        |
-| Serve the web app from an address of its own             | `DEEVY_WEB_ORIGIN`             |
+| If you want to…                                          | Set                         |
+| -------------------------------------------------------- | --------------------------- |
+| Connect a GitHub Enterprise Server instead of github.com | `DEEVY_GITHUB_API`          |
+| Change how long a silent Run takes to count as stale     | `DEEVY_RUN_STALE_MINUTES`   |
+| Change how often an undecided Gate reminds its approvers | `DEEVY_GATE_REMINDER_HOURS` |
+| Change the order of the sign-in buttons                  | `DEEVY_SIGN_IN_ORDER`       |
+| Share sign-in apps with other deevys                     | `DEEVY_SIGN_IN_RELAY_*`     |
+| Serve the web app from an address of its own             | `DEEVY_WEB_ORIGIN`          |
 
 What the Workspace lets in, who is invited, which Projects and Agents it has, and where Notifications go
 are not configuration: an admin sets them in **Settings**.

@@ -11,7 +11,8 @@ import { deriveNotifications } from "../src/notifications.ts";
 import { deriveWebhookDeliveries } from "../src/webhooks.ts";
 import { deliverWebhook, remindAboutGates } from "../src/work.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
+import type { InboundEvent } from "../src/sockets/port.ts";
+import { agentContext, externalIssue, memberContext, seedProject, testDb } from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
 /**
@@ -36,9 +37,7 @@ async function workspace() {
   const { db, close } = testDb();
   closers.push(close);
   const alice = await memberContext(db, { role: "admin", name: "Alice" });
-  const { sockets } = fakeSockets();
-  const asAlice = createRouterClient(router, { context: { ...alice, sockets } });
-  const { project } = await seedProject(db, alice.workspace.id);
+  const seeded = await seedProject(db, alice.workspace.id);
   const subscriptionId = newId("webhook");
   await db.insert(webhookSubscription).values({
     id: subscriptionId,
@@ -49,7 +48,24 @@ async function workspace() {
     projectId: null,
     createdBy: alice.member.id,
   });
-  return { db, alice, asAlice, project, subscriptionId, workspaceId: alice.workspace.id };
+  return {
+    db,
+    alice,
+    seeded,
+    project: seeded.project,
+    subscriptionId,
+    workspaceId: alice.workspace.id,
+  };
+}
+
+/** The tracker announcing a record it opened, as its delivery says so. */
+function announced(over: Parameters<typeof externalIssue>[0]): InboundEvent {
+  return {
+    kind: "issue",
+    scopeKey: "acme/deevy",
+    issue: externalIssue(over),
+    actor: { login: "alice", id: "u-alice", isBot: false },
+  };
 }
 
 /** A Slack Channel the Workspace sends everything to. */
@@ -88,15 +104,13 @@ async function slackFor(db: Db, event: Event) {
 
 describe("deriving the same Event a second time", () => {
   it("leaves the one Notification it already owed", async () => {
-    const { db, alice, asAlice, project } = await workspace();
-    // Routing is what assigns a projection now, and deevy states it by opening
-    // the record with the Agent's label on it (ADR-0024).
+    const { db, alice, seeded, project } = await workspace();
+    // Routing is what assigns a projection now, and the tracker states it: the
+    // record arrives with the Agent's label on it (ADR-0024).
     const planner = await agentContext(db, { sponsor: alice.member, grants: [project.id] });
-    await asAlice.issues.create({
-      projectSlug: "deevy",
-      title: "Ship the thing",
-      assignAgent: planner.member.id,
-    });
+    await seeded.deliver([
+      announced({ externalId: "7", title: "Ship the thing", labels: ["agent:planner"] }),
+    ]);
     const assigned = (await db.query.event.findFirst({
       where: { kind: "issue.assigned" },
     })) as Event;
@@ -114,8 +128,8 @@ describe("deriving the same Event a second time", () => {
   });
 
   it("leaves the one delivery the subscribed URL was already owed", async () => {
-    const { db, asAlice, subscriptionId } = await workspace();
-    await asAlice.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
+    const { db, seeded, subscriptionId } = await workspace();
+    await seeded.deliver([announced({ externalId: "7", title: "Ship the thing" })]);
     const created = (await db.query.event.findFirst({
       where: { kind: "issue.created" },
     })) as Event;
@@ -131,13 +145,13 @@ describe("deriving the same Event a second time", () => {
   });
 
   it("leaves the one message the Slack Channel was already owed", async () => {
-    const { db, alice, asAlice, project } = await workspace();
+    const { db, alice, seeded, project } = await workspace();
     const channelId = await slackRoom(db, alice.workspace.id);
     // A room is full of Humans, so the Event has to be one a Human is owed:
     // a Run asking its Sponsor something (docs/plans/m3.md, slice 2).
     const agent = await agentContext(db, { sponsor: alice.member, grants: [project.id] });
     const asAgent = createRouterClient(router, { context: agent });
-    const issue = await asAlice.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
+    const issue = await seeded.record({ externalId: "7", title: "Ship the thing" });
     const run = await asAgent.runs.start({ issue: issue.externalKey });
     await asAgent.runs.postActivity({
       runId: run.id,
@@ -161,14 +175,11 @@ describe("deriving the same Event a second time", () => {
 
 describe("asking again about a Run nobody has answered", () => {
   it("leaves the Slack Channel the one message that Event already owed", async () => {
-    const { db, alice, asAlice, project } = await workspace();
+    const { db, alice, seeded, project } = await workspace();
     await slackRoom(db, alice.workspace.id);
     const agent = await agentContext(db, { sponsor: alice.member, grants: [project.id] });
     const asAgent = createRouterClient(router, { context: agent });
-    const issue = await asAlice.issues.create({
-      projectSlug: "deevy",
-      title: "Waiting on a Human",
-    });
+    const issue = await seeded.record({ externalId: "7", title: "Waiting on a Human" });
     const run = await asAgent.runs.start({ issue: issue.url });
     await asAgent.runs.postActivity({
       runId: run.id,
@@ -212,8 +223,8 @@ function stubFetch() {
 
 describe("sending the same delivery a second time", () => {
   it("makes no request at all, because the row already landed", async () => {
-    const { db, asAlice } = await workspace();
-    await asAlice.issues.create({ projectSlug: "deevy", title: "Ship the thing" });
+    const { db, seeded } = await workspace();
+    await seeded.deliver([announced({ externalId: "7", title: "Ship the thing" })]);
     const [owed] = (await db.query.delivery.findMany()).filter((row) => row.target === "webhook");
     const receiver = stubFetch();
     const first = await deliverWebhook({

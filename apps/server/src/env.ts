@@ -19,8 +19,6 @@ export interface ServerEnv {
    * volume (docs/OPERATIONS.md).
    */
   socketSecret?: string;
-  /** Silence after which deevy asks a Socket rather than waiting to be told. */
-  socketCatchupMinutes: number;
   /**
    * GitHub's REST root for a Socket that names none: a GitHub Enterprise
    * Server, or the acceptance walk's stand-in (`DEEVY_GITHUB_API`).
@@ -196,7 +194,6 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     // in through a relay").
     signInRelay: signInRelayFromEnv(env),
     socketSecret: env.DEEVY_SECRET,
-    socketCatchupMinutes: positive(env.DEEVY_SOCKET_CATCHUP_MINUTES, 30),
     githubApi: env.DEEVY_GITHUB_API,
     webOrigin: env.DEEVY_WEB_ORIGIN,
     // Under the flag every provider is the stub, including the ones this

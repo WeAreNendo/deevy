@@ -43,13 +43,14 @@ _Avoid_: organization, tenant, account, instance
 
 **Socket**:
 One connected external tool under one identity: a GitHub App, a Linear app, a GitLab account, a Notion
-connection, a Slack app. A Socket has capabilities — tracker, docs, chat — and holds the credential
-deevy uses to act there.
+connection, a Slack app. A Socket has capabilities — tracker, chat — and holds the credential deevy
+uses there. It listens and announces: it takes what the tool delivers, and says on a record when a Gate is
+waiting and how it was ruled. Everything else in the tool is the Agent's, with its own access.
 _Avoid_: integration, connector, plugin, provider (for the row; the provider is the kind of tool)
 
 **Project**:
-A scope of work bound to Sockets: where its Issues live, optionally where its documents are read from, which Agents may work it, its default Agent and routing rule, its Checkpoints, and
-how much deevy mirrors back.
+A scope of work bound to a tracker Socket's container: where its Issues live, which Agents may work it, its
+default Agent and routing rule, and its Checkpoints.
 _Avoid_: board, space, repo, team, binding
 
 ### Work
@@ -62,13 +63,13 @@ _Avoid_: ticket, card, task, story, work item, item
 
 **Assignee**:
 The Member deevy routed an Issue to, by label, by mention, or by a Project's default. The tracker's own
-assignee is a fact deevy mirrors, not this.
+assignee is a fact deevy keeps, not this.
 _Avoid_: owner, delegate
 
 **Sub-issue**:
 A record opened under another in the tracker, which is its parent. A piece of a larger piece of work with
-its own Runs and its own Gates; it may live in a different Project. deevy keeps the tree even where the
-tracker cannot link it.
+its own Runs and its own Gates; it may live in a different Project. deevy knows the tree only where the
+tracker delivers the parent.
 _Avoid_: subtask, child ticket, epic
 
 **Run**:
@@ -153,7 +154,7 @@ code and new writing do not.
   Proposal on a Gate; where a team keeps plans is theirs.
 - **State** and **Workflow** — a Project's ordered steps. A Project has Checkpoints; an Issue's state is
   the tracker's.
-- **Label** — a Workspace classification. A tracker label is a fact deevy mirrors and a routing input.
+- **Label** — a Workspace classification. A tracker label is a fact deevy keeps and a routing input.
 - **Team** — a named group of Members. Mention Members; a tracker's teams are its containers.
 - **Key** as `DEV-42` — deevy's own numbering. An Issue's key is the tracker's.
 - **Usage** — the tokens and cost a Run's client reported. deevy says how long a Run worked and waited,

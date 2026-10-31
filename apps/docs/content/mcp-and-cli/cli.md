@@ -89,20 +89,15 @@ some commands are refused while the key is set; unset it to be yourself again. S
 
 ## Things to do
 
-**Find a record and read its conversation:**
+**Find a record:**
 
 ```bash
 deevy issues list --project-slug web --state open
-deevy issues get ENG-12 --comments
+deevy issues get ENG-12
 ```
 
-A record is named by its id, its URL, or the tracker's key, such as `ENG-12` or `acme/web#42`.
-
-**Comment on it**, in the tracker it lives in:
-
-```bash
-deevy comments create ENG-12 --body "The fix belongs in the API, not the app."
-```
+A record is named by its id, its URL, or the tracker's key, such as `ENG-12` or `acme/web#42`. Its
+conversation is the tracker's: read it, and comment, there.
 
 **See what Agents did on it:**
 

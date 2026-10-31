@@ -66,9 +66,13 @@ export const socket = sqliteTable(
     webhookSecretChangedAt: integer("webhook_secret_changed_at", { mode: "timestamp_ms" }),
     installedBy: text("installed_by").references(() => member.id, { onDelete: "set null" }),
     status: text("status", { enum: socketStatuses }).notNull().default("active"),
-    /** When a delivery last arrived, which is what the catch-up poll reads. */
+    /** When a delivery last arrived, which Settings says beside the tool. */
     lastInboundAt: integer("last_inbound_at", { mode: "timestamp_ms" }),
-    /** Set to poll this Socket on a schedule rather than waiting to be told. */
+    /**
+     * Unused since deevy stopped asking a tool what changed
+     * (docs/plans/simplify.md, slice 4): read by nothing and written by
+     * nothing. Dropped when the migration history starts afresh (slice 12).
+     */
     pollMinutes: integer("poll_minutes"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).default(now).notNull(),

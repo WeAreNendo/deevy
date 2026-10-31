@@ -20,25 +20,16 @@ import { providerLabel } from "@/lib/providers";
 
 /** Base UI wants a real value for "nobody", so the sentinel is a constant. */
 const NOBODY = "__nobody";
-/** And for "nowhere", when a Project keeps its documents in no tool deevy reads. */
-const NOWHERE = "__nowhere";
-
-/**
- * What each mirror setting is called. A Base UI trigger shows the value it
- * holds unless told what it is called, which put `gates` on the screen.
- */
-const mirrorLabel: Record<string, string> = {
-  off: "Nothing",
-  gates: "Gates and rulings",
-  runs: "Runs as well",
-};
 
 /**
  * What a Project is bound to (ADR-0024).
  *
  * A Project holds no work: it names the tool and the container its records
- * come from, which Agent gets a record nobody named, and how much deevy says back where the work lives. That is the whole
- * of what a Project is now, so this is the whole of what there is to set.
+ * come from, which Agent gets a record nobody named, and how a record names an
+ * Agent. That is the whole of what a Project is now, so this is the whole of
+ * what there is to set. What deevy says back on a record is a Gate and its
+ * Ruling, always, so there is no setting for it (docs/plans/simplify.md,
+ * slice 4).
  *
  * The tracker itself is stated and not offered: moving a Project to another
  * container would orphan every projection under it, which is a new Project
@@ -89,10 +80,6 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
     return typeof found[key] === "string" ? found[key] : "";
   };
   const container = text(bound.trackerScope, "scopeKey");
-  // Only a tool that can read a page is somewhere documents can be read from.
-  const readers = (sockets.data?.sockets ?? []).filter(
-    (one) => one.capabilities.includes("docs") && one.status === "active",
-  );
 
   return (
     <SettingsSection
@@ -204,74 +191,6 @@ export function ProjectBinding({ projectSlug }: { projectSlug: string }) {
             tool or the Default Agent still does.
           </span>
         </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="project-mirror">Mirror</Label>
-          <Select
-            value={bound.mirror}
-            onValueChange={(next) =>
-              update.mutate({ slug: projectSlug, mirror: next as "off" | "gates" | "runs" })
-            }
-          >
-            <SelectTrigger id="project-mirror" aria-label="Mirror" className="w-56">
-              <SelectValue>{(selected: string) => mirrorLabel[selected] ?? selected}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {Object.entries(mirrorLabel).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground">
-            How much deevy writes back where the work lives.
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="project-docs">Documents</Label>
-        <Select
-          value={bound.docsSocketId ?? NOWHERE}
-          onValueChange={(next) =>
-            update.mutate({
-              slug: projectSlug,
-              docs: next === NOWHERE ? null : { socketId: next as string, scope: {} },
-            })
-          }
-        >
-          <SelectTrigger id="project-docs" aria-label="Documents" className="w-72">
-            <SelectValue>
-              {(selected: string) => {
-                const reader = readers.find((one) => one.id === selected);
-                return reader
-                  ? `${reader.name} (${providerLabel(reader.provider)})`
-                  : "Nowhere deevy reads";
-              }}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value={NOWHERE}>Nowhere deevy reads</SelectItem>
-            </SelectGroup>
-            <SelectSeparator />
-            <SelectGroup>
-              <SelectLabel>Tools that hold documents</SelectLabel>
-              {readers.map((reader) => (
-                <SelectItem key={reader.id} value={reader.id}>
-                  {reader.name} ({providerLabel(reader.provider)})
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground">
-          Where this Project&apos;s plans live. An Agent working it reads a page there when a record
-          links one.
-        </span>
       </div>
 
       {update.error ? <p className="text-sm text-destructive">{update.error.message}</p> : null}

@@ -1,11 +1,20 @@
-import { project as projectTable } from "@deevy/db";
+import { project as projectTable, type Socket } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Job, JobQueue } from "../src/jobs.ts";
 import { router } from "../src/operations/index.ts";
+import { applyInbound } from "../src/sockets/apply.ts";
+import type { InboundEvent } from "../src/sockets/port.ts";
 import { deliverDueSocketMirrors, deliverDueWebhooks, deliverWebhook } from "../src/work.ts";
-import { agentContext, fakeSockets, memberContext, seedProject, testDb } from "./helpers.ts";
+import {
+  agentContext,
+  externalIssue,
+  fakeSockets,
+  memberContext,
+  seedProject,
+  testDb,
+} from "./helpers.ts";
 
 /**
  * The queue as the core sees it: a hint about when to look at a row that is
@@ -36,6 +45,11 @@ function recordingQueue(): JobQueue & { jobs: Job[] } {
 /**
  * An admin, a Project, and a URL subscribed to `issue.created` alone, so one
  * Issue owes exactly one delivery and the counting below means something.
+ *
+ * `deliver` is the tracker announcing a record on a deployment that has this
+ * queue, as the hook route hands its jobs to `applyInbound`: the seeded
+ * Socket's own `deliver` has no queue behind it, which is the case these tests
+ * are not about.
  */
 async function workspace(jobs: JobQueue) {
   const { db, close } = testDb();
@@ -49,18 +63,31 @@ async function workspace(jobs: JobQueue) {
     secret,
     kinds: ["issue.created"],
   });
-  return { db, alice, asAlice, subscription, project: seeded.project };
+  const socket = (await db.query.socket.findFirst({ where: { id: seeded.socketId } })) as Socket;
+  const deliver = (events: InboundEvent[]) =>
+    applyInbound({ db, workspace: alice.workspace, socket, events, jobs });
+  return { db, alice, asAlice, subscription, deliver };
+}
+
+/** A record the tracker opened, as its delivery states it. */
+function announced(externalId: string, title: string): InboundEvent {
+  return {
+    kind: "issue",
+    scopeKey: "acme/deevy",
+    issue: externalIssue({ externalId, title }),
+    actor: { login: "alice", id: "u-alice", isBot: false },
+  };
 }
 
 describe("deriving a delivery with a queue behind it", () => {
   it("enqueues exactly one job, carrying the row's id and no payload", async () => {
     const queue = recordingQueue();
-    const { asAlice, subscription, project } = await workspace(queue);
+    const { asAlice, subscription, deliver } = await workspace(queue);
     // The subscription's own `webhook.subscribed` Event is not one it asked
     // for, so nothing has been owed yet.
     expect(queue.jobs).toEqual([]);
 
-    await asAlice.issues.create({ projectSlug: project.slug, title: "Ship the thing" });
+    await deliver([announced("7", "Ship the thing")]);
 
     const { deliveries } = await asAlice.webhooks.deliveries({
       subscriptionId: subscription.id,
@@ -75,13 +102,14 @@ describe("deriving a delivery with a queue that is down", () => {
     const refusing: JobQueue = {
       enqueue: () => Promise.reject(new Error("the queue is unreachable")),
     };
-    const { db, alice, asAlice, subscription, project } = await workspace(refusing);
+    const { db, alice, asAlice, subscription, deliver } = await workspace(refusing);
 
-    const issue = await asAlice.issues.create({
-      projectSlug: project.slug,
-      title: "Ship the thing",
-    });
-    expect(issue.externalKey).toBe("acme/deevy#new-1");
+    // The delivery is still applied, so the tracker is answered as if the queue
+    // were up and the record is projected.
+    const applied = await deliver([announced("7", "Ship the thing")]);
+    expect(applied).toEqual({ applied: 1, skipped: [] });
+    const issue = await db.query.issue.findFirst({ where: { externalId: "7" } });
+    expect(issue?.externalKey).toBe("acme/deevy#7");
 
     const { deliveries } = await asAlice.webhooks.deliveries({
       subscriptionId: subscription.id,

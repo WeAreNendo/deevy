@@ -47,7 +47,7 @@ read, `x` ticks a row, and `o` opens the record where it lives.
 | **Gate awaiting**      | Every Human who may approve the Gate: the ones its Checkpoint names, or every active Human, leaving out the Human the work is for where the Checkpoint does. |
 | **Run awaiting input** | The Human behind the Run, when it asks a question: whoever started it, or the Agent's Sponsor.                                                               |
 | **Run finished**       | The Human behind the Run, when it finishes or fails.                                                                                                         |
-| **Sub-issues**         | An Agent's Sponsor, once when it opens sub-issues under a record, and once when they are all finished.                                                       |
+| **Sub-issues**         | The Sponsor of the Agent a record is routed to, when the record's sub-issues are all finished.                                                               |
 
 You are never told about something you did yourself, and a suspended Member is told nothing.
 

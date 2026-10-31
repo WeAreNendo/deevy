@@ -67,14 +67,14 @@ describe("a command's name", () => {
 
 describe("a command's positional arguments", () => {
   it("are the path parameters, in the order the path names them", () => {
-    expect(parametersOf("/issues/{issue}/comments")).toEqual(["issue"]);
+    expect(parametersOf("/issues/{issue}/links")).toEqual(["issue"]);
     expect(parametersOf("/agents/{memberId}/keys/{keyId}")).toEqual(["memberId", "keyId"]);
     expect(parametersOf("/issues")).toEqual([]);
   });
 
   it("are read off the real operations", () => {
     expect(byOperation.get("issues.get")?.parameters).toEqual(["issue"]);
-    expect(byOperation.get("issues.create")?.parameters).toEqual([]);
+    expect(byOperation.get("issues.list")?.parameters).toEqual([]);
   });
 
   /**
@@ -119,7 +119,7 @@ describe("the shape of what the walk hands on", () => {
 
   it("carries the authority each operation wants", () => {
     expect(byOperation.get("health.ping")?.auth).toBe("public");
-    expect(byOperation.get("issues.create")?.auth).toBe("member");
+    expect(byOperation.get("issues.list")?.auth).toBe("member");
     // Something wants an admin, and the CLI cannot say so later: the OpenAPI
     // document deevy serves carries no security information at all.
     expect(commands.some((command) => command.auth === "admin")).toBe(true);

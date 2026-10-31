@@ -152,7 +152,11 @@ export const gateDecision = sqliteTable(
   (table) => [uniqueIndex("gate_decision_uidx").on(table.gateRequestId, table.memberId)],
 );
 
-/** What a mirrored thing is: a comment on the record, a label on it, a message in a room. */
+/**
+ * What a mirrored thing is: a comment on the record or a message in a room. A
+ * label on the record is a value deevy no longer writes (docs/plans/simplify.md,
+ * slice 4), kept until the clean break.
+ */
 export const socketMirrorKinds = ["comment", "label", "message"] as const;
 
 /**

@@ -1,3 +1,4 @@
+import type { TrackerSocket } from "@deevy/core/sockets";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createLinearSocket, resetLinearTokens } from "../src/linear/index.ts";
 
@@ -30,25 +31,6 @@ interface Asked {
   operation: string;
   variables: Record<string, unknown>;
   form: Record<string, string>;
-}
-
-/** An issue as Linear's API answers one, rather than as its webhook does. */
-function apiIssue(overrides: Record<string, unknown> = {}) {
-  return {
-    id: ISSUE,
-    identifier: "ENG-12",
-    url: ref.url,
-    title: "Checkout totals are wrong with a coupon",
-    description: "A 10% coupon takes the total below zero.",
-    updatedAt: "2026-09-24T09:14:05.311Z",
-    parent: null,
-    delegate: null,
-    assignee: null,
-    state: { name: "Todo", type: "unstarted" },
-    labels: { nodes: [{ name: "Bug" }] },
-    team: { id: TEAM },
-    ...overrides,
-  };
 }
 
 type Answer = object | ((variables: Record<string, unknown>, asked: Asked) => unknown);
@@ -152,8 +134,17 @@ function linearReturning(
     });
 
   const module = connect({ clientId: "lin_client_id_1", clientSecret: "lin_client_secret_1" });
-  if (!module.tracker) throw new Error("a Linear Socket is a tracker");
-  return { module, tracker: module.tracker, asked, connect };
+  const { tracker } = module;
+  if (!tracker?.listContainers) {
+    throw new Error("a Linear Socket is a tracker that offers teams");
+  }
+  // Checked just above: the binding picker lists the teams the app can see.
+  return {
+    module,
+    tracker: tracker as TrackerSocket & Required<Pick<TrackerSocket, "listContainers">>,
+    asked,
+    connect,
+  };
 }
 
 const who = {
@@ -173,8 +164,8 @@ describe("how deevy authenticates", () => {
 
     const grants = asked.filter((one) => one.operation === "client_credentials");
     expect(grants).toHaveLength(1);
-    // The scopes an app actor needs to read a team's issues and say things on
-    // them, and nothing that administers the workspace.
+    // The scopes an app actor needs to see the teams and say things on their
+    // issues, and nothing that administers the workspace.
     expect(grants[0]?.form).toMatchObject({
       client_id: "lin_client_id_1",
       client_secret: "lin_client_secret_1",
@@ -245,7 +236,9 @@ describe("how deevy authenticates", () => {
   it("says what Linear said when it refuses something else", async () => {
     const { tracker } = linearReturning({});
 
-    await expect(tracker.getIssue(scope, ref)).rejects.toThrow("No answer for DeevyIssue");
+    await expect(tracker.createComment(scope, ref, "Said")).rejects.toThrow(
+      "No answer for DeevyCommentCreate",
+    );
   });
 });
 
@@ -296,165 +289,6 @@ describe("the tracker", () => {
     ]);
   });
 
-  it("reads one record by its id", async () => {
-    const { tracker, asked } = linearReturning({
-      DeevyIssue: {
-        issue: apiIssue({
-          parent: { id: "7e6d5c4b-3a29-4180-b7c6-d5e4f3a2b1c0" },
-          delegate: { id: APP_USER },
-          assignee: { id: "5a1b7c3e", name: "Grace Hopper" },
-          state: { name: "Canceled", type: "canceled" },
-        }),
-      },
-    });
-
-    const issue = await tracker.getIssue(scope, ref);
-
-    expect(asked.at(-1)?.variables).toEqual({ id: ISSUE });
-    expect(issue).toEqual({
-      externalId: ISSUE,
-      key: "ENG-12",
-      url: ref.url,
-      title: "Checkout totals are wrong with a coupon",
-      body: "A 10% coupon takes the total below zero.",
-      state: "closed",
-      stateName: "Canceled",
-      assignees: [{ login: "Grace Hopper", id: "5a1b7c3e" }],
-      labels: ["Bug"],
-      parentExternalId: "7e6d5c4b-3a29-4180-b7c6-d5e4f3a2b1c0",
-      delegateId: APP_USER,
-      updatedAt: new Date("2026-09-24T09:14:05.311Z"),
-    });
-  });
-
-  it("lists what changed since, oldest change first, so a catch-up walks forward", async () => {
-    const { tracker, asked } = linearReturning({
-      DeevyIssues: {
-        issues: {
-          // Linear orders by the newest change first, so the oldest page is the
-          // last one: asked for with `last` and turned round here.
-          nodes: [
-            apiIssue({ id: "b", identifier: "ENG-14", updatedAt: "2026-09-24T09:30:00.000Z" }),
-            apiIssue({ id: "a", identifier: "ENG-13", updatedAt: "2026-09-24T09:20:00.000Z" }),
-          ],
-          pageInfo: { hasPreviousPage: true, startCursor: "cursor-older" },
-        },
-      },
-    });
-
-    const page = await tracker.listIssues(scope, {
-      updatedSince: new Date("2026-09-24T09:14:05.311Z"),
-      cursor: null,
-      limit: 2,
-    });
-
-    expect(page.issues.map((issue) => issue.key)).toEqual(["ENG-13", "ENG-14"]);
-    expect(page.nextCursor).toBe("cursor-older");
-    expect(asked.at(-1)?.variables).toEqual({
-      filter: {
-        team: { id: { eq: TEAM } },
-        updatedAt: { gt: "2026-09-24T09:14:05.311Z" },
-      },
-      last: 2,
-      before: null,
-    });
-  });
-
-  it("reads a record's comments, with who wrote each and whether it was an app", async () => {
-    const { tracker } = linearReturning({
-      DeevyComments: {
-        issue: {
-          comments: {
-            nodes: [
-              {
-                id: "c1",
-                body: "Is this the spring coupon?",
-                url: `${ref.url}#comment-c1`,
-                createdAt: "2026-09-24T09:40:00.000Z",
-                user: { id: "5a1b7c3e", name: "Grace Hopper", displayName: "grace" },
-                botActor: null,
-              },
-              {
-                id: "c2",
-                body: "**Waiting on a ruling** at the `plan` Checkpoint.",
-                url: `${ref.url}#comment-c2`,
-                createdAt: "2026-09-24T09:41:00.000Z",
-                user: { id: APP_USER, name: "deevy", displayName: "deevy" },
-                botActor: { id: "bot", name: "deevy", type: "oauthClient" },
-              },
-            ],
-          },
-        },
-      },
-    });
-
-    const comments = await tracker.listComments(scope, ref, 20);
-
-    expect(comments).toEqual([
-      {
-        externalId: "c1",
-        url: `${ref.url}#comment-c1`,
-        body: "Is this the spring coupon?",
-        // The handle Linear mentions by, where it says one.
-        author: { login: "grace", id: "5a1b7c3e", isBot: false },
-        createdAt: new Date("2026-09-24T09:40:00.000Z"),
-      },
-      expect.objectContaining({ author: { login: "deevy", id: APP_USER, isBot: true } }),
-    ]);
-  });
-
-  it("opens a record under its parent natively, with its labels found or made by name", async () => {
-    const { tracker, asked } = linearReturning({
-      DeevyLabels: {
-        issueLabels: {
-          nodes: [
-            { id: "label-other-team", name: "agent:builder", team: { id: "somewhere-else" } },
-            { id: "label-workspace", name: "agent:builder", team: null },
-          ],
-        },
-      },
-      DeevyLabelCreate: (variables: Record<string, unknown>) => ({
-        issueLabelCreate: {
-          success: true,
-          issueLabel: { id: `label-made-${String((variables.input as { name: string }).name)}` },
-        },
-      }),
-      DeevyIssueCreate: {
-        issueCreate: {
-          success: true,
-          issue: apiIssue({
-            id: "d1",
-            identifier: "ENG-15",
-            parent: { id: ISSUE },
-            labels: { nodes: [{ name: "agent:builder" }, { name: "sub-task" }] },
-          }),
-        },
-      },
-    });
-
-    const created = await tracker.createIssue(scope, {
-      title: "Cap the coupon",
-      body: "Split out of ENG-12.",
-      parent: ref,
-      labels: ["agent:builder", "sub-task"],
-    });
-
-    expect(created).toMatchObject({ key: "ENG-15", parentExternalId: ISSUE, parentLinked: true });
-    expect(asked.find((one) => one.operation === "DeevyLabelCreate")?.variables).toEqual({
-      input: { name: "sub-task", teamId: TEAM },
-    });
-    expect(asked.find((one) => one.operation === "DeevyIssueCreate")?.variables).toEqual({
-      input: {
-        teamId: TEAM,
-        title: "Cap the coupon",
-        description: "Split out of ENG-12.",
-        parentId: ISSUE,
-        // The workspace's own label, since this team has none of that name.
-        labelIds: ["label-workspace", "label-made-sub-task"],
-      },
-    });
-  });
-
   it("comments as the app, and answers where the comment is", async () => {
     const { tracker, asked } = linearReturning({
       DeevyCommentCreate: {
@@ -468,32 +302,6 @@ describe("the tracker", () => {
     expect(asked.at(-1)?.variables).toEqual({
       input: { issueId: ISSUE, body: "Approved: **1 of 2**." },
     });
-  });
-
-  it("adds a label it makes on first use, and takes one off by name", async () => {
-    const { tracker, asked } = linearReturning({
-      DeevyLabels: (variables: Record<string, unknown>) => ({
-        issueLabels: {
-          nodes: JSON.stringify(variables).includes("deevy:awaiting-approval")
-            ? []
-            : [{ id: "label-agent", name: "agent:planner", team: { id: TEAM } }],
-        },
-      }),
-      DeevyLabelCreate: {
-        issueLabelCreate: { success: true, issueLabel: { id: "label-awaiting" } },
-      },
-      DeevyLabelsChange: { issueUpdate: { success: true } },
-    });
-
-    await tracker.setLabels(scope, ref, { add: ["deevy:awaiting-approval"], remove: [] });
-    await tracker.setLabels(scope, ref, { add: [], remove: ["agent:planner", "never-there"] });
-
-    const changes = asked.filter((one) => one.operation === "DeevyLabelsChange");
-    expect(changes.map((one) => one.variables)).toEqual([
-      { id: ISSUE, input: { addedLabelIds: ["label-awaiting"], removedLabelIds: [] } },
-      // A label that does not exist is not on the record, which is what was wanted.
-      { id: ISSUE, input: { addedLabelIds: [], removedLabelIds: ["label-agent"] } },
-    ]);
   });
 });
 

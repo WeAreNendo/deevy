@@ -1,57 +1,5 @@
 [
   {
-    "name": "comments_create",
-    "operation": "comments.create",
-    "summary": "Say something on the record in the tracker it lives in",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue": {
-          "type": "string",
-          "minLength": 1
-        },
-        "body": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100000
-        }
-      },
-      "required": [
-        "issue",
-        "body"
-      ]
-    }
-  },
-  {
-    "name": "docs_get",
-    "operation": "docs.get",
-    "summary": "Read a page from where this Project's documents live, as markdown",
-    "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
-        },
-        "page": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2000
-        }
-      },
-      "required": [
-        "project",
-        "page"
-      ]
-    }
-  },
-  {
     "name": "gates_get",
     "operation": "gates.get",
     "summary": "What has been ruled on a Gate, for an Agent waiting or a Human reading",
@@ -153,59 +101,6 @@
     }
   },
   {
-    "name": "issues_create",
-    "operation": "issues.create",
-    "summary": "Open a record in the tracker a Project is bound to, and project it",
-    "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "parent": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 300
-        },
-        "body": {
-          "anyOf": [
-            {
-              "type": "string",
-              "maxLength": 100000
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "assignAgent": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "projectSlug": {
-          "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
-        }
-      },
-      "required": [
-        "title"
-      ]
-    }
-  },
-  {
     "name": "issues_get",
     "operation": "issues.get",
     "summary": "One record by id, URL or the tracker's key, with its family",
@@ -218,12 +113,6 @@
         "issue": {
           "type": "string",
           "minLength": 1
-        },
-        "comments": {
-          "type": [
-            "boolean",
-            "string"
-          ]
         }
       },
       "required": [

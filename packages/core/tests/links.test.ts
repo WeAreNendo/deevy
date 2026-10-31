@@ -136,9 +136,6 @@ describe("links.add", () => {
     const { db, close } = testDb();
     closers.push(close);
     const { admin, client, project, issue } = await withIssue(db);
-    // A Project that says the most it can on the record, which once included a
-    // comment for every pull request deevy was told of.
-    await client.projects.update({ slug: project.slug, mirror: "runs" });
     const context = await agentContext(db, {
       sponsor: admin.member,
       name: "Builder",

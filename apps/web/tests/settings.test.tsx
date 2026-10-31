@@ -189,9 +189,10 @@ describe("how far an Agent may split work", () => {
     expect(await screen.findByLabelText("Sub-issues each")).toHaveProperty("value", "20");
     expect(screen.getByLabelText("Levels deep")).toHaveProperty("value", "3");
     expect(screen.getByLabelText("Open in one tree")).toHaveProperty("value", "50");
-    // They are about Agents, and a Human reading the page should not wonder
-    // whether they are about to be stopped by one.
-    expect(screen.getByText(/do not apply to you/)).toBeTruthy();
+    // deevy opens no sub-issue any more (docs/plans/simplify.md, slice 4), so
+    // nothing checks them, and the page must not say an Agent is refused.
+    expect(screen.getByText(/bound nothing/)).toBeTruthy();
+    expect(screen.queryByText(/refused/)).toBeNull();
   });
 
   it("saves the one that changed, and only that one", async () => {

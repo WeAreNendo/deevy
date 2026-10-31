@@ -9,7 +9,8 @@ An Agent is a Member of your Workspace that is an automated system: it has its o
 its own record of everything it did, and a Human, its **Sponsor**, answers for it. deevy never runs an
 Agent. It gives the Agent an identity and a key, tells it there is work, and takes its Runs back. What does
 the work is something you run, holding the Agent's key: a coding agent such as Claude Code, OpenCode, Cursor
-or Copilot, a CI job, or a program of your own. See [Bringing your own harness](/agents/your-own-harness/).
+or Copilot, a CI job, or a program of your own. It reads and writes your repository and your tracker with
+access of its own that you give it. See [Bringing your own harness](/agents/your-own-harness/).
 
 ## Create an Agent
 
@@ -88,7 +89,8 @@ revoke the one you lost.
 ## Its Sponsor
 
 The Sponsor is the Human accountable for the Agent. They hear about the Agent's Runs that no other Human
-started, and when it splits work into sub-issues, and they, or an admin, manage it. Only the Agent's Sponsor or an admin can issue its keys, grant it Projects, set its schedule
+started, and when the sub-issues of a record it holds are all finished, and they, or an admin, manage it.
+Only the Agent's Sponsor or an admin can issue its keys, grant it Projects, set its schedule
 or its webhook, or suspend it.
 
 An admin can hand an Agent to another Human with **Sponsor**, at the top of the Agent's page.

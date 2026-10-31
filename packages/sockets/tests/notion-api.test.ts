@@ -1,3 +1,4 @@
+import type { TrackerSocket } from "@deevy/core/sockets";
 import { describe, expect, it } from "vite-plus/test";
 import { createNotionSocket } from "../src/notion/index.ts";
 import page from "./fixtures/notion/page.json" with { type: "json" };
@@ -74,8 +75,16 @@ function notionReturning(answers: Record<string, Answer>) {
     fetch: fetchImpl,
     now: () => new Date("2026-09-24T10:00:00Z"),
   });
-  if (!module.tracker || !module.docs) throw new Error("a Notion Socket is a tracker and docs");
-  return { module, tracker: module.tracker, docs: module.docs, asked };
+  const { tracker } = module;
+  if (!tracker?.getIssue || !tracker.getComment || !tracker.listContainers) {
+    throw new Error(
+      "a Notion Socket reads a row back, and its comments, and offers its data sources",
+    );
+  }
+  // Checked just above: what Notion's deliveries only name, it reads back.
+  const reads = tracker as TrackerSocket &
+    Required<Pick<TrackerSocket, "getIssue" | "getComment" | "listContainers">>;
+  return { module, tracker: reads, asked };
 }
 
 const markdown = {
@@ -218,39 +227,6 @@ describe("the tracker", () => {
     });
   });
 
-  it("lists what changed since, oldest change first, without reading every page's content", async () => {
-    const { tracker, asked } = notionReturning({
-      [`POST /v1/data_sources/${DATA_SOURCE}/query`]: {
-        object: "list",
-        results: [page],
-        next_cursor: "cursor-2",
-        has_more: true,
-      },
-    });
-
-    const listed = await tracker.listIssues(scope, {
-      updatedSince: new Date("2026-09-24T09:00:00Z"),
-      cursor: null,
-      limit: 20,
-    });
-
-    expect(asked).toHaveLength(1);
-    expect(asked[0]?.body).toEqual({
-      // On or after: Notion keeps edit times to the minute, and an edit in the
-      // same minute as the newest one deevy holds must not be skipped.
-      filter: {
-        timestamp: "last_edited_time",
-        last_edited_time: { on_or_after: "2026-09-24T09:00:00.000Z" },
-      },
-      sorts: [{ timestamp: "last_edited_time", direction: "ascending" }],
-      page_size: 20,
-    });
-    expect(listed.nextCursor).toBe("cursor-2");
-    expect(listed.issues[0]).toMatchObject({ key: "TASK-12" });
-    // Content is not in a query's answer, and deevy keeps the body it had.
-    expect(listed.issues[0]?.body).toBeUndefined();
-  });
-
   it("reads one comment back with who wrote it, and the address Notion reports for them", async () => {
     const { tracker } = notionReturning({
       "GET /v1/comments/cmt-1": {
@@ -273,70 +249,14 @@ describe("the tracker", () => {
       },
     });
 
-    expect(await tracker.getComment?.(scope, ref, "cmt-1")).toEqual({
+    expect(await tracker.getComment(scope, ref, "cmt-1")).toEqual({
       externalId: "cmt-1",
       url: page.url,
       body: "/approve cap it at the basket total",
       author: { login: "Grace Hopper", id: GRACE, isBot: false, email: "grace@example.com" },
       createdAt: new Date("2026-09-24T10:21:00.000Z"),
     });
-    expect(await tracker.getComment?.(scope, ref, "cmt-gone")).toBeNull();
-  });
-
-  it("reads a record's comments, with an app's marked as a machine's", async () => {
-    const { tracker, asked } = notionReturning({
-      "GET /v1/comments": {
-        results: [
-          {
-            id: "cmt-1",
-            created_time: "2026-09-24T10:21:00.000Z",
-            created_by: { object: "user", id: GRACE },
-            rich_text: [{ plain_text: "Is this the spring coupon?" }],
-          },
-          {
-            id: "cmt-2",
-            created_time: "2026-09-24T10:22:00.000Z",
-            created_by: { object: "user", id: BOT },
-            rich_text: [{ plain_text: "Waiting on a ruling." }],
-          },
-        ],
-        has_more: false,
-      },
-      [`GET /v1/users/${GRACE}`]: { id: GRACE, name: "Grace Hopper", type: "person", person: {} },
-      [`GET /v1/users/${BOT}`]: { id: BOT, name: "deevy", type: "bot", bot: {} },
-    });
-
-    const comments = await tracker.listComments(scope, ref, 20);
-
-    expect(asked[0]?.path).toBe(`/v1/comments?block_id=${PAGE}&page_size=20`);
-    expect(comments.map((one) => one.author)).toEqual([
-      { login: "Grace Hopper", id: GRACE, isBot: false },
-      { login: "deevy", id: BOT, isBot: true },
-    ]);
-  });
-
-  it("opens a row under its parent, with its labels and its content as markdown", async () => {
-    const { tracker, asked } = notionReturning({
-      "POST /v1/pages": { ...page, id: "new-page" },
-    });
-
-    const created = await tracker.createIssue(scope, {
-      title: "Cap the coupon",
-      body: "Split out of TASK-12.",
-      parent: ref,
-      labels: ["agent:builder"],
-    });
-
-    expect(asked[0]?.body).toEqual({
-      parent: { data_source_id: DATA_SOURCE },
-      properties: {
-        "Task name": { title: [{ text: { content: "Cap the coupon" } }] },
-        Tags: { multi_select: [{ name: "agent:builder" }] },
-        "Parent item": { relation: [{ id: PAGE }] },
-      },
-      markdown: "Split out of TASK-12.",
-    });
-    expect(created).toMatchObject({ externalId: "new-page", parentLinked: true });
+    expect(await tracker.getComment(scope, ref, "cmt-gone")).toBeNull();
   });
 
   it("comments in markdown, as the integration", async () => {
@@ -349,36 +269,6 @@ describe("the tracker", () => {
       markdown: "Approved: **1 of 2**.",
     });
     expect(posted).toEqual({ externalId: "cmt-9", url: page.url });
-  });
-
-  it("sets its labels property to what it was, plus and minus the change, and only if it moved", async () => {
-    const { tracker, asked } = notionReturning({
-      [`GET /v1/pages/${PAGE}`]: page,
-      [`PATCH /v1/pages/${PAGE}`]: page,
-    });
-
-    await tracker.setLabels(scope, ref, { add: ["deevy:awaiting-approval"], remove: ["Bug"] });
-    await tracker.setLabels(scope, ref, { add: ["Bug"], remove: ["never-there"] });
-
-    const patches = asked.filter((one) => one.method === "PATCH");
-    expect(patches.map((one) => one.body)).toEqual([
-      {
-        properties: {
-          Tags: { multi_select: [{ name: "agent:planner" }, { name: "deevy:awaiting-approval" }] },
-        },
-      },
-    ]);
-  });
-
-  it("labels nothing in a data source with no labels property", async () => {
-    const { tracker, asked } = notionReturning({});
-
-    await tracker.setLabels({ ...scope, labelsProperty: undefined }, ref, {
-      add: ["deevy:awaiting-approval"],
-      remove: [],
-    });
-
-    expect(asked).toEqual([]);
   });
 
   it("says what Notion said when it refuses, in its words and then its code", async () => {
@@ -413,61 +303,25 @@ describe("the tracker", () => {
   });
 });
 
-describe("documents", () => {
-  it("are a page read as markdown, named by its URL or its id", async () => {
-    const plan = {
-      ...page,
-      id: "3c5d7e9f-1a2b-4c3d-8e4f-5a6b7c8d9e0f",
-      parent: { type: "page_id", page_id: "somewhere" },
-      properties: {
-        title: {
-          id: "title",
-          type: "title",
-          title: [{ type: "text", plain_text: "Checkout plan" }],
-        },
-      },
-      url: "https://www.notion.so/acme/Checkout-plan-3c5d7e9f1a2b4c3d8e4f5a6b7c8d9e0f",
-    };
-    const { docs, asked } = notionReturning({
-      [`GET /v1/pages/${plan.id}`]: plan,
-      [`GET /v1/pages/${plan.id}/markdown`]: {
-        ...markdown,
-        markdown: "# Checkout plan\n\nCap it.",
-      },
-    });
-
-    const byUrl = await docs.readPage({ url: `${plan.url}?pvs=4` });
-    const byId = await docs.readPage({ externalId: plan.id });
-
-    expect(byUrl).toEqual({
-      title: "Checkout plan",
-      markdown: "# Checkout plan\n\nCap it.",
-      url: plan.url,
-    });
-    expect(byId).toEqual(byUrl);
-    expect(asked[0]?.path).toBe(`/v1/pages/${plan.id}`);
-  });
-
-  it("say where Notion left part of a page out, and where the whole page is", async () => {
+describe("a row's content", () => {
+  it("says where Notion left part of a page out, and where the whole page is", async () => {
     const gaps = {
       ...markdown,
       markdown:
         'A 10% coupon takes the total below zero.\n\n<unknown url="https://www.notion.so/acme/Coupon-9f8e7d6c5b4a4f3e8d2c1b0a9f8e7d6c" alt="bookmark"/>',
       unknown_block_ids: ["9f8e7d6c-5b4a-4f3e-8d2c-1b0a9f8e7d6c"],
     };
-    const { docs, tracker } = notionReturning({
+    const { tracker } = notionReturning({
       [`GET /v1/pages/${PAGE}`]: page,
       [`GET /v1/pages/${PAGE}/markdown`]: gaps,
     });
 
-    const read = await docs.readPage({ externalId: PAGE });
-    expect(read.markdown).toBe(
+    expect((await tracker.getIssue(scope, ref)).body).toBe(
       `${gaps.markdown}\n\n> Notion left 1 block of this page out, marked \`<unknown>\` above: one not shared with deevy, or of a kind Notion does not write as markdown. The page is at ${page.url}.`,
     );
-    expect((await tracker.getIssue(scope, ref)).body).toBe(read.markdown);
   });
 
-  it("say when Notion stopped reading a page before its end", async () => {
+  it("says when Notion stopped reading a page before its end", async () => {
     const cut = {
       ...markdown,
       markdown: 'Step 1.\n\n<unknown url="https://www.notion.so/acme/x" alt="paragraph"/>',
@@ -477,29 +331,30 @@ describe("documents", () => {
         "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e",
       ],
     };
-    const { docs } = notionReturning({
+    const { tracker } = notionReturning({
       [`GET /v1/pages/${PAGE}`]: page,
       [`GET /v1/pages/${PAGE}/markdown`]: cut,
     });
 
-    expect((await docs.readPage({ externalId: PAGE })).markdown).toBe(
+    expect((await tracker.getIssue(scope, ref)).body).toBe(
       `${cut.markdown}\n\n> Notion stopped reading this page at about 20,000 blocks, so 2 blocks are missing here, marked \`<unknown>\` above. The whole page is at ${page.url}.`,
     );
 
-    const { docs: unlisted } = notionReturning({
+    const { tracker: unlisted } = notionReturning({
       [`GET /v1/pages/${PAGE}`]: page,
       [`GET /v1/pages/${PAGE}/markdown`]: { ...cut, markdown: "Step 1.", unknown_block_ids: [] },
     });
-    expect((await unlisted.readPage({ externalId: PAGE })).markdown).toBe(
+    expect((await unlisted.getIssue(scope, ref)).body).toBe(
       `Step 1.\n\n> Notion stopped reading this page at about 20,000 blocks, so its end is missing here. The whole page is at ${page.url}.`,
     );
   });
 
-  it("refuses a URL that names no Notion page", async () => {
-    const { docs } = notionReturning({});
+  it("asks Notion nothing for a reference that names no Notion page", async () => {
+    const { tracker, asked } = notionReturning({});
 
-    await expect(docs.readPage({ url: "https://example.com/not-notion" })).rejects.toThrow(
-      "names no Notion page",
-    );
+    await expect(
+      tracker.getIssue(scope, { externalId: "", url: "https://example.com/not-notion" }),
+    ).rejects.toThrow("names no Notion page");
+    expect(asked).toEqual([]);
   });
 });

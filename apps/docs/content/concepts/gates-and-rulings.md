@@ -28,7 +28,7 @@ Rulings on it so far. While it is open:
 
 - the Run waits, as long as it takes, and never goes quiet;
 - the Humans who may approve it are told, and reminded while nobody has decided;
-- the record in your tracker says it is waiting, if the Project mirrors Gates;
+- the record in your tracker says it is waiting, in a comment from deevy;
 - if suspending somebody leaves fewer Humans who could approve it than the approvals it still wants, the
   Gate says so, with both numbers, and an admin decides what to do about it.
 

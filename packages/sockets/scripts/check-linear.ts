@@ -34,40 +34,21 @@ import { createLinearSocket, resetLinearTokens } from "../src/linear/index.ts";
 const SCHEMA_URL =
   "https://raw.githubusercontent.com/linear/linear/master/packages/sdk/src/schema.graphql";
 
-/** What each operation answers here: enough for the module to carry on to its next request. */
-const node = {
-  id: "i1",
-  identifier: "ENG-1",
-  url: "https://linear.app/acme/issue/ENG-1/x",
-  title: "A record",
-  description: "Its words",
-  updatedAt: new Date().toISOString(),
-  parent: null,
-  delegate: null,
-  assignee: null,
-  state: { name: "Todo", type: "unstarted" },
-  labels: { nodes: [] },
-  team: { id: "t1" },
-};
+/**
+ * What each operation answers here: enough for the module to carry on to its
+ * next request. Who it is, which teams it can see, and the comment that
+ * announces a Gate are all deevy asks Linear's API; the rest is the Agent's,
+ * with its own access.
+ */
 const answers: Record<string, unknown> = {
   DeevyWho: {
     viewer: { id: "u1", name: "deevy", displayName: "deevy" },
     organization: { id: "o1", name: "Acme", urlKey: "acme" },
   },
   DeevyTeams: { teams: { nodes: [{ id: "t1", key: "ENG", name: "Engineering" }] } },
-  DeevyIssue: { issue: node },
-  DeevyIssues: {
-    issues: { nodes: [node], pageInfo: { hasPreviousPage: true, startCursor: "c0" } },
-  },
-  DeevyComments: { issue: { comments: { nodes: [] } } },
-  // One label found by name, so both halves of a label change are sent.
-  DeevyLabels: { issueLabels: { nodes: [{ id: "l0", name: "done-with", team: { id: "t1" } }] } },
-  DeevyLabelCreate: { issueLabelCreate: { success: true, issueLabel: { id: "l1" } } },
-  DeevyIssueCreate: { issueCreate: { success: true, issue: node } },
   DeevyCommentCreate: {
     commentCreate: { success: true, comment: { id: "c1", url: "https://linear.app/c1" } },
   },
-  DeevyLabelsChange: { issueUpdate: { success: true } },
 };
 
 /** The webhook fields `payloads.ts` reads, by the payload type Linear's schema names them in. */
@@ -137,24 +118,10 @@ async function recorded(): Promise<Sent[]> {
   const tracker = module.tracker;
   if (!tracker) throw new Error("a Linear Socket is a tracker");
   const scope = { scopeKey: "t1", teamKey: "ENG" };
-  const ref = { externalId: "i1", url: node.url };
+  const ref = { externalId: "i1", url: "https://linear.app/acme/issue/ENG-1/x" };
   await module.identity();
-  await tracker.listContainers();
-  await tracker.getIssue(scope, ref);
-  await tracker.listIssues(scope, {
-    updatedSince: new Date(Date.now() - 3_600_000),
-    limit: 20,
-    cursor: "c9",
-  });
-  await tracker.listComments(scope, ref, 50);
-  await tracker.createIssue(scope, {
-    title: "A part",
-    body: "Its words",
-    parent: ref,
-    labels: ["agent:planner"],
-  });
+  await tracker.listContainers?.();
   await tracker.createComment(scope, ref, "Said");
-  await tracker.setLabels(scope, ref, { add: ["deevy:awaiting-approval"], remove: ["done-with"] });
   return sent;
 }
 

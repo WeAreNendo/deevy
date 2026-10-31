@@ -32,7 +32,8 @@ pointing at something that is not deevy answers nothing.
 **A tool's deliveries come through the proxy too.** A Socket's address is `<BETTER_AUTH_URL>/hooks/<socket>`,
 which in the dev loop is the SPA's origin, so `apps/web/vite.config.ts` forwards `/hooks` to the server with
 the rest. A tool on the internet reaches a laptop only through a tunnel pointed at that origin
-(docs/OPERATIONS.md, "Where a tool delivers"); without one, the catch-up poll is what brings records in.
+(docs/OPERATIONS.md, "Where a tool delivers"); without one, nothing a tool does reaches deevy, because deevy
+asks no tool what changed.
 
 **And the SPA's own port follows the launcher.** Both configurations in `.claude/launch.json` set
 `autoPort`, so a busy 5173 does not stop the preview: the launcher picks a free port, hands it to the child
@@ -152,7 +153,8 @@ starts.
 (`packages/sockets/src/stub`): a tracker deevy talks to exactly as it will talk to GitHub, in this process,
 with no App, no tunnel and no network. Connect it under Settings, Sockets — it needs no credential — bind a
 Project to one of its containers, and everything else works as it will in production: deliveries at
-`/hooks/:socketId`, routing, Gates and mirrored comments.
+`/hooks/:socketId`, routing, Gates and what deevy says on a record. `/dev/tracker` shows what it holds, deevy's
+comments among them, as JSON.
 
 What it holds is `DEEVY_DEV_STUB_CONTAINERS`, container names separated by commas, such as `acme/deevy`. The
 default is one container called `acme/deevy`. A store lives in the process deevy runs in, so this is the
@@ -422,7 +424,7 @@ leak.
 Every piece of background work is a bounded function in `packages/core/src/work.ts` — one indexed SELECT with
 a LIMIT, one batched UPDATE, never a query per row — and `runDueWork` there is all of them in order, the
 whole of one trigger: stale Runs, Agents' schedules, Channel and webhook deliveries, Gate reminders, what the
-tools are owed (mirrored comments, chat messages), the catch-up poll, and forgetting old inbound deliveries. Both deployments call it and neither owns it. Node satisfies the `Cron` port in
+tools are owed (a Gate's comments on its record, chat messages), and forgetting old inbound deliveries. Both deployments call it and neither owns it. Node satisfies the `Cron` port in
 `packages/core/src/jobs.ts` with `createTimerCron()` from `@deevy/adapters/node`, and
 `apps/server/src/runner.ts` starts that schedule beside `serve()`, drains while a pass says there is more, and
 stops it on SIGINT and SIGTERM. Cloudflare owns its own schedule, so `apps/web/src/worker.ts` has a

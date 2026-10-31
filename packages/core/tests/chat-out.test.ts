@@ -309,9 +309,24 @@ describe("a direct message in Slack", () => {
   it("links anything but a Gate to the record's page in deevy", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asPlanner, issue, chat, send } = await posting(db);
+    const { seeded, issue, chat, send } = await posting(db);
 
-    await asPlanner.comments.create({ issue: issue.url, body: "@grace can you look?" });
+    // A comment in the tracker that names Grace through deevy's own account,
+    // which is how a mention reaches deevy now (ADR-0024).
+    await seeded.deliver([
+      {
+        kind: "comment",
+        scopeKey: "acme/deevy",
+        issueExternalId: issue.externalId,
+        comment: {
+          externalId: "c1",
+          url: `${issue.url}#c1`,
+          body: "@deevy grace can you look?",
+          author: { login: "ada", id: "u-ada", isBot: false },
+          createdAt: new Date(),
+        },
+      },
+    ]);
     await send();
 
     // The Work item, by the id deevy gave the record: `/issues/<key>` went

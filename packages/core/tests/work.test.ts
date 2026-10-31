@@ -5,6 +5,7 @@ import {
   run as runTable,
   webhookSubscription as webhookSubscriptionTable,
   type Db,
+  type Issue,
 } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq, sql } from "drizzle-orm";
@@ -22,7 +23,15 @@ import {
   sweepSchedules,
   sweepStaleRuns,
 } from "../src/work.ts";
-import { agentContext, memberContext, testDb, seedProject, fakeSockets } from "./helpers.ts";
+import type { InboundEvent } from "../src/sockets/port.ts";
+import {
+  agentContext,
+  externalIssue,
+  memberContext,
+  testDb,
+  seedProject,
+  fakeSockets,
+} from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
 const closers: Array<() => void> = [];
@@ -44,12 +53,25 @@ async function workspaceWithAgent() {
   return {
     db,
     admin: { ...admin, sockets },
-    asAdmin: createRouterClient(router, { context: { ...admin, sockets } }),
     workspaceId: admin.workspace.id,
     project: seeded.project,
     record: seeded.record,
+    deliver: seeded.deliver,
     issue,
     agent,
+  };
+}
+
+/**
+ * A record the tracker opened, as its delivery states it: what an
+ * `issue.created` comes from, since deevy opens nothing there (ADR-0024).
+ */
+function announced(over: Parameters<typeof externalIssue>[0]): InboundEvent {
+  return {
+    kind: "issue",
+    scopeKey: "acme/deevy",
+    issue: externalIssue(over),
+    actor: { login: "ada", id: "u-ada", isBot: false },
   };
 }
 
@@ -466,12 +488,12 @@ describe("the webhook delivery sweep", () => {
   });
 
   it("is claimed by one pass only, because two of them must not POST it twice", async () => {
-    const { db, workspaceId, asAdmin, project } = await workspaceWithAgent();
+    const { db, workspaceId, deliver } = await workspaceWithAgent();
     await subscribeTo(db, workspaceId);
-    // Four records, so four Events are owed: one apiece now that opening one
-    // no longer creates a Document beside it (ADR-0024).
-    for (const title of ["First", "Second", "Third", "Fourth"]) {
-      await asAdmin.issues.create({ projectSlug: project.slug, title });
+    // Four records arrive, so four Events are owed: one apiece, since a record
+    // the tracker announces writes its `issue.created` and nothing beside it.
+    for (const [n, title] of ["First", "Second", "Third", "Fourth"].entries()) {
+      await deliver([announced({ externalId: String(n + 2), title })]);
     }
     const posted: string[] = [];
     const now = new Date();
@@ -499,10 +521,10 @@ describe("the webhook delivery sweep", () => {
   });
 
   it("costs the same handful of statements whatever is owed", async () => {
-    const { db, workspaceId, asAdmin, project } = await workspaceWithAgent();
+    const { db, workspaceId, deliver } = await workspaceWithAgent();
     await subscribeTo(db, workspaceId, ["issue.created"]);
     for (let n = 0; n < 20; n += 1) {
-      await asAdmin.issues.create({ projectSlug: project.slug, title: `Record ${String(n)}` });
+      await deliver([announced({ externalId: String(n + 2), title: `Record ${String(n)}` })]);
     }
     const { counted, statements } = countingDb(db);
 
@@ -533,11 +555,11 @@ describe("Events a sweep writes", () => {
       url: "https://runner.example/deevy",
       secret: "whsec_the_receiver_holds_this",
     });
-    const nightly = await asAda.issues.create({
-      projectSlug: seeded.project.slug,
-      title: "Nightly",
-      assignAgent: agent.member.id,
-    });
+    // The tracker hands the record to the Agent with its routing label.
+    await seeded.deliver([
+      announced({ externalId: "7", title: "Nightly", labels: ["agent:planner"] }),
+    ]);
+    const nightly = (await db.query.issue.findFirst({ where: { externalId: "7" } })) as Issue;
     await db
       .update(agentTable)
       .set({ scheduleMinutes: 60 })

@@ -14,10 +14,9 @@ import {
  * payloads with no network, and the half that breaks when a provider changes
  * its shape.
  *
- * GitLab describes an issue two ways — a webhook's `object_attributes`, with
- * the project and the labels beside it, and REST v4's issue, which carries its
- * own reference — and both are read here so a delivery and a poll project the
- * same record the same way.
+ * A webhook's `object_attributes`, with the project and the labels beside it,
+ * is the only shape of an issue read here: deevy asks GitLab's REST API for
+ * none, since an Agent reads GitLab with its own access.
  */
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
@@ -27,7 +26,7 @@ const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
 /**
- * GitLab's clocks, in either of its two spellings: REST and issue webhooks say
+ * GitLab's clocks, in either of its two spellings: issue webhooks say
  * `2026-09-24T09:14:05Z`, comment webhooks `2026-09-24 09:14:05 UTC`.
  */
 export function gitlabDate(value: unknown): Date {
@@ -63,12 +62,10 @@ export function actorOf(user: unknown): ExternalActor | null {
   };
 }
 
-/** Labels as names: a webhook sends objects with a `title`, REST sends strings. */
+/** Labels as names: a webhook sends objects with a `title`. */
 function labelsOf(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((label) => (typeof label === "string" ? label : text(record(label).title)))
-    .filter((name) => name.length > 0);
+  return value.map((label) => text(record(label).title)).filter((name) => name.length > 0);
 }
 
 function assigneesOf(value: unknown): { login: string; id: string }[] {
@@ -79,12 +76,12 @@ function assigneesOf(value: unknown): { login: string; id: string }[] {
 }
 
 /**
- * One GitLab issue as deevy projects it, from a webhook or from REST.
+ * One GitLab issue as deevy projects it, from a webhook.
  *
  * The id is GitLab's global one, which survives a move to another project;
  * the key is the reference a Human types (`acme/deevy#42`), which does not.
  * GitLab has no parent for an issue — an epic is a group's, and a task is a
- * work item deevy does not read — so deevy keeps the tree itself.
+ * work item deevy does not read — so a GitLab record never has one here.
  */
 export function issueOf(
   issue: unknown,
@@ -93,10 +90,9 @@ export function issueOf(
   const found = record(issue);
   const externalId = num(found.id);
   const iid = num(found.iid);
-  const url = text(found.web_url) || text(found.url);
-  const reference = text(record(found.references).full);
+  const url = text(found.url);
   const path = context.path ?? "";
-  const key = reference || (path && iid ? `${path}#${iid}` : "");
+  const key = path && iid ? `${path}#${iid}` : "";
   if (!externalId || !key) return null;
   const state = text(found.state) === "closed" ? "closed" : "open";
   return {
@@ -116,7 +112,7 @@ export function issueOf(
   };
 }
 
-/** One comment, from a webhook's note or REST's. */
+/** One comment, from a webhook's note. */
 export function commentOf(note: unknown, author: unknown, issueUrl = ""): ExternalComment | null {
   const found = record(note);
   const externalId = num(found.id);
@@ -125,7 +121,7 @@ export function commentOf(note: unknown, author: unknown, issueUrl = ""): Extern
   return {
     externalId,
     url: text(found.url) || (issueUrl ? `${issueUrl}#note_${externalId}` : ""),
-    body: text(found.note) || text(found.body),
+    body: text(found.note),
     author: who,
     createdAt: gitlabDate(found.created_at),
   };

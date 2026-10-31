@@ -51,9 +51,11 @@ ask one to connect GitHub with you. [GitHub](/tools/github/#for-an-organizations
 The Project is the repository's issues. An Agent that writes code here reaches the repository with access you
 give it, such as a deploy key or a fine-grained token, and opens its own pull requests.
 
-Nothing moves. An Issue stays a GitHub issue: deevy hears about it when something happens to it on
-GitHub, such as being opened, labelled or commented on, and lists it under **Work**. What deevy has to
-say, it writes back on GitHub.
+Nothing moves. An Issue stays a GitHub issue: deevy hears about it when GitHub tells it something happened
+to it, such as being opened, labelled or commented on, and lists it under **Work** from then on. An issue
+nobody has touched since you bound the Project isn't there yet. What deevy says back on
+GitHub is about Gates: a comment when an Agent is waiting on a Ruling, and one when it is ruled on.
+Anything else an Agent writes there, it writes with its own access, as its own account.
 
 ## Next
 

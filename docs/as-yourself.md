@@ -34,16 +34,17 @@ there is theirs, in their name, and it stays in the Event log. Use the `deevy` M
 HTTP API by hand.
 
 - **Find the Issue.** `issues_get` with its id, its URL, or the key the tracker wrote — `acme/deevy#42`,
-  `ENG-12`. Pass `comments: true` and you get what has been said on it, read from the tracker as you ask.
-  That conversation is the brief. `issues_list` with a `q` finds a key or a word of a title.
+  `ENG-12`. What has been said on it is in the tracker, read with the person's own access to it (`gh issue
+view --comments`, the tool's own MCP server): that conversation is the brief. `issues_list` with a `q`
+  finds a key or a word of a title.
 - **Write outcomes, not steps.** There is no Run for you, and no Activity feed: a Run is an Agent's attempt,
-  and the person is right here reading you. Put results where the team reads them: `comments_create` writes
-  on the record in their own tracker, mentioning people by handle.
+  and the person is right here reading you. Put results where the team reads them: a comment on the record in
+  their own tracker, made with their access, mentioning people by handle.
 - **Attach what you produced.** `links_add` with the pull request URL and the Issue. There is no `runId` to
   give.
 - **The record is the tracker's.** You cannot move it, close it or retitle it from here, and nothing is
-  missing: that happens where it lives, and deevy follows. `issues_create` opens a new record in the
-  tracker through the Project's Socket, including a sub-issue under this one.
+  missing: that happens where it lives, and deevy follows. A new record, a sub-issue under this one included,
+  is opened there too, and reaches deevy when the tracker delivers it.
 - **Their Agents are visible to you.** `runs_list` with an Issue shows what Agents have done on it,
   `runs_get` reads one Run's feed, `gates_get` says what a Gate is waiting for, and `runs_answer` answers a
   question an Agent left it waiting on, in the person's name. Answer only what the person told you to answer.

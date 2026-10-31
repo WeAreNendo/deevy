@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { appendEvent } from "../src/events.ts";
 import { routeIssueTo } from "../src/issues.ts";
 import { router } from "../src/operations/index.ts";
+import type { InboundEvent } from "../src/sockets/port.ts";
 import {
   agentContext,
   fakeSockets,
@@ -31,10 +32,31 @@ async function workspace(db: MemberContext["db"]) {
     carol,
     project: seeded.project,
     record: seeded.record,
+    deliver: seeded.deliver,
     issue,
     asAlice: createRouterClient(router, { context }),
     asBob: createRouterClient(router, { context: bob }),
     asCarol: createRouterClient(router, { context: carol }),
+  };
+}
+
+/**
+ * Alice saying something on the record in the tracker, as its delivery states
+ * it. A tracker comment names a Member through deevy's own account
+ * (`@deevy bob`), and deevy hears it only from the tool (ADR-0024).
+ */
+function aliceSays(issue: { externalId: string; url: string }, body: string): InboundEvent {
+  return {
+    kind: "comment",
+    scopeKey: "acme/deevy",
+    issueExternalId: issue.externalId,
+    comment: {
+      externalId: "c1",
+      url: `${issue.url}#c1`,
+      body,
+      author: { login: "alice", id: "u-alice", isBot: false },
+      createdAt: new Date(),
+    },
   };
 }
 
@@ -89,10 +111,12 @@ describe("a mention", () => {
   it("notifies the mentioned Member but not the one who wrote it", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asAlice, asBob, issue } = await workspace(db);
+    const { asAlice, asBob, deliver, issue } = await workspace(db);
 
-    await asAlice.comments.create({ issue: issue.url, body: "over to @bob" });
+    await deliver([aliceSays(issue, "over to @deevy bob")]);
 
+    // A delivery names its author by the tool's account, not as a Member, so
+    // what keeps Alice out of her own inbox is that the body does not name her.
     expect(
       (await asBob.inbox.list({})).notifications.filter((n) => n.kind === "mention"),
     ).toHaveLength(1);
@@ -227,14 +251,16 @@ describe("what a Notification carries", () => {
   it("names who did it and quotes the comment a mention came from", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { alice, asAlice, asBob, bob, issue } = await workspace(db);
-    await asAlice.comments.create({ issue: issue.url, body: "Look at this, @bob" });
+    const { alice, asBob, bob, deliver, issue } = await workspace(db);
+    await deliver([aliceSays(issue, "Look at this, @deevy bob")]);
     await route(alice, issue, bob.member.id);
 
     const rows = (await asBob.inbox.list({})).notifications;
     const mention = rows.find((row) => row.kind === "mention");
-    expect(mention?.actor?.user.name).toBe("Alice");
-    expect(mention?.comment?.body).toBe("Look at this, @bob");
+    // Alice wrote this in the tracker and deevy heard it from the tool, so the
+    // Event names no Member as its actor; what she wrote is still quoted.
+    expect(mention?.actor).toBeNull();
+    expect(mention?.comment?.body).toBe("Look at this, @deevy bob");
     const assignment = rows.find((row) => row.kind === "assignment");
     expect(assignment?.actor?.user.name).toBe("Alice");
     expect(assignment?.comment).toBeNull();

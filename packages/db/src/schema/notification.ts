@@ -19,8 +19,9 @@ export const humanNotificationKinds = [
   /** A Run ended, completed or failed. */
   "run_finished",
   /**
-   * An Agent this Human sponsors split work into sub-issues, or finished all of
-   * them (docs/plans/sub-issue-delegation.md). One line per parent per wave
+   * Every sub-issue under a record an Agent this Human sponsors is routed to
+   * is finished, or, in a row from before docs/plans/simplify.md slice 4, that
+   * Agent split work into sub-issues (docs/plans/sub-issue-delegation.md). One line per parent per wave
    * rather than one per sub-issue: forty of them that make an inbox useless
    * have cost more than they bought.
    */
