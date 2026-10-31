@@ -88,8 +88,8 @@ describe("the Agent capability rule", () => {
       // Where it learns what its Project is bound to, without asking a Human.
       "projects.get",
       "projects.list",
-      // `runs.answer` is not here: an elicitation asks a Human. Nor is any
-      // checkout or pull request: an Agent's code is its own (ADR-0034). Nor
+      // Nothing answers a question here: an Agent asks on the record, in the
+      // tracker (docs/plans/simplify.md, slice 5). Nor is any checkout or pull request: an Agent's code is its own (ADR-0034). Nor
       // is a report of what it spent, which deevy no longer takes.
       "runs.finish",
       "runs.get",

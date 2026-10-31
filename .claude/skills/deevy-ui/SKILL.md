@@ -297,8 +297,7 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
 with <label>`); a provider is added by configuring one, never by editing `App.tsx`. The dev form stays
   under them only when `health.ping` reports `devSignIn`. **An invitation link is answered outside the
   router**: `/invite/<token>` is held in `sessionStorage` (`lib/invitation.ts`) and spent by `NotAMember`.
-- **Live regions:** the Gate banner on a focused ruling card and a Run's "Needs your answer" band are
-  `role="status"`; nothing else announces without a reason. **Tests drive Base UI popups with keys**:
+- **Live regions:** the Gate banner on a focused ruling card is `role="status"`; nothing else announces without a reason. **Tests drive Base UI popups with keys**:
   `ArrowDown` opens a Select or Combobox in jsdom, `Enter` on the highlighted option chooses, `Escape`
   closes — and while one is open the rest of the page is inert.
 - **`ui/*` hygiene:** a `ui/*` file may sit unimported (it is the kit), but a dependency only an unimported
@@ -312,12 +311,13 @@ with <label>`); a provider is added by configuring one, never by editing `App.ts
 
 - **Needs me is the home page** (`routes/home.tsx`, `region "Needs me"`), in the order things block
   somebody: `region "Gates awaiting you"` (a card per Gate — the record's key, the Checkpoint, the Agent, how
-  long it has waited, a link into the ruling), `region "Runs awaiting your answer"`, then `region "Your Agents'
-Runs"`. It is not a list of work: the work is in the tools.
+  long it has waited, a link into the ruling), then `region "Your Agents' Runs"`. It is not a list of work:
+  the work is in the tools, and so is a question an Agent asks (docs/plans/simplify.md, slice 5).
 - **The Runs feed** (`/runs`) is the one list deevy owns, because a Run is deevy's record and the tracker has
   none of it: flat, newest first, `group "Filters"` with the statuses as a ToggleGroup, filters in the URL.
 - **A Run** (`/runs/$runId`) is its feed in time order (`ol "Activity of <run id>"`, an item per Activity,
-  toned by kind — the Agent's voice, a Human's, an error) with the Gates it asked for in the rail (`list
+  toned by kind — what the Agent narrated, and its errors; a Gate's Proposal and Ruling are on the Gate the
+  rail links to) with the Gates it asked for in the rail (`list
 "Gates"`), because a Gate is where a Run stops and the only thing on that page a Human acts on.
 - **A Gate** (`/gates/$requestId`) is the one link an Agent hands a Human, so it answers four things at a
   glance: what is proposed (`region "Proposal"`, the markdown), which record (its key, linking out), where
@@ -387,7 +387,7 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
 - **Channels** add a room in a connected Slack app beside the incoming-webhook kind, and **Notifications**
   has a Direct message column for a Human whose Slack account is linked.
 - **Notifications has an Email column** (docs/plans/email-channel.md, slice 1): `<Kind> by email` per row,
-  checked by default for Gate awaiting and Run awaiting input only, and disabled, with the reason said
+  checked by default for Gate awaiting only, and disabled, with the reason said
   beneath the table, when `preferences.get` answers `emailAddress: null` — deevy never emails an address the
   sign-in did not confirm. When there is one, the line beneath names it.
 - **Channels adds a team email address** (slice 2): `form "Add an email address"` with `Team email address`
@@ -427,8 +427,8 @@ The names a screen keeps unless a change says otherwise:
 - **Signed out.** `Continue with <provider>` per provider, the one used last described `Last used`; `More
 ways to sign in` (with `aria-expanded`) past four; `form "Development sign-in"`, `Sign in as this email`;
   `Sign out and try another account` for somebody who is not a Member.
-- **Needs me.** `region "Needs me"`, `region "Gates awaiting you"` with a link per Gate, `region "Runs
-awaiting your answer"`, `region "Your Agents' Runs"`.
+- **Needs me.** `region "Needs me"`, `region "Gates awaiting you"` with a link per Gate,
+  `region "Your Agents' Runs"`.
 - **Runs.** `table "Runs"` with a row per Run, `group "Filters"`, and the column `Time`; on a Run
   `ol "Activity of <run id>"` and `list "Gates"`, `region "Time"`,
   `heading` named by the record, and `Try again` on a failed or stale one.

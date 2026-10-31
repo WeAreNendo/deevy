@@ -67,7 +67,7 @@ Open **Runs** in the sidebar. The Run shows **Waiting to start** until the Agent
 request on GitHub. It ends **Finished** or **Failed**.
 
 If your Project lists Checkpoints, such as `plan` before the Agent writes code or `ship` before it
-finishes, the Agent stops at a Gate at each one, and the Run shows **Waiting for input** until a Human
+finishes, the Agent stops at a Gate at each one, and the Run shows **Waiting on a ruling** until a Human
 rules: in deevy, or with `/approve` in a comment on the issue
 ([How a Gate asks](/gates/how-a-gate-asks/)).
 

@@ -159,9 +159,11 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
  * write and its Event. Then one more, from slice 10: a Ruling changes what the
  * Gate's chat messages should say, so it asks where there are any
  * (sockets/chat-out.ts). One fewer since a settled Gate resumes its Run from
- * the row read with the Gate rather than reading the Run again (gates.ts).
+ * the row read with the Gate rather than reading the Run again (gates.ts), and
+ * one fewer again since a Ruling writes nothing in the Run's feed
+ * (docs/plans/simplify.md, slice 5).
  */
-const rulingFromTracker = 30;
+const rulingFromTracker = 29;
 
 describe(`the D1 request budget: a Ruling from the tracker costs ${String(rulingFromTracker)}`, () => {
   it("is under D1's cap the first time deevy meets the account", async () => {
@@ -240,9 +242,10 @@ describe(`the D1 request budget: a Ruling from the tracker costs ${String(ruling
  * `recordRuling` as the web pays it — including the one read of where the
  * Gate's chat messages are, which owes this click's own message its update
  * through the outbox rather than changing it inline. Like the tracker's, one
- * fewer since the Run resumes from the row read with the Gate.
+ * fewer since the Run resumes from the row read with the Gate, and one fewer
+ * since a Ruling writes nothing in the Run's feed.
  */
-const slackClick = 23;
+const slackClick = 22;
 
 describe(`the D1 request budget: a Slack click that rules costs ${String(slackClick)}`, () => {
   it("is under D1's cap, and changes nothing in Slack on the way", async () => {
@@ -325,9 +328,9 @@ describe(`the D1 request budget: a Slack click that rules costs ${String(slackCl
  *
  * Both are ordinary writes with `appendEvent`'s tail on them, and both are on
  * the path a Worker serves: the ask is an MCP tool call and the ruling is a
- * click. The ask pays for the request row, the elicitation Activity, the Run's
- * move and two Events; the ruling pays for the policy, the decision row, the
- * Event and the Run resuming with a third — and, since the Slack app, one read
+ * click. The ask pays for the request row, the Run's move and two Events; the
+ * ruling pays for the policy, the decision row, the Event and the Run resuming
+ * with a third — and, since the Slack app, one read
  * of where the Gate's chat messages are, which a Gate posted nowhere answers
  * with nothing (sockets/chat-out.ts). Since the first real GitHub walk the ask
  * also reads whether this exact Proposal was already approved on the record,
@@ -336,10 +339,12 @@ describe(`the D1 request budget: a Slack click that rules costs ${String(slackCl
  * the ask reads the Workspace's active Humans once for its answer; the
  * ruling's answer does not, because the approval that settles a Gate leaves
  * nothing open to be short. And the ruling no longer reads the Run it resumes:
- * the Gate was read with it.
+ * the Gate was read with it. Neither writes in the Run's feed any more, which
+ * is one statement off each (docs/plans/simplify.md, slice 5): the Proposal
+ * and the Ruling are the Gate's own rows.
  */
-const asking = 21;
-const ruling = 19;
+const asking = 20;
+const ruling = 18;
 
 describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
   it("stays well under D1's cap on both halves", async () => {

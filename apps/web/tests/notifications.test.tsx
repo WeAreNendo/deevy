@@ -6,7 +6,7 @@ const stub = vi.hoisted(() => ({
     { kind: "mention", inbox: true, slack: true, slackDm: true, email: false },
     { kind: "assignment", inbox: true, slack: true, slackDm: true, email: false },
     { kind: "gate_awaiting", inbox: true, slack: true, slackDm: true, email: true },
-    { kind: "run_awaiting_input", inbox: true, slack: false, slackDm: false, email: true },
+    { kind: "delegation", inbox: true, slack: false, slackDm: false, email: true },
     { kind: "run_finished", inbox: false, slack: true, slackDm: true, email: false },
   ],
   /** Where deevy would email this Human; null when their sign-in did not verify it. */
@@ -36,9 +36,9 @@ describe("the Notifications settings page", () => {
     await mountAt("/settings/notifications", { memberName: "Ada" });
 
     expect(await screen.findByText("Gate awaiting")).toBeTruthy();
-    expect(
-      (screen.getByLabelText("Run awaiting input in Slack") as HTMLInputElement).ariaChecked,
-    ).toBe("false");
+    expect((screen.getByLabelText("Sub-issues in Slack") as HTMLInputElement).ariaChecked).toBe(
+      "false",
+    );
     expect(
       (screen.getByLabelText("Run finished in the inbox") as HTMLInputElement).ariaChecked,
     ).toBe("false");
@@ -65,7 +65,7 @@ describe("the Notifications settings page", () => {
     stub.saved = [];
     await mountAt("/settings/notifications", { memberName: "Ada" });
 
-    const dm = await screen.findByLabelText("Run awaiting input as a Slack direct message");
+    const dm = await screen.findByLabelText("Sub-issues as a Slack direct message");
     expect((dm as HTMLInputElement).ariaChecked).toBe("false");
     fireEvent.click(dm);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -73,7 +73,7 @@ describe("the Notifications settings page", () => {
     await waitFor(() => expect(stub.saved).toHaveLength(1));
     const [saved] = stub.saved as [{ preferences: Array<Record<string, unknown>> }];
     expect(saved.preferences).toContainEqual({
-      kind: "run_awaiting_input",
+      kind: "delegation",
       inbox: true,
       slack: false,
       slackDm: true,

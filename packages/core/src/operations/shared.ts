@@ -454,7 +454,7 @@ export async function addIssueLink(context: ContextFor<"member">, input: IssueLi
 /**
  * An Activity is what an Agent posts to its own Run (CONTEXT.md), so nobody
  * else writes into that feed: another Agent's Run is not theirs to narrate, and
- * a Human speaks through `runs.answer`.
+ * a Human speaks on the record, in the tracker, or by ruling at a Gate.
  */
 export function assertOwnRun(context: ContextFor<"member">, run: Run): void {
   if (run.agentMemberId !== context.member.id) {

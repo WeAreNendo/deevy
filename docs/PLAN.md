@@ -46,7 +46,7 @@ may work it, the default Agent, how a record names an Agent (a label prefix, a m
 **Checkpoints**. What deevy says back in the tracker is a Gate and its Ruling, on every Project. An **Issue** is a projection of a record in a tracker — its key, URL,
 title, body and state as the tool last said them — routed to one Agent; deevy authors none of it. An Agent
 working an Issue produces a **Run** that records who triggered it, posts **Activities** (thought, action,
-elicitation, response, error), asks at Checkpoints for **Gates**, attaches **Links** — the pull request it
+response, error), asks on the record when it needs to know something, asks at Checkpoints for **Gates**, attaches **Links** — the pull request it
 opened among them — and ends in a state. A Gate carries the Agent's **Proposal** and the **Rulings** on it, made in deevy, in the
 tracker or in Slack. A Human's **Identities** are their accounts on the tools, linked so a Ruling made there is
 theirs. Every change becomes an **Event**. **Notifications** derive from Events and are delivered to
@@ -76,8 +76,8 @@ Event, creates a Run in `pending`, and delivers a signed webhook to the URL the 
 and backoff from the Event log; Agents without a URL poll their inbox over MCP. Either way the Agent then reads
 the record over MCP, and its conversation in the tool, with its own access.
 
-**Run lifecycle.** `pending` → `active` on first Activity → `awaiting_input` when the Agent asks a Gate or a
-question → back to `active` when a Human rules or answers → `completed` or `failed`; `stale` after a
+**Run lifecycle.** `pending` → `active` on first Activity → `awaiting_input` when the Agent asks at a Gate,
+and only then → back to `active` when a Human rules → `completed` or `failed`; `stale` after a
 configurable silence (default 30 minutes), recoverable — but never while it waits on a Human. The Run's final
 response carries a summary and Links.
 
@@ -121,11 +121,11 @@ One typed core, projected three ways (ADR-0005):
   through the fetch adapter, with generated OpenAPI 3.1 and a reference UI. The React SPA uses the typed client
   with TanStack Query (ADR-0009).
 - **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
-  procedures. The set is fifteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
+  procedures. The set is fourteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
   `projects_get`, `links_list`, `links_add`, `links_remove`, `inbox_list`, `gates_get`, `runs_list`,
   `runs_get` for anyone; `runs_start`, `runs_post_activity`,
-  `gates_request`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
-  for a Human alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
+  `gates_request`, `runs_finish` for an Agent alone, because a Run is its attempt. A question is asked and
+  answered on the record, in the tracker, so none is a Human's alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
   rule on, in a browser or from a tool that vouches for them.
 - **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is
   not a Member with a session.
@@ -167,7 +167,7 @@ tools/acceptance  the acceptance walk: a scripted Agent against every deployment
 
 ## Notifications
 
-Notification kinds: assignment, mention, Gate awaiting you, Run awaiting input, Run finished or failed, and
+Notification kinds: assignment, mention, Gate awaiting you, Run finished or failed, and
 the sub-issues an Agent opened or finished. Channels: each Human's in-app inbox (always), a Slack room through
 an incoming webhook or a connected Slack app, and a Slack direct message for a Human whose Slack account is
 linked. Routing is both Workspace rules (this kind, for this Project, to this Channel) and per-person

@@ -10,8 +10,8 @@ invitations.
 
 ## Your own email
 
-deevy emails you about what is waiting on you: a Gate you may approve, and a Run waiting for your answer. You
-can choose more, or less, under **Settings › Notifications**.
+deevy emails you about what is waiting on you: a Gate you may approve. You can choose more, or less, under
+**Settings › Notifications**.
 
 deevy only ever writes to an address your sign-in confirmed. **Settings › Notifications** says which, under
 the table: "Email goes to" your address. If the account you signed in with didn't confirm one, as a Linear or
@@ -23,13 +23,12 @@ an Atlassian sign-in doesn't, it says so, and the **Email** column can't be tick
 2. Tick or untick each kind in the **Email** column.
 3. Choose **Save**.
 
-By default, only **Gate awaiting** and **Run awaiting input** are ticked.
+By default, only **Gate awaiting** is ticked.
 
 A few things deevy does for you:
 
 - **One email per thing that happened.** If one Event concerns you twice, you get one email.
-- **No stale email.** An email about a Gate already ruled on, or a Run already answered, by the time it would
-  go out is not sent.
+- **No stale email.** An email about a Gate already decided by the time it would go out is not sent.
 
 ### Stop an email
 

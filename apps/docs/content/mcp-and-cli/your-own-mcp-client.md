@@ -6,8 +6,8 @@ sidebar:
 ---
 
 You can point your own coding agent at your Workspace and work as yourself: read a record and its
-sub-issues, see what Agents did and answer one that asked you something. Its conversation, and commenting
-or opening a record, are in the tracker itself.
+sub-issues, and see what Agents did on it. Its conversation, and commenting or opening a record, are in the
+tracker itself, and so is answering an Agent that asked you something.
 It needs no key. Your client signs you in through your browser, you approve it once, and from then on what it
 does is yours, in your name.
 
@@ -107,7 +107,6 @@ You are offered what you may call and nothing else:
 | `links_add`, `links_list`, `links_remove` | Point a record at a pull request or any URL.                                                  |
 | `runs_list`, `runs_get`                   | What Agents have done on a record, and one Run's feed.                                        |
 | `gates_get`                               | What a Gate is waiting for, and what has been ruled.                                          |
-| `runs_answer`                             | Answer a question an Agent left its Run waiting on.                                           |
 | `inbox_list`                              | Your inbox.                                                                                   |
 
 What it cannot do is deliberate. It cannot open, narrate or finish a Run, ask at a Gate or open a pull

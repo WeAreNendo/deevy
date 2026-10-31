@@ -16,18 +16,17 @@ is waiting on you, in the order it blocks somebody.
 1. **Gates awaiting you**: every open Gate you may approve now, with its Checkpoint, the first line of the
    Proposal, the record's key, the Agent, how long it has waited and its count. Choose one to rule on it.
    See [How a Gate asks](/gates/how-a-gate-asks/).
-2. **Runs awaiting your answer**: Runs you are behind that asked a question rather than a Gate. You answer
-   one from your own MCP client: see [Your own MCP client](/mcp-and-cli/your-own-mcp-client/).
-3. **Your Agents' Runs**: the Runs you started and the ones your Agents are working, while they are still
+2. **Your Agents' Runs**: the Runs you started and the ones your Agents are working, while they are still
    going.
 
-When none of those has anything in it, the page says **Nothing needs you**.
+When neither has anything in it, the page says **Nothing needs you**. A question an Agent asks you is not
+here: it asks on the record, in the tracker, and you answer it there, with a reply that mentions it.
 
 ## The Inbox
 
 The **Inbox** is one list of your Notifications, newest first, and the number beside it in the sidebar is how
 many you haven't read. Each row says who did what, on which record, and quotes what they said: "wants your
-ruling at plan", "mentioned you", "finished a Run", "asks a question".
+ruling at plan", "mentioned you", "finished a Run".
 
 - Choose **All** or **Unread** to see everything or only what you haven't read.
 - Choose a row to open it. On a wide screen it opens beside the list: the Gate itself for a Gate, the record
@@ -40,20 +39,19 @@ read, `x` ticks a row, and `o` opens the record where it lives.
 
 ## What lands in your Inbox
 
-| Notification           | Who is told                                                                                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Mention**            | Whoever a comment on a record mentions by handle.                                                                                                            |
-| **Assignment**         | The Member a record is routed to.                                                                                                                            |
-| **Gate awaiting**      | Every Human who may approve the Gate: the ones its Checkpoint names, or every active Human, leaving out the Human the work is for where the Checkpoint does. |
-| **Run awaiting input** | The Human behind the Run, when it asks a question: whoever started it, or the Agent's Sponsor.                                                               |
-| **Run finished**       | The Human behind the Run, when it finishes or fails.                                                                                                         |
-| **Sub-issues**         | The Sponsor of the Agent a record is routed to, when the record's sub-issues are all finished.                                                               |
+| Notification      | Who is told                                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Mention**       | Whoever a comment on a record mentions by handle.                                                                                                            |
+| **Assignment**    | The Member a record is routed to.                                                                                                                            |
+| **Gate awaiting** | Every Human who may approve the Gate: the ones its Checkpoint names, or every active Human, leaving out the Human the work is for where the Checkpoint does. |
+| **Run finished**  | The Human behind the Run, when it finishes or fails.                                                                                                         |
+| **Sub-issues**    | The Sponsor of the Agent a record is routed to, when the record's sub-issues are all finished.                                                               |
 
 You are never told about something you did yourself, and a suspended Member is told nothing.
 
 If a Gate is still waiting four hours later, its Notification comes back unread for everyone it is still
 waiting on, which leaves out whoever has already ruled, and again every four hours until the Gate is
-decided. A Run waiting on a plain question is reminded the same way.
+decided.
 
 ## Choose what reaches you
 
@@ -67,7 +65,7 @@ decided. A Run waiting on a plain question is reminded the same way.
 | **Email**          | Your own email address, if your sign-in confirmed it.                                                                             |
 
 Tick what you want and choose **Save**. Until you change anything, you get every kind in the Inbox, in Slack
-and by direct message, and by email only a Gate awaiting you and a Run awaiting your answer.
+and by direct message, and by email only a Gate awaiting you.
 
 Turning a column off changes where you hear about something, never whether it concerns you: a Gate you may
 rule on is still on **Needs me**.

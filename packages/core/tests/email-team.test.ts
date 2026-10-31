@@ -224,9 +224,9 @@ describe("a team address", () => {
 });
 
 describe("what a team address is told", () => {
-  it("asks for an answer without saying it is the team's", () => {
+  it("asks for a Human's ruling without saying it is the team's", () => {
     const said = renderEmail({
-      kind: "run_awaiting_input",
+      kind: "gate_awaiting",
       audience: "team",
       baseUrl,
       workspaceName: "Acme",
@@ -236,9 +236,16 @@ describe("what a team address is told", () => {
         title: "Retry",
         url: "https://linear.app/acme/issue/ENG-12",
       },
-      question: "Exponential or fixed?",
-      runId: "run_1",
+      gate: {
+        id: "gate_1",
+        checkpoint: "plan",
+        proposal: "Exponential backoff, capped at a minute.",
+        agentName: "Planner",
+        approvals: 0,
+        required: 1,
+      },
     });
-    expect(said.subject).toBe("Waiting for an answer: ENG-12");
+    expect(said.subject).toBe("Gate waiting: ENG-12 · plan");
+    expect(said.text).toContain("Planner is waiting for a Human at plan");
   });
 });

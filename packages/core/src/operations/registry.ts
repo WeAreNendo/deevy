@@ -109,8 +109,8 @@ export interface AppContext {
   /**
    * This instance's own secret (`BETTER_AUTH_SECRET`). Nothing is sealed with
    * it; what it signs is short-lived and public-facing — the `state` a
-   * provider echoes back on a redirect, and the MCP elicitation's
-   * `requestState` — so rotating it ends those in flight and nothing else.
+   * provider echoes back on a redirect, an email's unsubscribe and confirm
+   * links — so rotating it ends those in flight and nothing else.
    */
   secret?: string;
   /**

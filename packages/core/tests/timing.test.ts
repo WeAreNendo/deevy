@@ -58,26 +58,6 @@ describe("how long a Run took", () => {
     expectAbout(started.timing.queuedMs, 2 * minute);
   });
 
-  it("adds up every wait on a Human, however many there were", async () => {
-    const { asAdmin, asAgent, run, earlier } = await workspaceWithAgent();
-    await asAgent.runs.postActivity({ runId: run.id, kind: "thought", body: "Reading" });
-    await earlier({ startedAt: ago(30 * minute) });
-
-    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which one?" });
-    await earlier({ waitingSince: ago(10 * minute) });
-    await asAdmin.runs.answer({ runId: run.id, body: "The first" });
-
-    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "And now?" });
-    await earlier({ waitingSince: ago(5 * minute) });
-    await asAdmin.runs.answer({ runId: run.id, body: "Carry on" });
-
-    const read = await asAdmin.runs.get({ runId: run.id });
-    expectAbout(read.timing.waitingMs, 15 * minute);
-    // The rest of its life since it started was work.
-    expectAbout(read.timing.workingMs + read.timing.waitingMs, 30 * minute);
-    expect(read.timing.workingMs).toBeLessThan(15 * minute + slack);
-  });
-
   it("counts a wait at a Gate as waiting, until somebody rules", async () => {
     const { asAdmin, asAgent, run, earlier } = await workspaceWithAgent();
     await asAgent.runs.postActivity({ runId: run.id, kind: "thought", body: "Planning" });
@@ -147,7 +127,7 @@ describe("how long a Run took", () => {
 
   it("counts a wait still going until now, and a finished Run until it finished", async () => {
     const { asAdmin, asAgent, run, earlier } = await workspaceWithAgent();
-    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which one?" });
+    await asAgent.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
     await earlier({ startedAt: ago(8 * minute), waitingSince: ago(3 * minute) });
 
     const waiting = await asAdmin.runs.get({ runId: run.id });
@@ -173,9 +153,9 @@ describe("how long a Run took", () => {
     expect(read.timing.waitingMs).toBe(0);
   });
 
-  it("starts waiting from the first word when the first word is a question", async () => {
+  it("starts waiting from its first act when its first act is a Gate", async () => {
     const { asAdmin, asAgent, run, earlier } = await workspaceWithAgent();
-    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which one?" });
+    await asAgent.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
     await earlier({ startedAt: ago(4 * minute), waitingSince: ago(4 * minute) });
 
     const read = await asAdmin.runs.get({ runId: run.id });

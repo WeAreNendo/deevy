@@ -143,7 +143,7 @@ export interface EmailTarget {
  * filtered away, and with it the one that mattered.
  */
 export function emailByDefault(kind: HumanNotificationKind): boolean {
-  return kind === "gate_awaiting" || kind === "run_awaiting_input";
+  return kind === "gate_awaiting";
 }
 
 /** Where one Event's Notifications go. */
@@ -308,21 +308,20 @@ export function issueOf(event: Event): string | null {
 
 /** What a Run Event tells a Human, or nothing when the Event is not one. */
 const runNotificationKinds: Partial<Record<Event["kind"], Notification["kind"]>> = {
-  "run.awaiting_input": "run_awaiting_input",
   "run.completed": "run_finished",
   "run.failed": "run_finished",
 };
 
 /**
- * The Gate a waiting Run stopped at, when that is why it is waiting.
+ * The Gate a waiting Run stopped at, which a `run.awaiting_input` names in its
+ * payload.
  *
- * `run.awaiting_input` is the one Event that asks, whether the Agent asked a
- * question or asked to pass a Checkpoint, so the reminder and the Slack rules
- * work unchanged (docs/plans/sockets.md). What tells the two apart is this
- * field, and it is read from the row rather than looked up, because the
- * delivery path asks hours later and must stay a pure function of the Event.
+ * A Gate is the one thing a Run waits at (docs/plans/simplify.md, slice 5), so
+ * this names one on every such Event since; one from before, when an Agent
+ * could leave its Run waiting on a question, names none and asks nobody. Read
+ * from the row rather than looked up, because the delivery path asks hours
+ * later and must stay a pure function of the Event.
  */
-/** The Gate a Run stopped at, which a `run.awaiting_input` names in its payload. */
 export function gateRequestIdOf(event: Event): string | null {
   if (event.kind !== "run.awaiting_input") return null;
   const carried = (event.payload as { gateRequestId?: unknown } | null)?.gateRequestId;

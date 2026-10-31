@@ -95,28 +95,15 @@ export const run = sqliteTable(
 );
 
 /**
- * What an Agent narrates, plus `prompt`, which only a Human writes: their
- * answer to an elicitation. Linear splits them the same way, so an agent
- * ported to deevy never confuses its own output with a Human's words
- * (docs/research/landscape-agent-aware-trackers.md).
+ * What an Agent narrates, and only that. A question for a Human is a comment
+ * on the record, in the tracker, and so is the Human's reply; a Gate, its
+ * Proposal and its Ruling are the Gate's own rows. `elicitation` and `prompt`
+ * were those two before docs/plans/simplify.md slice 5, and nothing writes
+ * either now. A row of either kind written before it no longer reads, since the
+ * API's schema is this list; slice 12's empty database is what clears them,
+ * and nothing is kept for one before that (that plan's convention 9).
  */
-export const activityKinds = [
-  "thought",
-  "action",
-  "elicitation",
-  "response",
-  "error",
-  "prompt",
-] as const;
-
-/** The kinds an Agent may post. `prompt` is the Human's word, so it is not here. */
-export const agentActivityKinds = [
-  "thought",
-  "action",
-  "elicitation",
-  "response",
-  "error",
-] as const;
+export const activityKinds = ["thought", "action", "response", "error"] as const;
 
 /** One entry an Agent posts to its Run while working (CONTEXT.md). */
 export const activity = sqliteTable(
