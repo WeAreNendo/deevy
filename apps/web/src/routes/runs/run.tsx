@@ -14,14 +14,15 @@ import { useMembersById } from "@/lib/members";
 import { startedBy } from "@/lib/run-trigger";
 import { ago, duration } from "@/lib/time";
 
-/** How an Activity reads, by kind: the Agent's voice, a Human's, an error. */
+/**
+ * How an Activity reads, by kind: what the Agent thought, did, concluded, or
+ * could not do. The feed is only the Agent's; its Gates are beside it.
+ */
 const tones: Record<string, string> = {
   thought: "text-muted-foreground italic",
   action: "",
-  elicitation: "text-gate-foreground dark:text-gate",
   response: "text-agent",
   error: "font-mono text-destructive",
-  prompt: "text-human",
 };
 
 /**

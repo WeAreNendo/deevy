@@ -148,15 +148,15 @@ describe("deriving the same Event a second time", () => {
     const { db, alice, seeded, project } = await workspace();
     const channelId = await slackRoom(db, alice.workspace.id);
     // A room is full of Humans, so the Event has to be one a Human is owed:
-    // a Run asking its Sponsor something (docs/plans/m3.md, slice 2).
+    // a Run asking at a Gate (docs/plans/m3.md, slice 2).
     const agent = await agentContext(db, { sponsor: alice.member, grants: [project.id] });
     const asAgent = createRouterClient(router, { context: agent });
     const issue = await seeded.record({ externalId: "7", title: "Ship the thing" });
     const run = await asAgent.runs.start({ issue: issue.externalKey });
-    await asAgent.runs.postActivity({
+    await asAgent.gates.request({
       runId: run.id,
-      kind: "elicitation",
-      body: "Which base branch should this go to?",
+      checkpoint: "plan",
+      proposal: "Branch from main and cap the coupon.",
     });
     const asked = (await db.query.event.findFirst({
       where: { kind: "run.awaiting_input" },
@@ -173,7 +173,7 @@ describe("deriving the same Event a second time", () => {
   });
 });
 
-describe("asking again about a Run nobody has answered", () => {
+describe("asking again about a Gate nobody has ruled on", () => {
   it("leaves the Slack Channel the one message that Event already owed", async () => {
     const { db, alice, seeded, project } = await workspace();
     await slackRoom(db, alice.workspace.id);
@@ -181,10 +181,10 @@ describe("asking again about a Run nobody has answered", () => {
     const asAgent = createRouterClient(router, { context: agent });
     const issue = await seeded.record({ externalId: "7", title: "Waiting on a Human" });
     const run = await asAgent.runs.start({ issue: issue.url });
-    await asAgent.runs.postActivity({
+    await asAgent.gates.request({
       runId: run.id,
-      kind: "elicitation",
-      body: "Which base branch should this go to?",
+      checkpoint: "plan",
+      proposal: "Branch from main and cap the coupon.",
     });
     const asked = (await db.query.event.findFirst({
       where: { kind: "run.awaiting_input" },

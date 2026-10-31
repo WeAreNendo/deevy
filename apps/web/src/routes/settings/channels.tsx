@@ -22,7 +22,6 @@ const kinds = [
   { value: "mention", label: "Mention" },
   { value: "assignment", label: "Assignment" },
   { value: "gate_awaiting", label: "Gate awaiting" },
-  { value: "run_awaiting_input", label: "Run awaiting input" },
   { value: "run_finished", label: "Run finished" },
   { value: "delegation", label: "Sub-issues" },
 ] as const;

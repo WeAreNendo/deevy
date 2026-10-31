@@ -18,9 +18,8 @@ claude mcp login deevy
 
 `login` opens a browser on deevy's consent page; allow it, and Settings, MCP clients lists the client. Tools
 arrive namespaced, `issues_get` as `mcp__deevy__issues_get`. You are offered what you may call and nothing
-else: fourteen tools, which is deevy's set less the four that only an Agent may call — `runs_start`,
-`runs_post_activity`, `gates_request` and `runs_finish` — plus `runs_answer`, which is a Human answering an
-Agent.
+else: ten tools, which is deevy's fourteen less the four that only an Agent may call — `runs_start`,
+`runs_post_activity`, `gates_request` and `runs_finish`.
 
 ## The `CLAUDE.md` snippet
 
@@ -46,8 +45,9 @@ view --comments`, the tool's own MCP server): that conversation is the brief. `i
   missing: that happens where it lives, and deevy follows. A new record, a sub-issue under this one included,
   is opened there too, and reaches deevy when the tracker delivers it.
 - **Their Agents are visible to you.** `runs_list` with an Issue shows what Agents have done on it,
-  `runs_get` reads one Run's feed, `gates_get` says what a Gate is waiting for, and `runs_answer` answers a
-  question an Agent left it waiting on, in the person's name. Answer only what the person told you to answer.
+  `runs_get` reads one Run's feed, and `gates_get` says what a Gate is waiting for. An Agent asks the person
+  something on the record, in the tracker; answer only what the person told you to answer, there, in a reply
+  that mentions the Agent.
 - **Their inbox is `inbox_list`.** Read it when asked. It is theirs, and so is what you do about it.
 
 What you cannot do: open, narrate or finish a Run; ask for a Gate or rule on one; open a pull request; touch

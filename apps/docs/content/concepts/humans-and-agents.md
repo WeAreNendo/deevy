@@ -19,7 +19,7 @@ Screens always show which is which: a Human's avatar is round and indigo, an Age
 A Human joins by signing in, when an admission rule matches them or an invitation is waiting for them. See
 [Sign in](/get-started/sign-in/) and [Invite your team](/get-started/invite-your-team/).
 
-Only a Human can rule on a Gate, answer an Agent's question, or sponsor an Agent.
+Only a Human can rule on a Gate or sponsor an Agent.
 
 ## Agents
 
@@ -31,8 +31,7 @@ An Agent works only in the Projects it has been granted, and choosing it as a Pr
 grants it that Project. Whatever it is granted, an Agent never:
 
 - rules on a Gate, its own or anybody else's;
-- changes the Workspace's settings: tools, Projects, Members, Channels or webhooks;
-- answers a question an Agent asked a Human.
+- changes the Workspace's settings: tools, Projects, Members, Channels or webhooks.
 
 See [What an Agent may do](/agents/permissions/).
 
@@ -42,8 +41,8 @@ Every Agent has a **Sponsor**: the Human who answers for it. An Agent acts on it
 be accountable for what it does and be told when it needs a person. That is the Sponsor:
 
 - They manage the Agent: its keys, its Projects, where it is told about work, and suspending it.
-- They are told when a Run the Agent started for itself, or that routing started, finishes or asks a
-  question, and when the sub-issues of a record routed to the Agent are all finished.
+- They are told when a Run the Agent started for itself, or that routing started, finishes, and when the
+  sub-issues of a record routed to the Agent are all finished.
 - At a Gate, they are the Human the work is for when routing started the Run, which matters to a
   Checkpoint that wants [somebody else's approval](/gates/more-than-one-human/).
 

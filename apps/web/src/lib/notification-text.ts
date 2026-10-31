@@ -88,24 +88,14 @@ function describe(row: DescribableNotification): NotificationText {
         tone: "gate",
       };
     }
-    case "run_awaiting_input":
-      return { verb: "asks a question", excerpt: text(payload.question), tone: "agent" };
     case "run_finished":
       return row.event.kind === "run.failed"
         ? { verb: "failed a Run", excerpt: text(payload.summary), tone: "destructive" }
         : { verb: "finished a Run", excerpt: text(payload.summary), tone: "agent" };
     case "run_answered": {
-      // A Gate ruling carries `ruling` and the Gate's name; a plain answer to
-      // an Agent's question carries neither, and claims no ruling.
-      const ruling =
-        payload.ruling === "rejected"
-          ? "rejected"
-          : payload.ruling === "approved"
-            ? "approved"
-            : null;
-      if (!ruling) {
-        return { verb: "answered your Agent's question", excerpt: null, tone: "muted" };
-      }
+      // Only a Ruling on a Gate answers a Run (docs/plans/simplify.md, slice 5),
+      // and its Event says which way it went as `decision`.
+      const ruling = payload.decision === "rejected" ? "rejected" : "approved";
       return {
         verb: `${ruling} the Gate your Agent asked about`,
         excerpt: text(payload.note),

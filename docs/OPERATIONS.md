@@ -1075,8 +1075,8 @@ pins that line and no earlier one. With it the consent page appears, the tool li
 from that session is the Human's in the Event log, and its inbox is the Human's.
 
 What that client is offered is decided by the same registry that authorizes it (ADR-0016): the tool set less
-the four that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request` and `runs_finish`, and a Human naming one anyway is refused with "Only an Agent can do that" — plus
-`runs_answer`, which is a Human's. `issues_get` and `projects_get` face both.
+the four that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request` and `runs_finish`, and a Human naming one anyway is refused with "Only an Agent can do that". Nothing in it is a Human's alone:
+a question an Agent asks is asked and answered on the record, in the tracker.
 [as-yourself.md](./as-yourself.md) is the worked example: the `CLAUDE.md` snippet a person puts in the
 repository they work in, beside the Agent's in [agent-loop.md](./agent-loop.md).
 
@@ -1254,8 +1254,8 @@ same either way.
 ## Notification Channels and routing
 
 A Notification reaches a Human through Channels: their in-app inbox always, a Slack channel or a team email
-address when the Workspace routes it there, and their own email when they want it (see [Email](#email)). Six
-kinds exist — `mention`, `assignment`, `gate_awaiting`, `run_awaiting_input`, `run_finished`, `delegation` —
+address when the Workspace routes it there, and their own email when they want it (see [Email](#email)). Five
+kinds exist — `mention`, `assignment`, `gate_awaiting`, `run_finished`, `delegation` —
 and who a Notification concerns is decided from the Event alone, never from where it is delivered. Turning
 Slack or email off changes where a Human hears about something, never whether it concerns them.
 
@@ -1312,8 +1312,8 @@ an hour.
 ### Who is emailed, and how it stops
 
 - **A Human, at their own address.** Only an address their sign-in provider verified: a Linear or Atlassian
-  sign-in is never emailed, and Settings › Notifications says why. By default they get a Gate awaiting them
-  and a Run awaiting their answer, and switch any kind on or off in that page's Email column. Every such
+  sign-in is never emailed, and Settings › Notifications says why. By default they get a Gate awaiting them,
+  and switch any kind on or off in that page's Email column. Every such
   email carries a one-click unsubscribe (RFC 8058) that turns off that kind for them alone, signed with
   `BETTER_AUTH_SECRET` and good for six months; opening the link only asks, so a mail scanner changes
   nothing.

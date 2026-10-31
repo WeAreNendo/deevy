@@ -19,7 +19,6 @@ const labels: Record<string, string> = {
   mention: "Mention",
   assignment: "Assignment",
   gate_awaiting: "Gate awaiting",
-  run_awaiting_input: "Run awaiting input",
   run_finished: "Run finished",
   delegation: "Sub-issues",
 };

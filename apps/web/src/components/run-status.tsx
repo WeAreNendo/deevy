@@ -13,7 +13,8 @@ export type RunStatusValue =
 export const runStatusLabels: Record<RunStatusValue, string> = {
   pending: "Waiting to start",
   active: "Working",
-  awaiting_input: "Waiting for input",
+  // At a Gate, the one thing a Run waits at (docs/plans/simplify.md, slice 5).
+  awaiting_input: "Waiting on a ruling",
   completed: "Finished",
   failed: "Failed",
   stale: "Gone quiet",
@@ -38,7 +39,7 @@ export function RunStatus({
   className,
 }: {
   status: RunStatusValue;
-  /** Overrides the default wording, e.g. "Waiting for approval" on a Gate. */
+  /** Overrides the default wording. */
   label?: string;
   className?: string;
 }) {

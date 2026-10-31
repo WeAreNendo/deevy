@@ -50,7 +50,7 @@ const groups: Array<{ title: string; rows: Array<[keys: string, does: string]> }
   {
     title: "While writing",
     rows: [
-      ["mod+enter", "Send the answer or the note"],
+      ["mod+enter", "Send the note"],
       ["@", "Mention a Member"],
     ],
   },

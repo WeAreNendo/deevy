@@ -39,7 +39,11 @@ describe("the committed tool manifest", () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
     /*
-     * Fifteen, now that the tracker is the Agent's to read and write with its
+     * Fourteen, every one of them an Agent's, now that a Run waits only at a
+     * Gate: a question is asked and answered on the record, in the tracker,
+     * so there is nothing for a Human to answer here, and a Gate's answer is
+     * the request itself rather than a URL elicitation to retry
+     * (docs/plans/simplify.md, slice 5). Fifteen, now that the tracker is the Agent's to read and write with its
      * own access: deevy opens no record, writes no comment and reads no page
      * for it (docs/plans/simplify.md, slice 4). Eighteen, now that deevy takes no report of what a session spent: time
      * is what deevy saw itself, and a token count was only ever a client's
@@ -52,8 +56,8 @@ describe("the committed tool manifest", () => {
      * and `runs_checkout` deliberately is not, because it answers with a
      * credential (ADR-0014). Seventeen when a Gate became a request on a Run: `runs_request_approval`
      * came back as `gates_request`, and `gates_get` beside it is the polling
-     * half for a client that cannot take an elicitation, which is every client
-     * today (mcp/elicitation.ts). The other fifteen are what the Sockets cut
+     * half for a client that cannot take an elicitation, which was every client
+     * then. The other fifteen are what the Sockets cut
      * left — the plan predicted thirteen and was counting the runtime's own
      * allowlist (docs/plans/sockets.md, slice 8), which is a different list.
      */
@@ -73,12 +77,9 @@ describe("the committed tool manifest", () => {
       "links_remove",
       // Where an Agent learns what its Project is bound to.
       "projects_get",
-      // The Human side of a Run: answering an Agent's question from the
-      // client the Human read it in. Not an Agent's, and the manifest says so.
-      "runs_answer",
       "runs_finish",
-      // Without it an Agent cannot read its own Activity feed, so a Human's
-      // answer to a free-form elicitation never reaches the loop that asked.
+      // How an Agent reads its own Run: its status, its timing and the
+      // Activities it posted.
       "runs_get",
       // Not in PLAN.md's list, and needed: an Agent whose Run a trigger opened
       // has no other way to find it, because it cannot learn its own Member id.
@@ -113,10 +114,12 @@ describe("the committed tool manifest", () => {
     for (const name of ["runs_start", "runs_post_activity", "runs_finish"]) {
       expect(facing(name)).toMatchObject({ agents: true, agentsOnly: true });
     }
-    // Its reading side is anyone's, and answering is a Human's.
+    // Its reading side is anyone's.
     expect(facing("runs_list")).toMatchObject({ agents: true, agentsOnly: false });
     expect(facing("runs_get")).toMatchObject({ agents: true, agentsOnly: false });
-    expect(facing("runs_answer")).toMatchObject({ agents: false, agentsOnly: false });
+    // And every tool is an Agent's, now that nothing is left for a Human to
+    // answer from their own client (docs/plans/simplify.md, slice 5).
+    for (const tool of manifest) expect(tool.agents).toBe(true);
     // Nothing is an Agent's alone without being an Agent's at all.
     for (const tool of manifest) if (tool.agentsOnly) expect(tool.agents).toBe(true);
   });

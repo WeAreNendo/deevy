@@ -1,11 +1,10 @@
-import type { Activity, Db, Run } from "@deevy/db";
-import { run as runTable } from "@deevy/db";
+import type { Db, Run } from "@deevy/db";
+import { activityKinds, run as runTable } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 export type RunStatus = Run["status"];
-export type ActivityKind = Activity["kind"];
 
 /**
  * A Run is open while the Agent may still act on it. `stale` counts: a silent
@@ -36,34 +35,23 @@ export async function openRunFor(
 }
 
 /**
- * Where an Activity of each kind leaves the Run. An elicitation is the Agent
- * asking a Human something, so the Run waits; everything else is work, so it
- * runs. Posting to a finished Run is refused rather than silently reopening it.
+ * Where an Activity leaves the Run. Every kind is work, so the Run runs: only
+ * a Gate makes it wait (docs/plans/simplify.md, slice 5). Posting to a
+ * finished Run is refused rather than silently reopening it.
  *
  * A Run that is already waiting keeps waiting, whatever is said to it. Only a
- * Human un-waits one — `runs.answer`, or a Ruling on its Gate — because a Run
- * moved back to `active` is a Run the stale sweep may take, and a Gate that
- * went stale would strand the answer a Human was about to give
- * (docs/plans/sockets.md). A loop may write such an Activity itself, as the
- * reference runtime did to say what refs a session moved, after the session
- * that asked for the Gate had ended.
+ * Ruling on its Gate un-waits one, because a Run moved back to `active` is a
+ * Run the stale sweep may take, and a Gate that went stale would strand the
+ * Ruling a Human was about to make (docs/plans/sockets.md). A loop may well
+ * write an Activity after the session that asked for the Gate has ended.
  */
-export function statusAfterActivity(current: RunStatus, kind: ActivityKind): RunStatus {
+export function statusAfterActivity(current: RunStatus): RunStatus {
   if (!isOpen(current)) {
     throw new ORPCError("BAD_REQUEST", {
       message: `This Run is ${current}; start another to carry on`,
     });
   }
-  if (current === "awaiting_input") return "awaiting_input";
-  return kind === "elicitation" ? "awaiting_input" : "active";
-}
-
-/** A Human's answer un-blocks a waiting Run, and nothing else. */
-export function statusAfterAnswer(current: RunStatus): RunStatus {
-  if (current !== "awaiting_input") {
-    throw new ORPCError("BAD_REQUEST", { message: "This Run is not waiting for an answer" });
-  }
-  return "active";
+  return current === "awaiting_input" ? "awaiting_input" : "active";
 }
 
 /** Only an open Run can finish, and it finishes exactly once. */
@@ -118,7 +106,7 @@ export const RunSchema = z.object({
 export const ActivitySchema = z.object({
   id: z.string(),
   runId: z.string(),
-  kind: z.enum(["thought", "action", "elicitation", "response", "error", "prompt"]),
+  kind: z.enum(activityKinds),
   body: z.string(),
   payload: z.record(z.string(), z.unknown()).nullable(),
   createdAt: z.date(),
@@ -135,8 +123,8 @@ export async function setRunStatus(
 ): Promise<void> {
   const now = new Date();
   // Waiting on a Human is counted as it happens: a wait that begins stamps
-  // when, and one that ends — answered, ruled on, or the Run finished while
-  // it waited — adds itself to the total (docs/plans/run-usage.md).
+  // when, and one that ends — ruled on, or the Run finished while it waited —
+  // adds itself to the total (docs/plans/run-usage.md).
   const begins = status === "awaiting_input" && current.status !== "awaiting_input";
   const ends = current.status === "awaiting_input" && status !== "awaiting_input";
   await db
@@ -153,8 +141,8 @@ export async function setRunStatus(
           }
         : {}),
       // The first Activity is what starts a Run working, so that is when the
-      // clock starts, not when the trigger created it. A Run whose first word
-      // is a question has started too: it is waiting, not idle.
+      // clock starts, not when the trigger created it. A Run whose first act
+      // is a Gate has started too: it is waiting, not idle.
       startedAt:
         current.startedAt ?? (status === "active" || status === "awaiting_input" ? now : null),
       ...(extra.touchActivity ? { lastActivityAt: now } : {}),

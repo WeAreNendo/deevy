@@ -700,31 +700,6 @@ describe("a Run waiting at a Gate", () => {
     expect(waiting(await asBob.inbox.list({ unreadOnly: true }))).toHaveLength(1);
     expect(waiting(await asCarol.inbox.list({ unreadOnly: true }))).toHaveLength(1);
   });
-
-  it("asks the Human behind a plain question again, as before", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { ada, asAda, asPlanner, run } = await workspace(db);
-    await asPlanner.runs.postActivity({
-      runId: run.id,
-      kind: "elicitation",
-      body: "Which base branch should this go to?",
-    });
-    const questions = (inbox: { notifications: { id: string; kind: string }[] }) =>
-      inbox.notifications.filter((row) => row.kind === "run_awaiting_input");
-    const unread = questions(await asAda.inbox.list({ unreadOnly: true }));
-    expect(unread).toHaveLength(1);
-    await asAda.inbox.markRead({ ids: unread.map((row) => row.id) });
-
-    const reminded = await remindAboutGates({
-      db,
-      workspaceId: ada.workspace.id,
-      now: new Date(Date.now() + 5 * 60 * 60_000),
-    });
-
-    expect(reminded.changed).toBe(1);
-    expect(questions(await asAda.inbox.list({ unreadOnly: true }))).toHaveLength(1);
-  });
 });
 
 describe("what the Gate says to the Human reading it", () => {
@@ -970,13 +945,11 @@ describe("an admin lowering Approvals", () => {
     });
     expect(await db.query.gateDecision.findMany({})).toHaveLength(1);
 
-    // The Agent hears it where it hears every answer (ADR-0003).
+    // The Agent hears it where it hears every Ruling (ADR-0003), and its feed
+    // stays what it narrated: the Event says how the Gate passed.
     const inbox = await asPlanner.inbox.list({ unreadOnly: true });
     expect(inbox.notifications.map((row) => row.kind)).toContain("run_answered");
-    const said = (await asPlanner.runs.get({ runId: run.id })).activities.map((one) => one.body);
-    expect(said).toContainEqual(
-      "@ada lowered Approvals on the ship Checkpoint from 2 to 1, so it passed with the 1 approval it had",
-    );
+    expect((await asPlanner.runs.get({ runId: run.id })).activities).toEqual([]);
   });
 
   it("settles nothing that is raised, kept, or lowered to more than the Gate has", async () => {

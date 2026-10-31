@@ -71,6 +71,11 @@ const str = (value: unknown): string | null =>
 const list = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 const join = (items: string[]) => items.join(", ");
+/** "is waiting at the plan Gate", or "… at a Gate" for an Event that names none. */
+const gateAt = (checkpoint: unknown, said: string) => {
+  const name = str(checkpoint);
+  return name ? `${said} the ${name} Gate` : `${said} a Gate`;
+};
 
 export function describeEvent(event: EventLike, context: EventContext = {}): EventText | null {
   const p =
@@ -178,15 +183,15 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     case "run.activity":
       return null; // The Run card shows its Activities; the stream would only repeat them.
     case "run.awaiting_input":
-      return p.gateStateId
-        ? say(
-            str(p.state) ? `is waiting at the ${str(p.state) ?? ""} Gate` : "is waiting at a Gate",
-            null,
-            "gate",
-          )
-        : say("is waiting on a Human", str(p.question), "agent");
-    case "run.answered":
-      return say("answered the Run", null, "human");
+      // A Run waits only at a Gate (docs/plans/simplify.md, slice 5). The
+      // Proposal is on the `gate.requested` line just before, not quoted twice.
+      return say(gateAt(p.checkpoint, "is waiting at"), null, "gate");
+    case "run.answered": {
+      // The Ruling reaching the Run, after the `gate.*` line that made it.
+      return p.decision === "rejected"
+        ? say(gateAt(p.checkpoint, "sent the Run back from"), null, "human")
+        : say(gateAt(p.checkpoint, "let the Run carry on past"), null, "human");
+    }
     case "run.completed":
       return say("finished the Run", str(p.summary), "agent", true);
     case "run.failed":

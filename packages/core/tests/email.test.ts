@@ -322,26 +322,6 @@ describe("what an email says", () => {
     expect(said.text).toContain("check it was signed, and rule as the Human.");
     expect(said.text).toContain("• one");
   });
-
-  it("quotes the question a Run waits on", () => {
-    const said = renderEmail({
-      kind: "run_awaiting_input",
-      baseUrl,
-      workspaceName: "Acme",
-      issue: {
-        id: "iss_1",
-        key: "ENG-12",
-        title: "Retry the import",
-        url: "https://linear.app/acme/issue/ENG-12",
-      },
-      question: "Exponential or fixed backoff?",
-      runId: "run_1",
-    });
-
-    expect(said.subject).toBe("Waiting for your answer: ENG-12");
-    expect(said.text).toContain("Exponential or fixed backoff?");
-    expect(said.text).toContain(`${baseUrl}/runs/run_1`);
-  });
 });
 
 /** A database that says what it was asked to do (notifications.test.ts has the same). */

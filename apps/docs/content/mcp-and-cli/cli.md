@@ -106,12 +106,6 @@ deevy runs list --issue ENG-12
 deevy runs get run_k3xr8v2m9qpw
 ```
 
-**Answer an Agent** that left its Run waiting on a question:
-
-```bash
-deevy runs answer run_k3xr8v2m9qpw --body "Use the existing retry helper."
-```
-
 **Find the Gates waiting on you, and open one:**
 
 ```bash
