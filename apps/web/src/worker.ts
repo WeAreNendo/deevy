@@ -21,7 +21,7 @@ import {
 } from "@deevy/core";
 import type { EmailSenders } from "@deevy/core/email";
 import { emailSenders } from "@deevy/email";
-import { socketModules } from "@deevy/sockets";
+import { devTrackerView, socketModules } from "@deevy/sockets";
 import type { WorkerBindings, WorkerEnv } from "./env.ts";
 import { authSecretProblem, readWorkerEnv, workerAuthEnv } from "./env.ts";
 
@@ -122,6 +122,8 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // was just registered with (docs/plans/sign-in.md).
       signInProviders: signInProviders(authEnv),
       devSockets: env.devStubSockets,
+      // What the stub holds, at `/dev/tracker`, wherever it is registered.
+      ...(env.devStubSockets ? { devTracker: () => devTrackerView() } : {}),
       // The tools this build can speak (ADR-0024). The stub is registered only
       // where a var says so, which is a deployment somebody made a stubbed one
       // on purpose — the acceptance walk runs here too, and the whole of its
@@ -188,10 +190,6 @@ const cronLimits: DueWorkLimits = {
   maxPasses: 1,
   sweepLimit: 20,
   deliveryLimit: 10,
-  // A poll applies whole records, and applying one costs several statements
-  // against the same per-invocation cap the sweeps are counted against, so a
-  // page here is small and `more` brings the platform back a minute later.
-  socketPageLimit: 5,
 };
 
 /**
@@ -259,9 +257,6 @@ export default {
             ...cronLimits,
             silenceMs: isolate.env.runStaleMinutes * 60_000,
             gateSilenceMs: isolate.env.gateReminderHours * 3_600_000,
-            ...(isolate.env.socketCatchupMinutes
-              ? { catchupMs: isolate.env.socketCatchupMinutes * 60_000 }
-              : {}),
           },
           // As in the request path: a link a Human clicks is built on the
           // SPA's origin when it has one (docs/plans/sign-in.md).

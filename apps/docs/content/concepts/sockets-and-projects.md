@@ -18,12 +18,14 @@ with:
 | GitHub | a GitHub App               | issues as records                                    |
 | Linear | a Linear OAuth application | issues as records                                    |
 | GitLab | a GitLab account           | issues as records                                    |
-| Notion | a Notion connection        | a database's rows as records, and pages as documents |
+| Notion | a Notion connection        | a database's rows as records                         |
 | Slack  | a Slack app                | Gates in a channel or a direct message, with buttons |
 
-An Agent's comments and labels go through the Socket: they are written by deevy's identity in that tool,
-and signed with the Agent and the Run they came from, so your team can tell which Agent did what without
-opening deevy. Its code and its pull requests are its own, with access you give it.
+A Socket listens and announces. It takes what the tool delivers, and it says on a record when a Gate is
+waiting and how it was ruled, written by deevy's identity in that tool and signed with the Agent and the Run
+it came from. Nothing else: everything else an Agent does in the tool, such as reading a record's comments,
+commenting, labelling or opening a record, and its code and pull requests, it does with its own access
+there, which you give it.
 
 An admin connects a tool under **Settings › Sockets**, with **Connect GitHub**, **Connect Linear** and the
 others. Each tool's page walks you through it: start at [Connecting your tools](/tools/overview/).
@@ -31,18 +33,16 @@ others. Each tool's page walks you through it: start at [Connecting your tools](
 ### How a tool tells deevy what happened
 
 Each Socket has an address of its own, shown on its page under **Where it delivers**, which the tool posts to
-when something changes. A Socket that has said nothing for half an hour is also asked what changed, so
-records still arrive if a delivery goes missing. Two things only ever arrive by delivery: comments, and so a
-`/approve` in one, and clicks on Slack's buttons.
+when something changes. That is the only way deevy hears of it: deevy never asks a tool what changed, so a
+delivery that never arrives is a change deevy never sees, until the tool sends it again.
 
 :::note[deevy Cloud]
 Your Workspace's address is public, so every tool can reach it. There is nothing to set up.
 :::
 
 :::note[Self-hosted]
-The tools have to reach your deevy over public HTTPS. A deevy on a laptop needs a tunnel; without one it
-still sees records arrive and change, a little late, but hears no comments and no Slack clicks. See
-[Connecting your tools](/tools/overview/).
+The tools have to reach your deevy over public HTTPS. A deevy on a laptop, or behind a firewall, needs a
+tunnel; without one it hears nothing from its tools. See [Connecting your tools](/tools/overview/).
 :::
 
 ## Projects
@@ -51,10 +51,8 @@ A Project binds one container in a tool: a GitHub repository, a Linear team, a G
 source. It holds no work of its own. It says:
 
 - where its records come from, which never changes once it is bound;
-- where its documents are, for an Agent to read;
 - which Agent takes a record that nobody named, and which label routes one to an Agent;
-- its Checkpoints, and how many Humans each one asks for;
-- how much deevy writes back on the record.
+- its Checkpoints, and how many Humans each one asks for.
 
 An admin binds one under **Settings › Projects** with **Bind a Project**: choose the **Tool**, then the
 **Container** it offers, then a **Name**. A Project holds nothing about code: an Agent reaches its

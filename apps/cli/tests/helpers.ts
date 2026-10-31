@@ -8,7 +8,7 @@
  */
 import { createApp } from "@deevy/core/app";
 import type { Auth } from "@deevy/core/auth";
-import type { ExternalIssue, SocketModule, SocketModules } from "@deevy/core/sockets";
+import type { InboundEvent, SocketModule, SocketModules } from "@deevy/core/sockets";
 import { API_PATH } from "@deevy/core";
 import type { StoredToken } from "../src/credentials.ts";
 import type { Reporter } from "../src/identity.ts";
@@ -58,6 +58,8 @@ export function testDeevy(options: { version?: string; baseURL?: string } = {}):
     auth,
     baseURL: at,
     sockets: fakeSockets(),
+    // What a Socket's webhook secret is sealed under, so one can be connected.
+    socketSecret: "cli-test-sealing-secret-cli-test-sealing",
     ...(options.version ? { version: options.version } : {}),
   });
   const asFetch = ((input: Request | string | URL, init?: RequestInit) => {
@@ -71,49 +73,27 @@ export function testDeevy(options: { version?: string; baseURL?: string } = {}):
  * A tracker that is not a tool.
  *
  * An Issue is a projection of a record in a Socket (ADR-0024), so a generated
- * command that opens one needs a provider behind the Socket to open it in. Its
+ * command that reads one needs a provider behind the Socket to have delivered
+ * it. It takes every delivery and reads the events straight off the body. Its
  * own small fake rather than `@deevy/sockets`, for the reason the core's tests
  * give: a test dependency on a package that depends on the core is a cycle
  * nobody needs.
  */
 function fakeSockets(): SocketModules {
-  const records = new Map<string, ExternalIssue>();
   const module = (): SocketModule => ({
     provider: "stub",
     capabilities: new Set(["tracker"] as const),
     webhookSecretFrom: "either",
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
     tracker: {
-      verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "" }),
-      normalize: () => [],
-      getIssue: (_scope, ref) => {
-        const found = records.get(ref.externalId);
-        if (!found) throw new Error(`no record ${ref.externalId}`);
-        return Promise.resolve(found);
-      },
-      listIssues: () => Promise.resolve({ issues: [...records.values()], nextCursor: null }),
-      listComments: () => Promise.resolve([]),
-      createIssue: (_scope, draft) => {
-        const externalId = String(records.size + 1);
-        const key = `acme/deevy#${externalId}`;
-        const made: ExternalIssue = {
-          externalId,
-          key,
-          url: `https://tracker.test/acme/deevy/issues/${externalId}`,
-          title: draft.title,
-          body: draft.body,
-          state: "open",
-          stateName: "open",
-          assignees: [],
-          labels: draft.labels,
-          parentExternalId: draft.parent?.externalId ?? null,
-          updatedAt: new Date(),
-        };
-        records.set(externalId, made);
-        return Promise.resolve({ ...made, parentLinked: draft.parent !== null });
-      },
+      verifyInbound: () => Promise.resolve({ ok: true, deliveryId: null, eventName: "events" }),
+      normalize: (_eventName, payload) =>
+        ((payload as { events?: InboundEvent[] }).events ?? []).map((event) =>
+          event.kind === "issue"
+            ? { ...event, issue: { ...event.issue, updatedAt: new Date(event.issue.updatedAt) } }
+            : event,
+        ),
       createComment: (_scope, ref) => Promise.resolve({ externalId: "c1", url: `${ref.url}#c1` }),
-      setLabels: () => Promise.resolve(),
       listContainers: () =>
         Promise.resolve([
           { scope: { scopeKey: "acme/deevy" }, scopeKey: "acme/deevy", name: "acme/deevy" },

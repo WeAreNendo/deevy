@@ -18,6 +18,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createGithubSocket, resetGithubTokens, socketModules } from "../src/index.ts";
 import installations from "./fixtures/github/app.installations.json" with { type: "json" };
 import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" };
+import subIssueAdded from "./fixtures/github/sub_issues.added.json" with { type: "json" };
 import installed from "./fixtures/github/installation.created.json" with { type: "json" };
 import uninstalled from "./fixtures/github/installation.deleted.json" with { type: "json" };
 import suspended from "./fixtures/github/installation.suspend.json" with { type: "json" };
@@ -191,6 +192,37 @@ describe("somebody labels an issue on GitHub", () => {
 
     expect(await second.json()).toMatchObject({ status: "duplicate" });
     expect(await db.query.run.findMany({})).toHaveLength(1);
+  });
+
+  it("and an issue opened first and made its sub-issue after is linked to it", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { socketId } = await workspaceOnGithub(db);
+    const app = deevy(db);
+    // GitHub's own order: the child is opened as an issue of its own, and only
+    // then added under the parent, in a delivery of another kind.
+    const opened = {
+      ...labeled,
+      action: "opened",
+      issue: subIssueAdded.sub_issue,
+      label: undefined,
+    };
+
+    await app.request(`/hooks/${socketId}`, await delivery("issues", labeled, "delivery-1"));
+    await app.request(`/hooks/${socketId}`, await delivery("issues", opened, "delivery-2"));
+    const linked = await app.request(
+      `/hooks/${socketId}`,
+      await delivery("sub_issues", subIssueAdded, "delivery-3"),
+    );
+
+    expect(linked.status).toBe(200);
+    const parent = await db.query.issue.findFirst({ where: { externalKey: "acme/deevy#42" } });
+    const child = await db.query.issue.findFirst({ where: { externalKey: "acme/deevy#43" } });
+    expect(parent?.id).toMatch(/^iss_/);
+    expect(child).toMatchObject({
+      title: "Cap the coupon at the basket total",
+      parentId: parent?.id,
+    });
   });
 
   it("but a delivery signed with the wrong secret is refused and written nowhere", async () => {
@@ -381,7 +413,8 @@ describe("an App the organization already has", () => {
       installations: [{ id: "61892041", account: "acme" }],
     });
     const { containers } = await asAda.sockets.containers({ socketId: socket.id });
-    expect(containers.map((one) => one.scopeKey)).toEqual(["acme/deevy"]);
+    // A list rather than null: GitHub says what the App can see, so nobody types it.
+    expect(containers?.map((one) => one.scopeKey)).toEqual(["acme/deevy"]);
     expect(api.asked).toContain("GET /app/installations?per_page=100&page=1");
   });
 });

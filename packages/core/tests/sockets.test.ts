@@ -189,9 +189,8 @@ describe("a connected tool", () => {
       socketId: connected.id,
       name: "acme's GitHub",
       status: "active",
-      pollMinutes: 15,
     });
-    expect(renamed).toMatchObject({ name: "acme's GitHub", status: "active", pollMinutes: 15 });
+    expect(renamed).toMatchObject({ name: "acme's GitHub", status: "active" });
 
     const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
     expect(kinds.filter((kind) => kind === "socket.updated")).toHaveLength(2);
@@ -442,7 +441,7 @@ describe("a connected tool", () => {
 /**
  * Where a tool delivers, when this deevy's address changes: a laptop behind a
  * tunnel whose hostname moved. Every registered hook points at the old one,
- * and polling is what keeps the loop alive meanwhile (docs/OPERATIONS.md).
+ * and nothing arrives until the tool is told the new one (docs/OPERATIONS.md).
  */
 describe("a tool's delivery address", () => {
   it("is said for every connected tool, so it can be pasted again", async () => {
@@ -514,7 +513,7 @@ describe("what this deevy can speak", () => {
       {
         id: "stub",
         label: "the stub tracker",
-        capabilities: ["tracker", "docs"],
+        capabilities: ["tracker"],
         webhookSecretFrom: "either",
         beginRefusal: null,
       },

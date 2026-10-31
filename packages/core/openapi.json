@@ -5183,42 +5183,6 @@
                           "trackerScopeKey": {
                             "type": "string"
                           },
-                          "docsSocketId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "docsScope": {
-                            "anyOf": [
-                              {
-                                "anyOf": [
-                                  {
-                                    "type": [
-                                      "string",
-                                      "number",
-                                      "boolean",
-                                      "null"
-                                    ]
-                                  },
-                                  {
-                                    "type": "object",
-                                    "propertyNames": {
-                                      "type": "string"
-                                    },
-                                    "additionalProperties": {}
-                                  },
-                                  {
-                                    "type": "array",
-                                    "items": {}
-                                  }
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "defaultAgentMemberId": {
                             "type": [
                               "string",
@@ -5240,26 +5204,6 @@
                               "mention"
                             ],
                             "additionalProperties": false
-                          },
-                          "mirror": {
-                            "type": "string",
-                            "enum": [
-                              "off",
-                              "gates",
-                              "runs"
-                            ]
-                          },
-                          "lastPolledAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
                           },
                           "createdAt": {
                             "type": "string",
@@ -5288,12 +5232,8 @@
                           "trackerSocketId",
                           "trackerScope",
                           "trackerScopeKey",
-                          "docsSocketId",
-                          "docsScope",
                           "defaultAgentMemberId",
                           "routing",
-                          "mirror",
-                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -5402,42 +5342,6 @@
                           "trackerScopeKey": {
                             "type": "string"
                           },
-                          "docsSocketId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "docsScope": {
-                            "anyOf": [
-                              {
-                                "anyOf": [
-                                  {
-                                    "type": [
-                                      "string",
-                                      "number",
-                                      "boolean",
-                                      "null"
-                                    ]
-                                  },
-                                  {
-                                    "type": "object",
-                                    "propertyNames": {
-                                      "type": "string"
-                                    },
-                                    "additionalProperties": {}
-                                  },
-                                  {
-                                    "type": "array",
-                                    "items": {}
-                                  }
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "defaultAgentMemberId": {
                             "type": [
                               "string",
@@ -5459,26 +5363,6 @@
                               "mention"
                             ],
                             "additionalProperties": false
-                          },
-                          "mirror": {
-                            "type": "string",
-                            "enum": [
-                              "off",
-                              "gates",
-                              "runs"
-                            ]
-                          },
-                          "lastPolledAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
                           },
                           "createdAt": {
                             "type": "string",
@@ -5507,12 +5391,8 @@
                           "trackerSocketId",
                           "trackerScope",
                           "trackerScopeKey",
-                          "docsSocketId",
-                          "docsScope",
                           "defaultAgentMemberId",
                           "routing",
-                          "mirror",
-                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -5623,42 +5503,6 @@
                           "trackerScopeKey": {
                             "type": "string"
                           },
-                          "docsSocketId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "docsScope": {
-                            "anyOf": [
-                              {
-                                "anyOf": [
-                                  {
-                                    "type": [
-                                      "string",
-                                      "number",
-                                      "boolean",
-                                      "null"
-                                    ]
-                                  },
-                                  {
-                                    "type": "object",
-                                    "propertyNames": {
-                                      "type": "string"
-                                    },
-                                    "additionalProperties": {}
-                                  },
-                                  {
-                                    "type": "array",
-                                    "items": {}
-                                  }
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "defaultAgentMemberId": {
                             "type": [
                               "string",
@@ -5680,26 +5524,6 @@
                               "mention"
                             ],
                             "additionalProperties": false
-                          },
-                          "mirror": {
-                            "type": "string",
-                            "enum": [
-                              "off",
-                              "gates",
-                              "runs"
-                            ]
-                          },
-                          "lastPolledAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
                           },
                           "createdAt": {
                             "type": "string",
@@ -5728,12 +5552,8 @@
                           "trackerSocketId",
                           "trackerScope",
                           "trackerScopeKey",
-                          "docsSocketId",
-                          "docsScope",
                           "defaultAgentMemberId",
                           "routing",
-                          "mirror",
-                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -6525,7 +6345,6 @@
                               "type": "string",
                               "enum": [
                                 "tracker",
-                                "docs",
                                 "chat"
                               ]
                             }
@@ -6607,7 +6426,6 @@
                               "type": "string",
                               "enum": [
                                 "tracker",
-                                "docs",
                                 "chat"
                               ]
                             }
@@ -6685,18 +6503,6 @@
                               }
                             ]
                           },
-                          "pollMinutes": {
-                            "anyOf": [
-                              {
-                                "type": "integer",
-                                "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -6728,7 +6534,6 @@
                           "installedBy",
                           "status",
                           "lastInboundAt",
-                          "pollMinutes",
                           "createdAt",
                           "updatedAt",
                           "hasCredentials",
@@ -6797,11 +6602,6 @@
                     "minLength": 8,
                     "maxLength": 500
                   },
-                  "pollMinutes": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 1440
-                  },
                   "socketId": {
                     "type": "string"
                   }
@@ -6845,7 +6645,6 @@
                         "type": "string",
                         "enum": [
                           "tracker",
-                          "docs",
                           "chat"
                         ]
                       }
@@ -6923,18 +6722,6 @@
                         }
                       ]
                     },
-                    "pollMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -6972,7 +6759,6 @@
                     "installedBy",
                     "status",
                     "lastInboundAt",
-                    "pollMinutes",
                     "createdAt",
                     "updatedAt",
                     "hasCredentials",
@@ -7063,7 +6849,6 @@
                         "type": "string",
                         "enum": [
                           "tracker",
-                          "docs",
                           "chat"
                         ]
                       }
@@ -7141,18 +6926,6 @@
                         }
                       ]
                     },
-                    "pollMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -7199,7 +6972,6 @@
                     "installedBy",
                     "status",
                     "lastInboundAt",
-                    "pollMinutes",
                     "createdAt",
                     "updatedAt",
                     "hasCredentials",
@@ -7359,7 +7131,7 @@
     "/sockets/{socketId}": {
       "post": {
         "operationId": "sockets.update",
-        "summary": "Rename a tool, rest it, or ask it on a schedule",
+        "summary": "Rename a tool, or rest it",
         "parameters": [
           {
             "in": "path",
@@ -7387,18 +7159,6 @@
                       "pending",
                       "active",
                       "paused"
-                    ]
-                  },
-                  "pollMinutes": {
-                    "anyOf": [
-                      {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 1440
-                      },
-                      {
-                        "type": "null"
-                      }
                     ]
                   },
                   "identityByEmail": {
@@ -7445,7 +7205,6 @@
                         "type": "string",
                         "enum": [
                           "tracker",
-                          "docs",
                           "chat"
                         ]
                       }
@@ -7523,18 +7282,6 @@
                         }
                       ]
                     },
-                    "pollMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -7563,7 +7310,6 @@
                     "installedBy",
                     "status",
                     "lastInboundAt",
-                    "pollMinutes",
                     "createdAt",
                     "updatedAt",
                     "hasCredentials",
@@ -7635,7 +7381,6 @@
                             "type": "string",
                             "enum": [
                               "tracker",
-                              "docs",
                               "chat"
                             ]
                           }
@@ -7713,18 +7458,6 @@
                             }
                           ]
                         },
-                        "pollMinutes": {
-                          "anyOf": [
-                            {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
                         "createdAt": {
                           "type": "string",
                           "format": "date-time",
@@ -7753,7 +7486,6 @@
                         "installedBy",
                         "status",
                         "lastInboundAt",
-                        "pollMinutes",
                         "createdAt",
                         "updatedAt",
                         "hasCredentials",
@@ -7804,31 +7536,38 @@
                   "type": "object",
                   "properties": {
                     "containers": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "scope": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
                             "type": "object",
-                            "propertyNames": {
-                              "type": "string"
+                            "properties": {
+                              "scope": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "scopeKey": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
                             },
-                            "additionalProperties": {}
-                          },
-                          "scopeKey": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
+                            "required": [
+                              "scope",
+                              "scopeKey",
+                              "name"
+                            ],
+                            "additionalProperties": false
                           }
                         },
-                        "required": [
-                          "scope",
-                          "scopeKey",
-                          "name"
-                        ],
-                        "additionalProperties": false
-                      }
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -8061,7 +7800,6 @@
                         "type": "string",
                         "enum": [
                           "tracker",
-                          "docs",
                           "chat"
                         ]
                       }
@@ -8139,18 +7877,6 @@
                         }
                       ]
                     },
-                    "pollMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "createdAt": {
                       "type": "string",
                       "format": "date-time",
@@ -8179,7 +7905,6 @@
                     "installedBy",
                     "status",
                     "lastInboundAt",
-                    "pollMinutes",
                     "createdAt",
                     "updatedAt",
                     "hasCredentials",
@@ -8783,42 +8508,6 @@
                           "trackerScopeKey": {
                             "type": "string"
                           },
-                          "docsSocketId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "docsScope": {
-                            "anyOf": [
-                              {
-                                "anyOf": [
-                                  {
-                                    "type": [
-                                      "string",
-                                      "number",
-                                      "boolean",
-                                      "null"
-                                    ]
-                                  },
-                                  {
-                                    "type": "object",
-                                    "propertyNames": {
-                                      "type": "string"
-                                    },
-                                    "additionalProperties": {}
-                                  },
-                                  {
-                                    "type": "array",
-                                    "items": {}
-                                  }
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "defaultAgentMemberId": {
                             "type": [
                               "string",
@@ -8840,26 +8529,6 @@
                               "mention"
                             ],
                             "additionalProperties": false
-                          },
-                          "mirror": {
-                            "type": "string",
-                            "enum": [
-                              "off",
-                              "gates",
-                              "runs"
-                            ]
-                          },
-                          "lastPolledAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
                           },
                           "createdAt": {
                             "type": "string",
@@ -8888,12 +8557,8 @@
                           "trackerSocketId",
                           "trackerScope",
                           "trackerScopeKey",
-                          "docsSocketId",
-                          "docsScope",
                           "defaultAgentMemberId",
                           "routing",
-                          "mirror",
-                          "lastPolledAt",
                           "createdAt",
                           "archivedAt"
                         ],
@@ -8942,25 +8607,6 @@
                     ]
                   },
                   "tracker": {
-                    "type": "object",
-                    "properties": {
-                      "socketId": {
-                        "type": "string"
-                      },
-                      "scope": {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string"
-                        },
-                        "additionalProperties": {}
-                      }
-                    },
-                    "required": [
-                      "socketId",
-                      "scope"
-                    ]
-                  },
-                  "docs": {
                     "type": "object",
                     "properties": {
                       "socketId": {
@@ -9050,42 +8696,6 @@
                     "trackerScopeKey": {
                       "type": "string"
                     },
-                    "docsSocketId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "docsScope": {
-                      "anyOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
-                            }
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "defaultAgentMemberId": {
                       "type": [
                         "string",
@@ -9107,26 +8717,6 @@
                         "mention"
                       ],
                       "additionalProperties": false
-                    },
-                    "mirror": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "gates",
-                        "runs"
-                      ]
-                    },
-                    "lastPolledAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "createdAt": {
                       "type": "string",
@@ -9155,12 +8745,8 @@
                     "trackerSocketId",
                     "trackerScope",
                     "trackerScopeKey",
-                    "docsSocketId",
-                    "docsScope",
                     "defaultAgentMemberId",
                     "routing",
-                    "mirror",
-                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -9242,42 +8828,6 @@
                     "trackerScopeKey": {
                       "type": "string"
                     },
-                    "docsSocketId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "docsScope": {
-                      "anyOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
-                            }
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "defaultAgentMemberId": {
                       "type": [
                         "string",
@@ -9299,26 +8849,6 @@
                         "mention"
                       ],
                       "additionalProperties": false
-                    },
-                    "mirror": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "gates",
-                        "runs"
-                      ]
-                    },
-                    "lastPolledAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "createdAt": {
                       "type": "string",
@@ -9347,12 +8877,8 @@
                     "trackerSocketId",
                     "trackerScope",
                     "trackerScopeKey",
-                    "docsSocketId",
-                    "docsScope",
                     "defaultAgentMemberId",
                     "routing",
-                    "mirror",
-                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -9365,7 +8891,7 @@
       },
       "patch": {
         "operationId": "projects.update",
-        "summary": "Rename a Project, rebind its documents, or change what deevy says back",
+        "summary": "Rename a Project, or change who gets its work and how a record names an Agent",
         "parameters": [
           {
             "in": "path",
@@ -9403,40 +8929,6 @@
                     "type": [
                       "string",
                       "null"
-                    ]
-                  },
-                  "mirror": {
-                    "type": "string",
-                    "enum": [
-                      "off",
-                      "gates",
-                      "runs"
-                    ]
-                  },
-                  "docs": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "properties": {
-                          "socketId": {
-                            "type": "string"
-                          },
-                          "scope": {
-                            "type": "object",
-                            "propertyNames": {
-                              "type": "string"
-                            },
-                            "additionalProperties": {}
-                          }
-                        },
-                        "required": [
-                          "socketId",
-                          "scope"
-                        ]
-                      },
-                      {
-                        "type": "null"
-                      }
                     ]
                   },
                   "routing": {
@@ -9515,42 +9007,6 @@
                     "trackerScopeKey": {
                       "type": "string"
                     },
-                    "docsSocketId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "docsScope": {
-                      "anyOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
-                            }
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "defaultAgentMemberId": {
                       "type": [
                         "string",
@@ -9572,26 +9028,6 @@
                         "mention"
                       ],
                       "additionalProperties": false
-                    },
-                    "mirror": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "gates",
-                        "runs"
-                      ]
-                    },
-                    "lastPolledAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "createdAt": {
                       "type": "string",
@@ -9620,12 +9056,8 @@
                     "trackerSocketId",
                     "trackerScope",
                     "trackerScopeKey",
-                    "docsSocketId",
-                    "docsScope",
                     "defaultAgentMemberId",
                     "routing",
-                    "mirror",
-                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -9717,42 +9149,6 @@
                     "trackerScopeKey": {
                       "type": "string"
                     },
-                    "docsSocketId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "docsScope": {
-                      "anyOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
-                            }
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "defaultAgentMemberId": {
                       "type": [
                         "string",
@@ -9774,26 +9170,6 @@
                         "mention"
                       ],
                       "additionalProperties": false
-                    },
-                    "mirror": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "gates",
-                        "runs"
-                      ]
-                    },
-                    "lastPolledAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "createdAt": {
                       "type": "string",
@@ -9822,12 +9198,8 @@
                     "trackerSocketId",
                     "trackerScope",
                     "trackerScopeKey",
-                    "docsSocketId",
-                    "docsScope",
                     "defaultAgentMemberId",
                     "routing",
-                    "mirror",
-                    "lastPolledAt",
                     "createdAt",
                     "archivedAt"
                   ],
@@ -11897,1191 +11269,6 @@
       }
     },
     "/issues": {
-      "post": {
-        "operationId": "issues.create",
-        "summary": "Open a record in the tracker a Project is bound to, and project it",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "parent": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 300
-                  },
-                  "body": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 100000
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "assignAgent": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "projectSlug": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
-                  }
-                },
-                "required": [
-                  "title"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "projectId": {
-                      "type": "string"
-                    },
-                    "socketId": {
-                      "type": "string"
-                    },
-                    "externalId": {
-                      "type": "string"
-                    },
-                    "externalKey": {
-                      "type": "string"
-                    },
-                    "url": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "body": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "state": {
-                      "type": "string",
-                      "enum": [
-                        "open",
-                        "closed"
-                      ]
-                    },
-                    "stateName": {
-                      "type": "string"
-                    },
-                    "assignees": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
-                        },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
-                        }
-                      ]
-                    },
-                    "labels": {
-                      "anyOf": [
-                        {
-                          "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                          ]
-                        },
-                        {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        },
-                        {
-                          "type": "array",
-                          "items": {}
-                        }
-                      ]
-                    },
-                    "assigneeMemberId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "parentExternalId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "parentId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "createdBy": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "externalUpdatedAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    },
-                    "lastSyncedAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    },
-                    "createdAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    },
-                    "updatedAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    },
-                    "closedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "assignee": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "workspaceId": {
-                              "type": "string"
-                            },
-                            "userId": {
-                              "type": "string"
-                            },
-                            "handle": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "role": {
-                              "type": "string",
-                              "enum": [
-                                "admin",
-                                "member"
-                              ]
-                            },
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "human",
-                                "agent"
-                              ]
-                            },
-                            "sponsorId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "createdAt": {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            "suspendedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "date-time",
-                                  "x-native-type": "date"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "user": {
-                              "type": "object",
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "name": {
-                                  "type": "string"
-                                },
-                                "email": {
-                                  "type": "string"
-                                },
-                                "image": {
-                                  "type": [
-                                    "string",
-                                    "null"
-                                  ]
-                                },
-                                "kind": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "enum": [
-                                        "human",
-                                        "agent"
-                                      ]
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "id",
-                                "name",
-                                "email",
-                                "image",
-                                "kind"
-                              ],
-                              "additionalProperties": false
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "workspaceId",
-                            "userId",
-                            "handle",
-                            "role",
-                            "kind",
-                            "sponsorId",
-                            "createdAt",
-                            "suspendedAt",
-                            "user"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "hasOpenRun": {
-                      "type": "boolean"
-                    },
-                    "project": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "workspaceId": {
-                          "type": "string"
-                        },
-                        "slug": {
-                          "type": "string"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "description": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "trackerSocketId": {
-                          "type": "string"
-                        },
-                        "trackerScope": {
-                          "anyOf": [
-                            {
-                              "type": [
-                                "string",
-                                "number",
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "array",
-                              "items": {}
-                            }
-                          ]
-                        },
-                        "trackerScopeKey": {
-                          "type": "string"
-                        },
-                        "docsSocketId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "docsScope": {
-                          "anyOf": [
-                            {
-                              "anyOf": [
-                                {
-                                  "type": [
-                                    "string",
-                                    "number",
-                                    "boolean",
-                                    "null"
-                                  ]
-                                },
-                                {
-                                  "type": "object",
-                                  "propertyNames": {
-                                    "type": "string"
-                                  },
-                                  "additionalProperties": {}
-                                },
-                                {
-                                  "type": "array",
-                                  "items": {}
-                                }
-                              ]
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "defaultAgentMemberId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "routing": {
-                          "type": "object",
-                          "properties": {
-                            "labelPrefix": {
-                              "type": "string"
-                            },
-                            "mention": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "labelPrefix",
-                            "mention"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "mirror": {
-                          "type": "string",
-                          "enum": [
-                            "off",
-                            "gates",
-                            "runs"
-                          ]
-                        },
-                        "lastPolledAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "createdAt": {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        "archivedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "workspaceId",
-                        "slug",
-                        "name",
-                        "description",
-                        "trackerSocketId",
-                        "trackerScope",
-                        "trackerScopeKey",
-                        "docsSocketId",
-                        "docsScope",
-                        "defaultAgentMemberId",
-                        "routing",
-                        "mirror",
-                        "lastPolledAt",
-                        "createdAt",
-                        "archivedAt"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "parent": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "projectId": {
-                              "type": "string"
-                            },
-                            "socketId": {
-                              "type": "string"
-                            },
-                            "externalId": {
-                              "type": "string"
-                            },
-                            "externalKey": {
-                              "type": "string"
-                            },
-                            "url": {
-                              "type": "string"
-                            },
-                            "title": {
-                              "type": "string"
-                            },
-                            "body": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "state": {
-                              "type": "string",
-                              "enum": [
-                                "open",
-                                "closed"
-                              ]
-                            },
-                            "stateName": {
-                              "type": "string"
-                            },
-                            "assignees": {
-                              "anyOf": [
-                                {
-                                  "type": [
-                                    "string",
-                                    "number",
-                                    "boolean",
-                                    "null"
-                                  ]
-                                },
-                                {
-                                  "type": "object",
-                                  "propertyNames": {
-                                    "type": "string"
-                                  },
-                                  "additionalProperties": {}
-                                },
-                                {
-                                  "type": "array",
-                                  "items": {}
-                                }
-                              ]
-                            },
-                            "labels": {
-                              "anyOf": [
-                                {
-                                  "type": [
-                                    "string",
-                                    "number",
-                                    "boolean",
-                                    "null"
-                                  ]
-                                },
-                                {
-                                  "type": "object",
-                                  "propertyNames": {
-                                    "type": "string"
-                                  },
-                                  "additionalProperties": {}
-                                },
-                                {
-                                  "type": "array",
-                                  "items": {}
-                                }
-                              ]
-                            },
-                            "assigneeMemberId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "parentExternalId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "parentId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "createdBy": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "externalUpdatedAt": {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            "lastSyncedAt": {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            "createdAt": {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            "updatedAt": {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            "closedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "date-time",
-                                  "x-native-type": "date"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "assignee": {
-                              "anyOf": [
-                                {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "workspaceId": {
-                                      "type": "string"
-                                    },
-                                    "userId": {
-                                      "type": "string"
-                                    },
-                                    "handle": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "role": {
-                                      "type": "string",
-                                      "enum": [
-                                        "admin",
-                                        "member"
-                                      ]
-                                    },
-                                    "kind": {
-                                      "type": "string",
-                                      "enum": [
-                                        "human",
-                                        "agent"
-                                      ]
-                                    },
-                                    "sponsorId": {
-                                      "type": [
-                                        "string",
-                                        "null"
-                                      ]
-                                    },
-                                    "createdAt": {
-                                      "type": "string",
-                                      "format": "date-time",
-                                      "x-native-type": "date"
-                                    },
-                                    "suspendedAt": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "format": "date-time",
-                                          "x-native-type": "date"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ]
-                                    },
-                                    "user": {
-                                      "type": "object",
-                                      "properties": {
-                                        "id": {
-                                          "type": "string"
-                                        },
-                                        "name": {
-                                          "type": "string"
-                                        },
-                                        "email": {
-                                          "type": "string"
-                                        },
-                                        "image": {
-                                          "type": [
-                                            "string",
-                                            "null"
-                                          ]
-                                        },
-                                        "kind": {
-                                          "anyOf": [
-                                            {
-                                              "type": "string",
-                                              "enum": [
-                                                "human",
-                                                "agent"
-                                              ]
-                                            },
-                                            {
-                                              "type": "null"
-                                            }
-                                          ]
-                                        }
-                                      },
-                                      "required": [
-                                        "id",
-                                        "name",
-                                        "email",
-                                        "image",
-                                        "kind"
-                                      ],
-                                      "additionalProperties": false
-                                    }
-                                  },
-                                  "required": [
-                                    "id",
-                                    "workspaceId",
-                                    "userId",
-                                    "handle",
-                                    "role",
-                                    "kind",
-                                    "sponsorId",
-                                    "createdAt",
-                                    "suspendedAt",
-                                    "user"
-                                  ],
-                                  "additionalProperties": false
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "hasOpenRun": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "projectId",
-                            "socketId",
-                            "externalId",
-                            "externalKey",
-                            "url",
-                            "title",
-                            "body",
-                            "state",
-                            "stateName",
-                            "assignees",
-                            "labels",
-                            "assigneeMemberId",
-                            "parentExternalId",
-                            "parentId",
-                            "createdBy",
-                            "externalUpdatedAt",
-                            "lastSyncedAt",
-                            "createdAt",
-                            "updatedAt",
-                            "closedAt",
-                            "assignee"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "children": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "projectId": {
-                            "type": "string"
-                          },
-                          "socketId": {
-                            "type": "string"
-                          },
-                          "externalId": {
-                            "type": "string"
-                          },
-                          "externalKey": {
-                            "type": "string"
-                          },
-                          "url": {
-                            "type": "string"
-                          },
-                          "title": {
-                            "type": "string"
-                          },
-                          "body": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "state": {
-                            "type": "string",
-                            "enum": [
-                              "open",
-                              "closed"
-                            ]
-                          },
-                          "stateName": {
-                            "type": "string"
-                          },
-                          "assignees": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
-                              },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
-                              }
-                            ]
-                          },
-                          "labels": {
-                            "anyOf": [
-                              {
-                                "type": [
-                                  "string",
-                                  "number",
-                                  "boolean",
-                                  "null"
-                                ]
-                              },
-                              {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
-                              },
-                              {
-                                "type": "array",
-                                "items": {}
-                              }
-                            ]
-                          },
-                          "assigneeMemberId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "parentExternalId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "parentId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "createdBy": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "externalUpdatedAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          },
-                          "lastSyncedAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          },
-                          "createdAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          },
-                          "updatedAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          },
-                          "closedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "assignee": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "workspaceId": {
-                                    "type": "string"
-                                  },
-                                  "userId": {
-                                    "type": "string"
-                                  },
-                                  "handle": {
-                                    "type": [
-                                      "string",
-                                      "null"
-                                    ]
-                                  },
-                                  "role": {
-                                    "type": "string",
-                                    "enum": [
-                                      "admin",
-                                      "member"
-                                    ]
-                                  },
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "human",
-                                      "agent"
-                                    ]
-                                  },
-                                  "sponsorId": {
-                                    "type": [
-                                      "string",
-                                      "null"
-                                    ]
-                                  },
-                                  "createdAt": {
-                                    "type": "string",
-                                    "format": "date-time",
-                                    "x-native-type": "date"
-                                  },
-                                  "suspendedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string",
-                                        "format": "date-time",
-                                        "x-native-type": "date"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
-                                  "user": {
-                                    "type": "object",
-                                    "properties": {
-                                      "id": {
-                                        "type": "string"
-                                      },
-                                      "name": {
-                                        "type": "string"
-                                      },
-                                      "email": {
-                                        "type": "string"
-                                      },
-                                      "image": {
-                                        "type": [
-                                          "string",
-                                          "null"
-                                        ]
-                                      },
-                                      "kind": {
-                                        "anyOf": [
-                                          {
-                                            "type": "string",
-                                            "enum": [
-                                              "human",
-                                              "agent"
-                                            ]
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
-                                      }
-                                    },
-                                    "required": [
-                                      "id",
-                                      "name",
-                                      "email",
-                                      "image",
-                                      "kind"
-                                    ],
-                                    "additionalProperties": false
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "workspaceId",
-                                  "userId",
-                                  "handle",
-                                  "role",
-                                  "kind",
-                                  "sponsorId",
-                                  "createdAt",
-                                  "suspendedAt",
-                                  "user"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "hasOpenRun": {
-                            "type": "boolean"
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "projectId",
-                          "socketId",
-                          "externalId",
-                          "externalKey",
-                          "url",
-                          "title",
-                          "body",
-                          "state",
-                          "stateName",
-                          "assignees",
-                          "labels",
-                          "assigneeMemberId",
-                          "parentExternalId",
-                          "parentId",
-                          "createdBy",
-                          "externalUpdatedAt",
-                          "lastSyncedAt",
-                          "createdAt",
-                          "updatedAt",
-                          "closedAt",
-                          "assignee"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "checkpoints": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "comments": {
-                      "anyOf": [
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "externalId": {
-                                "type": "string"
-                              },
-                              "url": {
-                                "type": "string"
-                              },
-                              "body": {
-                                "type": "string"
-                              },
-                              "author": {
-                                "type": "object",
-                                "properties": {
-                                  "login": {
-                                    "type": "string"
-                                  },
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "isBot": {
-                                    "type": "boolean"
-                                  }
-                                },
-                                "required": [
-                                  "login",
-                                  "id",
-                                  "isBot"
-                                ],
-                                "additionalProperties": false
-                              },
-                              "createdAt": {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              }
-                            },
-                            "required": [
-                              "externalId",
-                              "url",
-                              "body",
-                              "author",
-                              "createdAt"
-                            ],
-                            "additionalProperties": false
-                          }
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "commentsUnavailable": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "projectId",
-                    "socketId",
-                    "externalId",
-                    "externalKey",
-                    "url",
-                    "title",
-                    "body",
-                    "state",
-                    "stateName",
-                    "assignees",
-                    "labels",
-                    "assigneeMemberId",
-                    "parentExternalId",
-                    "parentId",
-                    "createdBy",
-                    "externalUpdatedAt",
-                    "lastSyncedAt",
-                    "createdAt",
-                    "updatedAt",
-                    "closedAt",
-                    "assignee",
-                    "project",
-                    "parent",
-                    "children",
-                    "checkpoints",
-                    "comments"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      },
       "get": {
         "operationId": "issues.list",
         "summary": "The records deevy has projected, newest change first",
@@ -13337,12 +11524,6 @@
                               "null"
                             ]
                           },
-                          "createdBy": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
                           "externalUpdatedAt": {
                             "type": "string",
                             "format": "date-time",
@@ -13514,7 +11695,6 @@
                           "assigneeMemberId",
                           "parentExternalId",
                           "parentId",
-                          "createdBy",
                           "externalUpdatedAt",
                           "lastSyncedAt",
                           "createdAt",
@@ -13561,20 +11741,6 @@
               "type": "string",
               "minLength": 1
             }
-          },
-          {
-            "in": "query",
-            "name": "comments",
-            "schema": {
-              "type": [
-                "boolean",
-                "string"
-              ]
-            },
-            "allowEmptyValue": true,
-            "allowReserved": true,
-            "style": "deepObject",
-            "explode": true
           }
         ],
         "responses": {
@@ -13681,12 +11847,6 @@
                       ]
                     },
                     "parentId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "createdBy": {
                       "type": [
                         "string",
                         "null"
@@ -13896,42 +12056,6 @@
                         "trackerScopeKey": {
                           "type": "string"
                         },
-                        "docsSocketId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "docsScope": {
-                          "anyOf": [
-                            {
-                              "anyOf": [
-                                {
-                                  "type": [
-                                    "string",
-                                    "number",
-                                    "boolean",
-                                    "null"
-                                  ]
-                                },
-                                {
-                                  "type": "object",
-                                  "propertyNames": {
-                                    "type": "string"
-                                  },
-                                  "additionalProperties": {}
-                                },
-                                {
-                                  "type": "array",
-                                  "items": {}
-                                }
-                              ]
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
                         "defaultAgentMemberId": {
                           "type": [
                             "string",
@@ -13953,26 +12077,6 @@
                             "mention"
                           ],
                           "additionalProperties": false
-                        },
-                        "mirror": {
-                          "type": "string",
-                          "enum": [
-                            "off",
-                            "gates",
-                            "runs"
-                          ]
-                        },
-                        "lastPolledAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
                         },
                         "createdAt": {
                           "type": "string",
@@ -14001,12 +12105,8 @@
                         "trackerSocketId",
                         "trackerScope",
                         "trackerScopeKey",
-                        "docsSocketId",
-                        "docsScope",
                         "defaultAgentMemberId",
                         "routing",
-                        "mirror",
-                        "lastPolledAt",
                         "createdAt",
                         "archivedAt"
                       ],
@@ -14113,12 +12213,6 @@
                               ]
                             },
                             "parentId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "createdBy": {
                               "type": [
                                 "string",
                                 "null"
@@ -14295,7 +12389,6 @@
                             "assigneeMemberId",
                             "parentExternalId",
                             "parentId",
-                            "createdBy",
                             "externalUpdatedAt",
                             "lastSyncedAt",
                             "createdAt",
@@ -14411,12 +12504,6 @@
                             ]
                           },
                           "parentId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "createdBy": {
                             "type": [
                               "string",
                               "null"
@@ -14593,7 +12680,6 @@
                           "assigneeMemberId",
                           "parentExternalId",
                           "parentId",
-                          "createdBy",
                           "externalUpdatedAt",
                           "lastSyncedAt",
                           "createdAt",
@@ -14609,66 +12695,6 @@
                       "items": {
                         "type": "string"
                       }
-                    },
-                    "comments": {
-                      "anyOf": [
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "externalId": {
-                                "type": "string"
-                              },
-                              "url": {
-                                "type": "string"
-                              },
-                              "body": {
-                                "type": "string"
-                              },
-                              "author": {
-                                "type": "object",
-                                "properties": {
-                                  "login": {
-                                    "type": "string"
-                                  },
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "isBot": {
-                                    "type": "boolean"
-                                  }
-                                },
-                                "required": [
-                                  "login",
-                                  "id",
-                                  "isBot"
-                                ],
-                                "additionalProperties": false
-                              },
-                              "createdAt": {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              }
-                            },
-                            "required": [
-                              "externalId",
-                              "url",
-                              "body",
-                              "author",
-                              "createdAt"
-                            ],
-                            "additionalProperties": false
-                          }
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "commentsUnavailable": {
-                      "type": "string"
                     }
                   },
                   "required": [
@@ -14687,7 +12713,6 @@
                     "assigneeMemberId",
                     "parentExternalId",
                     "parentId",
-                    "createdBy",
                     "externalUpdatedAt",
                     "lastSyncedAt",
                     "createdAt",
@@ -14697,101 +12722,7 @@
                     "project",
                     "parent",
                     "children",
-                    "checkpoints",
-                    "comments"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/issues/{issue}/comments": {
-      "post": {
-        "operationId": "comments.create",
-        "summary": "Say something on the record in the tracker it lives in",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "issue",
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "body": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100000
-                  }
-                },
-                "required": [
-                  "body"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "externalId": {
-                      "type": "string"
-                    },
-                    "url": {
-                      "type": "string"
-                    },
-                    "body": {
-                      "type": "string"
-                    },
-                    "author": {
-                      "type": "object",
-                      "properties": {
-                        "login": {
-                          "type": "string"
-                        },
-                        "id": {
-                          "type": "string"
-                        },
-                        "isBot": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "login",
-                        "id",
-                        "isBot"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "createdAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    }
-                  },
-                  "required": [
-                    "externalId",
-                    "url",
-                    "body",
-                    "author",
-                    "createdAt"
+                    "checkpoints"
                   ],
                   "additionalProperties": false
                 }
@@ -15082,64 +13013,6 @@
         }
       }
     },
-    "/projects/{project}/docs": {
-      "get": {
-        "operationId": "docs.get",
-        "summary": "Read a page from where this Project's documents live, as markdown",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "project",
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2000
-            },
-            "allowEmptyValue": true,
-            "allowReserved": true,
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "title": {
-                      "type": "string"
-                    },
-                    "markdown": {
-                      "type": "string"
-                    },
-                    "url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "title",
-                    "markdown",
-                    "url"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/inbox": {
       "get": {
         "operationId": "inbox.list",
@@ -15348,12 +13221,6 @@
                                       "null"
                                     ]
                                   },
-                                  "createdBy": {
-                                    "type": [
-                                      "string",
-                                      "null"
-                                    ]
-                                  },
                                   "externalUpdatedAt": {
                                     "type": "string",
                                     "format": "date-time",
@@ -15525,7 +13392,6 @@
                                   "assigneeMemberId",
                                   "parentExternalId",
                                   "parentId",
-                                  "createdBy",
                                   "externalUpdatedAt",
                                   "lastSyncedAt",
                                   "createdAt",

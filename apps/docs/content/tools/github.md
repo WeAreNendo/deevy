@@ -37,7 +37,7 @@ An App installed nowhere sees no repository, so nothing can be bound to it. To a
 
 | Permission | Access         | Why                                                               |
 | ---------- | -------------- | ----------------------------------------------------------------- |
-| Issues     | Read and write | To read records, comment on them, label them and open sub-issues. |
+| Issues     | Read and write | To hear about issues, and comment on one when a Gate waits on it. |
 | Metadata   | Read           | GitHub requires it.                                               |
 
 Nothing about code: an Agent reaches the repository with access you give it, not through the App.
@@ -100,17 +100,20 @@ GitHub cannot assign an issue to an App, so there are three ways to give one to 
 
 ## What deevy writes on GitHub
 
-Everything deevy writes is by the App's own account, named after the App, such as `acme-on-github[bot]` for
-an App called "acme on GitHub". A comment about a Gate or a Run ends with the Agent and the Run it came
-from; a comment an Agent writes itself ends with its handle.
+deevy writes about Gates and nothing else, as the App's own account, named after the App, such as
+`acme-on-github[bot]` for an App called "acme on GitHub":
 
-- **Comments**, as the Project's **Mirror** says: a Gate asking for a Ruling, with the Proposal and how to
-  rule; each Ruling; and with **Runs as well**, each Run starting, finishing or failing. See
-  [Connecting your tools](/tools/overview/#what-deevy-writes-back).
-- **The `deevy:awaiting-approval` label** while a Gate waits. GitHub creates it the first time deevy uses it.
-- **Sub-issues**, which an Agent opens as GitHub's own sub-issues of the issue it is working.
-  deevy opens no pull request. The Agent opens its own with the access you gave it and attaches it to its Run;
-  one that says `Closes <the issue's URL>` closes the issue when it merges.
+- a comment when an Agent asks at a Gate, with the Proposal and how to rule;
+- a comment for each approval and for the decision;
+- a reply to a `/approve` or `/reject` that ruled nothing, saying why.
+
+Each ends with the Agent and the Run it came from. See
+[Connecting your tools](/tools/overview/#what-deevy-writes-back).
+
+deevy sets no label and opens nothing. Everything else on GitHub is the Agent's, with the access you gave
+it: it reads an issue's comments, comments, labels, opens sub-issues as GitHub's own and opens its pull
+request, as its own account, then attaches the pull request to its Run. One that says
+`Closes <the issue's URL>` closes the issue when it merges.
 
 ## Rule from GitHub
 

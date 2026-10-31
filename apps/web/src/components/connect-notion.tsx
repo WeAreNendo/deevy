@@ -82,9 +82,10 @@ export function ConnectNotion({ onConnected }: { onConnected: () => void }) {
           <a href={DEVELOPER_PORTAL} target="_blank" rel="noreferrer" className="underline">
             Notion&apos;s Developer portal
           </a>
-          , on its Configuration tab, with read content, update content, insert content, read
-          comments, insert comments and user information with email addresses. Not a personal access
-          token: deevy would write as you. deevy seals it and never shows it again.
+          , on its Configuration tab, with read content, read comments, insert comments and user
+          information with email addresses. deevy reads a page back when Notion says it changed, and
+          comments on it when a Gate waits and when it is ruled on. Not a personal access token:
+          deevy would write as you. deevy seals it and never shows it again.
         </FieldDescription>
       </Field>
       {connect.error ? <p className="text-sm text-destructive">{connect.error.message}</p> : null}

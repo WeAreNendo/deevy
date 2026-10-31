@@ -1,13 +1,13 @@
 ---
 title: Notion
-description: Connect a Notion workspace through an internal connection, bind a Project to a database's rows, and let Agents read your pages as documents.
+description: Connect a Notion workspace through an internal connection, and bind a Project to a database's rows.
 sidebar:
   order: 5
 ---
 
-A Notion Socket is one Notion workspace, reached through an internal connection you make there. It does two
-jobs. A database can be a Project's tracker, with each row a record. And any Project, whatever its tracker,
-can read its plans from Notion: an Agent working it reads a page there when a record links one.
+A Notion Socket is one Notion workspace, reached through an internal connection you make there. A database
+can be a Project's tracker, with each row a record. An Agent that reads your other pages, or writes in
+Notion, does it with Notion access of its own, such as Notion's MCP server, not through deevy.
 
 deevy sees only what you share with the connection, and the pages under it. That is Notion's rule.
 
@@ -18,8 +18,9 @@ You need to be an owner of the Notion workspace to use Notion's Developer portal
 1. In Notion's [Developer portal](https://app.notion.com/developers/connections), choose **Build ›
    Internal connections › Create a new connection**, and call it `deevy`. Every comment deevy writes in
    Notion is by that name.
-2. On its **Configuration** tab, give it **read content**, **update content**, **insert content**, **read
-   comments**, **insert comments** and **user information with email addresses**.
+2. On its **Configuration** tab, give it **read content**, **read comments**, **insert comments** and
+   **user information with email addresses**. deevy reads a row back when Notion says it changed, and
+   comments on it when a Gate waits and when it is ruled on.
 3. Copy its **installation access token**, which starts `ntn_`.
 
 Use the connection's token, not a personal access token. A personal token acts as the person who made it,
@@ -36,11 +37,10 @@ deevy asks Notion who the connection is. A token Notion refuses is not stored. W
 
 ## Share what deevy should read
 
-In Notion, give the connection each database deevy should take records from, and the pages its Agents
-should be able to read as documents. Either:
+In Notion, give the connection each database deevy should take records from. Either:
 
 - on the connection's **Content access** tab, choose **Edit access**; or
-- on the database or page itself, choose **••• › Connections › Add connection**.
+- on the database itself, choose **••• › Connections › Add connection**.
 
 ## Subscribe to changes
 
@@ -84,23 +84,15 @@ Notion holds no code: an Agent that should push reaches its repository with acce
 - **Add the connection** to the row's people property, and the Project's **Default Agent** takes it.
 - **Set the Project's Default Agent**, which takes any open row nobody named.
 
-## Read your plans from Notion
-
-A Project's documents can live in Notion whatever its tracker is. In the Project's settings, choose the
-Notion Socket under **Documents**. An Agent working the Project can then read a page there as markdown when
-a record links it. Only a page shared with the connection answers.
-
-Where Notion cannot give all of a page, such as a very long page, a child page not shared with the
-connection, or a bookmark or an embed, Notion marks the gap where it can, and deevy ends the page with a
-note and its link, so the Agent knows something is missing.
-
 ## What deevy writes in Notion
 
-- **Comments** on the row, as the Project's **Mirror** says. See
-  [Connecting your tools](/tools/overview/#what-deevy-writes-back).
-- **The `deevy:awaiting-approval` option** in the row's multi-select while a Gate waits.
-- **New rows**, when an Agent opens a sub-issue, related to their parent where the data source has a
-  parent relation.
+deevy writes about Gates and nothing else, as comments on the row by the connection: one when an Agent asks
+at a Gate, with the Proposal and how to rule; one for each approval and for the decision; and a reply to a
+`/approve` or `/reject` that ruled nothing. See
+[Connecting your tools](/tools/overview/#what-deevy-writes-back).
+
+deevy changes no property and opens no row. An Agent that opens a sub-item does it in Notion with its own
+access; where the data source has a parent relation, deevy links the new row to its parent by it.
 
 ## Rule from Notion
 

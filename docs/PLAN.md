@@ -40,10 +40,10 @@ the plan. A clean break: the first release of this shape starts from an empty da
 ## Domain model in one paragraph
 
 A **Workspace** holds **Members** (Humans and Agents), **Sockets**, **Projects**, and settings. A Socket is a
-connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion), **docs** (Notion) and
-**chat** (Slack). A **Project** is a binding: the container in a tracker its records come from, optionally
-where its documents live, which Agents may work it, the default Agent, how a record names an Agent (a label prefix, a mention), its **Checkpoints**, and
-how much deevy says back in the tracker. An **Issue** is a projection of a record in a tracker — its key, URL,
+connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion) and
+**chat** (Slack). A **Project** is a binding: the container in a tracker its records come from, which Agents
+may work it, the default Agent, how a record names an Agent (a label prefix, a mention), and its
+**Checkpoints**. What deevy says back in the tracker is a Gate and its Ruling, on every Project. An **Issue** is a projection of a record in a tracker — its key, URL,
 title, body and state as the tool last said them — routed to one Agent; deevy authors none of it. An Agent
 working an Issue produces a **Run** that records who triggered it, posts **Activities** (thought, action,
 elicitation, response, error), asks at Checkpoints for **Gates**, attaches **Links** — the pull request it
@@ -67,13 +67,14 @@ is, and deevy answers the second with the first's approval rather than asking th
 
 **Triggers** that create a Run: routing a record to an Agent (a label `agent:<handle>`, an assignment or
 delegation to deevy in the tool, or the Project's default Agent); mentioning an Agent in a comment on the
-record; opening a sub-issue for another Agent; a schedule on an Agent.
+record; the last sub-issue of a record closing, which wakes the Agent the record is routed to; a schedule on an
+Agent.
 
-**Delivery.** A tool tells deevy what changed at `/hooks/<socket>`, signed, and deevy asks the tool itself
-when it has heard nothing for a while, so an instance no tool can reach still works. A trigger appends an
+**Delivery.** A tool tells deevy what changed at `/hooks/<socket>`, signed, and that is the only way in:
+deevy asks no tool what changed, so an instance no tool can reach hears nothing. A trigger appends an
 Event, creates a Run in `pending`, and delivers a signed webhook to the URL the Agent registered, with retries
 and backoff from the Event log; Agents without a URL poll their inbox over MCP. Either way the Agent then reads
-the record and its conversation — live from the tool — over MCP.
+the record over MCP, and its conversation in the tool, with its own access.
 
 **Run lifecycle.** `pending` → `active` on first Activity → `awaiting_input` when the Agent asks a Gate or a
 question → back to `active` when a Human rules or answers → `completed` or `failed`; `stale` after a
@@ -104,9 +105,8 @@ one hop away: the triggering Human, or the Sponsor when routing or an Agent trig
   admin email becomes admin.
 - Every Member is a Better Auth user. Agents are token-only users created by their Sponsor, who issues and
   rotates their API keys. A suspended Sponsor suspends their Agents until someone else sponsors them.
-- Agents get a fixed capability set scoped to granted Projects: read records and their conversation, comment
-  and open sub-issues through the tools, read documents, add Links, ask at Checkpoints, open pull requests,
-  drive their own Runs. Never administer, never manage Members, never rule on a Gate.
+- Agents get a fixed capability set scoped to granted Projects: read records, add Links, ask at Checkpoints,
+  drive their own Runs; what an Agent reads or writes in a tool it does with its own access there. Never administer, never manage Members, never rule on a Gate.
 - A Ruling from a tool counts only when the tool signed it and the account is the Human's: the account they
   sign in with, one they linked from a signed-in session, or — where an admin allowed it, for a tool with
   nothing better — an address they verified (ADR-0025).
@@ -121,9 +121,9 @@ One typed core, projected three ways (ADR-0005):
   through the fetch adapter, with generated OpenAPI 3.1 and a reference UI. The React SPA uses the typed client
   with TanStack Query (ADR-0009).
 - **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
-  procedures. The set is eighteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
-  `issues_create`, `comments_create`, `projects_get`, `docs_get`, `links_list`, `links_add`, `links_remove`,
-  `inbox_list`, `gates_get`, `runs_list`, `runs_get` for anyone; `runs_start`, `runs_post_activity`,
+  procedures. The set is fifteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
+  `projects_get`, `links_list`, `links_add`, `links_remove`, `inbox_list`, `gates_get`, `runs_list`,
+  `runs_get` for anyone; `runs_start`, `runs_post_activity`,
   `gates_request`, `runs_finish` for an Agent alone, because a Run is its attempt; `runs_answer`
   for a Human alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
   rule on, in a browser or from a tool that vouches for them.

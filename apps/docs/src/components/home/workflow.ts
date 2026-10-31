@@ -54,7 +54,7 @@ export const nodes: Node[] = [
   },
   { id: "ruling", x: 490, y: 360, title: "Ruling", detail: "gate.approved", kind: "human" },
   { id: "pr", x: 260, y: 360, title: "Pull request", detail: "acme/billing#88", kind: "agent" },
-  { id: "back", x: 30, y: 360, title: "Linear", detail: "comment · Finished", kind: "tool" },
+  { id: "back", x: 30, y: 360, title: "Linear", detail: "builder's own comment", kind: "tool" },
 ];
 
 /** Which way a wire leaves its node: along a row, down between rows, or back up the side. */
@@ -152,7 +152,7 @@ export const status: Record<string, string> = {
   "comment>ruling": "Ruling recorded",
   "slack>ruling": "Ruling recorded",
   "ruling>pr": "pull request opening",
-  "pr>back": "Linear hears back",
+  "pr>back": "builder tells Linear",
   "back>linear": "finished",
 };
 

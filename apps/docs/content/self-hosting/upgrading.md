@@ -90,7 +90,7 @@ for longer than a tab stays open.
 
 0.9 starts on an empty database: there is no upgrade from 0.8 or anything before it. Start 0.9 or later on
 a new volume, or a new D1 database, then connect your tools, set up your Projects and create your Agents
-again; your records arrive from the tools themselves. Keep the old volume for as long as you want what it
-held.
+again; your records arrive from the tools themselves, each the next time it changes. Keep the old volume
+for as long as you want what it held.
 
 Releases up to 0.7.0 were published as `ghcr.io/mattallty/deevy`. Nothing newer is published there.

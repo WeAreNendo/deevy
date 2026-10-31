@@ -1,29 +1,24 @@
 import type {
   Container,
-  ExternalComment,
-  ExternalIssue,
   ExternalRef,
   IdentityScope,
   InboundCheck,
   InboundEvent,
   InboundInput,
-  IssueDraft,
-  IssuePage,
-  IssueQuery,
   Scope,
   SocketIdentity,
   SocketModule,
   SocketModuleInput,
 } from "@deevy/core/sockets";
 import { hmacBase64, sameText } from "../signing.ts";
-import { commentOf, issueOf, normalizeGitlab } from "./payloads.ts";
+import { normalizeGitlab } from "./payloads.ts";
 
 /**
- * GitLab, as a tracker (ADR-0024).
+ * GitLab, as a tracker deevy listens to and comments on (ADR-0024).
  *
  * One GitLab user is one Socket — a dedicated account, or the bot a project or
  * group access token makes — and deevy acts as it through the token the
- * operator pasted: it reads issues, comments and labels as that user. Its code
+ * operator pasted: what it says on an issue, it says as that user. Its code
  * is not deevy's (ADR-0034): an Agent reaches it with access of its own.
  *
  * gitlab.com and a self-managed GitLab are the same module with a different
@@ -65,24 +60,14 @@ function projectOf(scope: Scope): string {
 /**
  * An issue's number inside its project, out of its URL.
  *
- * deevy keeps GitLab's global id, which survives a move, and every REST call
- * wants the project's own number — which is in the URL deevy already keeps.
+ * deevy keeps GitLab's global id, which survives a move, and the REST call
+ * that comments on an issue wants the project's own number — which is in the
+ * URL deevy already keeps.
  */
 function iidOf(ref: ExternalRef): string {
   const match = /\/-\/(?:issues|work_items)\/(\d+)/.exec(ref.url);
   if (!match?.[1]) throw new Error(`That is not a GitLab issue URL: ${ref.url}`);
   return match[1];
-}
-
-/** The project path an issue URL names: `acme/deevy`. */
-function pathOf(url: string): string | null {
-  try {
-    const { pathname } = new URL(url);
-    const match = /^\/(.+?)\/-\//.exec(pathname);
-    return match?.[1] ?? null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -201,8 +186,6 @@ export function createGitlabSocket(
     return (await response.json()) as T;
   }
 
-  const pathFor = (scope: Scope) => (typeof scope.path === "string" ? scope.path : undefined);
-
   return {
     provider: "gitlab",
     capabilities: new Set(["tracker"] as const),
@@ -212,12 +195,12 @@ export function createGitlabSocket(
     identityScope: gitlabIdentityScope(base, options.signInIssuer),
 
     /**
-     * The user the token belongs to, which is who every comment and merge
-     * request is by — and a refusal for a token that cannot write. `/user`
-     * answers any token at all, so a `read_user` one connected and then failed
-     * at every comment; GitLab says what an access token may do at
-     * `/personal_access_tokens/self`, and where it cannot say — an OAuth token,
-     * or an older GitLab — `/user` stays the proof.
+     * The user the token belongs to, which is who every comment is by — and
+     * a refusal for a token that cannot write. `/user` answers any token at
+     * all, so a `read_user` one connected and then failed at every comment;
+     * GitLab says what an access token may do at `/personal_access_tokens/self`,
+     * and where it cannot say — an OAuth token, or an older GitLab — `/user`
+     * stays the proof.
      */
     async identity(): Promise<SocketIdentity> {
       const user = await call<{ id: number; username: string }>("GET", "/user");
@@ -229,7 +212,7 @@ export function createGitlabSocket(
         : null;
       if (scopes && !scopes.includes("api")) {
         throw new Error(
-          `This token has ${scopes.join(", ") || "no scopes"}; deevy needs the api scope to comment, label and open merge requests`,
+          `This token has ${scopes.join(", ") || "no scopes"}; deevy needs the api scope to comment on issues`,
         );
       }
       return { login: user.username, id: String(user.id), mentionHandle: `@${user.username}` };
@@ -265,90 +248,6 @@ export function createGitlabSocket(
         return normalizeGitlab(eventName, payload);
       },
 
-      async getIssue(scope: Scope, ref: ExternalRef): Promise<ExternalIssue> {
-        const found = await call<unknown>(
-          "GET",
-          `/projects/${projectOf(scope)}/issues/${iidOf(ref)}`,
-        );
-        const issue = issueOf(found, { path: pathFor(scope) });
-        if (!issue) throw new Error(`GitLab answered with no issue for ${ref.url}`);
-        return issue;
-      },
-
-      /** Oldest change first, so a catch-up walks forward and a full page leaves the rest. */
-      async listIssues(scope: Scope, query: IssueQuery): Promise<IssuePage> {
-        const page = Number(query.cursor ?? "1");
-        const search = new URLSearchParams({
-          scope: "all",
-          state: "all",
-          order_by: "updated_at",
-          sort: "asc",
-          per_page: String(query.limit),
-          page: String(page),
-        });
-        if (query.updatedSince) search.set("updated_after", query.updatedSince.toISOString());
-        const rows = await call<unknown[]>(
-          "GET",
-          `/projects/${projectOf(scope)}/issues?${search.toString()}`,
-        );
-        const issues = rows
-          .map((row) => issueOf(row, { path: pathFor(scope) }))
-          .filter((issue): issue is ExternalIssue => issue !== null);
-        return { issues, nextCursor: rows.length >= query.limit ? String(page + 1) : null };
-      },
-
-      async listComments(
-        scope: Scope,
-        ref: ExternalRef,
-        limit: number,
-      ): Promise<ExternalComment[]> {
-        const rows = await call<Array<{ system?: boolean; author?: unknown }>>(
-          "GET",
-          `/projects/${projectOf(scope)}/issues/${iidOf(ref)}/notes?sort=asc&order_by=created_at&per_page=${String(limit)}`,
-        );
-        return rows
-          .filter((row) => row.system !== true)
-          .map((row) => commentOf(row, row.author, ref.url))
-          .filter((comment): comment is ExternalComment => comment !== null);
-      },
-
-      /**
-       * A new issue, related to its parent. GitLab has no parent for an issue,
-       * so the relation is what a Human sees there and deevy keeps the tree
-       * itself (ADR-0022).
-       */
-      async createIssue(
-        scope: Scope,
-        draft: IssueDraft,
-      ): Promise<ExternalIssue & { parentLinked: boolean }> {
-        const project = projectOf(scope);
-        const created = await call<{ iid: number }>("POST", `/projects/${project}/issues`, {
-          title: draft.title,
-          description: draft.body,
-          ...(draft.labels.length > 0 ? { labels: draft.labels.join(",") } : {}),
-        });
-        const issue = issueOf(created, { path: pathFor(scope) });
-        if (!issue) throw new Error("GitLab answered with no issue after creating one");
-
-        if (draft.parent) {
-          const parentPath = pathOf(draft.parent.url);
-          try {
-            await call("POST", `/projects/${project}/issues/${String(created.iid)}/links`, {
-              target_project_id:
-                !parentPath || parentPath === pathFor(scope)
-                  ? project
-                  : encodeURIComponent(parentPath),
-              target_issue_iid: iidOf(draft.parent),
-              link_type: "relates_to",
-            });
-          } catch {
-            // A relation GitLab would not make costs the link on GitLab and
-            // nothing else: the tree is deevy's either way.
-          }
-        }
-        return { ...issue, parentLinked: false };
-      },
-
       async createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef> {
         const created = await call<{ id: number }>(
           "POST",
@@ -357,23 +256,6 @@ export function createGitlabSocket(
         );
         const id = String(created.id);
         return { externalId: id, url: `${ref.url}#note_${id}` };
-      },
-
-      /**
-       * One call for both halves. A label GitLab has never seen is made on the
-       * project as it is added, which is the lazy creation the mirror relies
-       * on; one removed that is not there is not an error.
-       */
-      async setLabels(
-        scope: Scope,
-        ref: ExternalRef,
-        change: { add: string[]; remove: string[] },
-      ): Promise<void> {
-        if (change.add.length === 0 && change.remove.length === 0) return;
-        await call("PUT", `/projects/${projectOf(scope)}/issues/${iidOf(ref)}`, {
-          ...(change.add.length > 0 ? { add_labels: change.add.join(",") } : {}),
-          ...(change.remove.length > 0 ? { remove_labels: change.remove.join(",") } : {}),
-        });
       },
 
       /** The projects its user can work issues in: Reporter or more, as the setup asks. */

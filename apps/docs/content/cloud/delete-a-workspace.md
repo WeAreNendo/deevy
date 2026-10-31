@@ -34,7 +34,9 @@ Within the 30 days:
 1. Under **Your Workspaces**, choose **Manage** on the Workspace.
 2. Choose **Restore Workspace**.
 
-It comes back as it was. Each Socket then catches up by asking its tool what changed while it was away.
+It comes back as it was, and hears what its tools deliver from then on. What they sent while it was away
+is not replayed: where a tool can send a delivery again, such as **Redeliver** on a GitHub App's recent
+deliveries, that is how to catch one up.
 
 During the beta each person has one Workspace at a time, and one being deleted doesn't count. So if you
 asked for a new Workspace in the meantime, the old one can't be restored until the new one is deleted.

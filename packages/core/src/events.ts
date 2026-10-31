@@ -53,16 +53,16 @@ export type EventKind =
   | "issue.closed"
   | "issue.reopened"
   /**
-   * An Agent asked for one more sub-issue than this Workspace allows, and did
-   * not get it (docs/plans/sub-issue-delegation.md). The one Event here that
-   * records something *not* happening, and it earns its place: an Agent that
-   * hits a ceiling notes it and does something else, so without this the
-   * Sponsor never learns that the shape of the work was decided by a number.
+   * An Agent went past one of this Workspace's ceilings on sub-issues, and
+   * did not get what it asked for (docs/plans/sub-issue-delegation.md). Nothing
+   * appends it since deevy stopped opening sub-issues (docs/plans/simplify.md,
+   * slice 4); slice 6 appends it again for a routed child past the depth
+   * ceiling, and the Log still shows the ones already written.
    */
   | "delegation.refused"
   /**
    * Every sub-issue of this Issue is finished. A delegating Run does not wait —
-   * it finishes, and this is what wakes the Agent that opened them
+   * it finishes, and this is what wakes the Agent the parent is routed to
    * (docs/plans/sub-issue-delegation.md). Appended even where there is no Agent
    * left to wake, so a parent whose children are done is visibly a Human's
    * rather than silently nobody's.
@@ -206,8 +206,8 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
   // whether or not anything is running to send it (ADR-0003).
   const webhooks = await deriveWebhookDeliveries(source.db, row);
   // And what the tracker is owed, which is deevy saying back where the work
-  // lives (ADR-0024). Same shape, same row, same sweep: a Project that mirrors
-  // nothing pays one pure check and no query at all (sockets/mirror.ts).
+  // lives (ADR-0024). Same shape, same row, same sweep: an Event that is not
+  // about a Gate pays one pure check and no query at all (sockets/mirror.ts).
   await deriveSocketMirrors(source.db, row);
   // And the messages a chat tool holds about a Gate this Event changes: the
   // buttons on a Slack message stop being true the moment anybody rules,

@@ -48,7 +48,6 @@ describe("projects.create", () => {
     // is, deevy does not hold (ADR-0034).
     expect(project).not.toHaveProperty("forgeSocketId");
     expect(project).not.toHaveProperty("forgeScope");
-    expect(project.docsSocketId).toBeNull();
     expect(project.defaultAgentMemberId).toBeNull();
   });
 
@@ -255,22 +254,6 @@ describe("projects.update", () => {
       kind: "project.updated",
       projectId: project.id,
       payload: { name: { from: "deevy", to: "deevy core" } },
-    });
-  });
-
-  it("changes how much deevy says back in the tracker", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client, bind } = await withSocket(db);
-    const project = await client.projects.create({
-      slug: "deevy",
-      name: "deevy",
-      tracker: bind("acme/deevy"),
-    });
-    expect(project.mirror).toBe("gates");
-
-    expect(await client.projects.update({ slug: "deevy", mirror: "off" })).toMatchObject({
-      mirror: "off",
     });
   });
 

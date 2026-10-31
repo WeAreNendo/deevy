@@ -2,7 +2,6 @@ import {
   agent as agentTable,
   channel as channelTable,
   event as eventTable,
-  inboundDelivery,
   issue as issueTable,
   socketMirror as socketMirrorTable,
   member as memberTable,
@@ -13,12 +12,10 @@ import {
   type Db,
   type Event,
   type Issue,
-  type Project,
   type Socket,
 } from "@deevy/db";
 import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import type { EventKind } from "./events.ts";
-import type { JobQueue } from "./jobs.ts";
 import {
   deriveNotifications,
   gateRequestIdOf,
@@ -28,11 +25,10 @@ import {
 } from "./notifications.ts";
 import { openStatuses } from "./runs.ts";
 import { appendEvent } from "./events.ts";
-import { applyInbound } from "./sockets/apply.ts";
-import { mirrorFor, mirrorsKind, payloadRunId, type MirrorAction } from "./sockets/mirror.ts";
+import { mirrorFor } from "./sockets/mirror.ts";
 import { chatGateMessage } from "./sockets/chat-out.ts";
 import { forgetOldDeliveries } from "./sockets/hooks.ts";
-import type { ChatMessage, InboundEvent, SocketModules } from "./sockets/port.ts";
+import type { ChatMessage, SocketModules } from "./sockets/port.ts";
 import { socketModuleFor } from "./sockets/registry.ts";
 import {
   workItemUrl,
@@ -936,14 +932,7 @@ export async function deliverDueSocketMirrors({
     ? await db.query.gateRequest.findMany({ where: { id: { in: [...new Set(gateIds)] } } })
     : [];
   const gateById = new Map(gates.map((row) => [row.id, row]));
-  const runIds = [
-    ...new Set([
-      ...gates.map((gate) => gate.runId),
-      ...events.filter((event) => event.subjectType === "run").map((event) => event.subjectId),
-      // Evidence names the Run that produced it in its payload (shared.ts).
-      ...events.map((event) => payloadRunId(event)).filter(isText),
-    ]),
-  ];
+  const runIds = [...new Set(gates.map((gate) => gate.runId))];
   const runs = runIds.length
     ? await db.query.run.findMany({
         where: { id: { in: runIds } },
@@ -957,7 +946,7 @@ export async function deliverDueSocketMirrors({
     id: string;
     socket: Socket;
     issue: Issue;
-    action: MirrorAction;
+    comment: string;
     gateId: string | null;
   }> = [];
   for (const row of claimed) {
@@ -966,30 +955,16 @@ export async function deliverDueSocketMirrors({
     const issueId = event ? issueOf(event) : null;
     const issue = issueId ? issueById.get(issueId) : undefined;
     const project = event?.projectId ? projectById.get(event.projectId) : undefined;
-    // A Socket that was rested, disconnected or never built, a Project that
-    // stopped mirroring, a record that is gone: none of these become sendable
-    // by waiting, so they are retired rather than retried.
-    if (
-      !event ||
-      !socket ||
-      !issue ||
-      !project ||
-      socket.status !== "active" ||
-      !mirrorsKind(event.kind, project.mirror)
-    ) {
+    // A Socket that was rested, disconnected or never built, a Project or a
+    // record that is gone: none of these become sendable by waiting, so they
+    // are retired rather than retried.
+    if (!event || !socket || !issue || !project || socket.status !== "active") {
       undeliverable.push(row.id);
       continue;
     }
     const gate = event.subjectType === "gate" ? gateById.get(event.subjectId) : undefined;
-    const attributed = payloadRunId(event);
-    const run = gate
-      ? runById.get(gate.runId)
-      : event.subjectType === "run"
-        ? runById.get(event.subjectId)
-        : attributed
-          ? runById.get(attributed)
-          : undefined;
-    const action = mirrorFor(event, {
+    const run = gate ? runById.get(gate.runId) : undefined;
+    const comment = mirrorFor(event, {
       gate: gate
         ? {
             id: gate.id,
@@ -1002,15 +977,15 @@ export async function deliverDueSocketMirrors({
       runId: run?.id ?? null,
       ...(baseUrl ? { origin: baseUrl.replace(/\/+$/, "") } : {}),
     });
-    if (!action) {
+    if (!comment) {
       undeliverable.push(row.id);
       continue;
     }
-    sending.push({ id: row.id, socket, issue, action, gateId: gate?.id ?? null });
+    sending.push({ id: row.id, socket, issue, comment, gateId: gate?.id ?? null });
   }
 
   const attempted: Attempted[] = [];
-  for (const { id, socket, issue, action, gateId } of sending) {
+  for (const { id, socket, issue, comment, gateId } of sending) {
     try {
       const module = await socketModuleFor(
         {
@@ -1029,10 +1004,7 @@ export async function deliverDueSocketMirrors({
       const project = projectById.get(issue.projectId);
       const scope = project?.trackerScope ?? {};
       const ref = { externalId: issue.externalId, url: issue.url };
-      const posted = await tracker.createComment(scope, ref, action.comment);
-      if (action.labels.add.length > 0 || action.labels.remove.length > 0) {
-        await tracker.setLabels(scope, ref, action.labels);
-      }
+      const posted = await tracker.createComment(scope, ref, comment);
       // Where it landed, so a later Ruling can go back and change what it
       // finds (schema/gate.ts).
       await db.insert(socketMirrorTable).values({
@@ -1068,7 +1040,7 @@ export async function deliverDueSocketMirrors({
   await retireDeliveries(
     db,
     undeliverable,
-    "the tool this was owed to is gone, rested, or no longer mirrors",
+    "the tool this was owed to is gone or rested",
     maxAttempts,
   );
 
@@ -1433,204 +1405,6 @@ export async function remindAboutGates({
   return result;
 }
 
-/**
- * How long a Socket may be silent before deevy goes and asks
- * (`DEEVY_SOCKET_CATCHUP_MINUTES`). Thirty minutes, the same window a Run goes
- * stale in: a tool that has said nothing for half an hour is either quiet or
- * unreachable, and asking costs one page.
- */
-export const defaultCatchupMs = 30 * 60_000;
-
-/** Records one poll may take. `more` is what brings the next page. */
-export const defaultSocketPageSize = 20;
-
-export interface SyncSocketsOptions {
-  db: Db;
-  workspaceId: string;
-  /** The providers this deployment can speak. Without them nothing is polled. */
-  sockets?: SocketModules;
-  socketSecret?: string;
-  fetch?: typeof fetch;
-  jobs?: JobQueue;
-  now?: Date;
-  catchupMs?: number;
-  /** Records one page may carry. A Worker asks for fewer than Node does. */
-  limit?: number;
-}
-
-export interface SyncResult {
-  /** Records this pass read from a tracker. */
-  scanned: number;
-  /** Of those, the ones that changed something in deevy. */
-  applied: number;
-  more: boolean;
-}
-
-/**
- * Asking a tool what changed, for the deevy it cannot reach.
- *
- * This is what makes a laptop instance work at all: no public URL means no
- * delivery, so deevy asks instead of being told, and a team gets the same
- * behaviour one interval later. It goes through `applyInbound`, so the rules
- * about ordering, routing and the loop guard are the delivery's rules and not
- * a second set.
- *
- * One Project per pass, and one page of it, because a poll's cost is the page
- * and a Cron Trigger's budget is not: `more` means come back, which on Node is
- * the drain loop and on Workers is the platform.
- */
-export async function syncSockets({
-  db,
-  workspaceId,
-  sockets,
-  socketSecret,
-  fetch,
-  jobs,
-  now = new Date(),
-  catchupMs = defaultCatchupMs,
-  limit = defaultSocketPageSize,
-}: SyncSocketsOptions): Promise<SyncResult> {
-  const idle: SyncResult = { scanned: 0, applied: 0, more: false };
-  if (!sockets) return idle;
-
-  // Every Socket that could be asked: one an operator put on a schedule, and
-  // one that has gone quiet long enough to be worth checking on.
-  const candidates = await db.query.socket.findMany({
-    where: {
-      workspaceId,
-      status: "active",
-      OR: [
-        { pollMinutes: { isNotNull: true } },
-        { lastInboundAt: { isNull: true } },
-        { lastInboundAt: { lt: new Date(now.getTime() - catchupMs) } },
-      ],
-    },
-    limit: 10,
-  });
-  if (candidates.length === 0) return idle;
-
-  const bySocket = new Map(candidates.map((row) => [row.id, row]));
-  // The Project that has gone longest without asking, among those Sockets.
-  const waiting = await db.query.project.findMany({
-    where: { trackerSocketId: { in: [...bySocket.keys()] }, archivedAt: { isNull: true } },
-    orderBy: { lastPolledAt: "asc" },
-    limit: 10,
-  });
-
-  const due = waiting.find((project) => {
-    const socket = bySocket.get(project.trackerSocketId);
-    if (!socket) return false;
-    const interval = socket.pollMinutes === null ? catchupMs : socket.pollMinutes * 60_000;
-    return !project.lastPolledAt || project.lastPolledAt.getTime() <= now.getTime() - interval;
-  });
-  if (!due) return idle;
-  const socket = bySocket.get(due.trackerSocketId) as Socket;
-
-  const outcome = await pollProject(
-    { db, socket, project: due, sockets, limit, now },
-    {
-      ...(socketSecret ? { socketSecret } : {}),
-      ...(fetch ? { fetch } : {}),
-      ...(jobs ? { jobs } : {}),
-    },
-  );
-
-  await db.update(projectTable).set({ lastPolledAt: now }).where(eq(projectTable.id, due.id));
-  return outcome;
-}
-
-interface PollOptions {
-  db: Db;
-  socket: Socket;
-  project: Project;
-  sockets: SocketModules;
-  limit: number;
-  now: Date;
-}
-
-/**
- * One page of one Project, written down where the tool's own deliveries are.
- *
- * The row is what makes a poll visible: an operator looking at a Socket that
- * has projected nothing needs to see whether deevy asked and heard nothing, or
- * never asked at all.
- */
-async function pollProject(
-  { db, socket, project, sockets, limit, now }: PollOptions,
-  extra: { socketSecret?: string; fetch?: typeof fetch; jobs?: JobQueue },
-): Promise<SyncResult> {
-  const idle: SyncResult = { scanned: 0, applied: 0, more: false };
-  const [claimed] = await db
-    .insert(inboundDelivery)
-    .values({
-      id: newId("inboundDelivery"),
-      socketId: socket.id,
-      deliveryId: `poll-${project.id}-${String(now.getTime())}`,
-      eventName: "poll",
-    })
-    .onConflictDoNothing()
-    .returning();
-  if (!claimed) return idle;
-
-  try {
-    const module = await socketModuleFor({ db, sockets, now: () => now, ...extra }, socket);
-    const tracker = module.tracker;
-    if (!tracker) throw new Error(`The ${socket.name} Socket is not a tracker`);
-
-    // What deevy already holds decides what it asks for: everything the
-    // tracker touched after the newest record here, which on a Project nobody
-    // has polled yet is everything.
-    const newest = await db.query.issue.findFirst({
-      where: { projectId: project.id },
-      orderBy: { externalUpdatedAt: "desc" },
-      columns: { externalUpdatedAt: true },
-    });
-    const page = await tracker.listIssues(project.trackerScope, {
-      updatedSince: newest?.externalUpdatedAt ?? null,
-      cursor: null,
-      limit,
-    });
-
-    const scopeKey =
-      typeof project.trackerScope.scopeKey === "string" ? project.trackerScope.scopeKey : "";
-    const events: InboundEvent[] = page.issues.map((issue) => ({
-      kind: "issue",
-      scopeKey,
-      issue,
-      // Nobody did this: deevy asked, and the tracker answered.
-      actor: null,
-    }));
-    const result = await applyInbound({
-      db,
-      workspace: { id: project.workspaceId },
-      socket,
-      events,
-      ...(extra.jobs ? { jobs: extra.jobs } : {}),
-      now: () => now,
-    });
-
-    await db
-      .update(inboundDelivery)
-      .set({
-        status: result.applied > 0 || events.length === 0 ? "applied" : "skipped",
-        error: result.skipped.length > 0 ? result.skipped.join("; ").slice(0, 2000) : null,
-      })
-      .where(eq(inboundDelivery.id, claimed.id));
-
-    return {
-      scanned: page.issues.length,
-      applied: result.applied,
-      more: page.nextCursor !== null,
-    };
-  } catch (error) {
-    await db
-      .update(inboundDelivery)
-      .set({ status: "failed", error: String(error instanceof Error ? error.message : error) })
-      .where(eq(inboundDelivery.id, claimed.id));
-    return idle;
-  }
-}
-
 /** Passes one call may take before it leaves the rest for the next one. */
 export const defaultMaxPasses = 5;
 
@@ -1651,10 +1425,6 @@ export interface DueWorkLimits {
   deliveryLimit?: number;
   /** Passes one sweep may take before it leaves the rest for the next call. */
   maxPasses?: number;
-  /** Records one poll of a tracker may take (`syncSockets`). */
-  socketPageLimit?: number;
-  /** Silence after which a Socket is asked rather than waited on. */
-  catchupMs?: number;
 }
 
 export interface RunDueWorkOptions {
@@ -1673,8 +1443,8 @@ export interface RunDueWorkOptions {
   /** Aborted when the caller is shutting down. Checked between passes. */
   signal?: AbortSignal;
   /**
-   * The providers this deployment can speak (ADR-0024). Without them the poll
-   * does nothing, which is what a deployment that connects no tool wants.
+   * The providers this deployment can speak (ADR-0024). Without them nothing
+   * is said in a tool, which is what a deployment that connects none wants.
    */
   sockets?: SocketModules;
   /** What this deployment seals a Socket's credentials with (secrets.ts). */
@@ -1709,8 +1479,6 @@ export interface DueWorkResult {
   webhooks: number;
   /** Gates whose approvers were asked again. */
   gateReminders: number;
-  /** Records a poll read from a tracker and applied. */
-  syncedRecords: number;
   /** Deliveries old enough that no provider could still replay them. */
   forgottenDeliveries: number;
   /** Comments deevy left in a tracker, saying back what happened here. */
@@ -1755,8 +1523,6 @@ export async function runDueWork({
     sweepLimit,
     deliveryLimit,
     maxPasses = defaultMaxPasses,
-    socketPageLimit,
-    catchupMs,
   } = limits;
   const sweepBound = sweepLimit === undefined ? {} : { limit: sweepLimit };
   const deliveryBound = deliveryLimit === undefined ? {} : { limit: deliveryLimit };
@@ -1767,7 +1533,6 @@ export async function runDueWork({
     channelMessages: 0,
     webhooks: 0,
     gateReminders: 0,
-    syncedRecords: 0,
     forgottenDeliveries: 0,
     mirrored: 0,
     chatMessages: 0,
@@ -1905,27 +1670,6 @@ export async function runDueWork({
         }),
       (of) => {
         result.emails += of.delivered;
-      },
-    );
-  }
-  // And what a tool was never able to tell deevy, because this instance has no
-  // address it can reach: the poll asks instead (ADR-0024). Without a registry
-  // there is nothing to ask, which is a deployment that connected no tool.
-  if (sockets) {
-    await drain(
-      () =>
-        syncSockets({
-          db,
-          workspaceId,
-          sockets,
-          now,
-          ...(socketSecret ? { socketSecret } : {}),
-          ...(fetch ? { fetch } : {}),
-          ...(socketPageLimit === undefined ? {} : { limit: socketPageLimit }),
-          ...(catchupMs === undefined ? {} : { catchupMs }),
-        }),
-      (of) => {
-        result.syncedRecords += of.applied;
       },
     );
   }

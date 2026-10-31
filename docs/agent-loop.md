@@ -62,10 +62,9 @@ touch nothing else runs with `--strict-mcp-config` and an explicit allowlist:
 claude -p "Work your next assigned Issue." \
   --strict-mcp-config --mcp-config .mcp.json \
   --allowedTools "mcp__deevy__inbox_list,mcp__deevy__runs_list,mcp__deevy__runs_get,\
-mcp__deevy__runs_start,mcp__deevy__issues_get,mcp__deevy__docs_get,mcp__deevy__issues_create,\
-mcp__deevy__comments_create,mcp__deevy__runs_post_activity,mcp__deevy__gates_request,\
-mcp__deevy__gates_get,mcp__deevy__links_add,mcp__deevy__runs_finish,\
-Read,Edit,Write,Bash(git:*),Bash(gh pr create:*)"
+mcp__deevy__runs_start,mcp__deevy__issues_get,mcp__deevy__runs_post_activity,\
+mcp__deevy__gates_request,mcp__deevy__gates_get,mcp__deevy__links_add,mcp__deevy__runs_finish,\
+Read,Edit,Write,Bash(git:*),Bash(gh issue:*),Bash(gh pr create:*)"
 ```
 
 The file tools are how it changes code; the last two are the loop's own git and its own way to open a pull
@@ -104,14 +103,13 @@ Work one Issue at a time, in this order.
    are finished attempts, and an open Issue still routed to you is still yours to work whatever happened on an
    earlier try. If every Run there is finished, open a new one with `runs_start`. That is not a duplicate —
    the rule is one _open_ Run per Issue and Agent, and a finished one is not open.
-3. **Read before you write.** `issues_get` with the Issue and `comments: true`, which answers with the record
-   as the tracker last said it — title, body, state, labels — and with what has been said on it, live from
-   the tracker. That conversation is the brief. Where it links a page the team keeps its plans in — a Notion
-   page — read it with `docs_get`, naming your Project by the `project.slug` the record came with and the page
-   by its URL; a Project with no documents bound says so, and then the record is all there is. If the record
-   does not say enough to act on, say so in a comment and ask. An answer with `commentsUnavailable` means the
-   tracker did not answer and the conversation is unread, not empty: ask again once, and if it is still
-   unread, say so in an Activity and do not plan as if nobody had said anything.
+3. **Read before you write.** `issues_get` with the Issue answers with the record as the tracker last said
+   it — title, body, state, labels, its URL — and the Checkpoints its Project asks for. What has been said on
+   it is in the tracker, and you read it there with your own access to that tool (`gh issue view <url>
+--comments` on GitHub, the tool's own MCP server or CLI elsewhere): deevy keeps no copy of the
+   conversation. That conversation is the brief. Where it links a page the team keeps its plans in — a Notion
+   page — read that with your own access too. If the record does not say enough to act on, say so in a
+   comment on it and ask.
 
    The same answer carries `checkpoints`: the names this Project asks a Run to stop at. It is usually `plan`,
    `ship`, both or neither, and it is what decides steps 5 and 10. A Project that asks for none is one where
@@ -143,11 +141,13 @@ Work one Issue at a time, in this order.
    never told they had to rule on anything.
 
 6. **If the work is too big for one Issue, split it.** Not every Issue is one change: some are three or
-   thirty. Open a sub-issue per part with `issues_create`, passing `parent` — this Issue's key or URL — and
-   `assignAgent` where you know which Agent should do it, which opens their Run. deevy writes the record in
-   the tracker, with the routing label the Project names, so the team sees the parts where they see everything
-   else. A sub-issue may sit in another Project you were granted, which is how a part belonging to the API
-   rather than to the app gets said. Keep each one small enough that a Human can read the change it produces
+   thirty. Open a sub-issue per part in the tracker, with your own access, as that tool's own sub-issue of
+   this one (GitHub's sub-issues, Linear's parent), and give it the routing label the Project names —
+   `agent:<handle>` — where you know which Agent should do it: the tracker delivers it to deevy like any
+   record, which routes it and opens that Agent's Run. When the last of them closes, deevy wakes whichever
+   Agent this Issue is routed to — you, while it is yours — with a `children_done` Run. A part may sit in a
+   container another Project is bound to, which is how a part belonging to the API rather than to the app
+   gets said. Keep each one small enough that a Human can read the change it produces
    in one sitting.
 
    Then **finish your Run**. Do not wait for them and do not keep checking. When the last of your sub-issues
@@ -177,9 +177,8 @@ Work one Issue at a time, in this order.
     and a Proposal naming what you built and what you want looked at, with the pull request in `links`. Where
     `checkpoints` did not list it, there is nothing to wait for: go on and finish.
 11. **Finish.** `runs_finish` with `status: "completed"` and a summary a Human can act on: what you did, what
-    you decided, and what you recommend. You recommend; a Human approves. Use `comments_create` if somebody
-    needs telling something in prose — it is written on the record in their own tracker, where they will see
-    it.
+    you decided, and what you recommend. You recommend; a Human approves. If somebody needs telling something
+    in prose, comment on the record in their own tracker, with your own access, where they will see it.
 
 **What you write is what a reviewer reads.** Your pull request's title and body are where the code review
 happens, and your Run's `summary` is what a Human reads in deevy; your Proposal is what a Human rules on. Your Activities explain how

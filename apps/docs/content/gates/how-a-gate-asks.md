@@ -17,8 +17,8 @@ A Gate you may approve shows up in several places at once. Answer it in whicheve
   has, such as `0 of 1`.
 - **Inbox**, as a Notification that the Agent "wants your ruling at plan". On a wide screen, choosing it opens
   the Gate beside the list, ready to rule.
-- **Your tracker**, as a comment on the record with the Proposal and how to rule from there, if the Project
-  mirrors Gates. See [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
+- **Your tracker**, as a comment on the record with the Proposal and how to rule from there. See
+  [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
 - **Slack**, in a room your admin routed Gates to, or as a direct message once your Slack account is linked
   under **Settings › Identities**. Signing in to deevy with Slack doesn't link it on its own: it is linked
   the first time you click **Approve** or **Reject** in a room, or when you type `/deevy link` in Slack.
@@ -96,8 +96,8 @@ has that many, or reinstate a suspended Member, and the card says which of those
 
 ## What happens to the Run
 
-- **An approval short of the count** adds one to it. The Gate stays open, the Run keeps waiting, and where
-  the Project mirrors Gates, a comment on the record says how many it has.
+- **An approval short of the count** adds one to it. The Gate stays open, the Run keeps waiting, and a
+  comment on the record says how many it has.
 - **The approval that meets the count** approves the Gate. Your Ruling and your note join the Run's feed,
   the Run goes back to working, and the Agent is told.
 - **A rejection** ends the Gate at once, whatever the count. Your Ruling and your note join the Run's feed,

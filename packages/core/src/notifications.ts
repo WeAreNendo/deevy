@@ -299,22 +299,10 @@ function targetOf(channel: {
  * one, and its Events carry that Issue so the inbox needs no second query.
  */
 export function issueOf(event: Event): string | null {
-  // A wave of sub-issues is one line about the parent, so it is the parent the
-  // line points at: the parent is the only place that work is whole
-  // (docs/plans/sub-issue-delegation.md).
-  const under = delegatedUnder(event);
-  if (under) return under;
   if (event.subjectType === "issue") return event.subjectId;
   // A Run and a Gate both happen on an Issue without being one, and both carry
   // it, so the inbox needs no second query for either (ADR-0024).
   const carried = (event.payload as { issueId?: unknown } | null)?.issueId;
-  return typeof carried === "string" ? carried : null;
-}
-
-/** The parent an Agent opened this Issue under, when that is what happened. */
-function delegatedUnder(event: Event): string | null {
-  if (event.kind !== "issue.created") return null;
-  const carried = (event.payload as { delegatedTo?: unknown } | null)?.delegatedTo;
   return typeof carried === "string" ? carried : null;
 }
 
@@ -364,9 +352,9 @@ export function notificationKindOf(event: Event): Notification["kind"] | null {
   if (event.kind === "issue.assigned") return "assignment";
   if (gateRequestIdOf(event)) return "gate_awaiting";
   if (event.kind === "comment.created") return "mention";
-  // A wave of sub-issues is its Sponsor's business and not everybody's, and
-  // forty of them are one line (docs/plans/sub-issue-delegation.md).
-  if (delegatedUnder(event) || event.kind === "issue.children_closed") return "delegation";
+  // A parent's sub-issues all finishing is its Sponsor's business and not
+  // everybody's (docs/plans/sub-issue-delegation.md).
+  if (event.kind === "issue.children_closed") return "delegation";
   if (event.kind === AGENT_ANSWERED) return "run_answered";
   return runNotificationKinds[event.kind] ?? null;
 }
@@ -386,18 +374,12 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
     }));
   }
 
-  const under = delegatedUnder(event);
-  if (under) return delegationRecipients(db, event, under, { rollUp: true });
   if (event.kind === "issue.children_closed") {
-    // Once per wave by its nature — the last sub-issue closes once — so it is
-    // never rolled up into the line that announced the wave. They say two
-    // different things and a Human wants both. And it is addressed to the
-    // Sponsor of whoever split the work, not of whoever happened to close the
-    // last piece of it.
-    const opened = (event.payload as { openedBy?: unknown } | null)?.openedBy;
-    return typeof opened === "string"
-      ? delegationRecipients(db, event, event.subjectId, { rollUp: false, agent: opened })
-      : [];
+    // Once per wave by its nature — the last sub-issue closes once. And it is
+    // addressed to the Sponsor of the Agent holding the parent, not of whoever
+    // happened to close the last piece of it.
+    const routed = (event.payload as { routedTo?: unknown } | null)?.routedTo;
+    return typeof routed === "string" ? sponsorOf(db, event, routed) : [];
   }
 
   if (event.kind === "comment.created") {
@@ -495,54 +477,21 @@ async function humanBehind(db: Db, memberId: string | null): Promise<string | nu
   return found.kind === "human" ? memberId : found.sponsorId;
 }
 
-/** Of the given Members, those still able to act. Suspension silences an inbox. */
-/**
- * Who hears that an Agent split work up, or finished splitting it: the Human
- * accountable for that Agent, and nobody else. Rolled up to one line per parent
- * while that line is unread — a wave of forty sub-issues is one thing that
- * happened, and forty rows about it is an inbox nobody can use
- * (docs/plans/sub-issue-delegation.md).
- */
-async function delegationRecipients(
-  db: Db,
-  event: Event,
-  parentId: string,
-  { rollUp, agent }: { rollUp: boolean; agent?: string },
-): Promise<Recipient[]> {
-  const who = agent ?? event.actorMemberId;
-  const actor = who
-    ? await db.query.member.findFirst({
-        where: { id: who },
-        columns: { sponsorId: true, kind: true },
-      })
-    : null;
-  const sponsor = actor?.kind === "agent" ? actor.sponsorId : null;
+/** Who hears that an Agent's sub-issues are finished: the Human accountable for it. */
+async function sponsorOf(db: Db, event: Event, agent: string): Promise<Recipient[]> {
+  const found = await db.query.member.findFirst({
+    where: { id: agent },
+    columns: { sponsorId: true, kind: true },
+  });
+  const sponsor = found?.kind === "agent" ? found.sponsorId : null;
   if (!sponsor) return [];
-  /*
-   * Rolled up against the other waves only. An unread "every sub-issue is
-   * finished" line is the same kind on the same parent, and matching it would
-   * mean the wake-up Run's own decomposition — the whole point of waking it —
-   * is never announced.
-   */
-  const already = rollUp
-    ? await db.query.notification.findFirst({
-        where: {
-          recipientMemberId: sponsor,
-          kind: "delegation",
-          issueId: parentId,
-          readAt: { isNull: true },
-          event: { kind: "issue.created" },
-        },
-        columns: { id: true },
-      })
-    : null;
-  if (already) return [];
   return (await active(db, [sponsor], event)).map((memberId) => ({
     memberId,
     kind: "delegation" as const,
   }));
 }
 
+/** Of the given Members, those still able to act. Suspension silences an inbox. */
 async function active(db: Db, memberIds: string[], event: Event): Promise<string[]> {
   if (memberIds.length === 0) return [];
   const rows = await db.query.member.findMany({

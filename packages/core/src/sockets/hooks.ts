@@ -138,8 +138,8 @@ export async function handleInbound(request: Request, options: InboundOptions): 
       error: outcome.skipped?.length ? outcome.skipped.join("; ").slice(0, 2000) : null,
     })
     .where(eq(inboundDelivery.id, claimed.id));
-  // What the catch-up poll reads: a Socket that has spoken recently is one
-  // whose deliveries are arriving, so nothing needs to be gone looking for.
+  // When the tool last spoke, which the Socket's page says: a Socket that has
+  // been quiet for days may be one whose webhook stopped arriving.
   await db.update(socketTable).set({ lastInboundAt: now() }).where(eq(socketTable.id, socket.id));
 
   return json(outcome, 200);

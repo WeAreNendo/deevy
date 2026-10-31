@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { InboundEvent } from "@deevy/core/sockets";
 import {
   addContainer,
+  devTrackerView,
   openDevStubStore,
   createStubSocket,
   openStubStore,
@@ -11,10 +12,11 @@ import {
 } from "../src/stub/index.ts";
 
 /**
- * The stub is what every rule about inbound, routing and mirroring is proved
- * against (docs/plans/sockets.md), so the half of it deevy relies on is worth
- * holding: a delivery it signs is one deevy verifies, and a record it is given
- * is one it hands back.
+ * The stub is what every rule about inbound, routing and the comments that
+ * announce a Gate is proved against (docs/plans/sockets.md), so the half of it
+ * deevy relies on is worth holding: a delivery it signs is one deevy verifies,
+ * a record it is given is one it hands back, and what deevy says on a record
+ * is there to read.
  */
 
 const secret = "stub-secret-nobody-else-holds";
@@ -101,7 +103,7 @@ describe("what the stub signs", () => {
 });
 
 describe("the tracker it plays", () => {
-  it("hands back the record it was given, and opens one under a parent", async () => {
+  it("hands back the record it was given", async () => {
     resetStubStores();
     const store = openStubStore({ id: "tracking" });
     addContainer(store, { scopeKey: "acme/deevy" });
@@ -113,21 +115,11 @@ describe("the tracker it plays", () => {
     if (!tracker) throw new Error("the stub is a tracker");
     const scope = { scopeKey: "acme/deevy" };
 
-    const read = await tracker.getIssue(scope, {
+    const read = await tracker.getIssue?.(scope, {
       externalId: "1",
       url: "https://stub.invalid/acme/deevy/1",
     });
     expect(read).toMatchObject({ title: "Checkout rewrite", state: "open" });
-
-    const opened = await tracker.createIssue(scope, {
-      title: "Cart totals",
-      body: "A part of it",
-      parent: { externalId: "1", url: read.url },
-      labels: ["agent:builder"],
-    });
-    expect(opened).toMatchObject({ title: "Cart totals", parentExternalId: "1" });
-    expect(opened.parentLinked).toBe(true);
-    expect(opened.labels).toEqual(["agent:builder"]);
   });
 
   it("writes a comment as itself, which is what the loop guard drops", async () => {
@@ -142,51 +134,12 @@ describe("the tracker it plays", () => {
     if (!tracker) throw new Error("the stub is a tracker");
     const ref = { externalId: "1", url: "https://stub.invalid/acme/deevy/1" };
 
-    await tracker.createComment({ scopeKey: "acme/deevy" }, ref, "— Planner · via deevy");
-    const [comment] = await tracker.listComments({ scopeKey: "acme/deevy" }, ref, 10);
+    await tracker.createComment({ scopeKey: "acme/deevy" }, ref, "**Waiting on a ruling**");
+    const [comment] = container.comments.get("1") ?? [];
 
     // A comment deevy wrote comes back with deevy as its author, and that is
-    // the only thing standing between a mirror and a loop (ADR-0025).
+    // the only thing standing between an announcement and a loop (ADR-0025).
     expect(comment?.author).toMatchObject({ login: "deevy", isBot: true });
-  });
-
-  it("pages what it is asked for, and says where the next page starts", async () => {
-    resetStubStores();
-    const store = openStubStore({ id: "paging" });
-    addContainer(store, { scopeKey: "acme/deevy" });
-    const container = store.containers.get("acme/deevy");
-    if (!container) throw new Error("the container was just added");
-    for (const n of [1, 2, 3]) {
-      putIssue(container, {
-        externalId: String(n),
-        updatedAt: new Date(`2026-09-2${String(n)}T10:00:00Z`),
-      });
-    }
-
-    const tracker = socketFor("paging").tracker;
-    if (!tracker) throw new Error("the stub is a tracker");
-    const scope = { scopeKey: "acme/deevy" };
-
-    const first = await tracker.listIssues(scope, { updatedSince: null, cursor: null, limit: 2 });
-    expect(first.issues).toHaveLength(2);
-    expect(first.nextCursor).toBe("2");
-
-    const next = await tracker.listIssues(scope, {
-      updatedSince: null,
-      cursor: first.nextCursor,
-      limit: 2,
-    });
-    expect(next.issues).toHaveLength(1);
-    expect(next.nextCursor).toBeNull();
-
-    // A catch-up poll asks for what changed since it last heard, and gets
-    // everything that moved after that moment.
-    const since = await tracker.listIssues(scope, {
-      updatedSince: new Date("2026-09-22T00:00:00Z"),
-      cursor: null,
-      limit: 10,
-    });
-    expect(since.issues.map((issue) => issue.externalId)).toEqual(["2", "3"]);
   });
 });
 
@@ -199,5 +152,48 @@ describe("what a deployment says it holds", () => {
     const store = openDevStubStore("acme/deevy=/tmp/origin.git, acme/ops", "spec");
 
     expect([...store.containers.keys()]).toEqual(["acme/deevy", "acme/ops"]);
+  });
+});
+
+describe("what a walk outside the process reads", () => {
+  it("is each container's records, with what deevy said on each under it", async () => {
+    resetStubStores();
+    const store = openStubStore({ id: "viewed" });
+    const container = addContainer(store, { scopeKey: "acme/deevy" });
+    putIssue(container, { externalId: "1", title: "Checkout rewrite" });
+    const tracker = socketFor("viewed").tracker;
+    if (!tracker) throw new Error("the stub is a tracker");
+
+    await tracker.createComment(
+      { scopeKey: "acme/deevy" },
+      { externalId: "1", url: "https://stub.invalid/acme/deevy/1" },
+      "**Waiting on a ruling**",
+    );
+
+    expect(devTrackerView("viewed")).toEqual({
+      containers: [
+        {
+          scopeKey: "acme/deevy",
+          name: "acme/deevy",
+          issues: [expect.objectContaining({ externalId: "1", title: "Checkout rewrite" })],
+          comments: {
+            "1": [
+              expect.objectContaining({
+                body: "**Waiting on a ruling**",
+                author: expect.objectContaining({ login: "deevy", isBot: true }),
+              }),
+            ],
+          },
+        },
+      ],
+    });
+  });
+
+  it("is nothing for a store nobody opened, and opens none", () => {
+    resetStubStores();
+
+    expect(devTrackerView("never-opened")).toEqual({ containers: [] });
+    // Had the view made the store, this would find that one, signed as deevy.
+    expect(openStubStore({ id: "never-opened", login: "someone" }).identity.login).toBe("someone");
   });
 });

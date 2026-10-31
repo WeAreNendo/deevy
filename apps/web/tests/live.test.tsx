@@ -37,7 +37,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
     invitations: { list: async () => ({ invitations: [] }) },
     sockets: { list: async () => ({ sockets: [] }) },
     // Namespaces the hook only ever names a key of; nothing here is called.
-    comments: {},
     links: {},
     inbox: {},
     // stillChanging tells a Run's detail from its list by key, so both need a shape.
@@ -376,7 +375,7 @@ describe("useLiveEvents", () => {
     expect(issueKeys).toHaveLength(1);
     // And what an Issue Event touches beside the Issue: what is shown with it.
     const all = JSON.stringify(invalidated);
-    expect(all).toContain("comments");
+    expect(all).toContain("links");
     expect(all).toContain("inbox");
     expect(all).not.toContain("members");
   });

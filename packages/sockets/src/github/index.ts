@@ -2,16 +2,11 @@ import type {
   Container,
   SetupInput,
   SetupResult,
-  ExternalComment,
-  ExternalIssue,
   ExternalRef,
   InboundCheck,
   InboundEvent,
   InboundInput,
   IdentityScope,
-  IssueDraft,
-  IssuePage,
-  IssueQuery,
   Scope,
   SocketIdentity,
   SocketModule,
@@ -19,10 +14,10 @@ import type {
 } from "@deevy/core/sockets";
 import { credentialTag, hmacHex, sameText } from "../signing.ts";
 import { appJwt, importAppKey } from "./keys.ts";
-import { commentOf, isPullRequest, issueOf, normalizeGithub } from "./payloads.ts";
+import { normalizeGithub } from "./payloads.ts";
 
 /**
- * GitHub Issues, as a tracker deevy projects from (ADR-0024).
+ * GitHub Issues, as a tracker deevy listens to and comments on (ADR-0024).
  *
  * One GitHub App is one Socket: it has one webhook URL, one identity — the
  * `deevy[bot]` account every comment is authored by — and a list of
@@ -112,7 +107,7 @@ function isRefusal(error: unknown): boolean {
  *
  * A module is built per request, so a cache inside it would mint a token for
  * every call. GitHub's tokens live an hour, and minting one costs a round trip
- * and a signature — this is the difference between one request per delivery
+ * and a signature — this is the difference between one request per comment
  * and three.
  *
  * Both maps are filed under the API, the App's id and a tag of its private
@@ -142,9 +137,10 @@ function repositoryOf(scope: Scope): { owner: string; repo: string; scopeKey: st
 /**
  * The issue number out of a record's URL.
  *
- * deevy stores GitHub's node id, which survives a transfer, and every REST
- * call wants the number — which is in the URL deevy already keeps, and is the
- * one thing about a record that is true in both places.
+ * deevy stores GitHub's node id, which survives a transfer, and the REST call
+ * that comments on an issue wants the number — which is in the URL deevy
+ * already keeps, and is the one thing about a record that is true in both
+ * places.
  */
 function numberFrom(ref: ExternalRef): string {
   const match = /\/issues\/(\d+)/.exec(ref.url);
@@ -529,101 +525,6 @@ export function createGithubSocket({
         return normalizeGithub(eventName, payload);
       },
 
-      async getIssue(scope: Scope, ref: ExternalRef): Promise<ExternalIssue> {
-        const { owner, repo, scopeKey } = repositoryOf(scope);
-        const issue = await asInstallation<unknown>(
-          scopeKey,
-          `/repos/${owner}/${repo}/issues/${numberFrom(ref)}`,
-        );
-        const read = issueOf(scopeKey, issue);
-        if (!read) throw new Error(`GitHub answered with no issue for ${ref.url}`);
-        return read;
-      },
-
-      async listIssues(scope: Scope, query: IssueQuery): Promise<IssuePage> {
-        const { owner, repo, scopeKey } = repositoryOf(scope);
-        // Oldest change first, so a catch-up walks forward and a page that is
-        // full leaves the rest for the next one.
-        const page = Number(query.cursor ?? "1");
-        const search = new URLSearchParams({
-          state: "all",
-          sort: "updated",
-          direction: "asc",
-          per_page: String(query.limit),
-          page: String(page),
-        });
-        if (query.updatedSince) search.set("since", query.updatedSince.toISOString());
-        const rows = await asInstallation<unknown[]>(
-          scopeKey,
-          `/repos/${owner}/${repo}/issues?${search.toString()}`,
-        );
-        // GitHub lists pull requests among its issues, and a pull request is
-        // not a unit of work deevy projects: it is evidence on one.
-        const issues = rows
-          .filter((row) => !isPullRequest(row))
-          .map((row) => issueOf(scopeKey, row))
-          .filter((issue): issue is ExternalIssue => issue !== null);
-        return {
-          issues,
-          nextCursor: rows.length >= query.limit ? String(page + 1) : null,
-        };
-      },
-
-      async listComments(
-        scope: Scope,
-        ref: ExternalRef,
-        limit: number,
-      ): Promise<ExternalComment[]> {
-        const { owner, repo, scopeKey } = repositoryOf(scope);
-        const rows = await asInstallation<unknown[]>(
-          scopeKey,
-          `/repos/${owner}/${repo}/issues/${numberFrom(ref)}/comments?per_page=${String(limit)}`,
-        );
-        return rows
-          .map((row) => commentOf(row))
-          .filter((comment): comment is ExternalComment => comment !== null);
-      },
-
-      async createIssue(
-        scope: Scope,
-        draft: IssueDraft,
-      ): Promise<ExternalIssue & { parentLinked: boolean }> {
-        const { owner, repo, scopeKey } = repositoryOf(scope);
-        const created = await asInstallation<{ id: number }>(
-          scopeKey,
-          `/repos/${owner}/${repo}/issues`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              title: draft.title,
-              body: draft.body,
-              ...(draft.labels.length > 0 ? { labels: draft.labels } : {}),
-            }),
-          },
-        );
-        const issue = issueOf(scopeKey, created);
-        if (!issue) throw new Error("GitHub answered with no issue after creating one");
-
-        // The sub-issue call takes the child's numeric id, not its node id,
-        // and is the one part of this a GitHub Enterprise Server may not have.
-        let parentLinked = false;
-        if (draft.parent) {
-          try {
-            await asInstallation(
-              scopeKey,
-              `/repos/${owner}/${repo}/issues/${numberFrom(draft.parent)}/sub_issues`,
-              { method: "POST", body: JSON.stringify({ sub_issue_id: created.id }) },
-            );
-            parentLinked = true;
-          } catch {
-            // deevy keeps the tree itself where the tracker cannot, so a
-            // refusal here costs the link on GitHub and nothing else.
-            parentLinked = false;
-          }
-        }
-        return { ...issue, parentExternalId: null, parentLinked };
-      },
-
       async createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef> {
         const { owner, repo, scopeKey } = repositoryOf(scope);
         const created = await asInstallation<{ node_id: string; html_url: string }>(
@@ -632,35 +533,6 @@ export function createGithubSocket({
           { method: "POST", body: JSON.stringify({ body }) },
         );
         return { externalId: created.node_id, url: created.html_url };
-      },
-
-      async setLabels(
-        scope: Scope,
-        ref: ExternalRef,
-        change: { add: string[]; remove: string[] },
-      ): Promise<void> {
-        const { owner, repo, scopeKey } = repositoryOf(scope);
-        const number = numberFrom(ref);
-        // Adding a label GitHub has never seen creates it, which is the lazy
-        // creation the mirror relies on (docs/plans/sockets.md, slice 7).
-        if (change.add.length > 0) {
-          await asInstallation(scopeKey, `/repos/${owner}/${repo}/issues/${number}/labels`, {
-            method: "POST",
-            body: JSON.stringify({ labels: change.add }),
-          });
-        }
-        for (const label of change.remove) {
-          try {
-            await asInstallation(
-              scopeKey,
-              `/repos/${owner}/${repo}/issues/${number}/labels/${encodeURIComponent(label)}`,
-              { method: "DELETE" },
-            );
-          } catch {
-            // A label that is not on the issue is not an error: the state deevy
-            // wanted is the state there is.
-          }
-        }
       },
 
       /**

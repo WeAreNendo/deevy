@@ -75,10 +75,9 @@ interface Delivery {
  * One Socket: is it talking to deevy, and what has it said (ADR-0024).
  *
  * The question this page answers is the one an operator actually has: whether
- * the tool is telling deevy things or deevy is having to go and ask. Both work
- * — polling is what keeps an instance no tool can reach running — but they are
- * different situations and a screen that hid which is which would be lying by
- * omission.
+ * the tool is still telling deevy things. deevy asks no tool what changed
+ * (docs/plans/simplify.md, slice 4), so a tool gone quiet may be one whose
+ * deliveries no longer arrive, and the page says where to look.
  */
 export function SocketPage({ socketId }: { socketId: string }) {
   const client = useQueryClient();
@@ -201,8 +200,8 @@ export function SocketPage({ socketId }: { socketId: string }) {
             <>
               {" · "}
               <span className="text-muted-foreground">
-                deevy is asking it what changed rather than waiting to be told. That is the
-                fallback, and it works; a tool that cannot reach this deevy stays on it.
+                deevy hears only what it delivers, so check that its webhook still points here. The
+                tool&apos;s own redelivery sends anything this deevy missed.
               </span>
             </>
           ) : null}
@@ -270,7 +269,8 @@ export function SocketPage({ socketId }: { socketId: string }) {
         ) : (
           <p className="text-sm text-muted-foreground">
             When this deevy&apos;s address changes, paste it into the tool&apos;s webhook settings
-            again. Until then deevy goes and asks the tool what changed, so nothing is lost.
+            again. Until then nothing the tool says reaches deevy, and its own redelivery sends what
+            was missed.
           </p>
         )}
       </SettingsSection>

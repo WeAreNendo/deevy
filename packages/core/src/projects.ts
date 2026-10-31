@@ -5,8 +5,7 @@ import { newId } from "./ids.ts";
 /**
  * A Project is a binding to the Sockets its work lives in (ADR-0024). It has
  * no key, no Issue numbering and no Workflow: what it holds is where the
- * records come from, where the code is, who works it, and how much deevy says
- * back.
+ * records come from, who works them, and how a record names its Agent.
  */
 
 /** The URL handle. Lowercase, hyphenated, derived from the container it binds. */
@@ -16,8 +15,6 @@ export interface ProjectBinding {
   trackerSocketId: string;
   trackerScope: Scope;
   trackerScopeKey: string;
-  docsSocketId?: string | null;
-  docsScope?: Scope | null;
 }
 
 export interface CreateProjectInput extends ProjectBinding {
@@ -41,8 +38,6 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
       trackerSocketId: input.trackerSocketId,
       trackerScope: input.trackerScope,
       trackerScopeKey: input.trackerScopeKey,
-      docsSocketId: input.docsSocketId ?? null,
-      docsScope: input.docsScope ?? null,
       defaultAgentMemberId: input.defaultAgentMemberId ?? null,
     })
     .returning();

@@ -11,8 +11,8 @@ in deevy, under the same Checkpoint's rules, and the Gate records where it came 
 
 ## With a comment on the record
 
-When a Gate asks, deevy comments on the record with the Proposal and these instructions, if the Project
-mirrors Gates. Reply on the record:
+When a Gate asks, deevy comments on the record with the Proposal and these instructions, in every
+Project. Reply on the record:
 
 ```text
 /approve
@@ -31,10 +31,9 @@ or
 - The Checkpoint's rules are the same as in deevy. Where it wants somebody other than the Human the work is
   for, and that is you, `/reject` counts and `/approve` gets a reply saying you may still reject it.
 
-You can rule this way even where the Project's **Mirror** is set to **Nothing**, but then deevy says nothing
-back. Otherwise it answers on the record either way. A Ruling that counts is followed by deevy's comment
-saying where the count stands, such as "Approved: 1 of 2, still waiting". One that rules nothing gets a
-reply saying why: the
+deevy answers on the record either way. A Ruling that counts is followed by deevy's comment saying where
+the count stands, such as "Approved: 1 of 2, still waiting". One that rules nothing gets a reply saying
+why: the
 account isn't linked to anybody in deevy yet (with a link to **Settings › Identities**), nothing on the
 record is waiting, or the Checkpoint's own reason, in the same words the Gate's page would use. Comments from
 automated accounts, deevy's own included, rule nothing and get no reply.
@@ -83,8 +82,8 @@ rules. **Unlink** stops one ruling as you, and it stays unlinked until you choos
 
 ## When the tool has to reach deevy
 
-A comment and a Slack click only ever reach deevy as the tool's own delivery to it. A record changing still
-arrives without one, a little late, but a `/approve` does not.
+A comment and a Slack click reach deevy only as the tool's own delivery to it, and so does everything else
+a tool says: deevy never asks a tool what changed. A `/approve` the tool could not deliver rules nothing.
 
 :::note[deevy Cloud]
 Your Workspace is always reachable, so this just works.

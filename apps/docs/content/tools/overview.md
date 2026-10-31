@@ -1,27 +1,27 @@
 ---
 title: Connecting your tools
-description: Connect GitHub, Linear, GitLab, Notion or Slack to deevy as a Socket, bind a Project to what is in it, and choose what deevy says back.
+description: Connect GitHub, Linear, GitLab, Notion or Slack to deevy as a Socket, bind a Project to what is in it, and see what deevy says back.
 sidebar:
   order: 1
 ---
 
 deevy works in the tools your team already uses. You connect each one once, as a **Socket**: one tool,
-under one identity of deevy's own there, holding the credential deevy acts with. An Agent's comments and
-labels go through it, written by the Socket's identity and naming the Agent they came from; its code and
-pull requests are its own.
+under one identity of deevy's own there, holding the credential deevy acts with. A Socket listens and
+announces: it takes what the tool delivers, and it says on a record when a Gate is waiting and how it was
+ruled. Everything else an Agent does in a tool, it does itself, with its own access there.
 
 A Socket on its own does nothing. You then bind a **Project** to something inside it, such as a repository
 or a Linear team, and that is where deevy takes records from and hands them to Agents.
 
 ## Which tools
 
-| Tool                     | What deevy uses it for                                       | What you set up there                                    |
-| ------------------------ | ------------------------------------------------------------ | -------------------------------------------------------- |
-| [GitHub](/tools/github/) | Issues as records, and a repository for the code             | A GitHub App, which deevy writes for you                 |
-| [Linear](/tools/linear/) | Issues in a team as records                                  | An OAuth application of your own                         |
-| [GitLab](/tools/gitlab/) | Issues as records, and the project's repository for the code | An access token for the account deevy acts as, a webhook |
-| [Notion](/tools/notion/) | A database's rows as records, and pages as documents         | An internal connection, and a webhook subscription       |
-| [Slack](/tools/slack/)   | Gates in a channel or a direct message, ruled with buttons   | An app made from deevy's manifest                        |
+| Tool                     | What deevy uses it for                                     | What you set up there                                    |
+| ------------------------ | ---------------------------------------------------------- | -------------------------------------------------------- |
+| [GitHub](/tools/github/) | A repository's issues as records                           | A GitHub App, which deevy writes for you                 |
+| [Linear](/tools/linear/) | Issues in a team as records                                | An OAuth application of your own                         |
+| [GitLab](/tools/gitlab/) | A project's issues as records                              | An access token for the account deevy acts as, a webhook |
+| [Notion](/tools/notion/) | A database's rows as records                               | An internal connection, and a webhook subscription       |
+| [Slack](/tools/slack/)   | Gates in a channel or a direct message, ruled with buttons | An app made from deevy's manifest                        |
 
 GitHub, Linear, GitLab and Notion hold records, so a Project can be bound to them. Slack holds none: it is
 where deevy asks a Human to rule, and you route Notifications to it as a Channel.
@@ -47,8 +47,13 @@ yet**; open it and disconnect it, then start again.
 
 1. Go to **Settings › Projects** and choose **Bind a Project**.
 2. Choose the **Tool**, then the **Container**: a repository, a team or a database, as the tool itself
-   lists them. One container is one Project.
+   lists them. One container is one Project. A tool that cannot list its containers has you type the
+   one you mean, the way its deliveries name it.
 3. Give the Project a **Name**, and choose **Bind it**.
+
+A new Project starts empty. deevy takes a record the first time the tool delivers something about it, such
+as its being opened, edited, labelled or commented on, so a record nobody touches after you bind it stays
+out of deevy until somebody does.
 
 A Project stays bound to the container it was made from. To work another container, bind it as a
 Project of its own.
@@ -61,8 +66,6 @@ Each Project's settings, under **Settings › Projects**, say the rest:
   it. A record labelled `agent:planner` goes to the Agent whose handle is `planner`.
 - **Route by mention**: whether a comment that mentions an Agent hands it the record, on unless you turn it
   off; off, a mention still notifies whoever it names and starts no work.
-- **Mirror**: how much deevy writes back where the work lives, below.
-- **Documents**: a Notion Socket whose pages the Project's Agents may read when a record links one.
 
 ## How a record reaches an Agent
 
@@ -81,45 +84,48 @@ A closed record is handed to nobody.
 
 ## What deevy reads
 
-From each container a Project is bound to, deevy reads the records: their title, body, state, labels and
-the tool's own assignees, as the tool last said them. It reads a record's comments when an Agent or a Human
-asks for them, so the conversation is always the tool's. For a Notion Socket chosen as a Project's
-**Documents**, it reads the pages an Agent asks for.
+From each container a Project is bound to, deevy takes the records the tool delivers: their title, body,
+state, labels and the tool's own assignees, as the tool last said them. It reads each comment the tool
+delivers for a mention of an Agent or a Ruling. The conversation on a record stays the tool's: an Agent that
+wants it reads it there.
 
 deevy never authors a record of its own, never moves one between states and never closes one. That happens
 in the tool, and deevy follows.
 
 ## What deevy writes back
 
-What deevy says on a record depends on the Project's **Mirror**:
+deevy writes on a record about its Gates and nothing else, for every Project, with no setting to change it:
 
-| Mirror                | What deevy writes on the record                                                                                                                                  |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Nothing**           | Nothing.                                                                                                                                                         |
-| **Gates and rulings** | A comment when an Agent asks at a Gate, with its Proposal and how to rule; one for each Ruling; the `deevy:awaiting-approval` label while it waits. The default. |
-| **Runs as well**      | All of that, and a comment when a Run starts, finishes or fails.                                                                                                 |
+- a comment when an Agent asks at a Gate, with its Proposal, its links and how to rule: reply `/approve` or
+  `/reject <why>`, or open it in deevy;
+- a comment for each approval, such as "Approved: 1 of 2, still waiting", and one for the decision,
+  approved or rejected;
+- a reply when a comment in the tool ruled nothing, saying why.
 
-Whatever the Mirror says, an Agent can also, through the Socket:
+Nothing is written about a Run starting, working or finishing, and deevy sets no label.
 
-- comment on a record it was given;
-- open a sub-issue under it, carrying the routing label for the Agent it is meant for;
-- attach the pull request it opened to its Run, as a Link on the record.
+## What an Agent does in the tool
 
-Code is never deevy's: an Agent pushes and opens its pull request with access you give it. A pull request
-that says `Closes <the record's URL>` closes a GitHub or GitLab issue when it merges; a Linear or Notion
-record closes only if something in that tool acts on it, such as Linear's own GitHub integration.
+Everything else in a tool is the Agent's business, done with its own access to that tool: a token, an app
+or the tool's own MCP server that you give it. With that access it reads a record's conversation, comments,
+opens a record or a sub-issue, labels one and reads a page, and what it writes there is its own account's,
+not deevy's. It tells deevy about the pull request it opened by attaching it to its Run as a Link.
+
+Code is never deevy's either: an Agent pushes and opens its pull request with access you give it. A pull
+request that says `Closes <the record's URL>` closes a GitHub or GitLab issue when it merges; a Linear or
+Notion record closes only if something in that tool acts on it, such as Linear's own GitHub integration.
 
 ## What each tool lets deevy do
 
 deevy asks each tool for what it needs and nothing more.
 
-| Tool   | What deevy is given                                                                                                                                  |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub | Issues: read and write. Metadata: read. Only on the repositories you install the App on.                                                             |
-| Linear | Read and write, as the application itself. Installing it as an agent adds being assigned and being mentioned.                                        |
-| GitLab | Whatever the account behind the token may do, with the `api` scope. Give it **Reporter** on the projects it works, and nothing more.                 |
-| Notion | Read, update and insert content; read and insert comments; user information with email addresses. Only on the pages and databases you share with it. |
-| Slack  | `chat:write`, `im:write` and `commands`. Nothing about people.                                                                                       |
+| Tool   | What deevy is given                                                                                                                  |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| GitHub | Issues: read and write. Metadata: read. Only on the repositories you install the App on.                                             |
+| Linear | Read and write, as the application itself. Installing it as an agent adds being assigned and being mentioned.                        |
+| GitLab | Whatever the account behind the token may do, with the `api` scope. Give it **Reporter** on the projects it works, and nothing more. |
+| Notion | Read content; read and insert comments; user information with email addresses. Only on the pages and databases you share with it.    |
+| Slack  | `chat:write`, `im:write` and `commands`. Nothing about people.                                                                       |
 
 ## A Socket's page
 
@@ -143,10 +149,11 @@ GitHub, Linear and Notion Sockets have a section of their own as well, described
 
 ## When the tool cannot reach deevy
 
-A tool tells deevy what happened by posting to the Socket's address. If a Socket has said nothing for half
-an hour, deevy goes and asks it what changed in each Project bound to it, so records still arrive, change and
-close, and still reach Agents, only later. What asking cannot bring is what only a delivery carries: a new
-comment, and so a `/approve` written in one, and a click on a button in Slack.
+A tool tells deevy what happened by posting to the Socket's address, and that is the only way deevy hears
+of it: deevy never asks a tool what changed. While a tool cannot reach deevy, nothing it does arrives: no
+new or changed record, no comment, no `/approve`, no click on a button in Slack. Once it can, deevy hears
+what the tool delivers from then on, and what it missed stays missed. Where the tool can send a delivery
+again, such as **Redeliver** on a GitHub App's recent deliveries, that is how you replay one.
 
 :::note[deevy Cloud]
 Your Workspace's tools deliver to `https://app.deevy.dev/<address>/hooks/…`, which every tool can reach.
