@@ -1,11 +1,6 @@
 import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import {
-  activity as activityTable,
-  agentActivityKinds,
-  run as runTable,
-  runStatuses,
-} from "@deevy/db";
+import { activity as activityTable, activityKinds, run as runTable, runStatuses } from "@deevy/db";
 import { issue as issueTable, member as memberTable, project as projectTable } from "@deevy/db";
 import { alias } from "drizzle-orm/sqlite-core";
 import { ORPCError } from "@orpc/server";
@@ -18,7 +13,6 @@ import {
   openStatuses,
   setRunStatus,
   statusAfterActivity,
-  statusAfterAnswer,
 } from "../runs.ts";
 import { defineOperation } from "./registry.ts";
 import type { Activity, Run } from "@deevy/db";
@@ -173,7 +167,7 @@ export const runs = {
 
   postActivity: defineOperation({
     name: "runs.postActivity",
-    summary: "Post one Activity to your Run: a thought, an action, an elicitation, or an error",
+    summary: "Post one Activity to your Run: a thought, an action, a response, or an error",
     method: "POST",
     path: "/runs/{runId}/activities",
     auth: "member",
@@ -182,7 +176,12 @@ export const runs = {
     mcp: true,
     input: z.object({
       runId: z.string(),
-      kind: z.enum(agentActivityKinds),
+      /**
+       * What you are narrating. A question for a Human is not one of these:
+       * ask it in a comment on the record, in the tracker, and the reply that
+       * mentions you reaches your inbox (docs/plans/simplify.md, slice 5).
+       */
+      kind: z.enum(activityKinds),
       body: z.string().min(1).max(20_000),
       payload: z.record(z.string(), z.unknown()).nullish(),
     }),
@@ -190,7 +189,7 @@ export const runs = {
     handler: async ({ input, context }) => {
       const { run, issue, project, key } = await requireRun(context, input.runId);
       assertOwnRun(context, run);
-      const status = statusAfterActivity(run.status, input.kind);
+      const status = statusAfterActivity(run.status);
 
       const id = newId("activity");
       await context.db.insert(activityTable).values({
@@ -209,64 +208,6 @@ export const runs = {
         projectId: project.id,
         payload: { issueId: issue.id, activityId: id, activityKind: input.kind },
       });
-      // An elicitation is the Agent asking a Human something, so it is its own
-      // Event: that is what a Notification and the live feed hang off. Only
-      // where it begins the wait — something said to a Run that is already
-      // waiting is not a second question, and a second Notification about one
-      // Gate is a Human told twice.
-      if (status === "awaiting_input" && run.status !== "awaiting_input") {
-        await appendEvent(context, {
-          kind: "run.awaiting_input",
-          subjectType: "run",
-          subjectId: run.id,
-          projectId: project.id,
-          payload: { issueId: issue.id, activityId: id, question: input.body },
-        });
-      }
-
-      const updated = (await context.db.query.run.findFirst({ where: { id: run.id } })) as Run;
-      const row = await context.db.query.activity.findFirst({ where: { id } });
-      if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");
-      return { run: runView(updated, key), activity: row };
-    },
-  }),
-
-  answer: defineOperation({
-    name: "runs.answer",
-    summary: "Answer a Run's elicitation, so the Agent carries on",
-    method: "POST",
-    path: "/runs/{runId}/answer",
-    auth: "member",
-    mcp: true,
-    input: z.object({ runId: z.string(), body: z.string().min(1).max(20_000) }),
-    output: z.object({ run: RunSchema, activity: ActivitySchema }),
-    handler: async ({ input, context }) => {
-      // No `agents: true`: an elicitation asks a Human, and the registry
-      // refuses an Agent this operation without a check of its own. It is a
-      // tool all the same, because the Human's own MCP client is one place
-      // they read the question (ADR-0016).
-      const { run, issue, project, key } = await requireRun(context, input.runId);
-      const status = statusAfterAnswer(run.status);
-
-      // The answer joins the Activity feed as a `response`, because that feed
-      // is where the Agent looks: an answer it cannot read is no answer.
-      const id = newId("activity");
-      await context.db.insert(activityTable).values({
-        id,
-        runId: run.id,
-        kind: "prompt",
-        body: input.body,
-      });
-      await setRunStatus(context.db, run, status, { touchActivity: true });
-
-      await appendEvent(context, {
-        kind: "run.answered",
-        subjectType: "run",
-        subjectId: run.id,
-        projectId: project.id,
-        payload: { issueId: issue.id, activityId: id },
-      });
-
       const updated = (await context.db.query.run.findFirst({ where: { id: run.id } })) as Run;
       const row = await context.db.query.activity.findFirst({ where: { id } });
       if (!row) throw new ORPCError("INTERNAL_SERVER_ERROR");

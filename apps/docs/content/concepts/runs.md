@@ -29,16 +29,18 @@ chooses an Agent.
 
 ## Its states
 
-| Status                | What it means                                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Waiting to start**  | The Run exists, and the Agent has not posted anything yet.                                                                                 |
-| **Working**           | The Agent is posting to it.                                                                                                                |
-| **Waiting for input** | The Agent asked a Human a question, or asked at a Gate. In the Runs list, a Run at a Gate says **Waiting on a ruling** and opens the Gate. |
-| **Finished**          | The Agent finished, with a summary of what happened.                                                                                       |
-| **Failed**            | The Agent ended it as failed, with a summary of what happened.                                                                             |
-| **Gone quiet**        | The Agent has posted nothing for 30 minutes. The next thing it posts sets it working again.                                                |
+| Status                  | What it means                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| **Waiting to start**    | The Run exists, and the Agent has not posted anything yet.                                  |
+| **Working**             | The Agent is posting to it.                                                                 |
+| **Waiting on a ruling** | The Agent asked at a Gate, and stopped until a Human rules. The Runs list opens the Gate.   |
+| **Finished**            | The Agent finished, with a summary of what happened.                                        |
+| **Failed**              | The Agent ended it as failed, with a summary of what happened.                              |
+| **Gone quiet**          | The Agent has posted nothing for 30 minutes. The next thing it posts sets it working again. |
 
-A Run waiting on a Human never goes quiet, however long it waits.
+A Run waiting on a ruling never goes quiet, however long it waits. A Gate is the only thing a Run waits at:
+an Agent that needs to know something asks on the record, in the tracker, and the reply that mentions it is
+what reaches it. Until then its Run is open, and may go quiet, which is what it is.
 
 A Sponsor or an admin can choose **Try again** on a Run that failed or went quiet. That starts a fresh Run
 for the same Agent on the same record, and takes you to it.
@@ -50,9 +52,10 @@ How long a Run may be silent before it goes quiet is `DEEVY_RUN_STALE_MINUTES`, 
 
 ## Activity
 
-While it works, an Agent posts **Activities** to its Run: a thought, an action, a question for a Human, a
-response, or an error. They are the Run's feed, in the order they happened, on the Run's page. A Human's
-answer and a Gate's ruling join the same feed, because that feed is where the Agent reads them.
+While it works, an Agent posts **Activities** to its Run: a thought, an action, a response, or an error.
+They are the Run's feed, in the order they happened, on the Run's page. The Gates the Run asked at sit beside
+the feed, each with its Proposal and what was ruled; the Agent learns of a Ruling from its inbox, and a
+question it asked is answered on the record.
 
 ## Checkpoints
 
@@ -73,7 +76,7 @@ See [Gates and Rulings](/concepts/gates-and-rulings/) and
 deevy works out how long a Run took for itself, from the Run's own history:
 
 - **Working**: how long the Run was active.
-- **Waiting on a Human**: how long it waited at a Gate or on a question.
+- **Waiting on a Human**: how long it waited at a Gate.
 - **Queued**: how long it waited before it started.
 
 A Run's page shows all three under **Time** in its rail. Time is what deevy says about what a Run cost,
@@ -85,7 +88,7 @@ because it is what deevy saw: it shows no tokens or dollars, and whatever runs a
 **Time**. Time is the working time; point at it for the waiting and queued time, and choose it to sort by
 it.
 
-Filter by **Working**, **Waiting for input** or **Finished**, and choose **Mine** for the Runs you started
+Filter by **Working**, **Waiting on a ruling** or **Finished**, and choose **Mine** for the Runs you started
 and the ones your Agents are working.
 
 A Run's page shows its feed, the Gates it asked for with where each one's count stands, and its time.

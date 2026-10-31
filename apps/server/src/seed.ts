@@ -288,7 +288,10 @@ await builder.api.runs.postActivity({
 });
 await sweepStaleRuns({ db, workspaceId: admin.member.workspaceId, silenceMs: -1 });
 
-// Asking a question, and waiting for an answer.
+// Asking on the record, where the team will answer. A question is a comment in
+// the tracker, written with the Agent's own access, and the reply that mentions
+// it is what reaches it; the Run waits only at a Gate (docs/plans/simplify.md,
+// slice 5), so it carries on meanwhile.
 const asking = await record({
   container: "acme/deevy",
   project: dev,
@@ -304,8 +307,8 @@ await builder.api.runs.postActivity({
 });
 await builder.api.runs.postActivity({
   runId: askingRun.id,
-  kind: "elicitation",
-  body: "Should two routing labels mean two Runs, or should the second be refused?",
+  kind: "action",
+  body: "Asked on the record whether two routing labels should mean two Runs, or the second be refused.",
 });
 
 // Finished, with the evidence linked back to the Run that produced it.
@@ -534,7 +537,7 @@ const slack = await admin.api.channels.create({
 await admin.api.routing.set({
   rules: [
     { notificationKind: "run_finished", projectId: dev.id, channelId: slack.id },
-    { notificationKind: "run_awaiting_input", projectId: null, channelId: slack.id },
+    { notificationKind: "gate_awaiting", projectId: null, channelId: slack.id },
   ],
 });
 await admin.api.webhooks.create({

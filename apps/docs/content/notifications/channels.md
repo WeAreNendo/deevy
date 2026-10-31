@@ -64,8 +64,7 @@ Under **Routing**, each rule sends one kind of Notification from one Project to 
 So "everything to `#deevy`" is one rule, with **Any** and **Any**, and "Gates on the `platform` Project to
 `#platform`" is another. The rules are saved together.
 
-The kinds are **Mention**, **Assignment**, **Gate awaiting**, **Run awaiting input**, **Run finished** and
-**Sub-issues**. For Gates to arrive with buttons, route **Gate awaiting** to a room in your Slack app.
+The kinds are **Mention**, **Assignment**, **Gate awaiting**, **Run finished** and **Sub-issues**. For Gates to arrive with buttons, route **Gate awaiting** to a room in your Slack app.
 
 ## How it is decided
 

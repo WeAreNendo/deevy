@@ -354,10 +354,11 @@ describe("a tool call authenticated with an Agent's key", () => {
 /**
  * What an Agent that reaches a Checkpoint is handed (ADR-0004, ADR-0024).
  *
- * The elicitation is offered only to a client that said it can take one; every
- * other client gets the same URL in an ordinary answer, which is what a
- * polling Agent has always needed and did not get until it was found by
- * walking a deployed instance (mcp/elicitation.ts, canElicitUrl).
+ * The request as it stands, with the Gate's URL, whatever the client says it
+ * can take. A URL elicitation asked the client to retry once a Human had
+ * ruled, and every client that took one was a client deevy had to sign a
+ * retry for; the Agent learns of the Ruling from `run_answered` in its inbox
+ * and reads it with `gates_get` (docs/plans/simplify.md, slice 5).
  */
 describe("asking to pass a Checkpoint over MCP", () => {
   async function askedAGate(capabilities: Record<string, unknown>) {
@@ -374,33 +375,53 @@ describe("asking to pass a Checkpoint over MCP", () => {
     return { asked, run };
   }
 
-  it("is a URL for a Human to open, where the client can take one", async () => {
-    const { asked } = await askedAGate({ elicitation: { url: {} } });
+  for (const [client, capabilities] of [
+    ["one that can take a URL elicitation", { elicitation: { url: {} } }],
+    ["one that cannot", {}],
+  ] as const) {
+    it(`is the request itself, with the Gate's URL, for ${client}`, async () => {
+      const { asked } = await askedAGate(capabilities);
 
-    const result = asked.result as {
-      resultType?: string;
-      requestState?: string;
-      inputRequests?: Record<
-        string,
-        { method?: string; params?: { url?: string; message?: string } }
-      >;
-    };
-    expect(result.resultType).toBe("input_required");
-    expect(result.inputRequests?.approval?.method).toBe("elicitation/create");
-    expect(result.inputRequests?.approval?.params?.url).toMatch(/\/gates\/gate_/);
-    expect(result.inputRequests?.approval?.params?.message).toContain("plan Checkpoint");
-    // The retry is bound to the principal that asked and expires (ADR-0010).
-    expect(result.requestState).toMatch(/^v1\./);
-  });
+      expect((asked.result as { resultType?: string }).resultType).not.toBe("input_required");
+      const answer = JSON.parse(textOf(asked)) as {
+        status: string;
+        url: string;
+        checkpoint: string;
+      };
+      expect(answer).toMatchObject({ status: "open", checkpoint: "plan" });
+      expect(answer.url).toMatch(/\/gates\/gate_/);
+    });
+  }
+});
 
-  it("is the request itself, where the client cannot", async () => {
-    const { asked } = await askedAGate({});
+/**
+ * A Run waits only at a Gate (docs/plans/simplify.md, slice 5). A question
+ * that is not one goes on the record, in a comment the Agent writes with its
+ * own access, and the reply that mentions it is what wakes it: deevy has no
+ * kind of Activity for asking.
+ */
+describe("a question an Agent would ask over MCP", () => {
+  it("is refused as an Activity, and the refusal names the kinds it may post", async () => {
+    const { app, key, issue } = await workspaceWithAgent();
+    const started = await mcp(app, key, "tools/call", {
+      name: "runs_start",
+      arguments: { issue: issue.url },
+    });
+    const run = JSON.parse(textOf(started)) as { id: string };
 
-    const answer = JSON.parse(textOf(asked)) as { status: string; url: string; checkpoint: string };
-    // The same URL, in an answer the model can read out: a client with no
-    // elicitation support is the ordinary case, not the exception.
-    expect(answer).toMatchObject({ status: "open", checkpoint: "plan" });
-    expect(answer.url).toMatch(/\/gates\/gate_/);
+    const asked = await mcp(app, key, "tools/call", {
+      name: "runs_post_activity",
+      arguments: { runId: run.id, kind: "elicitation", body: "Which currency should it use?" },
+    });
+
+    const said = JSON.stringify(asked.result?.content ?? asked.error ?? null);
+    expect(asked.result?.isError === true || asked.error !== undefined).toBe(true);
+    for (const kind of ["thought", "action", "response", "error"]) expect(said).toContain(kind);
+    const read = await mcp(app, key, "tools/call", {
+      name: "runs_get",
+      arguments: { runId: run.id },
+    });
+    expect(read.result?.structuredContent).toMatchObject({ status: "pending", activities: [] });
   });
 });
 
@@ -621,9 +642,7 @@ describe("a Human's own client", () => {
       expect(human).not.toContain(name);
       expect(agent).toContain(name);
     }
-    // ...answering one faces the Human, and the rest faces both.
-    expect(human).toContain("runs_answer");
-    expect(agent).not.toContain("runs_answer");
+    // ...and the rest faces both.
     for (const name of [
       "issues_get",
       "issues_list",
@@ -635,6 +654,31 @@ describe("a Human's own client", () => {
       expect(human).toContain(name);
       expect(agent).toContain(name);
     }
+  });
+
+  /**
+   * An Agent's question is on the record, in the tracker, and so is the
+   * Human's reply (docs/plans/simplify.md, slice 5): there is nothing in deevy
+   * to answer, over MCP or HTTP.
+   */
+  it("has no question of a Run's to answer, over MCP or HTTP", async () => {
+    const { app, humanKey, agent, issue, sockets } = await workspaceWithHumanKey();
+    const asAgent = createRouterClient(router, { context: { ...agent, sockets } });
+    const run = await asAgent.runs.start({ issue: issue.url });
+
+    expect(toolNames(await mcp(app, humanKey, "tools/list", {}))).not.toContain("runs_answer");
+    const answer = await mcp(app, humanKey, "tools/call", {
+      name: "runs_answer",
+      arguments: { runId: run.id, body: "Use the basket's currency" },
+    });
+    expect(answer.result).toBeUndefined();
+    expect(answer.error?.message).toContain("runs_answer");
+    const answered = await app.request(`/api/runs/${run.id}/answer`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${humanKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ body: "Use the basket's currency" }),
+    });
+    expect(answered.status).toBe(404);
   });
 
   it("is refused a Run by the middleware when it names the tool anyway", async () => {

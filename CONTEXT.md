@@ -77,11 +77,12 @@ One attempt by one Agent on one Issue, with a status, a summary, timestamps, att
 _Avoid_: session, job, execution, attempt
 
 **Activity**:
-One entry an Agent posts to its Run while working: a thought, an action, an elicitation, a response, or an error.
+One entry an Agent posts to its Run while working: a thought, an action, a response, or an error. A question for a
+Human is not one: the Agent asks it on the record, in the tracker, and the reply that mentions it is what reaches it.
 _Avoid_: log line, step, message
 
 **Working time** and **waiting time**:
-How long a Run was active, and how long it waited on a Human at a Gate or a question. With the time before it
+How long a Run was active, and how long it waited on a Human at a Gate. With the time before it
 started, they are the whole of a Run's life, and deevy derives them rather than being told. They are all deevy
 says about what a Run cost.
 _Avoid_: usage, spend, billing, duration (alone), idle time
@@ -114,7 +115,7 @@ _Avoid_: approval (as the noun for the record), vote, verdict
 ### Attention
 
 **Notification**:
-A message to a Human derived from Events: a mention, a Gate awaiting them, a Run awaiting input, an assignment.
+A message to a Human derived from Events: a mention, a Gate awaiting them, an assignment, a Run that finished.
 _Avoid_: alert, ping, message
 
 **Channel**:

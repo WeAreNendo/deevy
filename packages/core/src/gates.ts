@@ -1,5 +1,4 @@
 import {
-  activity as activityTable,
   gateDecision as gateDecisionTable,
   gateRequest as gateRequestTable,
   identityVerifications,
@@ -14,7 +13,6 @@ import { z } from "zod";
 import {
   approvalShortfall,
   CheckpointPolicySchema,
-  plural,
   policyFor,
   requesterFor,
   rulingRefusal,
@@ -140,7 +138,6 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
   }
 
   const status = input.decision === "approved" ? "approved" : "rejected";
-  const who = member.handle ? `@${member.handle}` : "A Human";
   const decided = await settleGate(
     source,
     request,
@@ -150,7 +147,6 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
       required: policy.approvalsRequired,
       via: recorded.via,
       note: recorded.note,
-      said: `${who} ${status} the ${request.checkpoint} Checkpoint${recorded.note ? `: ${recorded.note}` : ""}`,
     },
     request.run,
   );
@@ -180,7 +176,6 @@ export async function passLoweredGates(
     where: { projectId, status: "open", checkpoint: { in: [...lowered.keys()] } },
     with: { decisions: true, run: true },
   });
-  const who = source.member.handle ? `@${source.member.handle}` : "An admin";
   let passed = 0;
   for (const request of open) {
     const change = lowered.get(request.checkpoint);
@@ -197,7 +192,6 @@ export async function passLoweredGates(
         via: "web",
         note: null,
         loweredFrom: change.from,
-        said: `${who} lowered Approvals on the ${request.checkpoint} Checkpoint from ${String(change.from)} to ${String(change.to)}, so it passed with the ${plural(approvals, "approval")} it had`,
       },
       request.run,
     );
@@ -206,7 +200,7 @@ export async function passLoweredGates(
   return passed;
 }
 
-/** How a Gate settled, as its Event and the Run's feed say it. */
+/** How a Gate settled, as its Event says it. */
 interface Settlement {
   status: "approved" | "rejected";
   approvals: number;
@@ -215,8 +209,6 @@ interface Settlement {
   note: string | null;
   /** The threshold an admin lowered, where lowering it is what passed the Gate. */
   loweredFrom?: number;
-  /** The line the Run's feed gets, which is what the Agent reads. */
-  said: string;
 }
 
 /**
@@ -277,14 +269,15 @@ function assertMayRule(member: Member | undefined): asserts member is Member {
 /**
  * Lets the Run carry on, and tells the Agent what was decided.
  *
- * The ruling joins the Activity feed as a response for the same reason an
- * answer does: that feed is where the Agent looks, and a decision it cannot
- * read is no decision. `run.answered` is what reaches its inbox (ADR-0003).
+ * `run.answered` is what reaches its inbox and its webhook (ADR-0003), and
+ * `gates_get` is where it reads which way it went and what the Human wrote.
+ * Nothing is written in the Run's feed: that is what the Agent narrated, and
+ * the Ruling is the Gate's own row (docs/plans/simplify.md, slice 5).
  */
 async function resumeGateRun(
   source: EventSource,
   request: GateRequest,
-  answer: Pick<Settlement, "status" | "note" | "loweredFrom" | "said">,
+  answer: Pick<Settlement, "status" | "note" | "loweredFrom">,
   known?: Run | null,
 ): Promise<void> {
   // Read with the Gate where the caller had it, so a page of Gates passing at
@@ -293,13 +286,6 @@ async function resumeGateRun(
   if (!run || !isOpen(run.status)) return;
 
   const lowered = answer.loweredFrom === undefined ? {} : { loweredFrom: answer.loweredFrom };
-  await source.db.insert(activityTable).values({
-    id: newId("activity"),
-    runId: run.id,
-    kind: "prompt",
-    body: answer.said,
-    payload: { gateRequestId: request.id, decision: answer.status, ...lowered },
-  });
   if (run.status === "awaiting_input") {
     await setRunStatus(source.db, run, "active", { touchActivity: true });
   }

@@ -13,9 +13,12 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 export const humanNotificationKinds = [
   "mention",
   "assignment",
+  /**
+   * A Gate this Human may rule on. Before docs/plans/simplify.md slice 5 a
+   * Run's Human was also asked a question of the Run's (`run_awaiting_input`);
+   * an Agent asks that on the record now, and nothing writes the kind.
+   */
   "gate_awaiting",
-  /** An Agent asked its Run's Human a question, and the Run waits (docs/plans/m2.md). */
-  "run_awaiting_input",
   /** A Run ended, completed or failed. */
   "run_finished",
   /**

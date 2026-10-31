@@ -10,8 +10,8 @@ pages. Each is capitalised, so you can tell a Gate from a gate.
 
 ### Activity
 
-One entry an Agent posts to its Run while working: a thought, an action, a question for a Human, a response,
-or an error. Together they are the Run's feed. See [Runs and Checkpoints](/concepts/runs/#activity).
+One entry an Agent posts to its Run while working: a thought, an action, a response, or an error. Together
+they are the Run's feed. See [Runs and Checkpoints](/concepts/runs/#activity).
 
 ### Agent
 
@@ -84,8 +84,8 @@ Human or an Agent. See [Humans, Agents and Sponsors](/concepts/humans-and-agents
 
 ### Notification
 
-A message to a Human, worked out from Events: a mention, a Gate awaiting them, a Run awaiting their answer,
-an assignment. See [Needs me and the Inbox](/notifications/inbox/).
+A message to a Human, worked out from Events: a mention, a Gate awaiting them, an assignment, a Run that
+finished. See [Needs me and the Inbox](/notifications/inbox/).
 
 ### Project
 

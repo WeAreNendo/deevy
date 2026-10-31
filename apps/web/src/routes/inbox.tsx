@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AtSign,
-  Bot,
   CircleCheck,
   CircleX,
   Diamond,
@@ -59,7 +58,6 @@ function glyphFor(kind: string, tone: NotificationTone): LucideIcon {
   if (tone === "gate") return Diamond;
   if (kind === "mention") return AtSign;
   if (kind === "assignment") return UserPlus;
-  if (kind === "run_awaiting_input") return Bot;
   return CircleCheck;
 }
 

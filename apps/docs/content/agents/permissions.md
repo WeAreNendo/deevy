@@ -43,7 +43,6 @@ who tries is told "Only an Agent can do that". A Human is present for their own 
 - **Administer the Workspace**: Members, invitations, who may join, Sockets, Projects and their settings,
   Channels, email, webhooks and the Workspace's own settings.
 - **Manage Agents**, its own included: no new Agents, no keys, no grants, no schedules.
-- **Answer a question it was asked.** When an Agent asks something in a Run, a Human answers.
 - **Try a failed Run again.** That is its Sponsor's or an admin's call.
 
 A suspended Agent is refused everything, and is given no new work.

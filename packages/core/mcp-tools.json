@@ -302,31 +302,6 @@
     }
   },
   {
-    "name": "runs_answer",
-    "operation": "runs.answer",
-    "summary": "Answer a Run's elicitation, so the Agent carries on",
-    "readOnly": false,
-    "agents": false,
-    "agentsOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "runId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 20000
-        }
-      },
-      "required": [
-        "runId",
-        "body"
-      ]
-    }
-  },
-  {
     "name": "runs_finish",
     "operation": "runs.finish",
     "summary": "End your Run, completed or failed, with a summary of what happened",
@@ -427,7 +402,7 @@
   {
     "name": "runs_post_activity",
     "operation": "runs.postActivity",
-    "summary": "Post one Activity to your Run: a thought, an action, an elicitation, or an error",
+    "summary": "Post one Activity to your Run: a thought, an action, a response, or an error",
     "readOnly": false,
     "agents": true,
     "agentsOnly": true,
@@ -442,7 +417,6 @@
           "enum": [
             "thought",
             "action",
-            "elicitation",
             "response",
             "error"
           ]

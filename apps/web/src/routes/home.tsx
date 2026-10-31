@@ -16,9 +16,10 @@ import { cn } from "@/lib/utils";
  * What needs you (docs/plans/sockets.md, slice 3).
  *
  * deevy is not where the work is any more, so this is not a list of work: it
- * is a Gate waiting on this Human's ruling, a Run waiting on their answer, and
- * then what their Agents are doing. In that order, because a ruling blocks
- * somebody, an answer blocks something, and the rest is news.
+ * is a Gate waiting on this Human's ruling, and then what their Agents are
+ * doing. In that order, because a ruling blocks somebody and the rest is news.
+ * A Run waits on nothing else: an Agent's question is asked on the record, in
+ * the tracker, and answered there (docs/plans/simplify.md, slice 5).
  */
 export function HomePage() {
   const gates = useQuery(orpc.gates.list.queryOptions({ input: { mine: true } }));
@@ -27,27 +28,17 @@ export function HomePage() {
 
   const waiting = gates.data?.gates ?? [];
   const mine = runs.data?.runs ?? [];
-  // A Run stopped at a Gate is not a second thing to do: the Gate above is
-  // where it is answered.
-  const asking = mine.filter(
-    (run) => run.status === "awaiting_input" && run.openGateRequestId === null,
-  );
-  // Everything else still going, the one stopped at a Gate included: it is
-  // still an Agent's Run, it is just not a second question.
-  const working = mine.filter(
-    (run) => !["completed", "failed"].includes(run.status) && !asking.includes(run),
-  );
+  // Everything still going, the one stopped at a Gate included: it is still
+  // an Agent's Run, it is just not a second thing to do.
+  const working = mine.filter((run) => !["completed", "failed"].includes(run.status));
   const loading = gates.isPending || runs.isPending;
-  const nothing = !loading && waiting.length === 0 && asking.length === 0 && working.length === 0;
+  const nothing = !loading && waiting.length === 0 && working.length === 0;
 
   return (
     // One landmark for the page, and one per queue inside it: a Human reading
     // with a screen reader hears what needs them, then what kind.
     <section aria-label="Needs me" className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8">
-      <PageHeader
-        title="Needs me"
-        description="Rulings, answers, and what your Agents are doing."
-      />
+      <PageHeader title="Needs me" description="Rulings, and what your Agents are doing." />
 
       {loading ? (
         <div className="flex flex-col gap-3">
@@ -61,7 +52,7 @@ export function HomePage() {
           <EmptyHeader>
             <EmptyTitle>Nothing needs you</EmptyTitle>
             <EmptyDescription>
-              Gates awaiting your ruling and Runs awaiting your answer will show up here.
+              Gates awaiting your ruling and your Agents' Runs will show up here.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -108,13 +99,6 @@ export function HomePage() {
               );
             })}
           </ul>
-        </section>
-      ) : null}
-
-      {asking.length > 0 ? (
-        <section aria-label="Runs awaiting your answer" className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium">Runs awaiting your answer</h2>
-          <RunList runs={asking} nameOf={nameOf} />
         </section>
       ) : null}
 

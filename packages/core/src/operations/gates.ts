@@ -222,7 +222,7 @@ export const gates = {
             carried: true,
           },
         });
-        await setRunStatus(context.db, run, statusAfterActivity(run.status, "action"), {
+        await setRunStatus(context.db, run, statusAfterActivity(run.status), {
           touchActivity: true,
         });
         await appendEvent(context, {
@@ -265,20 +265,11 @@ export const gates = {
       if (!created) throw new ORPCError("CONFLICT", { message: "Somebody else asked first" });
 
       const request = created as GateRequest;
-      const url = `${linkOrigin(context)}/gates/${request.id}`;
-      // The ask joins the Run's own feed, because that feed is the Run: a
-      // Human reading it should see where the Agent stopped and why.
-      const activityId = newId("activity");
-      await context.db.insert(activityTable).values({
-        id: activityId,
-        runId: run.id,
-        kind: "elicitation",
-        body: input.proposal,
-        payload: { gateRequestId: request.id, checkpoint: request.checkpoint, url },
-      });
-      await setRunStatus(context.db, run, statusAfterActivity(run.status, "elicitation"), {
-        touchActivity: true,
-      });
+      // The one thing that makes a Run wait (docs/plans/simplify.md, slice 5).
+      // The ask is the Gate's own row, which the Run's page shows beside its
+      // feed: the feed is what the Agent narrated, and the Proposal is not
+      // written into it a second time.
+      await setRunStatus(context.db, run, "awaiting_input", { touchActivity: true });
 
       await appendEvent(context, {
         kind: "gate.requested",
@@ -294,8 +285,8 @@ export const gates = {
         },
       });
       // And `run.awaiting_input` is what asks: the inbox, the Slack rules and
-      // the reminder all read it, and the `gateRequestId` is what makes it a
-      // Gate rather than a question (notifications.ts).
+      // the reminder all read it, and its `gateRequestId` names the Gate whose
+      // approvers it asks (notifications.ts).
       await appendEvent(context, {
         kind: "run.awaiting_input",
         subjectType: "run",
@@ -303,7 +294,6 @@ export const gates = {
         projectId: project.id,
         payload: {
           issueId: issue.id,
-          activityId,
           gateRequestId: request.id,
           checkpoint: request.checkpoint,
           question: input.proposal.slice(0, 2000),
