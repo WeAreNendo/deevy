@@ -83,8 +83,7 @@ _Avoid_: log line, step, message
 How long a Run was active, and how long it waited on a Human at a Gate or a question. With the time before it
 started, they are the whole of a Run's life, and deevy derives them rather than being told. They are all deevy
 says about what a Run cost.
-_Avoid_: usage, spend, billing
-_Avoid_: duration (alone), idle time
+_Avoid_: usage, spend, billing, duration (alone), idle time
 
 ### Rulings
 

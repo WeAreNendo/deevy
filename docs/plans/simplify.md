@@ -587,7 +587,8 @@ them, so every later slice removes columns the same way, in the code first. And 
 keeps reading `name=…`, ignoring what follows, so an older `DEEVY_DEV_STUB_CONTAINERS` still starts. The MCP
 tool set is nineteen; the walk, which already attached its pull request with `links_add`, needed no change.
 
-**Slice 3, time, not tokens.** `runs.reportUsage` and its tool, `agents.usage`, `usage.ts`, the
+**Slice 3, time, not tokens.** 828 lines of source out and 21 in, 681 of tests out and 156 in, and 609 out
+of the two snapshots. `runs.reportUsage` and its tool, `agents.usage`, `usage.ts`, the
 `run.usage_reported` Event, the `use_` id prefix, the Usage section on a Run's page and on an Agent's, the
 feed's Cost column and the seed's four reports are gone; `run_usage` stays in the schema, unused, by
 convention 2. The Runs feed reads in three statements rather than four. The Agent's month-by-month table went

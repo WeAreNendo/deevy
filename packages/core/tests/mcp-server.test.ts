@@ -387,21 +387,30 @@ describe("a tool deevy does not project", () => {
    * gone rather than answering with a refusal.
    */
   it("takes no report of what a session spent, over MCP or HTTP", async () => {
-    const { app, key, agent } = await workspaceWithAgent();
+    const { app, key, agent, issue, sockets } = await workspaceWithAgent();
+    // The Agent's own open Run and a report that was valid, so only the
+    // operation being gone can refuse it.
+    const asAgent = createRouterClient(router, { context: { ...agent, sockets } });
+    const run = await asAgent.runs.start({ issue: issue.url });
+    const report = {
+      report: "session-1",
+      harness: "claude-code",
+      models: [{ model: "claude-opus-5-5", inputTokens: 10, outputTokens: 10, costUsd: 0.01 }],
+    };
 
     expect(toolNames(await mcp(app, key, "tools/list", {}))).not.toContain("runs_report_usage");
     const answer = await mcp(app, key, "tools/call", {
       name: "runs_report_usage",
-      arguments: { runId: "run_000000000000", report: "s1", harness: "claude-code", models: [] },
+      arguments: { runId: run.id, ...report },
     });
     expect(answer.result).toBeUndefined();
     expect(answer.error?.message).toContain("runs_report_usage");
 
     const authorization = `Bearer ${key}`;
-    const reported = await app.request("/api/runs/run_000000000000/usage", {
+    const reported = await app.request(`/api/runs/${run.id}/usage`, {
       method: "POST",
       headers: { authorization, "content-type": "application/json" },
-      body: JSON.stringify({ report: "s1", harness: "claude-code", models: [] }),
+      body: JSON.stringify(report),
     });
     expect(reported.status).toBe(404);
     const months = await app.request(`/api/agents/${agent.member.id}/usage`, {

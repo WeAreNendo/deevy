@@ -166,7 +166,7 @@ describe("how long a Run took", () => {
 
     const table = await screen.findByRole("table", { name: "Runs" });
     expect(within(table).queryByRole("columnheader", { name: /Cost/ })).toBeNull();
-    expect(within(table).queryByText(/\$\d|\d tokens?\b/)).toBeNull();
+    expect(within(table).queryByText(/\$\d|\d[KMB]? tokens?\b/)).toBeNull();
   });
 
   it("shows no token and no dollar on a Run", async () => {
@@ -174,7 +174,7 @@ describe("how long a Run took", () => {
 
     await screen.findByRole("region", { name: "Time" });
     expect(screen.queryByRole("region", { name: "Usage" })).toBeNull();
-    expect(screen.queryByText(/\$\d|\d tokens?\b/)).toBeNull();
+    expect(screen.queryByText(/\$\d|\d[KMB]? tokens?\b/)).toBeNull();
   });
 });
 
