@@ -68,36 +68,27 @@ approval, from any Human.
 See [Gates and Rulings](/concepts/gates-and-rulings/) and
 [Gates that need more than one Human](/gates/more-than-one-human/).
 
-## Usage and time
+## Time
 
-Whatever runs an Agent reports what the Run used as it goes: tokens by model, input, output, and prompt cache
-read and written, and a cost where it priced them. That cost is the client's estimate, never a bill,
-and deevy never puts a price on a token itself.
-
-deevy works out the time for itself, from the Run's own history:
+deevy works out how long a Run took for itself, from the Run's own history:
 
 - **Working**: how long the Run was active.
 - **Waiting on a Human**: how long it waited at a Gate or on a question.
 - **Queued**: how long it waited before it started.
 
-A Run's page shows both in its rail. **Usage** says the cost as its client gave it, such as
-"≈ $2.89, estimated by Claude Code", or "Cost not reported by Cursor" where nothing priced it, or
-"No usage reported" where nothing reported at all; then the tokens, and **By model** for each model's
-share. **Time** shows Working, Waiting on a Human and Queued.
-
-An Agent's page, which its Sponsor and admins can see, adds up what its Runs used month by month.
+A Run's page shows all three under **Time** in its rail. Time is what deevy says about what a Run cost,
+because it is what deevy saw: it shows no tokens or dollars, and whatever runs an Agent keeps that account.
 
 ## The Runs screen
 
-**Runs** lists every Run in the Workspace, newest first, with its status, record, Agent, last summary,
-**Cost** and **Time**. Cost is a dash, never $0, where nothing priced the Run. Time is the working time;
-point at it for the waiting and queued time.
+**Runs** lists every Run in the Workspace, newest first, with its status, record, Agent, last summary and
+**Time**. Time is the working time; point at it for the waiting and queued time, and choose it to sort by
+it.
 
 Filter by **Working**, **Waiting for input** or **Finished**, and choose **Mine** for the Runs you started
 and the ones your Agents are working.
 
-A Run's page shows its feed, the Gates it asked for with where each one's count stands, and its usage and
-time.
+A Run's page shows its feed, the Gates it asked for with where each one's count stands, and its time.
 
 ## Next
 

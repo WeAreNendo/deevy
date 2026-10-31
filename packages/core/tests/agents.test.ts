@@ -93,14 +93,12 @@ describe("the Agent capability rule", () => {
       "projects.get",
       "projects.list",
       // `runs.answer` is not here: an elicitation asks a Human. Nor is any
-      // checkout or pull request: an Agent's code is its own (ADR-0034).
+      // checkout or pull request: an Agent's code is its own (ADR-0034). Nor
+      // is a report of what it spent, which deevy no longer takes.
       "runs.finish",
       "runs.get",
       "runs.list",
       "runs.postActivity",
-      // What a session of its own Run spent, as its client counted it: deevy
-      // runs no Agent, so it is told (docs/plans/run-usage.md).
-      "runs.reportUsage",
       "runs.start",
     ]);
   });

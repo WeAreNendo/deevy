@@ -127,7 +127,7 @@ supervisor gone, four kinds of Event left it, each one appended by deevy for a c
 made: `run.checkout_issued` (its checkout), `run.pull_request_opened` (it opened the pull request through
 deevy), `run.usage_reported` (it reported each session's spend) and a `comment.created` (it commented on the
 record when it delivered), along with the Activity it wrote for each ref a session moved. Slice 2 then
-removed the checkout and `pulls.open` themselves, and slice 3 removes Usage. And the old walk proved one thing
+removed the checkout and `pulls.open` themselves, and slice 3 removed Usage. And the old walk proved one thing
 about deevy only in passing: that a Ruling puts its Run back to `active`, because the supervisor resumed
 nothing else. The new walk checks it after each Ruling.
 

@@ -13,41 +13,7 @@ const seen = vi.hoisted(() => ({
   status: "active",
   trigger: "assignment",
   retried: [] as unknown[],
-  usage: null as Record<string, unknown> | null,
 }));
-
-/** What a Run spent, as Claude Code reported two models of one session. */
-const claudeUsage = {
-  inputTokens: 2_100,
-  outputTokens: 3_700,
-  cacheReadTokens: 250_000,
-  cacheWriteTokens: 18_000,
-  costUsd: 1.3,
-  unpricedTokens: 0,
-  reports: 1,
-  models: [
-    {
-      harness: "claude-code",
-      model: "claude-haiku-4-5",
-      inputTokens: 900,
-      outputTokens: 300,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      costUsd: 0.05,
-      costBasis: "list",
-    },
-    {
-      harness: "claude-code",
-      model: "claude-opus-5-5",
-      inputTokens: 1_200,
-      outputTokens: 3_400,
-      cacheReadTokens: 250_000,
-      cacheWriteTokens: 18_000,
-      costUsd: 1.25,
-      costBasis: "list",
-    },
-  ],
-};
 
 vi.mock("../src/lib/orpc.ts", async () => {
   const { createTanstackQueryUtils } = await import("@orpc/tanstack-query");
@@ -62,7 +28,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
               id: "run_1",
               issueKey: "acme/deevy#42",
               status: "active",
-              usage: claudeUsage,
               timing: { queuedMs: 10_000, workingMs: 25 * 60_000, waitingMs: 5 * 60_000 },
             }),
             stubRun({
@@ -70,6 +35,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
               issueKey: "acme/deevy#7",
               status: "awaiting_input",
               openGateRequestId: "gate_stub00000",
+              timing: { queuedMs: 0, workingMs: 3 * 60_000, waitingMs: 40 * 60_000 },
             }),
           ],
           nextCursor: null,
@@ -82,7 +48,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
           trigger: seen.trigger,
           summary: null,
           timing: { queuedMs: 10_000, workingMs: 25 * 60_000, waitingMs: 5 * 60_000 },
-          ...(seen.usage ? { usage: seen.usage } : {}),
         }),
         activities: [
           {
@@ -160,54 +125,12 @@ describe("one Run", () => {
   });
 });
 
-describe("what a Run spent, and how long it took", () => {
-  it("says what it spent and whose estimate the cost is, and never prices it itself", async () => {
-    seen.usage = claudeUsage;
-    await mountAt("/runs/run_1");
-
-    const spent = await screen.findByRole("region", { name: "Usage" });
-    expect(within(spent).getByText("≈ $1.30, estimated by Claude Code")).toBeTruthy();
-    expect(within(spent).getByText("274K tokens")).toBeTruthy();
-    // The prompt cache is most of what an agent session reads: said apart.
-    expect(within(spent).getByText("250K")).toBeTruthy();
-    expect(within(spent).getByText("claude-opus-5-5")).toBeTruthy();
-    seen.usage = null;
-  });
-
-  it("says the cost was not reported where the harness priced nothing", async () => {
-    seen.usage = {
-      ...claudeUsage,
-      costUsd: null,
-      unpricedTokens: 1_500,
-      models: [
-        {
-          harness: "cursor",
-          model: "gpt-5",
-          inputTokens: 1_000,
-          outputTokens: 500,
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-          costUsd: null,
-          costBasis: null,
-        },
-      ],
-    };
-    await mountAt("/runs/run_1");
-
-    const spent = await screen.findByRole("region", { name: "Usage" });
-    expect(within(spent).getByText("Cost not reported by Cursor")).toBeTruthy();
-    expect(within(spent).queryByText(/\$/)).toBeNull();
-    seen.usage = null;
-  });
-
-  it("says so when nothing was reported, rather than showing a zero", async () => {
-    await mountAt("/runs/run_1");
-
-    const spent = await screen.findByRole("region", { name: "Usage" });
-    expect(within(spent).getByText("No usage reported")).toBeTruthy();
-    expect(within(spent).queryByText(/0 tokens/)).toBeNull();
-  });
-
+/**
+ * How long a Run took is what deevy says about what it cost, because it is the
+ * one thing deevy saw: a token or a dollar was only ever a client's report, and
+ * deevy no longer takes one (docs/plans/simplify.md, slice 3).
+ */
+describe("how long a Run took", () => {
   it("splits its time into working, waiting on a Human, and queued", async () => {
     await mountAt("/runs/run_1");
 
@@ -219,16 +142,39 @@ describe("what a Run spent, and how long it took", () => {
     expect(within(time).getByText("Queued").nextElementSibling?.textContent).toBe("10 s");
   });
 
-  it("puts the cost and the working time in the feed, and a dash for what was not reported", async () => {
+  it("puts the working time in the feed, and sorts by it", async () => {
     await mountAt("/runs");
 
     const table = await screen.findByRole("table", { name: "Runs" });
-    expect(within(table).getByRole("columnheader", { name: /Cost/ })).toBeTruthy();
-    expect(within(table).getByRole("columnheader", { name: /Time/ })).toBeTruthy();
-    const [first, second] = within(table).getAllByRole("row").slice(1) as HTMLElement[];
-    expect(within(first as HTMLElement).getByText("$1.30")).toBeTruthy();
-    expect(within(first as HTMLElement).getByText("25 min")).toBeTruthy();
-    expect(within(second as HTMLElement).getAllByText("—").length).toBeGreaterThan(0);
+    const keys = () =>
+      within(table)
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => within(row).getByText(/^acme\/deevy#/).textContent);
+    expect(keys()).toEqual(["acme/deevy#42", "acme/deevy#7"]);
+
+    fireEvent.click(within(table).getByRole("button", { name: "Time" }));
+
+    // Least working time first: the Run that mostly waited on a Human.
+    expect(keys()).toEqual(["acme/deevy#7", "acme/deevy#42"]);
+    const [first] = within(table).getAllByRole("row").slice(1) as HTMLElement[];
+    expect(within(first as HTMLElement).getByText("3 min")).toBeTruthy();
+  });
+
+  it("shows no token and no dollar in the feed", async () => {
+    await mountAt("/runs");
+
+    const table = await screen.findByRole("table", { name: "Runs" });
+    expect(within(table).queryByRole("columnheader", { name: /Cost/ })).toBeNull();
+    expect(within(table).queryByText(/\$\d|\d tokens?\b/)).toBeNull();
+  });
+
+  it("shows no token and no dollar on a Run", async () => {
+    await mountAt("/runs/run_1");
+
+    await screen.findByRole("region", { name: "Time" });
+    expect(screen.queryByRole("region", { name: "Usage" })).toBeNull();
+    expect(screen.queryByText(/\$\d|\d tokens?\b/)).toBeNull();
   });
 });
 

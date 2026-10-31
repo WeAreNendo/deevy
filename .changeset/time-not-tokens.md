@@ -1,0 +1,5 @@
+---
+"@deevy/core": minor
+---
+
+deevy no longer takes a report of what a Run spent. `runs.reportUsage` (`POST /api/runs/{runId}/usage`, the MCP tool `runs_report_usage`, and `deevy runs report-usage`) and `agents.usage` (`GET /api/agents/{memberId}/usage` and `deevy agents usage`) are gone, `runs.get` and `runs.list` no longer carry `usage`, and the Event log no longer gains `run.usage_reported`. A Run's page and the Runs feed still show how long it worked, waited on a Human and was queued, and you can sort the feed by that time; they no longer show tokens or a cost, and an Agent's page no longer has a Usage section. If something you run reports usage, stop it: the route now answers 404 and the tool is unknown. Whatever runs your Agent keeps its own account of what a session spent. Usage reported before this release is kept in the database but no longer shown.

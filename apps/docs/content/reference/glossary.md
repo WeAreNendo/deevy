@@ -133,17 +133,11 @@ A record opened under another in the tracker, which is its parent: a piece of a 
 its own Runs and its own Gates. It may live in a different Project. deevy keeps the tree even where the
 tracker cannot link it. See [Issues](/concepts/issues/#sub-issues).
 
-### Usage
-
-What a Run used, as the client that ran its Agent reported it: tokens by model, input, output, and prompt
-cache read and written, and a cost where that client priced them. An estimate, never a bill; deevy never
-prices tokens itself. See [Runs and Checkpoints](/concepts/runs/#usage-and-time).
-
 ### Working time and waiting time
 
 How long a Run was active, and how long it waited on a Human at a Gate or for an answer. With the time before
 it started, they make up the whole of a Run's life, and deevy works them out rather than being told. See
-[Runs and Checkpoints](/concepts/runs/#usage-and-time).
+[Runs and Checkpoints](/concepts/runs/#time).
 
 ### Workspace
 
