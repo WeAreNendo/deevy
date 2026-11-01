@@ -10,6 +10,7 @@
  * the thing that is wrong, so the entry is where that is refused.
  */
 import type { SocketModules } from "@deevy/core/sockets";
+import { createGenericSocket } from "./generic/index.ts";
 import { createGithubSocket } from "./github/index.ts";
 import { createGitlabSocket } from "./gitlab/index.ts";
 import { createLinearSocket } from "./linear/index.ts";
@@ -18,6 +19,14 @@ import { createSlackSocket } from "./slack/index.ts";
 import { createStubSocket, openDevStubStore } from "./stub/index.ts";
 
 export * from "./stub/index.ts";
+export {
+  createGenericSocket,
+  deliveryHeaders,
+  readEvents,
+  signDelivery,
+  verifyDelivery,
+} from "./generic/index.ts";
+export type { SignedDelivery } from "./generic/index.ts";
 export { createGithubSocket, resetGithubTokens } from "./github/index.ts";
 export type { GithubConfig, GithubCredentials } from "./github/index.ts";
 export { createGitlabSocket, gitlabIdentityScope } from "./gitlab/index.ts";
@@ -84,6 +93,8 @@ export function socketModules({
     linear: createLinearSocket,
     notion: createNotionSocket,
     slack: createSlackSocket,
+    // A tool, not the stub: every entry has it, in production as anywhere.
+    generic: createGenericSocket,
     ...(devStub ? { stub: createStubSocket } : {}),
   };
 }

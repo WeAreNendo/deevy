@@ -176,7 +176,7 @@ describe("how deevy authenticates", () => {
 
     const wrote = await tracker.createComment(scope, ref, "Said");
 
-    expect(wrote.externalId).toBe("IC_new");
+    expect(wrote?.externalId).toBe("IC_new");
     // The App's own JWT for the two credential calls, the installation's token
     // for the repository call: a JWT cannot comment on an issue, and a token
     // cannot mint itself.

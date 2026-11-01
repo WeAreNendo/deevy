@@ -8,8 +8,8 @@ import {
   openStubStore,
   putIssue,
   resetStubStores,
-  signDelivery,
 } from "../src/stub/index.ts";
+import { signDelivery } from "../src/generic/index.ts";
 
 /**
  * The stub is what every rule about inbound, routing and the comments that
@@ -38,6 +38,7 @@ describe("what the stub signs", () => {
     if (!tracker) throw new Error("the stub is a tracker");
 
     const events: InboundEvent[] = [{ kind: "ignored", why: "nothing happened" }];
+    // The generic Socket's wire, which the stub shares (src/generic/wire.ts).
     const delivery = await signDelivery(secret, events, { deliveryId: "d1" });
 
     const good = await tracker.verifyInbound({
@@ -64,16 +65,19 @@ describe("what the stub signs", () => {
     expect(wrong.ok).toBe(false);
   });
 
-  it("carries its events through `normalize` verbatim", () => {
+  it("reads its events as the generic Socket does, and says why it would not", () => {
     resetStubStores();
     const tracker = socketFor("normalizing").tracker;
     if (!tracker) throw new Error("the stub is a tracker");
 
     const events: InboundEvent[] = [{ kind: "ignored", why: "a ping" }];
     expect(tracker.normalize("events", { events })).toEqual(events);
-    // A body that is not a delivery means nothing rather than throwing.
-    expect(tracker.normalize("events", null)).toEqual([]);
-    expect(tracker.normalize("events", { events: "not a list" })).toEqual([]);
+    // A body that is not a delivery means nothing, and says so rather than throwing.
+    for (const body of [null, { events: "not a list" }]) {
+      expect(tracker.normalize("events", body)).toEqual([
+        { kind: "ignored", why: expect.stringContaining("no list of events") },
+      ]);
+    }
   });
 
   it("gives a delivery its clocks back, because JSON has none", () => {
@@ -93,7 +97,14 @@ describe("what the stub signs", () => {
           kind: "issue",
           scopeKey: "acme/deevy",
           actor: null,
-          issue: { externalId: "1", updatedAt: updatedAt.toISOString() },
+          issue: {
+            externalId: "1",
+            key: "acme/deevy#1",
+            url: "https://stub.invalid/acme/deevy/1",
+            title: "Checkout rewrite",
+            state: "open",
+            updatedAt: updatedAt.toISOString(),
+          },
         },
       ],
     });

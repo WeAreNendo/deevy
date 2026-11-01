@@ -1064,3 +1064,77 @@ describe("an admin lowering Approvals", () => {
     expect((await asBob.gates.get({ requestId: plan.id })).status).toBe("open");
   });
 });
+
+describe("what a Gate's Events say about its record", () => {
+  it("names it as its tool does, however the Gate is asked, ruled on or passed", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asCarol, asPlanner, run, seeded, issue } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 2 },
+      ],
+    });
+
+    // Asked, one approval short, then met.
+    const plan = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "A",
+    });
+    await asBob.gates.approve({ requestId: plan.id });
+    await asCarol.gates.approve({ requestId: plan.id });
+    // Passed by an admin lowering Approvals to the one it has.
+    const ship = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "B",
+    });
+    await asBob.gates.approve({ requestId: ship.id });
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        { name: "plan", approvalsRequired: 2 },
+        { name: "ship", approvalsRequired: 1 },
+      ],
+    });
+    // Asked again, asked once more with another Proposal, and rejected.
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "C" });
+    const again = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "D",
+    });
+    await asCarol.gates.reject({ requestId: again.id, note: "Not yet" });
+
+    // What an adapter posting back to its own tool needs, since an Event's
+    // `issueId` is deevy's and the tool has never heard of it
+    // (docs/plans/simplify.md, slice 7).
+    const record = {
+      issueSocketId: issue.socketId,
+      issueExternalId: "42",
+      issueKey: issue.externalKey,
+      issueUrl: issue.url,
+    };
+    const gateEvents = await db.query.event.findMany({
+      where: { kind: { like: "gate.%" } },
+      orderBy: { seq: "asc" },
+    });
+    expect(gateEvents.map((event) => [event.kind, event.payload])).toEqual(
+      [
+        "gate.requested",
+        "gate.approval",
+        "gate.approved",
+        "gate.requested",
+        "gate.approval",
+        "gate.approved",
+        "gate.requested",
+        "gate.superseded",
+        "gate.requested",
+        "gate.rejected",
+      ].map((kind) => [kind, expect.objectContaining({ issueId: issue.id, ...record })]),
+    );
+  });
+});

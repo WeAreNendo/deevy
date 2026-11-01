@@ -58,7 +58,7 @@ after the import you point everything at it:
 - **The CLI and MCP clients.** Sign in again at the new address.
 - **Your tools.** A GitHub Socket's page has **Point GitHub at this address**, which moves its App's
   webhook for you. Linear, GitLab, Notion and Slack keep theirs in their own settings, where you change
-  them.
+  them. For [any other tool](/tools/generic/), give your adapter the new address; its secret is the same.
 
 Both copies keep working until you delete the hosted one, and nothing forwards from one to the other.
 Once the new one works, [delete the hosted Workspace](/cloud/delete-a-workspace/), so that nothing still

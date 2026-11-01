@@ -138,6 +138,8 @@ function socketStep(socket: ImportReport["sockets"][number], url: string): strin
       return `${socket.name} (Notion): a new webhook subscription to ${hook}, verified with the token the Socket's page shows; then delete the old one`;
     case "slack":
       return `${socket.name} (Slack): the app's Interactivity request URL and its /deevy command's URL ${hook}`;
+    case "generic":
+      return `${socket.name} (another tool): the address your adapter posts to, ${hook}, same secret`;
     default:
       return `${socket.name} (${socket.provider}): ${hook}`;
   }

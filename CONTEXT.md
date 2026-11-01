@@ -43,7 +43,8 @@ _Avoid_: organization, tenant, account, instance
 
 **Socket**:
 One connected external tool under one identity: a GitHub App, a Linear app, a GitLab account, a Notion
-connection, a Slack app. A Socket has capabilities — tracker, chat — and holds the credential deevy
+connection, a Slack app, or a generic Socket that any other tool reaches through an adapter of the team's.
+A Socket has capabilities — tracker, chat — and holds the credential deevy
 uses there. It listens and announces: it takes what the tool delivers, and says on a record when a Gate is
 waiting and how it was ruled. Everything else in the tool is the Agent's, with its own access.
 _Avoid_: integration, connector, plugin, provider (for the row; the provider is the kind of tool)

@@ -14,7 +14,8 @@ import {
   seedProject,
   testDb,
 } from "./helpers.ts";
-import { deriveWebhookDeliveriesForMany, signPayload, verifySignature } from "../src/webhooks.ts";
+import { signPayload, verifySignature } from "../src/signature.ts";
+import { deriveWebhookDeliveriesForMany } from "../src/webhooks.ts";
 import { newId } from "../src/ids.ts";
 
 /**

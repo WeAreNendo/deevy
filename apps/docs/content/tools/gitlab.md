@@ -3,7 +3,15 @@ title: GitLab
 description: Connect gitlab.com or your own GitLab with an access token, add a webhook to each project, and bind a Project to one for its issues.
 sidebar:
   order: 4
+  badge:
+    text: Preview
+    variant: caution
 ---
+
+:::caution[Preview]
+deevy's GitLab Socket is built and tested against GitLab's recorded deliveries, and has not yet been tried
+against GitLab itself. Settings says **Preview** beside it until it has.
+:::
 
 A GitLab Socket is one GitLab, gitlab.com or your own, reached as one GitLab account through its access
 token. A GitLab project's issues are a Project's records, and every comment deevy makes is by that

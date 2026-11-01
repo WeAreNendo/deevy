@@ -167,8 +167,9 @@ async function refused(
 // -------------------------------------------------------------- the tracker
 
 /**
- * One delivery, signed the way the stub signs one
- * (packages/sockets/src/stub/index.ts).
+ * One delivery in deevy's own format, signed as the stub and the generic
+ * Socket take one (packages/sockets/src/generic/wire.ts): `t=<unix>,v1=<hex>`
+ * over `<t>.<body>`, as deevy signs its webhooks.
  *
  * Written out rather than imported, because this script is deevy seen from
  * outside: what it proves is that a signature computed by somebody else over
@@ -179,15 +180,19 @@ async function deliver(
   socketId: string,
   events: unknown[],
   deliveryId: string,
+  secret: string = webhookSecret,
 ): Promise<Response> {
   const body = JSON.stringify({ events });
+  const t = Math.floor(Date.now() / 1000);
   return fetch(`${origin}/hooks/${socketId}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "stub-event": "events",
-      "stub-delivery": deliveryId,
-      "stub-signature": createHmac("sha256", webhookSecret).update(body).digest("hex"),
+      "deevy-event": "events",
+      "deevy-delivery": deliveryId,
+      "deevy-signature": `t=${String(t)},v1=${createHmac("sha256", secret)
+        .update(`${String(t)}.${body}`)
+        .digest("hex")}`,
     },
     body,
   });
@@ -198,15 +203,16 @@ function stated(
   record: { externalId: string; externalKey: string; url: string; title: string },
   labels: string[],
   minutesOn: number,
-  /** The tracker's own parent, for a sub-issue, and whether it is still open. */
+  /** The tracker's own parent, for a sub-issue, whether it is still open, and where it is. */
   {
     parentExternalId = null,
     state = "open",
-  }: { parentExternalId?: string | null; state?: "open" | "closed" } = {},
+    scopeKey = CONTAINER,
+  }: { parentExternalId?: string | null; state?: "open" | "closed"; scopeKey?: string } = {},
 ): unknown {
   return {
     kind: "issue",
-    scopeKey: CONTAINER,
+    scopeKey,
     actor: { login: "ada", id: "stub-user-ada", isBot: false },
     issue: {
       externalId: record.externalId,
@@ -477,7 +483,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
 
   const unsigned = await fetch(`${origin}/hooks/${socketId}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "stub-event": "events", "stub-delivery": "x" },
+    headers: { "content-type": "application/json", "deevy-event": "events", "deevy-delivery": "x" },
     body: JSON.stringify({ events: [] }),
   });
   check("an unsigned delivery is refused", unsigned.status === 401, String(unsigned.status));
@@ -921,6 +927,112 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "and one linked past it after it was routed is taken back, its Run failed before it began",
     taken.length === 1 && taken[0]?.status === "failed",
     JSON.stringify(taken),
+  );
+
+  // Part 9: any other tool, through an adapter that says what happened there
+  // in deevy's own format (docs/plans/simplify.md, slice 7). deevy makes the
+  // secret and says it once, takes a record signed with it as it takes one
+  // from any tracker, and counts no Ruling that comes this way: whoever holds
+  // the secret writes the author too.
+  const generic = await human(
+    origin,
+    "sockets/connect",
+    { provider: "generic", name: "Another tool" },
+    ada,
+  );
+  const genericId = String(generic.id);
+  const minted = typeof generic.webhookSecret === "string" ? generic.webhookSecret : "";
+  const listed = JSON.stringify(await human(origin, "sockets/list", {}, ada));
+  check(
+    "connecting another tool makes its secret, and says it once",
+    /^whsec_[0-9a-f]{48}$/.test(minted) && !listed.includes(minted),
+    minted,
+  );
+  const ops = await human(
+    origin,
+    "projects/create",
+    { slug: "ops", name: "ops", tracker: { socketId: genericId, scope: { scopeKey: "OPS" } } },
+    ada,
+  );
+  await human(
+    origin,
+    "checkpoints/set",
+    { projectSlug: "ops", checkpoints: [{ name: "plan", approvalsRequired: 1 }] },
+    ada,
+  );
+  await human(origin, "agents/grants/add", { memberId: plannerId, projectId: ops.id }, ada);
+  const elsewhere = {
+    externalId: "10042",
+    externalKey: "OPS-42",
+    url: "https://tracker.example/browse/OPS-42",
+    title: "Rotate the staging certificates",
+  };
+  const arrived = [stated(elsewhere, ["agent:planner"], 15, { scopeKey: "OPS" })];
+  const forged = await deliver(origin, genericId, arrived, "generic-forged");
+  check(
+    "a delivery signed with any other secret is refused",
+    forged.status === 401,
+    String(forged.status),
+  );
+  const opened = await deliver(origin, genericId, arrived, "generic-1", minted);
+  const opsRuns = (await agent.tool("runs_list", { issue: elsewhere.externalKey })).runs as Array<{
+    id: string;
+  }>;
+  check(
+    "and one signed with it opens a Run, as a record from any tracker does",
+    opened.status === 200 && opsRuns.length === 1,
+    `${String(opened.status)} ${JSON.stringify(opsRuns)}`,
+  );
+  const opsRunId = opsRuns[0]?.id ?? "";
+  await agent.tool("runs_post_activity", {
+    runId: opsRunId,
+    kind: "thought",
+    body: "Checking which certificates expire first",
+  });
+  const opsGate = await agent.tool("gates_request", {
+    runId: opsRunId,
+    checkpoint: "plan",
+    proposal: "Rotate the staging certificates with the new CA, one service at a time.",
+  });
+  const asked = (
+    await human(
+      origin,
+      "events/list",
+      { kindPrefix: "gate", subjectId: opsGate.id, limit: 10 },
+      ada,
+    )
+  ).events as Array<{ kind: string; payload: Record<string, unknown> | null }>;
+  const requested = asked.find((event) => event.kind === "gate.requested")?.payload;
+  check(
+    "its Gate's Event names the record as the tool knows it, for the adapter to say there",
+    requested?.issueSocketId === genericId &&
+      requested.issueKey === elsewhere.externalKey &&
+      requested.issueExternalId === elsewhere.externalId &&
+      requested.issueUrl === elsewhere.url,
+    JSON.stringify(requested),
+  );
+  const ruledThere = await deliver(
+    origin,
+    genericId,
+    [rulingComment(elsewhere, { login: "ada", id: adminEmail }, "/approve")],
+    "generic-ruling",
+    minted,
+  );
+  const unvouched = (
+    (await human(origin, "events/list", { kindPrefix: "gate", limit: 20 }, ada)).events as Array<{
+      kind: string;
+      payload: Record<string, unknown> | null;
+    }>
+  ).filter(
+    (event) => event.kind === "gate.ruling_refused" && event.payload?.reason === "unvouched",
+  );
+  check(
+    "and a Ruling through it counts for nothing, whoever it names, and the Gate still waits",
+    ruledThere.status === 200 &&
+      unvouched.length === 1 &&
+      unvouched[0]?.payload?.issueKey === elsewhere.externalKey &&
+      (await agent.tool("gates_get", { requestId: opsGate.id })).status === "open",
+    JSON.stringify(unvouched),
   );
 
   return story;

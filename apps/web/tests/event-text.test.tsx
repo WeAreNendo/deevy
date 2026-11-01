@@ -309,6 +309,15 @@ describe("a Ruling made in the tracker", () => {
         payload: { externalActor: "omar", reason: "unknown_identity", via: "slack" },
       })?.text,
     ).toBe("@omar ruled in Slack and it counted for nothing: an account nobody here has linked");
+    // And through a Socket whose deliveries anybody with its secret writes.
+    expect(
+      describeEvent({
+        kind: "gate.ruling_refused",
+        payload: { externalActor: "grace", reason: "unvouched" },
+      })?.text,
+    ).toBe(
+      "@grace ruled from the tracker and it counted for nothing: that tool can't vouch for who wrote it",
+    );
   });
 
   it("says how an account came to rule as somebody, and folds it away", () => {

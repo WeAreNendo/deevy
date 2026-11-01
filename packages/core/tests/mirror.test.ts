@@ -246,6 +246,7 @@ describe("the loop deevy must not close", () => {
     // The tracker tells deevy what deevy just said. Every provider does this,
     // and acting on it is a loop between deevy and somebody else's API.
     const result = await applyInbound({
+      vouches: true,
       db,
       workspace: ada.workspace,
       socket,

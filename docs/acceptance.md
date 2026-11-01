@@ -15,7 +15,7 @@ vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#buil
 vp run acceptance#walk
 ```
 
-A hundred and forty-seven checks: thirty-six against each of four deployments, and three comparing each Event
+A hundred and sixty-seven checks: forty-one against each of four deployments, and three comparing each Event
 log with Node's. The four are the image, the Worker, the image again under a path (`/deevy`), and a hosted
 Workspace at `/acme` behind the many-Workspaces Worker, provisioned through `Platform` and signed in through
 the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes,
@@ -111,7 +111,15 @@ run.awaiting_input gate.ruling_refused gate.approved run.answered run.completed`
     no Run. One opened and labelled first and linked under it after, which is GitHub's order, is taken back:
     its Run, not yet begun, fails. This comes after the Event log is read, so the story above is the first
     Run's alone.
-13. **The same walk on the other deployments**, and each Event log is compared with Node's.
+13. **Any other tool.** A generic Socket, connected with only a name: deevy mints its secret, says it in
+    the answer to the connect and nowhere after. A Project bound to the key `OPS` that the walk types. A
+    delivery signed with any other secret is 401; one signed with the minted secret, in deevy's own format,
+    opens a Run as the stub's do. The Agent asks at a Gate there, and `gate.requested` names the record as
+    the tool knows it — `issueExternalId`, `issueKey`, `issueUrl`, and `issueSocketId` for the Socket it
+    is in — which is what an adapter needs to say it in the tool, since deevy writes nothing there. And the admin's own `/approve` through it rules nothing:
+    one `gate.ruling_refused`, reason `unvouched`, and the Gate still waits (ADR-0024's 2026-11-01 section).
+    The stub signs with the same wire, so steps 2 to 12 exercise it too.
+14. **The same walk on the other deployments**, and each Event log is compared with Node's.
 
 ## Whose account is whose
 

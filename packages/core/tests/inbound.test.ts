@@ -45,7 +45,7 @@ async function workspace(db: Db) {
     asAda: createRouterClient(router, { context: ada }),
     asPlanner: createRouterClient(router, { context: planner }),
     apply: (events: InboundEvent[]) =>
-      applyInbound({ db, workspace: ada.workspace, socket, events }),
+      applyInbound({ vouches: true, db, workspace: ada.workspace, socket, events }),
   };
 }
 
@@ -100,7 +100,7 @@ describe("a record arriving from a tracker", () => {
     await seeded.setDefaultAgent(planner.member.id);
     const socket = (await db.query.socket.findFirst({ where: { id: seeded.socketId } })) as Socket;
     const apply = (events: InboundEvent[]) =>
-      applyInbound({ db, workspace: ada.workspace, socket, events });
+      applyInbound({ vouches: true, db, workspace: ada.workspace, socket, events });
 
     await apply([record({ externalId: "1", title: "Nobody named me" })]);
     await apply([record({ externalId: "2", title: "Already done", state: "closed" })]);
@@ -347,7 +347,14 @@ describe("a delivery that names what changed and says nothing else", () => {
       ...ready,
       fake,
       read: (events: InboundEvent[]) =>
-        applyInbound({ db, workspace: ready.ada.workspace, socket: ready.socket, events, tracker }),
+        applyInbound({
+          vouches: true,
+          db,
+          workspace: ready.ada.workspace,
+          socket: ready.socket,
+          events,
+          tracker,
+        }),
     };
   }
 
@@ -439,6 +446,7 @@ describe("what else a delivery can carry", () => {
     // Each delivery is applied to the Socket as it then stands.
     const apply = async (events: InboundEvent[]) =>
       applyInbound({
+        vouches: true,
         db,
         workspace: ada.workspace,
         socket: (await db.query.socket.findFirst({ where: { id: socket.id } })) as Socket,
