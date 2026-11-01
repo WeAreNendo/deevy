@@ -7,6 +7,7 @@ import { betterAuthKeys } from "../src/keys.ts";
 import { generateSpec } from "../src/openapi.ts";
 import { router } from "../src/operations/index.ts";
 import { applyInbound } from "../src/sockets/apply.ts";
+import type { SocketModules } from "../src/sockets/port.ts";
 import {
   agentContext,
   externalIssue,
@@ -90,6 +91,7 @@ describe("the read surface", () => {
     // A record the tracker announced on that Socket, so `issues.list` and
     // `issues.get` below have an Issue to answer with.
     await applyInbound({
+      vouches: true,
       db,
       workspace: ada.workspace,
       socket: sealed as Socket,
@@ -193,10 +195,17 @@ describe("the read surface", () => {
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const { sockets } = fakeSockets();
+    // A tool whose secret deevy mints at connect, as the generic Socket's is
+    // (docs/plans/simplify.md, slice 7): the connect answer says it once.
+    const generic: SocketModules["generic"] = (options) => {
+      const module = sockets.stub?.(options);
+      if (!module) throw new Error("the fake is a module");
+      return { ...module, provider: "generic", webhookSecretFrom: "deevy" };
+    };
     const asAda = createRouterClient(router, {
       context: {
         ...ada,
-        sockets,
+        sockets: { ...sockets, generic },
         socketSecret: testSealingSecret,
         // What `begin` signs its redirect's state with.
         secret: "test-secret-that-is-at-least-32-characters",
@@ -208,13 +217,16 @@ describe("the read surface", () => {
     const answers: Record<string, unknown> = {};
     answers["sockets.providers"] = await asAda.sockets.providers({});
     answers["sockets.begin"] = await asAda.sockets.begin({ provider: "stub", name: "Later" });
+    const minted = await asAda.sockets.connect({ provider: "generic", name: "Any tool" });
+    expect(minted.webhookSecret).toMatch(/^whsec_/);
+    const mintedRow = await db.query.socket.findFirst({ where: { id: minted.id } });
     const socket = await asAda.sockets.connect({
       provider: "stub",
       name: "Example tracker",
       credentials: { token: sentinels.socketCredential },
       webhookSecret: first,
     });
-    answers["sockets.connect"] = socket;
+    answers["sockets.connect"] = [socket, { ...minted, webhookSecret: "(said once)" }];
     // A secret replaced twice, the second time by a mint, so the replaced one
     // and when it was replaced are both in the row: the sealed previous secret
     // was in every Socket answer and in openapi.json until 2026-10-16.
@@ -242,6 +254,8 @@ describe("the read surface", () => {
       first,
       second,
       rotated.webhookSecret,
+      minted.webhookSecret ?? "",
+      mintedRow?.webhookSecret ?? "",
       sentinels.socketCredential,
       afterUpdate?.previousWebhookSecret ?? "",
       afterUpdate?.webhookSecret ?? "",
@@ -274,7 +288,8 @@ describe("the read surface", () => {
       paths: Record<string, Record<string, { operationId?: string; responses?: unknown }>>;
     };
     // The minted webhook secret is said once, by the three answers that mint
-    // or would: `begin` and `connect` always say null.
+    // or would: `begin` always says null, and `connect` says one only for a
+    // tool whose secret deevy makes, as the generic Socket's is.
     const sayOnce = new Set(["sockets.begin", "sockets.connect", "sockets.rotate"]);
     const found: string[] = [];
     let properties = 0;

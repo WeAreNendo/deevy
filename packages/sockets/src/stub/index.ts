@@ -6,7 +6,7 @@
  * says something, or is told something. Proving those against GitHub means a
  * network, an App, a tunnel and a clock; proving them against this means a
  * function call. So the stub is a real tracker with an in-memory store, it
- * signs its deliveries the way a provider does, it keeps what deevy says on a
+ * signs and reads its deliveries the way the generic Socket does, it keeps what deevy says on a
  * record where a test can read it, and it is what the core's tests, the seed
  * and the acceptance walk play (docs/plans/sockets.md).
  *
@@ -18,13 +18,11 @@ import type {
   ExternalComment,
   ExternalIssue,
   ExternalRef,
-  InboundCheck,
-  InboundEvent,
-  InboundInput,
   Scope,
   SocketModule,
   SocketModuleInput,
 } from "@deevy/core/sockets";
+import { readEvents, verifyDelivery } from "../generic/wire.ts";
 
 /** A container in the stub tracker: what a Project binds to. */
 export interface StubContainer {
@@ -184,82 +182,10 @@ function requireContainer(store: StubStore, scope: Scope): StubContainer {
   return container;
 }
 
-// The wire. The stub's own format, because what it exists to exercise is
-// deevy's half: a signature over the raw body, a delivery id that makes a
-// replay a no-op, and an event name `normalize` switches on.
-
-const encoder = new TextEncoder();
-
-async function hmac(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function equal(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let same = 0;
-  for (let index = 0; index < a.length; index += 1)
-    same |= a.charCodeAt(index) ^ b.charCodeAt(index);
-  return same === 0;
-}
-
-/** One delivery, ready to be POSTed at `/hooks/<socketId>`. */
-export interface StubDelivery {
-  headers: Record<string, string>;
-  body: string;
-}
-
-let deliveries = 0;
-
-/**
- * Signs one delivery. The events are carried verbatim, because the stub is not
- * modelling a provider's payload — a provider's own shape is what its fixture
- * tests are for, and what this proves is the machinery behind `normalize`.
- */
-export async function signDelivery(
-  secret: string,
-  events: InboundEvent[],
-  options: { deliveryId?: string; eventName?: string } = {},
-): Promise<StubDelivery> {
-  deliveries += 1;
-  const deliveryId = options.deliveryId ?? `stub-delivery-${deliveries}`;
-  const body = JSON.stringify({ events });
-  return {
-    headers: {
-      "content-type": "application/json",
-      "stub-event": options.eventName ?? "events",
-      "stub-delivery": deliveryId,
-      "stub-signature": await hmac(secret, body),
-    },
-    body,
-  };
-}
-
-/**
- * The clocks a delivery lost on the way through JSON.
- *
- * A provider's `normalize` reads a parsed body and answers deevy's own types,
- * and two of those are Dates: the core compares them to decide a reordered
- * delivery and writes them to integer columns. A stub that handed back strings
- * would be a stub that only worked in a test that never wrote one down.
- */
-function reviveDates(event: unknown): InboundEvent {
-  const one = event as Record<string, Record<string, unknown> | undefined>;
-  if (one.issue && typeof one.issue.updatedAt === "string") {
-    one.issue = { ...one.issue, updatedAt: new Date(one.issue.updatedAt) };
-  }
-  if (one.comment && typeof one.comment.createdAt === "string") {
-    one.comment = { ...one.comment, createdAt: new Date(one.comment.createdAt) };
-  }
-  return one as unknown as InboundEvent;
-}
+// The wire is the generic Socket's (src/generic/wire.ts): what the stub exists
+// to exercise is deevy's half — a signature over the raw body, a delivery id
+// that makes a replay a no-op, a strict reader — and a public format is the
+// one worth exercising on every deployment.
 
 export function createStubSocket({ config, now }: SocketModuleInput): SocketModule {
   // A Socket connected with no configuration finds the store the deployment
@@ -274,6 +200,8 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
     capabilities: new Set(["tracker"] as const),
     // In the process, so it signs with whatever it is given.
     webhookSecretFrom: "either",
+    // Walked on every deployment, on every commit (docs/acceptance.md).
+    walked: true,
     // Its own accounts, unless its configuration says they are the ones deevy
     // signs people in with: that is how the acceptance walk and the seed play a
     // Human who signed in with GitHub and rules from the tracker with no
@@ -288,22 +216,8 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
     identity: () => Promise.resolve(store.identity),
 
     tracker: {
-      async verifyInbound({
-        headers,
-        rawBody,
-        webhookSecret,
-      }: InboundInput): Promise<InboundCheck> {
-        const eventName = headers.get("stub-event") ?? "";
-        const deliveryId = headers.get("stub-delivery");
-        const signature = headers.get("stub-signature") ?? "";
-        const expected = await hmac(webhookSecret, rawBody);
-        return { ok: equal(signature, expected), deliveryId, eventName };
-      },
-
-      normalize(_eventName: string, payload: unknown): InboundEvent[] {
-        const events = (payload as { events?: unknown } | null)?.events;
-        return Array.isArray(events) ? events.map(reviveDates) : [];
-      },
+      verifyInbound: verifyDelivery,
+      normalize: (_eventName, payload) => readEvents(payload),
 
       getIssue(scope: Scope, ref: ExternalRef): Promise<ExternalIssue> {
         const issue = requireContainer(store, scope).issues.get(ref.externalId);

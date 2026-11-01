@@ -3,7 +3,15 @@ title: Linear
 description: Connect a Linear workspace through an OAuth application of your own, bind a Project to a team, and let people assign issues to deevy.
 sidebar:
   order: 3
+  badge:
+    text: Preview
+    variant: caution
 ---
+
+:::caution[Preview]
+deevy's Linear Socket is built and tested against Linear's recorded deliveries, and has not yet been tried
+against Linear itself. Settings says **Preview** beside it until it has.
+:::
 
 A Linear Socket is one Linear workspace, reached through an OAuth application you make there. deevy acts as
 the application itself, not as whoever connected it, so every comment it writes is the application's. A

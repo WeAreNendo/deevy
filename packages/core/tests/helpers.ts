@@ -485,7 +485,13 @@ export async function seedProject(
     deliver: async (events) => {
       const found = await db.query.socket.findFirst({ where: { id: socketId } });
       if (!found) throw new Error("seedProject: the Socket is gone");
-      return applyInbound({ db, workspace: { id: workspaceId }, socket: found, events });
+      return applyInbound({
+        vouches: true,
+        db,
+        workspace: { id: workspaceId },
+        socket: found,
+        events,
+      });
     },
   };
 }

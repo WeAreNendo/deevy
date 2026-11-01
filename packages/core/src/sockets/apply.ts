@@ -63,6 +63,13 @@ export interface ApplyInboundOptions {
    * name one (`changed`, `commented`): Notion's. Absent, those are skipped.
    */
   tracker?: TrackerSocket;
+  /**
+   * False where the tool cannot vouch for who made a Ruling on it, so every
+   * Ruling is refused (`SocketModule.vouches`): the generic Socket's. Said by
+   * every caller, never defaulted, so one that forgets cannot let such a
+   * Ruling reach the Identity lookup.
+   */
+  vouches: boolean;
   now?: () => Date;
 }
 
@@ -89,6 +96,7 @@ export async function applyInbound({
   jobs,
   identityScope,
   tracker,
+  vouches,
   now = () => new Date(),
 }: ApplyInboundOptions): Promise<ApplyInboundResult> {
   const source: EventSource = { db, workspace, member: null, ...(jobs ? { jobs } : {}) };
@@ -100,7 +108,7 @@ export async function applyInbound({
   const scope = identityScope ?? { instance: socket.provider };
   for (const event of events) {
     const why = await applyOne(
-      { db, socket, source, projects, scope, now, ...(tracker ? { tracker } : {}) },
+      { db, socket, source, projects, scope, vouches, now, ...(tracker ? { tracker } : {}) },
       event,
     );
     if (why === null) result.applied += 1;
@@ -116,6 +124,7 @@ interface Applying {
   projects: Map<string, Project | null>;
   scope: IdentityScope;
   tracker?: TrackerSocket;
+  vouches: boolean;
   now: () => Date;
 }
 
@@ -134,6 +143,7 @@ async function applyOne(applying: Applying, event: InboundEvent): Promise<string
       socket: applying.socket,
       scope: applying.scope,
       event,
+      vouches: applying.vouches,
     });
   }
   return event.why;

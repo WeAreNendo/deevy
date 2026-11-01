@@ -152,3 +152,32 @@ says back went here.
 
 Sub-issues follow: an Agent opens them in the tracker, deevy links each to its parent from what the tracker
 delivers, and keeps no tree where the tracker has no parent (ADR-0022, amended again in slice 6).
+
+## Any tool, through a generic Socket (2026-11-01)
+
+Amended again by [docs/plans/simplify.md](../plans/simplify.md), slice 7, because a tool deevy has no module
+for had no way in, and with the port at three methods a module for one is mostly its parser. The **generic
+Socket** is a tool whose parser is deevy's own format: an adapter of the team's posts
+`{ "events": [...] }`, each event an `InboundEvent` carrying its record or comment whole, to the Socket's
+address, signed the way deevy signs its webhooks (`deevy-signature: t=<unix>,v1=<hex>`, HMAC-SHA256 of
+`<t>.<body>`, refused after five minutes), so one routine in an adapter signs what it sends and checks what
+deevy sends it. deevy mints the secret at connect (`webhookSecretFrom: "deevy"`), since the sender has it
+from nowhere else, and shows it once. The format is public (`tools/generic` on docs.deevy.dev), and the stub
+reads and signs the same wire, so the walk exercises it on every deployment.
+
+Two rules make it safe to register everywhere, production included:
+
+- **It vouches for nobody** (`SocketModule.vouches: false`). Whoever holds the secret writes everything a
+  delivery says, the author's account and address included, so a Ruling through it is refused before any
+  Identity or address is looked up, as `gate.ruling_refused` with the reason `unvouched`, and a Gate on its
+  records is ruled in deevy or in a chat tool that does vouch. ADR-0025's rule is unchanged for every other
+  tool.
+- **It says nothing back.** `createComment` answers `null`, and deevy keeps no mirror row for it. What deevy
+  would say on a record is the Gate's own Events on the Workspace's webhooks, and every `gate.*` Event now
+  names its record as the tool knows it (`issueExternalId`, `issueKey`, `issueUrl`) and the Socket it is in
+  (`issueSocketId`), read in the queries that already load the Gate, so an adapter can say it in the tool
+  without asking deevy anything, and only for its own tool's records.
+
+`sockets.providers` also says whether each module has been **walked**, against the real tool or, for the
+stub and the generic Socket, by the acceptance walk; a module that has not is labelled **Preview** in
+Settings and on its public page until somebody walks it.

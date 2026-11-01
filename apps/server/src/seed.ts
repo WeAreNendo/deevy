@@ -506,6 +506,7 @@ await applyInbound({
   workspace: { id: admin.member.workspaceId },
   socket: socketRow,
   jobs,
+  vouches: true,
   ...(stubModule?.identityScope ? { identityScope: stubModule.identityScope } : {}),
   events: [
     {

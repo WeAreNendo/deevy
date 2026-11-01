@@ -938,6 +938,9 @@ importers:
       '@deevy/core':
         specifier: workspace:*
         version: link:../core
+      zod:
+        specifier: 'catalog:'
+        version: 4.5.4
     devDependencies:
       '@deevy/adapters':
         specifier: workspace:*

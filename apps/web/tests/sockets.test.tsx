@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 /**
@@ -36,7 +36,7 @@ const state = vi.hoisted(() => ({
   /** Makes the providers' answer an error, as a server that cannot be reached gives. */
   providersFail: false,
   /** What the stub provider says of its webhook secret, for the page to follow. */
-  stubSecretFrom: "either" as "either" | "tool" | "handshake",
+  stubSecretFrom: "either" as "either" | "tool" | "handshake" | "deevy",
   /** Why the GitHub module will not begin here, as it says on a GitHub Enterprise Server. */
   githubBeginRefusal: null as string | null,
 }));
@@ -54,43 +54,64 @@ vi.mock("../src/lib/orpc.ts", async () => {
             : {
                 // Who makes each one's webhook secret is the module's word, and
                 // what the Socket's page offers to change it follows it.
+                // And whether it has been walked against the real tool, which
+                // is what the Preview label says it has not.
                 providers: [
+                  {
+                    id: "generic",
+                    label: "Generic",
+                    capabilities: ["tracker"],
+                    webhookSecretFrom: "deevy",
+                    beginRefusal: null,
+                    walked: true,
+                  },
                   {
                     id: "github",
                     label: "GitHub",
                     capabilities: ["tracker"],
                     webhookSecretFrom: "either",
                     beginRefusal: state.githubBeginRefusal,
+                    walked: true,
                   },
                   {
                     id: "gitlab",
                     label: "GitLab",
                     capabilities: ["tracker"],
                     webhookSecretFrom: "either",
+                    beginRefusal: null,
+                    walked: false,
                   },
                   {
                     id: "linear",
                     label: "Linear",
                     capabilities: ["tracker"],
                     webhookSecretFrom: "tool",
+                    beginRefusal: null,
+                    walked: false,
                   },
                   {
                     id: "notion",
                     label: "Notion",
                     capabilities: ["tracker"],
                     webhookSecretFrom: "handshake",
+                    beginRefusal: null,
+                    walked: false,
                   },
                   {
                     id: "slack",
                     label: "Slack",
                     capabilities: ["chat"],
                     webhookSecretFrom: "tool",
+                    beginRefusal: null,
+                    walked: false,
                   },
                   {
                     id: "stub",
                     label: "the stub tracker",
                     capabilities: ["tracker"],
                     webhookSecretFrom: state.stubSecretFrom,
+                    beginRefusal: null,
+                    walked: true,
                   },
                 ],
               },
@@ -119,7 +140,8 @@ vi.mock("../src/lib/orpc.ts", async () => {
           hasCredentials: true,
           hasWebhookSecret: true,
           inboundUrl: "https://deevy.test/hooks/sock_stub00000",
-          webhookSecret: null,
+          // Minted at connect only for a tool whose sender deevy hands it to.
+          webhookSecret: input.provider === "generic" ? "whsec_minted_at_connect" : null,
         };
       },
       rotate: async (input: { socketId: string }) => {
@@ -441,6 +463,79 @@ describe("the tools this Workspace is connected to", () => {
       credentials: { botToken: "xoxb-pasted-from-slack" },
       webhookSecret: "8f14e45fceea167a5a36dedd4bea2543",
     });
+  });
+});
+
+describe("a tool nobody has walked yet", () => {
+  it("says Preview beside its Connect, and nothing beside one that has been", async () => {
+    state.sockets = [];
+    await mountAt("/settings/sockets");
+    const connect = await screen.findByRole("group", { name: "Connect a tool" });
+
+    // Said as the button's description, so its name stays what a test and a
+    // screen reader find it by.
+    for (const tool of ["GitLab", "Linear", "Notion", "Slack"]) {
+      expect(
+        within(connect).getByRole("button", { name: `Connect ${tool}`, description: "Preview" }),
+      ).toBeTruthy();
+    }
+    for (const name of ["Connect GitHub", "Connect another tool"]) {
+      expect(within(connect).getByRole("button", { name, description: "" })).toBeTruthy();
+    }
+    expect(screen.getByText(/not yet been tried against the tool itself/)).toBeTruthy();
+  });
+
+  it("says Preview on a connected one, in the list and on its page", async () => {
+    state.sockets = [
+      { ...stubSocket, provider: "linear", name: "Acme on Linear", hasWebhookSecret: true },
+    ];
+
+    await mountAt("/settings/sockets");
+    const list = await screen.findByRole("list", { name: "Sockets" });
+    expect(await within(list).findByText("Preview")).toBeTruthy();
+    cleanup();
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    expect(await screen.findByRole("heading", { name: "Acme on Linear" })).toBeTruthy();
+    expect(await screen.findByText("Preview")).toBeTruthy();
+  });
+});
+
+describe("connecting another tool", () => {
+  it("takes a name, then says where to send deliveries and the secret to sign them with, once", async () => {
+    state.sockets = [];
+    calls.connect.mockClear();
+    calls.rotate.mockClear();
+    await mountAt("/settings/sockets");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect another tool" }));
+    expect(screen.getByRole("heading", { name: "Connect another tool" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme's Jira" } });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
+    expect(calls.connect.mock.calls[0]?.[0]).toEqual({ provider: "generic", name: "Acme's Jira" });
+    expect(await screen.findByText("https://deevy.test/hooks/sock_stub00000")).toBeTruthy();
+    expect(screen.getByText("whsec_minted_at_connect")).toBeTruthy();
+    expect(screen.getByText(/only time deevy shows it/)).toBeTruthy();
+    // Minted by the connect itself: nothing is minted twice.
+    expect(calls.rotate).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "what a delivery says" }).getAttribute("href")).toBe(
+      "https://docs.deevy.dev/tools/generic/",
+    );
+  });
+
+  it("offers a new secret minted by deevy, and no field to paste one", async () => {
+    state.sockets = [
+      { ...stubSocket, provider: "generic", name: "Acme's Jira", hasWebhookSecret: true },
+    ];
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    const signs = await screen.findByRole("region", { name: "What it signs with" });
+
+    expect(within(signs).getByRole("button", { name: "Mint a webhook secret" })).toBeTruthy();
+    expect(within(signs).queryByRole("button", { name: "Use the new secret" })).toBeNull();
+    expect(within(signs).getByText(/deevy makes it/)).toBeTruthy();
   });
 });
 

@@ -289,7 +289,9 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
           ? "an account nobody here has linked"
           : str(p.reason) === "nothing_waiting"
             ? "nothing was waiting on a ruling"
-            : (str(p.message) ?? "the Checkpoint would not take it");
+            : str(p.reason) === "unvouched"
+              ? "that tool can't vouch for who wrote it"
+              : (str(p.message) ?? "the Checkpoint would not take it");
       const where = str(p.via) === "slack" ? "in Slack" : "from the tracker";
       return say(
         `${who ? `@${who}` : "somebody"} ruled ${where} and it counted for nothing: ${why}`,

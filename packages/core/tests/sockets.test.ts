@@ -319,6 +319,48 @@ describe("a connected tool", () => {
     expect((await asAda.sockets.rotate({ socketId: github.id })).webhookSecret).toMatch(/^whsec_/);
   });
 
+  it("mints the secret at connect for a tool whose sender deevy hands it to, and says it once", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const { sockets } = fakeSockets();
+    // The generic Socket's word: deevy makes the secret, and whoever sends the
+    // tool's deliveries is given it (docs/plans/simplify.md, slice 7).
+    const generic: SocketModules["generic"] = (options) => {
+      const module = sockets.stub?.(options);
+      if (!module) throw new Error("the fake is a module");
+      return { ...module, provider: "generic", webhookSecretFrom: "deevy" };
+    };
+    const asAda = createRouterClient(router, {
+      context: { ...ada, sockets: { ...sockets, generic }, socketSecret: testSealingSecret },
+    });
+
+    const connected = await asAda.sockets.connect({ provider: "generic", name: "Any tool" });
+
+    expect(connected.webhookSecret).toMatch(/^whsec_[0-9a-f]{48}$/);
+    const row = await db.query.socket.findFirst({ where: { id: connected.id } });
+    expect(row?.webhookSecret).toBeTruthy();
+    expect(row?.webhookSecret).not.toContain(connected.webhookSecret ?? "-");
+    // And a new one is minted the same way, the old one taken for a day more.
+    const rotated = await asAda.sockets.rotate({ socketId: connected.id });
+    expect(rotated.webhookSecret).toMatch(/^whsec_/);
+    expect(rotated.webhookSecret).not.toBe(connected.webhookSecret);
+    // A tool that is not that kind is still told nothing at connect.
+    const stub = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+    expect(stub.webhookSecret).toBeNull();
+
+    // Nor does it take one typed in, at connect or after: deevy is the only
+    // one that makes it, and the page and the docs say so.
+    const typed = "a-secret-somebody-chose";
+    await expect(
+      asAda.sockets.connect({ provider: "generic", name: "Typed", webhookSecret: typed }),
+    ).rejects.toThrow(/deevy makes/);
+    await expect(
+      asAda.sockets.update({ socketId: connected.id, webhookSecret: typed }),
+    ).rejects.toThrow(/Mint/);
+    expect(await db.query.socket.findMany({ where: { name: "Typed" } })).toEqual([]);
+  });
+
   it("starts no flow the tool says it cannot finish here, and says so first", async () => {
     const { db, close } = testDb();
     closers.push(close);
@@ -516,6 +558,9 @@ describe("what this deevy can speak", () => {
         capabilities: ["tracker"],
         webhookSecretFrom: "either",
         beginRefusal: null,
+        // The fake says nothing of having been tried against a real tool, and
+        // a module that says nothing is a Preview.
+        walked: false,
       },
     ]);
   });

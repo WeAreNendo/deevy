@@ -15,7 +15,15 @@
  * that cannot do without them.
  */
 
-export const socketProviders = ["github", "linear", "gitlab", "notion", "slack", "stub"] as const;
+export const socketProviders = [
+  "github",
+  "linear",
+  "gitlab",
+  "notion",
+  "slack",
+  "generic",
+  "stub",
+] as const;
 export type SocketProvider = (typeof socketProviders)[number];
 
 export const socketCapabilities = ["tracker", "chat"] as const;
@@ -147,8 +155,13 @@ export interface TrackerSocket {
   verifyInbound(input: InboundInput): Promise<InboundCheck>;
   /** Pure. One delivery may mean several things, or nothing. */
   normalize(eventName: string, payload: unknown): InboundEvent[];
-  /** Says something on a record: a Gate waiting, and the Ruling that settled it. */
-  createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef>;
+  /**
+   * Says something on a record: a Gate waiting, and the Ruling that settled
+   * it. Null where the tool takes nothing from deevy this way: the generic
+   * Socket, whose adapter hears the Gate's own Events on the Workspace's
+   * webhooks and says it in the tool itself.
+   */
+  createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef | null>;
   /**
    * One record, for a tool whose deliveries only name it (`changed`): Notion's.
    * Absent, such a delivery is skipped.
@@ -398,8 +411,12 @@ export interface IdentityScope {
  * - `handshake`: the tool sends it to establish its webhook and deevy keeps
  *   what it sent (hooks.ts): Notion's verification token. A minted one would
  *   replace it and break the webhook.
+ * - `deevy`: deevy makes it when the Socket is connected, says it once, and
+ *   whoever sends the tool's deliveries is given it: the generic Socket, whose
+ *   sender is an adapter somebody wrote and has nowhere a secret comes from
+ *   but deevy. A new one is minted the same way (`sockets.rotate`).
  */
-export const webhookSecretOrigins = ["either", "tool", "handshake"] as const;
+export const webhookSecretOrigins = ["either", "tool", "handshake", "deevy"] as const;
 export type WebhookSecretFrom = (typeof webhookSecretOrigins)[number];
 
 export interface SocketModule {
@@ -409,6 +426,21 @@ export interface SocketModule {
   webhookSecretFrom: WebhookSecretFrom;
   /** Where its accounts live. Absent, the provider's name is the instance and nothing is shared. */
   identityScope?: IdentityScope;
+  /**
+   * Whether a Ruling made on this tool may count (ADR-0025). Absent is yes:
+   * the tool signs what one of its own accounts did, and an Identity says
+   * whose that account is. The generic Socket says no, because whoever holds
+   * its secret writes the delivery, the author's name and address included,
+   * and that is not the tool vouching for anybody: every Ruling through it is
+   * refused before anybody is looked up.
+   */
+  vouches?: false;
+  /**
+   * Whether this module has been walked against the tool itself, rather than
+   * only its recorded payloads (docs/plans/simplify.md, slice 7). Absent is
+   * no, and Settings and the tool's page call it a Preview until it is.
+   */
+  walked?: boolean;
   /** Proves the credential at connect, and is what `sockets.test` re-asks. */
   identity(): Promise<SocketIdentity>;
   /**
@@ -475,6 +507,14 @@ export function parseRulingCommand(
     note: note || null,
   };
 }
+
+/**
+ * The signature deevy's webhooks carry, which is also the one a sender signs
+ * a delivery to the generic Socket with: one scheme in both directions
+ * (signature.ts).
+ */
+export { replayWindowSeconds, signPayload, verifySignature } from "../signature.ts";
+export type { VerifyInput } from "../signature.ts";
 
 /** What an entry hands `createApp`: the providers this deployment can speak. */
 export type SocketModules = Partial<

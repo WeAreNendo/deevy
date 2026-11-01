@@ -1423,6 +1423,11 @@ credential.
 | GitLab | records                                                 | an access token for the user deevy acts as, and a webhook on each project  |
 | Notion | records (a database's rows)                             | an internal connection's token, and a webhook subscription                 |
 | Slack  | Gates in a room or a direct message, ruled with buttons | an app from deevy's manifest                                               |
+| Any    | records, through an adapter of yours                    | nothing in deevy but a name; deevy mints the secret the adapter signs with |
+
+Linear, GitLab, Notion and Slack are labelled **Preview** in Settings and on their public pages until
+somebody walks them against the real tool: `walked` on each module, answered by `sockets.providers`. GitHub
+was walked against github.com on 2026-09-25, and the stub and the generic Socket are walked on every commit by the acceptance walk.
 
 ### Where a tool delivers
 
@@ -1459,6 +1464,8 @@ answered per provider by `sockets.providers`), and both the page and `sockets.ro
 - **`handshake`** — Notion, which signs with the verification token it sends when its subscription is made.
   The page has no such section, since **Verifying the webhook** shows that token, and `sockets.rotate`
   refuses, because a minted secret would replace the token and break the webhook.
+- **`deevy`** — the generic Socket, whose adapter has a secret from nowhere but deevy. `sockets.connect`
+  mints one and answers it once, and the page offers only **Mint a webhook secret**.
 
 Whichever way it changes, deevy keeps taking the old secret for a day (`PREVIOUS_SECRET_MS`, the sealed
 `previousWebhookSecret` and `webhookSecretChangedAt` on the Socket row), so the two sides can change in
@@ -1697,6 +1704,26 @@ This section has been checked against what Slack publishes — its signing docs'
 check, the Web API's and Block Kit's types, the manifest reference, example interactions, and slack.com
 answering a made-up token — but **not yet walked in a Slack workspace** (docs/plans/sockets.md, "The Slack
 check").
+
+### Working in any other tool
+
+A tool deevy has no module for is a **generic Socket** (`packages/sockets/src/generic`): **Connect another
+tool**, with a name and nothing else. `sockets.connect` mints its secret and answers it as `webhookSecret`,
+the only time it is said; the dialog shows it beside the address. An adapter of the team's posts deevy's own
+format to that address: `{ "events": [...] }`, each an `issue` or `comment` event carrying its record or
+comment whole, signed `deevy-signature: t=<unix>,v1=<hex>` over `<t>.<body>` as deevy signs its webhooks,
+with `deevy-delivery` as its id. The public page `tools/generic` is the contract: the fields, a signing
+script, an n8n flow. The stub (`packages/sockets/src/stub`) reads and signs the same wire, so every test that
+delivers to the stub exercises it.
+
+It is registered by every entry, in production too, and it is safe there because of two rules. **It vouches
+for nobody** (`vouches: false`): a `/approve` through it is refused before any Identity or address is looked
+up, as `gate.ruling_refused` with reason `unvouched`. **It writes nothing back**: `createComment` answers
+`null` and no mirror row is kept, so a Gate is announced only as its `gate.*` Events on the Workspace's
+webhooks, each carrying `issueExternalId`, `issueKey` and `issueUrl` for the adapter to say it in the tool,
+and `issueSocketId` for it to tell its own tool's records from another's. A secret typed in is refused at
+connect and on `sockets.update`: only deevy makes this one.
+A Project is bound to it by a typed key, since it cannot list containers.
 
 ## Ruling from the tracker
 
