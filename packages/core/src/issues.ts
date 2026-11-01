@@ -202,3 +202,34 @@ export function delegationRefused(
     payload: { limit: "depth", allowed, to, key: issue.externalKey },
   };
 }
+
+/**
+ * The record a Gate's Event is about, as its tool knows it: what an adapter
+ * hearing the Event on a webhook needs to say something there, since an
+ * Event's `issueId` is deevy's own and the tool has never heard of it
+ * (docs/plans/simplify.md, slice 7). Every Gate Event carries it, however the
+ * Gate settled. `issueSocketId` is the Socket the record is in, so an adapter
+ * hearing every Gate in the Workspace says only its own tool's; a payload's
+ * `socketId`, where there is one, is the Socket a Ruling came through.
+ */
+export function recordOf(issue: {
+  socketId: string;
+  externalId: string;
+  externalKey: string;
+  url: string;
+}) {
+  return {
+    issueSocketId: issue.socketId,
+    issueExternalId: issue.externalId,
+    issueKey: issue.externalKey,
+    issueUrl: issue.url,
+  };
+}
+
+/** The columns `recordOf` reads, for a query that loads them beside what it was reading anyway. */
+export const recordColumns = {
+  socketId: true,
+  externalId: true,
+  externalKey: true,
+  url: true,
+} as const;

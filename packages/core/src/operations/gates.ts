@@ -29,6 +29,7 @@ import {
   type GateDecisionRow,
 } from "../gates.ts";
 import { newId } from "../ids.ts";
+import { recordOf } from "../issues.ts";
 import { isOpen, setRunStatus, statusAfterActivity } from "../runs.ts";
 import { defineOperation } from "./registry.ts";
 import type { ContextFor } from "./registry.ts";
@@ -185,7 +186,12 @@ export const gates = {
           subjectType: "gate",
           subjectId: standing.id,
           projectId: project.id,
-          payload: { issueId: issue.id, runId: run.id, checkpoint: standing.checkpoint },
+          payload: {
+            issueId: issue.id,
+            ...recordOf(issue),
+            runId: run.id,
+            checkpoint: standing.checkpoint,
+          },
         });
       }
 
@@ -278,6 +284,7 @@ export const gates = {
         projectId: project.id,
         payload: {
           issueId: issue.id,
+          ...recordOf(issue),
           runId: run.id,
           checkpoint: request.checkpoint,
           visit: request.visit,

@@ -3,6 +3,7 @@ import { ORPCError } from "@orpc/server";
 import { appendEvent, type EventSource } from "../events.ts";
 import { recordRuling } from "../gates.ts";
 import { memberForExternalIdentity, mintLinkCode } from "../identities.ts";
+import { recordColumns, recordOf } from "../issues.ts";
 import type {
   ChatInteraction,
   ChatReply,
@@ -105,7 +106,7 @@ export async function applyChat({
 
   const gate = await source.db.query.gateRequest.findFirst({
     where: { id: interaction.gateRequestId },
-    with: { project: { columns: { workspaceId: true } } },
+    with: { project: { columns: { workspaceId: true } }, issue: { columns: recordColumns } },
   });
   // A Gate in another Workspace is not one this Socket can see, whatever a
   // forged value on a button says.
@@ -121,6 +122,7 @@ export async function applyChat({
       projectId: gate.projectId,
       payload: {
         issueId: gate.issueId,
+        ...recordOf(gate.issue),
         socketId: socket.id,
         checkpoint: gate.checkpoint,
         // Said in the chat tool already: the tracker is not told (mirror.ts).

@@ -121,6 +121,7 @@ async function waiting(
     const socket =
       (await db.query.socket.findFirst({ where: { id: seeded.socketId } })) ?? socketRow;
     return applyInbound({
+      vouches: true,
       db,
       workspace: { id: ada.workspace.id },
       socket,
@@ -205,6 +206,69 @@ describe("a Ruling from the tracker", () => {
     const reply = (await replies()).find((body) => body.includes("@carol-gh"));
     expect(reply).toContain("https://deevy.test/settings/identities");
     expect(reply).toContain("ruled nothing");
+  });
+
+  it("names the record as its tool does when it says a Ruling ruled nothing", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { issue, say } = await waiting(db);
+
+    await say({ login: "carol-gh", id: "2003" });
+
+    const refused = await db.query.event.findFirst({ where: { kind: "gate.ruling_refused" } });
+    expect(refused?.payload).toMatchObject({
+      issueId: issue.id,
+      issueExternalId: "42",
+      issueKey: issue.externalKey,
+      issueUrl: issue.url,
+    });
+  });
+
+  it("rules nothing through a Socket that vouches for nobody, whoever it names", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { ada, seeded, gate, decisions, replies } = await waiting(db);
+    const socket = await db.query.socket.findFirst({ where: { id: seeded.socketId } });
+    if (!socket) throw new Error("the Socket was just seeded");
+
+    // Bob signed in with GitHub, so on any other Socket this is his Ruling.
+    // Whoever holds the generic Socket's secret writes the author too, so on
+    // one that cannot vouch it is nobody's (ADR-0025).
+    await applyInbound({
+      db,
+      workspace: { id: ada.workspace.id },
+      socket,
+      identityScope: github,
+      vouches: false,
+      events: [
+        {
+          kind: "ruling",
+          scopeKey: "acme/deevy",
+          issueExternalId: "42",
+          comment: {
+            externalId: "c-unvouched",
+            url: "https://tracker.example/42#c-unvouched",
+            body: "/approve",
+            author: { login: "bob", id: "1002", isBot: false },
+            createdAt: new Date(),
+          },
+          decision: "approved",
+          note: null,
+        },
+      ],
+    });
+
+    expect(await decisions()).toEqual([]);
+    expect(await db.query.memberIdentity.findMany({})).toEqual([]);
+    const refused = await db.query.event.findFirst({ where: { kind: "gate.ruling_refused" } });
+    expect(refused).toMatchObject({
+      subjectId: gate.id,
+      payload: { reason: "unvouched", externalActor: "bob" },
+    });
+    // Where a tool that cannot vouch does take a comment, it says where to rule.
+    expect(await replies()).toContainEqual(
+      expect.stringContaining(`Rule on it in deevy: https://deevy.test/gates/${gate.id}`),
+    );
   });
 
   it("rules once the Human has linked the account, with the same comment", async () => {

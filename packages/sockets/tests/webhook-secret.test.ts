@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { SocketProvider } from "@deevy/core/sockets";
+import { webhookSecretOrigins, type SocketProvider } from "@deevy/core/sockets";
 import { socketModules } from "../src/index.ts";
 
 /**
@@ -35,9 +35,13 @@ describe("who makes a tool's webhook secret", () => {
     expect(declared("notion")).toBe("handshake");
   });
 
+  it("is deevy's alone for the generic Socket, whose sender has it from nowhere else", () => {
+    expect(declared("generic")).toBe("deevy");
+  });
+
   it("is said by every module this build registers", () => {
     for (const provider of Object.keys(modules) as SocketProvider[]) {
-      expect(["either", "tool", "handshake"]).toContain(declared(provider));
+      expect(webhookSecretOrigins).toContain(declared(provider));
     }
   });
 });

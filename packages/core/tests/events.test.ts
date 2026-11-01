@@ -176,6 +176,7 @@ describe("events.list by kind family", () => {
     // opens nothing there itself (ADR-0024).
     const row = (await db.query.socket.findFirst({ where: { id: socket.id } })) as Socket;
     await applyInbound({
+      vouches: true,
       db,
       workspace: alice.workspace,
       socket: row,

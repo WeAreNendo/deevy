@@ -5953,6 +5953,7 @@
                               "gitlab",
                               "notion",
                               "slack",
+                              "generic",
                               "stub"
                             ]
                           },
@@ -5974,7 +5975,8 @@
                             "enum": [
                               "either",
                               "tool",
-                              "handshake"
+                              "handshake",
+                              "deevy"
                             ]
                           },
                           "beginRefusal": {
@@ -5982,6 +5984,9 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "walked": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -5989,7 +5994,8 @@
                           "label",
                           "capabilities",
                           "webhookSecretFrom",
-                          "beginRefusal"
+                          "beginRefusal",
+                          "walked"
                         ],
                         "additionalProperties": false
                       }
@@ -6037,6 +6043,7 @@
                               "gitlab",
                               "notion",
                               "slack",
+                              "generic",
                               "stub"
                             ]
                           },
@@ -6192,6 +6199,7 @@
                       "gitlab",
                       "notion",
                       "slack",
+                      "generic",
                       "stub"
                     ]
                   },
@@ -6256,6 +6264,7 @@
                         "gitlab",
                         "notion",
                         "slack",
+                        "generic",
                         "stub"
                       ]
                     },
@@ -6413,6 +6422,7 @@
                       "gitlab",
                       "notion",
                       "slack",
+                      "generic",
                       "stub"
                     ]
                   },
@@ -6460,6 +6470,7 @@
                         "gitlab",
                         "notion",
                         "slack",
+                        "generic",
                         "stub"
                       ]
                     },
@@ -6816,6 +6827,7 @@
                         "gitlab",
                         "notion",
                         "slack",
+                        "generic",
                         "stub"
                       ]
                     },
@@ -6992,6 +7004,7 @@
                             "gitlab",
                             "notion",
                             "slack",
+                            "generic",
                             "stub"
                           ]
                         },
@@ -7411,6 +7424,7 @@
                         "gitlab",
                         "notion",
                         "slack",
+                        "generic",
                         "stub"
                       ]
                     },

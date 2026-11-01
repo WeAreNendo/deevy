@@ -35,8 +35,9 @@ import { cn } from "@/lib/utils";
  * `sockets.rotate` decides by too — so the page and the server cannot
  * disagree, and a tool with no sentence here still gets the right controls:
  * `tool` (Slack, Linear) takes only the tool's, `either` (GitHub, GitLab)
- * takes the tool's or mints one, and `handshake` (Notion) has no section,
- * since "Verifying the webhook" is where its token is.
+ * takes the tool's or mints one, `deevy` (the generic Socket) only mints, and
+ * `handshake` (Notion) has no section, since "Verifying the webhook" is where
+ * its token is.
  *
  * Either way the one replaced is still taken for a day (`PREVIOUS_SECRET_MS`
  * in the core's hooks.ts), so the two sides can change in either order.
@@ -53,12 +54,14 @@ const whereItIsMade: Record<string, string> = {
 };
 
 /** The tool's own sentence, or one that fits who makes the secret. */
-function madeWhere(provider: string, from: "either" | "tool", tool: string): string {
+function madeWhere(provider: string, from: "either" | "tool" | "deevy", tool: string): string {
   return (
     whereItIsMade[provider] ??
     (from === "tool"
       ? `${tool} makes it. When it changes there, paste the new one here.`
-      : `Paste a new one from ${tool} here, or mint one here and paste it into ${tool}.`)
+      : from === "deevy"
+        ? "deevy makes it, and nothing else does. Mint a new one here and give it to whatever signs the deliveries."
+        : `Paste a new one from ${tool} here, or mint one here and paste it into ${tool}.`)
   );
 }
 
@@ -134,17 +137,20 @@ export function SocketPage({ socketId }: { socketId: string }) {
   const tool = providerLabel(socket.provider);
   // Undefined until the server has said, and where it could not: the section
   // then says only whether there is a secret, and offers nothing to change it.
-  const from = providers.data?.providers.find(
-    (one) => one.id === socket.provider,
-  )?.webhookSecretFrom;
+  const provider = providers.data?.providers.find((one) => one.id === socket.provider);
+  const from = provider?.webhookSecretFrom;
   const signing =
     providers.isPending || from === "handshake"
       ? null
       : {
-          made:
-            from === "tool" || from === "either" ? madeWhere(socket.provider, from, tool) : null,
-          mint: from === "either",
+          made: from ? madeWhere(socket.provider, from, tool) : null,
+          paste: from === "tool" || from === "either",
+          mint: from === "either" || from === "deevy",
         };
+  // Said only once the server has: a tool is not a Preview for not having answered.
+  const preview = provider?.walked === false;
+  // Any other tool, which deevy hears only through an adapter of the team's.
+  const adapter = socket.provider === "generic";
   const config = socket.config as Record<string, unknown>;
   // Where a GitHub App is installed: an account per installation, written by
   // the install's redirect and by GitHub's own `installation` delivery.
@@ -191,7 +197,20 @@ export function SocketPage({ socketId }: { socketId: string }) {
   return (
     <SettingsPage
       title={socket.name}
-      description={`A ${providerLabel(socket.provider)} Socket${socket.identity.login ? `, as ${socket.identity.login}` : ""}.`}
+      description={
+        <>
+          {adapter
+            ? "Another tool, which your adapter delivers to deevy."
+            : `A ${tool} Socket${socket.identity.login ? `, as ${socket.identity.login}` : ""}.`}
+          {preview ? (
+            <>
+              {" "}
+              <Badge variant="secondary">Preview</Badge> Built against {tool}&apos;s recorded
+              deliveries, and not yet tried against {tool} itself.
+            </>
+          ) : null}
+        </>
+      }
     >
       <SettingsSection aria-label="How it is doing" title="How it is doing">
         <p className="text-sm">
@@ -200,8 +219,9 @@ export function SocketPage({ socketId }: { socketId: string }) {
             <>
               {" · "}
               <span className="text-muted-foreground">
-                deevy hears only what it delivers, so check that its webhook still points here. The
-                tool&apos;s own redelivery sends anything this deevy missed.
+                {adapter
+                  ? "deevy hears only what your adapter delivers, so check that it still posts here. Anything it could not deliver is its to send again."
+                  : "deevy hears only what it delivers, so check that its webhook still points here. The tool's own redelivery sends anything this deevy missed."}
               </span>
             </>
           ) : null}
@@ -266,6 +286,11 @@ export function SocketPage({ socketId }: { socketId: string }) {
               <p className="text-sm text-destructive">{rewire.error.message}</p>
             ) : null}
           </>
+        ) : adapter ? (
+          <p className="text-sm text-muted-foreground">
+            When this deevy&apos;s address changes, give it to your adapter again. Until then
+            nothing reaches deevy, and what the adapter could not deliver is its to send again.
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">
             When this deevy&apos;s address changes, paste it into the tool&apos;s webhook settings
@@ -433,9 +458,9 @@ export function SocketPage({ socketId }: { socketId: string }) {
               ? "There is one, and deevy will not show it again."
               : "There is none, so every delivery is refused."}
           </p>
-          {signing.made ? (
+          {signing.made ? <p className="text-sm text-muted-foreground">{signing.made}</p> : null}
+          {signing.paste ? (
             <>
-              <p className="text-sm text-muted-foreground">{signing.made}</p>
               <Field>
                 <FieldLabel htmlFor="socket-new-secret">New secret from {tool}</FieldLabel>
                 <div className="flex flex-col gap-2 @md:flex-row">
@@ -472,13 +497,14 @@ export function SocketPage({ socketId }: { socketId: string }) {
           ) : null}
           {signing.mint ? (
             // Apart from the field above where there is one: the other way round.
-            <div className={cn("flex flex-col gap-3", signing.made && "border-t pt-3")}>
+            <div className={cn("flex flex-col gap-3", signing.paste && "border-t pt-3")}>
               {minted ? (
                 <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
                   {minted}
                   <span className="mt-1 block font-sans text-xs text-muted-foreground">
-                    This is the only time deevy will show it. Paste it into {tool}: deevy takes the
-                    old one for a day more, so nothing {tool} sends meanwhile is refused.
+                    {from === "deevy"
+                      ? "This is the only time deevy will show it. Give it to whatever signs the deliveries: deevy takes the old one for a day more, so nothing signed meanwhile is refused."
+                      : `This is the only time deevy will show it. Paste it into ${tool}: deevy takes the old one for a day more, so nothing ${tool} sends meanwhile is refused.`}
                   </span>
                 </p>
               ) : null}

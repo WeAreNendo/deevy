@@ -3,6 +3,7 @@ import { ORPCError } from "@orpc/server";
 import { appendEvent, type EventSource } from "../events.ts";
 import { recordRuling } from "../gates.ts";
 import { memberForExternalIdentity } from "../identities.ts";
+import { recordColumns, recordOf } from "../issues.ts";
 import type { IdentityScope, InboundEvent } from "./port.ts";
 
 /**
@@ -22,6 +23,10 @@ import type { IdentityScope, InboundEvent } from "./port.ts";
  *   comment quotes `/approve` in its instructions, and a reply to a bot is a
  *   conversation between two bots. The Socket's own identity is refused by name
  *   as well as by flag, because a provider that forgot to mark it is the loop.
+ * - **A tool that cannot vouch rules nothing.** Whoever holds the generic
+ *   Socket's secret writes its deliveries, the author's name and address with
+ *   them, so a Ruling through it is refused before anybody is looked up, and
+ *   the refusal says where to rule instead (`SocketModule.vouches`).
  * - **The Gate is the newest open one on that record.** A record may have had
  *   several; only one is open per Run and Checkpoint, and the Human is replying
  *   to the one they can see.
@@ -42,10 +47,12 @@ export interface ApplyRuling {
   socket: Socket;
   scope: IdentityScope;
   event: RulingEvent;
+  /** False for a tool whose deliveries anybody with the secret writes (`SocketModule.vouches`). */
+  vouches: boolean;
 }
 
 /** Why a Ruling from outside ruled nothing, in the words the reply is built from. */
-export type RefusalReason = "unknown_identity" | "nothing_waiting" | "refused";
+export type RefusalReason = "unknown_identity" | "nothing_waiting" | "unvouched" | "refused";
 
 /** Applies one, answering null when it changed something and why when it did not. */
 export async function applyRuling({
@@ -53,6 +60,7 @@ export async function applyRuling({
   socket,
   scope,
   event,
+  vouches,
 }: ApplyRuling): Promise<string | null> {
   const { db } = source;
   const author = event.comment.author;
@@ -62,7 +70,7 @@ export async function applyRuling({
 
   const issue = await db.query.issue.findFirst({
     where: { socketId: socket.id, externalId: event.issueExternalId },
-    columns: { id: true, projectId: true },
+    columns: { id: true, projectId: true, ...recordColumns },
   });
   if (!issue) return `No record ${event.issueExternalId} has been projected here`;
 
@@ -80,6 +88,7 @@ export async function applyRuling({
       projectId: issue.projectId,
       payload: {
         issueId: issue.id,
+        ...recordOf(issue),
         socketId: socket.id,
         ...(gate ? { checkpoint: gate.checkpoint } : {}),
         reason,
@@ -92,6 +101,13 @@ export async function applyRuling({
     return `That ruled nothing: ${reason}`;
   };
 
+  // Before the Identity or an address is looked up: neither can make it count.
+  if (!vouches) {
+    return refuse(
+      "unvouched",
+      "A Ruling made here doesn't count, because whoever sends deevy this tool's deliveries could have written it.",
+    );
+  }
   if (!gate) return refuse("nothing_waiting");
 
   const resolved = await memberForExternalIdentity({ source, socket, scope, actor: author });
