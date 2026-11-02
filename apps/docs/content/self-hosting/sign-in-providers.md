@@ -214,8 +214,8 @@ back.
 Until there is a rule, the admin is the only one who can get in, apart from those they invite.
 
 **An invitation** lets in one person. Under **Invited**, choose **Invite someone**, give their **Email**
-and **Role**, and choose **Create invitation**. deevy shows the link once, and emails it to them as well
-when [a sender is set up](/self-hosting/email/). They have seven days to sign in with that same address
+and **Role**, and choose **Create invitation**. deevy shows the link once, with **Copy the link**, for you
+to send them however you like. They have seven days to sign in with that same address
 and accept it; a forwarded link lets nobody else in. One address has one live invitation at a time: to
 send another, revoke it first.
 

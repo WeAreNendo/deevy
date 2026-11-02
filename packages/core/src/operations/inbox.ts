@@ -1,18 +1,26 @@
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { notification as notificationTable } from "@deevy/db";
 import { MemberWithUserSchema, NotificationWithIssueSchema } from "../schemas.ts";
-import { NoInput, defineOperation } from "./registry.ts";
+import { defineOperation } from "./registry.ts";
 import { QueryFlag, issueWith } from "./shared.ts";
 
+/**
+ * An Agent's inbox (docs/plans/simplify.md, slice 8): what it was assigned,
+ * who mentioned it, and how its Gate was ruled. A Human has none. What needs
+ * them is the Gates they may rule on, which `gates.list { mine }` derives for
+ * Needs me, and nothing writes them a row, so a Human calling these is told
+ * they are an Agent's rather than handed an inbox that is always empty.
+ */
 export const inbox = {
   list: defineOperation({
     name: "inbox.list",
-    summary: "The Notifications waiting for you, newest first",
+    summary: "The Notifications waiting for this Agent, newest first",
     method: "GET",
     path: "/inbox",
     auth: "member",
     agents: true,
+    agentsOnly: true,
     mcp: true,
     input: z.object({
       unreadOnly: QueryFlag.optional(),
@@ -34,7 +42,7 @@ export const inbox = {
     handler: async ({ input, context }) => {
       // A Notification names an Issue and carries it back in full, so the
       // inbox is a way into a Project as much as issues.get is. An Agent sees
-      // only what its grants cover; a Human is not scoped (docs/plans/m2.md).
+      // only what its grants cover (docs/plans/m2.md).
       // It also carries who did it and, for a mention, what they wrote, so a
       // row can read as a sentence without one query per row.
       const granted = context.grantedProjectIds;
@@ -90,31 +98,9 @@ export const inbox = {
     },
   }),
 
-  unreadCount: defineOperation({
-    name: "inbox.unreadCount",
-    summary: "How many Notifications you have not read",
-    method: "GET",
-    path: "/inbox/unread",
-    auth: "member",
-    input: NoInput,
-    output: z.object({ unread: z.number().int() }),
-    handler: async ({ context }) => {
-      const [row] = await context.db
-        .select({ unread: count() })
-        .from(notificationTable)
-        .where(
-          and(
-            eq(notificationTable.recipientMemberId, context.member.id),
-            isNull(notificationTable.readAt),
-          ),
-        );
-      return { unread: row?.unread ?? 0 };
-    },
-  }),
-
   markRead: defineOperation({
     name: "inbox.markRead",
-    summary: "Mark some of your Notifications read",
+    summary: "Mark some of this Agent's Notifications read",
     method: "POST",
     path: "/inbox/read",
     auth: "member",
@@ -125,6 +111,7 @@ export const inbox = {
     // promises twenty tools, and the same key reaches this over the HTTP API,
     // which is the same authorisation through the other surface (ADR-0011).
     agents: true,
+    agentsOnly: true,
     input: z.object({ ids: z.array(z.string()) }),
     output: z.object({ read: z.number().int() }),
     handler: async ({ input, context }) => {
@@ -138,29 +125,6 @@ export const inbox = {
           and(
             eq(notificationTable.recipientMemberId, context.member.id),
             inArray(notificationTable.id, input.ids),
-            isNull(notificationTable.readAt),
-          ),
-        )
-        .returning({ id: notificationTable.id });
-      return { read: updated.length };
-    },
-  }),
-
-  markAllRead: defineOperation({
-    name: "inbox.markAllRead",
-    summary: "Mark your whole inbox read",
-    method: "POST",
-    path: "/inbox/read-all",
-    auth: "member",
-    input: NoInput,
-    output: z.object({ read: z.number().int() }),
-    handler: async ({ context }) => {
-      const updated = await context.db
-        .update(notificationTable)
-        .set({ readAt: new Date() })
-        .where(
-          and(
-            eq(notificationTable.recipientMemberId, context.member.id),
             isNull(notificationTable.readAt),
           ),
         )

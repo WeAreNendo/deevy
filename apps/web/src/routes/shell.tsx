@@ -1,10 +1,8 @@
-import { Link, Outlet, useMatches, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import {
   BellRing,
   ChevronsUpDown,
   ClipboardList,
-  Inbox,
   LogOut,
   Monitor,
   Moon,
@@ -40,7 +38,6 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -52,7 +49,6 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth";
 import { useLiveEvents } from "@/lib/live";
-import { orpc } from "@/lib/orpc";
 import { useShortcut } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -71,23 +67,20 @@ export interface ShellProps {
 
 /**
  * The frame every signed-in page sits in (docs/plans/ui-redesign.md, slice 1):
- * a sidebar that folds to its icons, with the Inbox as its only badge, the
- * Projects listed rather than hidden behind a page, and Settings as a door to
- * its own area; the command palette on ⌘K; and the page, full width.
+ * a sidebar that folds to its icons, with what needs this Human first, and
+ * Settings as a door to its own area; the command palette on ⌘K; and the page,
+ * full width.
  */
 export function AppShell({ workspaceName, memberName, member }: ShellProps) {
   // Mounted once for the whole signed-in app, so one stream serves every page.
   useLiveEvents(true);
   const navigate = useNavigate();
-  // A page that lays out its own panes (the Inbox) opts out of the shell's padding.
-  const bleed = useMatches().some((match) => match.staticData.bleed === true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useShortcut("mod+k", () => setPaletteOpen((open) => !open), { global: true });
   // Global, so `?` closes the sheet too: while open it owns the shortcut scope.
   useShortcut("?", () => setShortcutsOpen((open) => !open), { global: true });
-  useShortcut("g i", () => void navigate({ to: "/inbox" }));
   useShortcut("g r", () => void navigate({ to: "/runs" }));
   useShortcut("g w", () => void navigate({ to: "/work" }));
   useShortcut("g p", () => void navigate({ to: "/settings/projects" }));
@@ -148,13 +141,6 @@ export function AppShell({ workspaceName, memberName, member }: ShellProps) {
                     <span>Needs me</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton tooltip="Inbox" render={<Link to="/inbox" />}>
-                    <Inbox />
-                    <span>Inbox</span>
-                  </SidebarMenuButton>
-                  <InboxBadge />
-                </SidebarMenuItem>
                 {/* What the Agents are doing, and the records they are doing
                     it on. Everything else a team reads in its own tools. */}
                 <SidebarMenuItem>
@@ -206,12 +192,7 @@ export function AppShell({ workspaceName, memberName, member }: ShellProps) {
          * `h-full` — the Board, whose columns scroll on their own — gets the
          * room that is actually there rather than growing the window.
          */}
-        <div
-          className={cn(
-            "min-w-0 flex-1 overflow-y-auto",
-            bleed ? "flex min-h-0 flex-col" : "flex flex-col p-6",
-          )}
-        >
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6">
           <Outlet />
         </div>
       </SidebarInset>
@@ -224,22 +205,6 @@ export function AppShell({ workspaceName, memberName, member }: ShellProps) {
       <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <Toaster />
     </SidebarProvider>
-  );
-}
-
-/** The unread count, live: useLiveEvents re-reads the inbox on every Event that could owe one. */
-function InboxBadge() {
-  const unread = useQuery(orpc.inbox.unreadCount.queryOptions({ input: {} }));
-  const count = unread.data?.unread ?? 0;
-  if (count === 0) return null;
-  return (
-    <SidebarMenuBadge
-      aria-label={`${String(count)} unread`}
-      // A count, not an alarm: quiet grey that reads on the row's rest, hover and active tints.
-      className="rounded-full bg-muted-foreground/15 px-1.5 text-[11px] font-medium text-foreground/75 tabular-nums"
-    >
-      {count}
-    </SidebarMenuBadge>
   );
 }
 

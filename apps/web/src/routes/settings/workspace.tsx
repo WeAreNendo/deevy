@@ -24,7 +24,7 @@ export function WorkspacePage() {
 
   return (
     <SettingsPage title="Workspace">
-      {/* Only an admin can act on any of it, and `channels.list` is an
+      {/* Only an admin can act on any of it, and `sockets.list` is an
           admin-only operation besides. */}
       {admin ? <SetUp /> : null}
       <Identity canRename={admin} />
@@ -186,29 +186,29 @@ function Identity({ canRename }: { canRename: boolean }) {
  * checklist of ticks is furniture.
  */
 function SetUp() {
+  const sockets = useQuery(orpc.sockets.list.queryOptions({ input: {} }));
   const projects = useQuery(orpc.projects.list.queryOptions({ input: {} }));
   const agents = useQuery(orpc.agents.list.queryOptions({ input: {} }));
-  const channels = useQuery(orpc.channels.list.queryOptions({ input: {} }));
 
   const checks = [
     {
+      done: (sockets.data?.sockets.length ?? 0) > 0,
+      todo: "Connect a tool so its records reach deevy",
+      action: { label: "Connect", to: "/settings/sockets" },
+    },
+    {
       done: (projects.data?.projects.length ?? 0) > 0,
-      todo: "Create a Project so your Issues have somewhere to live",
-      action: { label: "New Project", to: "/settings/projects" },
+      todo: "Bind a Project to one of that tool's containers",
+      action: { label: "Bind one", to: "/settings/projects" },
     },
     {
       done: (agents.data?.agents.length ?? 0) > 0,
       todo: "Add an Agent so it can pick up work alongside your team",
       action: { label: "Add one", to: "/settings/agents" },
     },
-    {
-      done: (channels.data?.channels.length ?? 0) > 0,
-      todo: "Connect a Channel to get Notifications in Slack",
-      action: { label: "Connect", to: "/settings/channels" },
-    },
   ];
 
-  const loading = [projects, agents, channels].some((query) => query.isPending);
+  const loading = [sockets, projects, agents].some((query) => query.isPending);
   const left = checks.filter((check) => !check.done);
   // Nothing left to say, or not enough read yet to say it.
   if (loading || left.length === 0) return null;

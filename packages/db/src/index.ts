@@ -24,13 +24,9 @@ export type LinkCode = typeof import("./schema/identity.ts").linkCode.$inferSele
 export type Project = typeof import("./schema/project.ts").project.$inferSelect;
 export type Agent = typeof import("./schema/agent.ts").agent.$inferSelect;
 export type Run = typeof import("./schema/run.ts").run.$inferSelect;
-export type Channel = typeof import("./schema/channel.ts").channel.$inferSelect;
 export type Delivery = typeof import("./schema/delivery.ts").delivery.$inferSelect;
 export type WebhookSubscription =
   typeof import("./schema/webhook.ts").webhookSubscription.$inferSelect;
-export type RoutingRule = typeof import("./schema/channel.ts").routingRule.$inferSelect;
-export type NotificationPreference =
-  typeof import("./schema/channel.ts").notificationPreference.$inferSelect;
 export type Activity = typeof import("./schema/run.ts").activity.$inferSelect;
 export type ProjectGrant = typeof import("./schema/agent.ts").projectGrant.$inferSelect;
 export type Issue = typeof import("./schema/issue.ts").issue.$inferSelect;

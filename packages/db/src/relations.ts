@@ -17,7 +17,6 @@ import {
 } from "./schema/auth.ts";
 import { agent, projectGrant } from "./schema/agent.ts";
 import { activity, run, runUsage } from "./schema/run.ts";
-import { channel, emailSender, notificationPreference, routingRule } from "./schema/channel.ts";
 import { delivery } from "./schema/delivery.ts";
 import { webhookSubscription } from "./schema/webhook.ts";
 import { allowlistRule } from "./schema/allowlist.ts";
@@ -75,10 +74,6 @@ export const tables = {
   run,
   activity,
   runUsage,
-  channel,
-  routingRule,
-  notificationPreference,
-  emailSender,
   delivery,
   webhookSubscription,
 };
@@ -109,10 +104,6 @@ const appRelations = defineRelationsPart(tables, (r) => ({
       to: r.project.id.through(r.projectGrant.projectId),
     }),
     identities: r.many.memberIdentity({ from: r.member.id, to: r.memberIdentity.memberId }),
-    preferences: r.many.notificationPreference({
-      from: r.member.id,
-      to: r.notificationPreference.memberId,
-    }),
   },
   memberIdentity: {
     member: r.one.member({ from: r.memberIdentity.memberId, to: r.member.id, optional: false }),
@@ -144,6 +135,8 @@ const appRelations = defineRelationsPart(tables, (r) => ({
       optional: false,
     }),
     defaultAgent: r.one.member({ from: r.project.defaultAgentMemberId, to: r.member.id }),
+    /** Where its Gates are posted, when it binds a chat channel. */
+    chatSocket: r.one.socket({ from: r.project.chatSocketId, to: r.socket.id }),
     issues: r.many.issue({ from: r.project.id, to: r.issue.projectId }),
   },
   issue: {
@@ -218,29 +211,6 @@ const appRelations = defineRelationsPart(tables, (r) => ({
   },
   activity: {
     run: r.one.run({ from: r.activity.runId, to: r.run.id, optional: false }),
-  },
-  channel: {
-    workspace: r.one.workspace({
-      from: r.channel.workspaceId,
-      to: r.workspace.id,
-      optional: false,
-    }),
-    rules: r.many.routingRule({ from: r.channel.id, to: r.routingRule.channelId }),
-  },
-  routingRule: {
-    channel: r.one.channel({
-      from: r.routingRule.channelId,
-      to: r.channel.id,
-      optional: false,
-    }),
-    project: r.one.project({ from: r.routingRule.projectId, to: r.project.id }),
-  },
-  notificationPreference: {
-    member: r.one.member({
-      from: r.notificationPreference.memberId,
-      to: r.member.id,
-      optional: false,
-    }),
   },
   issueLink: {
     issue: r.one.issue({ from: r.issueLink.issueId, to: r.issue.id, optional: false }),

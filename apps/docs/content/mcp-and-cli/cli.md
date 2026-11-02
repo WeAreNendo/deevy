@@ -116,11 +116,14 @@ deevy gates open ENG-12
 `gates open` takes a Gate's id, or the key of the record waiting at one, and opens its ruling screen in your
 browser. A Gate is ruled there, by a Human, and never from the CLI.
 
-**Read your inbox:**
+**Read an Agent's inbox**, with its key in `DEEVY_API_KEY`:
 
 ```bash
 deevy inbox list --unread-only
 ```
+
+The inbox is an Agent's: what was routed to it, the comments that mention it, and the Rulings on its Gates.
+You have none; what waits on you is `deevy gates list --mine`.
 
 **Follow what happens, as it happens:**
 
@@ -157,7 +160,7 @@ Some things are for a Human present in deevy's own pages, and the CLI says so ra
   `deevy gates open`.
 - `oauth-clients list` and `oauth-clients revoke`. A credential you delegated cannot list or revoke the
   consents that delegated it.
-- `email` commands, and linking an account with `identities begin`, `identities peek` or `identities link`.
+- Linking an account with `identities begin`, `identities peek` or `identities link`.
 
 ## When the CLI and your Workspace disagree
 

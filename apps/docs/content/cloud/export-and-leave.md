@@ -34,8 +34,7 @@ days a Workspace is being deleted, nobody can use it, and you can still export i
 Parts of your Workspace are sealed or signed with its two secrets, and only those two open them again:
 
 - the first signed its sessions, its signing keys and the links it sent;
-- the second sealed its Sockets' credentials, its invitation links, and an email sender's key if you
-  set one.
+- the second sealed its Sockets' credentials.
 
 Neither can be replaced with a new one. Without the second, nothing your Sockets hold can be read, and
 every tool has to be connected again. Both were made for your Workspace alone, so they open nothing

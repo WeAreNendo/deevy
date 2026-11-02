@@ -57,8 +57,8 @@ That is safe because the release you are leaving runs on the new schema too.
    vp run web#check:workers
    ```
 
-   If you changed `apps/web/wrangler.jsonc`, with a `vars` block, a Queue or an email binding, carry your
-   changes onto the new release's copy before you build.
+   If you changed `apps/web/wrangler.jsonc`, with a `vars` block or a Queue, carry your changes onto the
+   new release's copy before you build.
 
 2. From `apps/web`, apply the migrations, then deploy:
 

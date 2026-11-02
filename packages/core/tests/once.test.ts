@@ -1,15 +1,17 @@
 import {
-  channel as channelTable,
-  routingRule,
+  project as projectTable,
+  socket as socketTable,
   webhookSubscription,
   type Db,
   type Event,
 } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
+import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { deriveNotifications } from "../src/notifications.ts";
+import { deriveChatMessages } from "../src/sockets/chat-out.ts";
 import { deriveWebhookDeliveries } from "../src/webhooks.ts";
-import { deliverWebhook, remindAboutGates } from "../src/work.ts";
+import { deliverWebhook } from "../src/work.ts";
 import { router } from "../src/operations/index.ts";
 import type { InboundEvent } from "../src/sockets/port.ts";
 import { agentContext, externalIssue, memberContext, seedProject, testDb } from "./helpers.ts";
@@ -68,24 +70,23 @@ function announced(over: Parameters<typeof externalIssue>[0]): InboundEvent {
   };
 }
 
-/** A Slack Channel the Workspace sends everything to. */
-async function slackRoom(db: Db, workspaceId: string) {
-  const channelId = newId("channel");
-  await db.insert(channelTable).values({
-    id: channelId,
+/** A chat Socket, and the Project bound to one of its channels (slice 8). */
+async function chatChannel(db: Db, workspaceId: string, projectId: string) {
+  const socketId = newId("socket");
+  await db.insert(socketTable).values({
+    id: socketId,
     workspaceId,
-    kind: "slack",
-    name: "#deevy",
-    config: { webhookUrl: "https://hooks.slack.example/services/T000/B000/xxx" },
+    provider: "slack",
+    capabilities: ["chat"],
+    name: "Acme Slack",
+    identity: { login: "deevy", id: "U0DEEVY", mentionHandle: "@deevy" },
+    config: { teamId: "T0TEST" },
   });
-  await db.insert(routingRule).values({
-    id: newId("routingRule"),
-    workspaceId,
-    notificationKind: null,
-    projectId: null,
-    channelId,
-  });
-  return channelId;
+  await db
+    .update(projectTable)
+    .set({ chatSocketId: socketId, chatChannel: "C0DEEVY" })
+    .where(eq(projectTable.id, projectId));
+  return socketId;
 }
 
 /** The deliveries one Event owes a subscribed URL. */
@@ -95,10 +96,10 @@ async function webhooksFor(db: Db, event: Event) {
   );
 }
 
-/** The messages one Event owes Slack, whichever room they are for. */
-async function slackFor(db: Db, event: Event) {
+/** The messages one Event owes a chat channel. */
+async function chatFor(db: Db, event: Event) {
   return (await db.query.delivery.findMany()).filter(
-    (row) => row.target === "slack" && row.eventSeq === event.seq,
+    (row) => row.target === "chat" && row.eventSeq === event.seq,
   );
 }
 
@@ -144,11 +145,11 @@ describe("deriving the same Event a second time", () => {
     expect(owed[0]?.id).toBe(first[0]?.id);
   });
 
-  it("leaves the one message the Slack Channel was already owed", async () => {
+  it("leaves the one message the Project's chat channel was already owed", async () => {
     const { db, alice, seeded, project } = await workspace();
-    const channelId = await slackRoom(db, alice.workspace.id);
-    // A room is full of Humans, so the Event has to be one a Human is owed:
-    // a Run asking at a Gate (docs/plans/m3.md, slice 2).
+    await chatChannel(db, alice.workspace.id, project.id);
+    // A channel is full of Humans, so the Event has to be one a Human is
+    // owed: a Run asking at a Gate.
     const agent = await agentContext(db, { sponsor: alice.member, grants: [project.id] });
     const asAgent = createRouterClient(router, { context: agent });
     const issue = await seeded.record({ externalId: "7", title: "Ship the thing" });
@@ -161,51 +162,15 @@ describe("deriving the same Event a second time", () => {
     const asked = (await db.query.event.findFirst({
       where: { kind: "run.awaiting_input" },
     })) as Event;
-    const first = await slackFor(db, asked);
+    const first = await chatFor(db, asked);
     expect(first).toHaveLength(1);
 
-    await deriveNotifications(db, asked);
+    await deriveChatMessages(db, asked);
 
-    const owed = await slackFor(db, asked);
+    const owed = await chatFor(db, asked);
     expect(owed).toHaveLength(1);
-    expect(owed[0]).toMatchObject({ targetId: channelId, attempts: 0 });
+    expect(owed[0]).toMatchObject({ targetId: project.id, attempts: 0 });
     expect(owed[0]?.id).toBe(first[0]?.id);
-  });
-});
-
-describe("asking again about a Gate nobody has ruled on", () => {
-  it("leaves the Slack Channel the one message that Event already owed", async () => {
-    const { db, alice, seeded, project } = await workspace();
-    await slackRoom(db, alice.workspace.id);
-    const agent = await agentContext(db, { sponsor: alice.member, grants: [project.id] });
-    const asAgent = createRouterClient(router, { context: agent });
-    const issue = await seeded.record({ externalId: "7", title: "Waiting on a Human" });
-    const run = await asAgent.runs.start({ issue: issue.url });
-    await asAgent.gates.request({
-      runId: run.id,
-      checkpoint: "plan",
-      proposal: "Branch from main and cap the coupon.",
-    });
-    const asked = (await db.query.event.findFirst({
-      where: { kind: "run.awaiting_input" },
-    })) as Event;
-    const owed = await slackFor(db, asked);
-    expect(owed).toHaveLength(1);
-
-    // Five hours of silence, well past the four the sweep waits for.
-    const reminded = await remindAboutGates({
-      db,
-      workspaceId: alice.workspace.id,
-      now: new Date(Date.now() + 5 * 60 * 60 * 1000),
-    });
-
-    // The reminder re-derives the Gate's Notification, and the room is owed
-    // one message per Event whoever asks for it: a Human being asked again is
-    // not a second thing happening in the Workspace (docs/plans/m3.md, slice 2).
-    expect(reminded).toMatchObject({ scanned: 1, changed: 1 });
-    const after = await slackFor(db, asked);
-    expect(after).toHaveLength(1);
-    expect(after[0]?.id).toBe(owed[0]?.id);
   });
 });
 

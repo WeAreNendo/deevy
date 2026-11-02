@@ -6,7 +6,7 @@ import { newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
 import { sealSecret } from "../src/secrets.ts";
 import type { ChatInteraction } from "../src/sockets/port.ts";
-import { deliverDueChannelMessages, deliverDueChatMessages } from "../src/work.ts";
+import { deliverDueChatMessages } from "../src/work.ts";
 import {
   agentContext,
   fakeChat,
@@ -25,8 +25,9 @@ afterEach(() => {
 const signingSecret = "a-slack-signing-secret-for-tests";
 
 /**
- * What deevy says in Slack (ADR-0025): a Gate in a room, with its two buttons,
- * and the same message changed wherever the Ruling came from.
+ * What deevy says in Slack (ADR-0025): a Gate in the channel its Project binds
+ * (docs/plans/simplify.md, slice 8), with its two buttons, and the same
+ * message changed wherever the Ruling came from.
  */
 async function posting(db: Db) {
   const ada = await memberContext(db, { role: "admin", name: "Ada" });
@@ -93,7 +94,7 @@ async function posting(db: Db) {
       decision: "approved",
       note: null,
       wantsNote: false,
-      message: chat.posted[0]?.ref ?? null,
+      message: chat.posted.find((one) => one.message.kind === "gate")?.ref ?? null,
       responseUrl: "https://hooks.slack.test/actions/1",
       triggerId: null,
     } satisfies ChatInteraction);
@@ -107,22 +108,35 @@ async function posting(db: Db) {
       body,
     });
   };
-  return { ada, grace, asAda, asGrace, asPlanner, run, chat, slackId, send, click, seeded, issue };
+  /** The Project's channel, bound as an admin binds it: deevy says hello there first. */
+  const bind = () =>
+    asAda.projects.update({ slug: "deevy", chat: { socketId: slackId, channel: "C0DEEVY" } });
+  /** The Gate's one message, whichever else was posted. */
+  const gateMessage = () => chat.posted.find((one) => one.message.kind === "gate");
+  return {
+    ada,
+    grace,
+    asAda,
+    asGrace,
+    asPlanner,
+    run,
+    chat,
+    slackId,
+    send,
+    click,
+    bind,
+    gateMessage,
+    seeded,
+    issue,
+  };
 }
 
-describe("a Gate in a Slack room", () => {
-  it("is posted with its buttons where a rule sends it, and deevy remembers where", async () => {
+describe("a Gate in a Project's Slack channel", () => {
+  it("is posted with its buttons where the Project binds, and deevy remembers where", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asAda, asPlanner, run, chat, slackId, send } = await posting(db);
-    const room = await asAda.channels.createInSocket({
-      name: "#deevy",
-      socketId: slackId,
-      conversation: "C0DEEVY",
-    });
-    await asAda.routing.set({
-      rules: [{ notificationKind: "gate_awaiting", projectId: null, channelId: room.id }],
-    });
+    const { asPlanner, run, slackId, send, bind, gateMessage } = await posting(db);
+    await bind();
 
     const gate = await asPlanner.gates.request({
       runId: run.id,
@@ -131,8 +145,9 @@ describe("a Gate in a Slack room", () => {
     });
     const sent = await send();
 
-    expect(sent.delivered).toBeGreaterThanOrEqual(1);
-    const inRoom = chat.posted.find((one) => one.channel === "C0DEEVY");
+    expect(sent.delivered).toBe(1);
+    const inRoom = gateMessage();
+    expect(inRoom?.channel).toBe("C0DEEVY");
     expect(inRoom?.message).toMatchObject({
       kind: "gate",
       gate: {
@@ -146,8 +161,7 @@ describe("a Gate in a Slack room", () => {
         agentName: "Planner",
       },
     });
-    // Every message it posted about the Gate — the room's, and Grace's direct
-    // message, since she is linked and may rule — so a Ruling can change them all.
+    // The message it posted about the Gate, so a Ruling can change it.
     const kept = await db.query.socketMirror.findMany({ where: { gateRequestId: gate.id } });
     expect(kept).toContainEqual(
       expect.objectContaining({
@@ -156,22 +170,14 @@ describe("a Gate in a Slack room", () => {
         externalRef: { channel: "C0DEEVY", ts: inRoom?.ref.ts },
       }),
     );
-    expect(kept).toHaveLength(chat.posted.length);
-    expect(room).toMatchObject({ kind: "slack_app", socketId: slackId, conversation: "C0DEEVY" });
+    expect(kept).toHaveLength(1);
   });
 
   it("is changed through the outbox when somebody rules in Slack, and when they rule in deevy", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asAda, asGrace, asPlanner, run, chat, slackId, send, click } = await posting(db);
-    const room = await asAda.channels.createInSocket({
-      name: "#deevy",
-      socketId: slackId,
-      conversation: "C0DEEVY",
-    });
-    await asAda.routing.set({
-      rules: [{ notificationKind: "gate_awaiting", projectId: null, channelId: room.id }],
-    });
+    const { asAda, asPlanner, run, chat, send, click, bind, gateMessage } = await posting(db);
+    await bind();
     await asAda.checkpoints.set({
       projectSlug: "deevy",
       checkpoints: [{ name: "plan", approvalsRequired: 2 }],
@@ -182,7 +188,7 @@ describe("a Gate in a Slack room", () => {
       proposal: "Ship it",
     });
     await send();
-    const posted = chat.posted.find((one) => one.channel === "C0DEEVY");
+    const posted = gateMessage();
 
     // From Slack: the click answers at once, and the message changes after.
     expect((await click("U0GRACE", gate.id)).status).toBe(200);
@@ -195,7 +201,6 @@ describe("a Gate in a Slack room", () => {
 
     // From deevy: the same message, because the Ruling is the same Ruling.
     await asAda.gates.approve({ requestId: gate.id, note: "Fine by me" });
-    void asGrace;
     await send();
     expect(inRoom().at(-1)).toMatchObject({
       message: { kind: "gate", gate: { status: "approved", approvals: 2 } },
@@ -205,15 +210,8 @@ describe("a Gate in a Slack room", () => {
   it("names the approvals its Checkpoint wants after the Project's Checkpoints are saved", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asAda, asPlanner, run, chat, slackId, send, click } = await posting(db);
-    const room = await asAda.channels.createInSocket({
-      name: "#deevy",
-      socketId: slackId,
-      conversation: "C0DEEVY",
-    });
-    await asAda.routing.set({
-      rules: [{ notificationKind: "gate_awaiting", projectId: null, channelId: room.id }],
-    });
+    const { asAda, asPlanner, run, chat, send, click, bind, gateMessage } = await posting(db);
+    await bind();
     await asAda.checkpoints.set({
       projectSlug: "deevy",
       checkpoints: [{ name: "plan", approvalsRequired: 3 }],
@@ -224,7 +222,7 @@ describe("a Gate in a Slack room", () => {
       proposal: "Ship it",
     });
     await send();
-    const posted = chat.posted.find((one) => one.channel === "C0DEEVY");
+    const posted = gateMessage();
 
     // Lowered to more than it has: it stays open, and wants two from now on.
     await asAda.checkpoints.set({
@@ -243,15 +241,8 @@ describe("a Gate in a Slack room", () => {
   it("is changed when an admin lowers Approvals to what the Gate already has", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asAda, asPlanner, run, chat, slackId, send, click } = await posting(db);
-    const room = await asAda.channels.createInSocket({
-      name: "#deevy",
-      socketId: slackId,
-      conversation: "C0DEEVY",
-    });
-    await asAda.routing.set({
-      rules: [{ notificationKind: "gate_awaiting", projectId: null, channelId: room.id }],
-    });
+    const { asAda, asPlanner, run, chat, send, click, bind, gateMessage } = await posting(db);
+    await bind();
     await asAda.checkpoints.set({
       projectSlug: "deevy",
       checkpoints: [{ name: "plan", approvalsRequired: 2 }],
@@ -262,7 +253,7 @@ describe("a Gate in a Slack room", () => {
       proposal: "Ship it",
     });
     await send();
-    const posted = chat.posted.find((one) => one.channel === "C0DEEVY");
+    const posted = gateMessage();
     await click("U0GRACE", gate.id);
     await send();
 
@@ -276,104 +267,5 @@ describe("a Gate in a Slack room", () => {
     expect(inRoom.at(-1)).toMatchObject({
       message: { kind: "gate", gate: { status: "approved", approvals: 1 } },
     });
-  });
-});
-
-describe("a direct message in Slack", () => {
-  it("tells a Human whose account is linked, unless they said not to", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { asGrace, asPlanner, run, chat, send } = await posting(db);
-
-    const gate = await asPlanner.gates.request({
-      runId: run.id,
-      checkpoint: "plan",
-      proposal: "Ship it",
-    });
-    await send();
-
-    // Grace linked Slack and is an approver; Omar is an approver who did not.
-    expect(chat.dms).toEqual(["U0GRACE"]);
-    expect(chat.posted).toMatchObject([
-      { channel: "D-U0GRACE", message: { kind: "gate", gate: { gateRequestId: gate.id } } },
-    ]);
-
-    await asGrace.preferences.set({
-      preferences: [{ kind: "gate_awaiting", inbox: true, slack: true, slackDm: false }],
-    });
-    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Ship it, v2" });
-    await send();
-    expect(chat.dms).toEqual(["U0GRACE"]);
-  });
-
-  it("links anything but a Gate to the record's page in deevy", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { seeded, issue, chat, send } = await posting(db);
-
-    // A comment in the tracker that names Grace through deevy's own account,
-    // which is how a mention reaches deevy now (ADR-0024).
-    await seeded.deliver([
-      {
-        kind: "comment",
-        scopeKey: "acme/deevy",
-        issueExternalId: issue.externalId,
-        comment: {
-          externalId: "c1",
-          url: `${issue.url}#c1`,
-          body: "@deevy grace can you look?",
-          author: { login: "ada", id: "u-ada", isBot: false },
-          createdAt: new Date(),
-        },
-      },
-    ]);
-    await send();
-
-    // The Work item, by the id deevy gave the record: `/issues/<key>` went
-    // with deevy's own tracker (ADR-0024), and a key is the tracker's.
-    expect(chat.posted).toMatchObject([
-      {
-        channel: "D-U0GRACE",
-        message: {
-          kind: "text",
-          link: {
-            url: `https://deevy.test/work/${issue.id}`,
-            label: `${issue.externalKey} Checkout rewrite`,
-          },
-        },
-      },
-    ]);
-  });
-});
-
-describe("the incoming-webhook Channel", () => {
-  it("still posts a link and nothing to click", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { ada, asAda, asPlanner, run, issue } = await posting(db);
-    const hook = await asAda.channels.create({
-      name: "#alerts",
-      webhookUrl: "https://hooks.slack.com/services/T0/B0/xyz",
-    });
-    await asAda.routing.set({
-      rules: [{ notificationKind: "gate_awaiting", projectId: null, channelId: hook.id }],
-    });
-    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Ship it" });
-
-    const bodies: string[] = [];
-    await deliverDueChannelMessages({
-      db,
-      workspaceId: ada.workspace.id,
-      baseUrl: "https://deevy.test",
-      fetch: async (_url, init) => {
-        bodies.push(typeof init.body === "string" ? init.body : "");
-        return new Response("ok");
-      },
-    });
-
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toContain("A Gate is waiting for a Human");
-    expect(bodies[0]).toContain(`<https://deevy.test/work/${issue.id}|`);
-    expect(bodies[0]).not.toContain("deevy_approve");
   });
 });

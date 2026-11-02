@@ -65,17 +65,14 @@ describe("what the registry turns into", () => {
       // points at: both are lists of objects, and flattening either into flags
       // would be guessing at a shape a team decides (ADR-0020).
       "checkpoints.set.checkpoints",
-      // A sender's settings and secrets, whose keys are the sender's own:
-      // Mailgun's domain and region are not Resend's (docs/plans/email-channel.md).
-      "email.configure.config",
-      "email.configure.credentials",
       "gates.request.links",
-      "preferences.set.preferences",
       "projects.create.tracker",
+      // A Project's chat channel: a Socket and a channel in it, bound together
+      // or not at all (docs/plans/simplify.md, slice 8).
+      "projects.update.chat",
       // The rest of a binding, changed after the fact: how a record names the
       // Agent it is for (ADR-0024).
       "projects.update.routing",
-      "routing.set.rules",
       "runs.postActivity.payload",
       // The configuration a provider's own flow needs before there is a
       // credential to go with it: a shape that provider decides (ADR-0024).

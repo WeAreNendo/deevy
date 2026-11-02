@@ -80,18 +80,8 @@ export function InvitationsRow() {
                 <span className="text-xs text-muted-foreground">
                   {lifeLeft(invitation.expiresAt)}
                 </span>
-                {/* Whether the link went by email, when it was sent that way. */}
-                {invitation.emailStatus === "sent" ? (
-                  <span className="text-xs text-muted-foreground">Emailed</span>
-                ) : invitation.emailStatus === "queued" ? (
-                  <span className="text-xs text-muted-foreground">Email on its way</span>
-                ) : invitation.emailStatus === "failed" ? (
-                  <span className="text-xs text-destructive">
-                    Email failed: {invitation.emailError ?? "the sender refused it"}
-                  </span>
-                ) : null}
-                {/* No Copy link: only the hash was stored, so the URL existed
-                    exactly once, in the dialog that made it. */}
+                {/* No Copy link here: only the hash was stored, so the URL
+                    existed exactly once, in the dialog that made it. */}
                 <Button
                   size="sm"
                   variant="destructive"
@@ -128,9 +118,8 @@ export function InvitationsRow() {
 
 /**
  * Inviting somebody, and the one sight of the link. deevy stores a hash of the
- * token, so this dialog is the only place the URL is shown; when a sender is
- * configured it is also emailed to the address (docs/plans/email-channel.md),
- * and the dialog says whether it was, or why not.
+ * token, so this dialog is the only place the URL is shown, and the admin sends
+ * it however they like: deevy sends no email (docs/plans/simplify.md, slice 8).
  */
 function InviteDialog({
   open,
@@ -144,23 +133,13 @@ function InviteDialog({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("member");
   const [link, setLink] = useState<string | null>(null);
-  const [emailed, setEmailed] = useState<string | null>(null);
+  // Said only once the browser has it: the link is shown this once, so a
+  // "Copied" that was not would lose the invitation.
+  const [copied, setCopied] = useState<"not yet" | "copied" | "refused">("not yet");
 
   const create = useMutation(
     orpc.invitations.create.mutationOptions({
-      onSuccess: async (created: {
-        path: string;
-        email: string;
-        emailStatus: string | null;
-        emailNotSent: string | null;
-      }) => {
-        setEmailed(
-          created.emailStatus
-            ? `Emailing the link to ${created.email}.`
-            : created.emailNotSent
-              ? `Not emailed: ${created.emailNotSent}`
-              : null,
-        );
+      onSuccess: async (created) => {
         // The link is built on the origin this browser is on, not the API's:
         // they are the same in the image and on Workers, and two ports in the
         // dev loop or a split-origin deployment (docs/plans/sign-in.md). And
@@ -176,7 +155,7 @@ function InviteDialog({
       setEmail("");
       setRole("member");
       setLink(null);
-      setEmailed(null);
+      setCopied("not yet");
       create.reset();
     }
     onOpenChange(next);
@@ -188,14 +167,12 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Invite someone</DialogTitle>
           <DialogDescription>
-            Invite one person by email address. The invitation is good for seven days. deevy emails
-            them the link when a sender is set up under Settings › Email, and shows it to you once
-            either way.
+            Invite one person by email address. You get a link to send them, good for seven days;
+            they join by signing in with that address.
           </DialogDescription>
         </DialogHeader>
         {link ? (
           <div className="flex flex-col gap-3">
-            {emailed ? <p className="text-sm text-muted-foreground">{emailed}</p> : null}
             <div className="flex min-w-0 flex-col gap-1 rounded-md border border-gate/50 bg-gate/10 p-3">
               <p className="text-sm font-medium">
                 Copy this now: it is the only time the link is shown.
@@ -206,6 +183,29 @@ function InviteDialog({
               <code className="rounded bg-background px-2 py-1 font-mono text-sm break-all">
                 {link}
               </code>
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Undefined where the page is not a secure context, such
+                    // as a deevy on a LAN over plain http.
+                    const clipboard = navigator.clipboard as Clipboard | undefined;
+                    if (!clipboard) return setCopied("refused");
+                    clipboard.writeText(link).then(
+                      () => setCopied("copied"),
+                      () => setCopied("refused"),
+                    );
+                  }}
+                >
+                  {copied === "copied" ? "Copied" : "Copy the link"}
+                </Button>
+              </div>
+              {copied === "refused" ? (
+                <p role="alert" className="text-xs text-destructive">
+                  This browser would not copy it. Select the link above and copy it yourself.
+                </p>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 deevy keeps only a hash of it, so it cannot be shown again. Revoke the invitation
                 and make another if it goes astray.

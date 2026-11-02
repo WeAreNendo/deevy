@@ -3,8 +3,8 @@ import { plainLine } from "../src/lib/plain-text.ts";
 
 /**
  * Markdown as one line of words, for a place that quotes a Proposal or a
- * comment rather than rendering it: an Inbox row, a Run's feed. Without it a
- * Proposal read "## What I will do Read `/approve` and …".
+ * comment rather than rendering it: a line of a Gate's history, a card on
+ * Needs me. Without it a Proposal read "## What I will do Read `/approve` and …".
  */
 describe("a line of words out of markdown", () => {
   it("keeps the words and drops the marks", () => {

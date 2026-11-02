@@ -83,13 +83,6 @@ export {
   type Principal,
 } from "./operations/registry.ts";
 export { EventSchema, MemberSchema, UserSchema, WorkspaceSchema } from "./schemas.ts";
-export {
-  workItemUrl,
-  postSlackMessage,
-  slackMessage,
-  type FetchLike,
-  type SlackPayload,
-} from "./slack.ts";
 export { signPayload, verifySignature, type VerifyInput } from "./signature.ts";
 export { webhookBody } from "./webhooks.ts";
 export {
@@ -97,15 +90,14 @@ export {
   defaultMaxPasses,
   defaultSilenceMs,
   defaultSweepLimit,
-  deliverDueChannelMessages,
+  deliverDueChatMessages,
   deliverDueWebhooks,
   deliverWebhook,
   maxDeliveryAttempts,
   maxWebhookAttempts,
   runDueWork,
-  remindAboutGates,
   sweepStaleRuns,
-  type DeliverDueChannelMessagesOptions,
+  type DeliverDueChatMessagesOptions,
   type DeliverDueWebhooksOptions,
   type DeliverWebhookOptions,
   type DeliveryResult,
@@ -116,16 +108,6 @@ export {
   type SweepStaleRunsOptions,
 } from "./work.ts";
 export {
-  defaultEmailLimit,
-  deliverDueEmails,
-  maxEmailAttempts,
-  resolveSender,
-  type DeliverDueEmailsOptions,
-  type EmailDeliveryResult,
-} from "./email/deliver.ts";
-export { renderEmail, type RenderInput, type RenderedEmail } from "./email/render.ts";
-export {
-  emailsSince,
   invitationsSince,
   limitWindowMs,
   limitWindowStart,

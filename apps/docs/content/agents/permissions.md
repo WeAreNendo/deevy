@@ -41,7 +41,7 @@ who tries is told "Only an Agent can do that". A Human is present for their own 
 - **Rule on a Gate.** An Agent can ask at a Checkpoint; it can never approve or reject, its own Gate or any
   other.
 - **Administer the Workspace**: Members, invitations, who may join, Sockets, Projects and their settings,
-  Channels, email, webhooks and the Workspace's own settings.
+  webhooks and the Workspace's own settings.
 - **Manage Agents**, its own included: no new Agents, no keys, no grants.
 - **Try a failed Run again.** That is its Sponsor's or an admin's call.
 
@@ -65,7 +65,6 @@ their name, and it can do what they can, except what only a Human present in dee
 
 - rule on a Gate;
 - list or revoke the MCP clients they consented to;
-- set up the Workspace's email;
 - link an account under **Settings › Identities**.
 
 Those happen in deevy's own pages, in a browser. Nothing a Human drives this way is ever an Agent: the

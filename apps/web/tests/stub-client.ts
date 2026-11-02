@@ -50,6 +50,8 @@ export function stubProject(slug: string, name: string, extra: Record<string, un
     trackerScopeKey: slug,
     defaultAgentMemberId: null,
     routing: { labelPrefix: "agent:", mention: true },
+    chatSocketId: null,
+    chatChannel: null,
     createdAt: stamp,
     archivedAt: null,
     ...extra,
@@ -244,6 +246,9 @@ export function stubClient(overrides: StubOverrides = {}): never {
       // Projects page, so a test that lands there needs an answer even when it
       // never opens the dialog.
       containers: async () => ({ containers: [] }),
+      // The channels a chat tool offers. A Project's Chat section asks once a
+      // chat Socket is chosen, which no test does unless it says so.
+      channels: async () => ({ channels: null, problem: null }),
       connect: async () => stubSocket,
       remove: async () => ({ ...stubSocket, status: "removed" }),
     },
@@ -258,23 +263,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
       list: async () => ({ issues: [], nextCursor: null, hasMore: false }),
       get: async () => emptyIssue,
     },
-    inbox: {
-      list: async () => ({ notifications: [], nextCursor: null }),
-      unreadCount: async () => ({ unread: 0 }),
-      markRead: async () => ({ read: 0 }),
-      markAllRead: async () => ({ read: 0 }),
-    },
-    channels: {
-      list: async () => ({ channels: [] }),
-      create: async () => ({}),
-      update: async () => ({}),
-      delete: async () => ({ deleted: true }),
-      test: async () => ({ delivered: true, status: 200, error: null }),
-    },
-    routing: {
-      list: async () => ({ rules: [] }),
-      set: async () => ({ rules: [] }),
-    },
     webhooks: {
       list: async () => ({ subscriptions: [] }),
       create: async () => ({}),
@@ -282,10 +270,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
       delete: async () => ({ deleted: true }),
       deliveries: async () => ({ deliveries: [] }),
       redeliver: async () => ({ queued: true }),
-    },
-    preferences: {
-      get: async () => ({ preferences: [] }),
-      set: async () => ({ preferences: [] }),
     },
     links: {
       list: async () => ({ links: [] }),

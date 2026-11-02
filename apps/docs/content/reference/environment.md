@@ -21,7 +21,7 @@ and on a Worker; where one only applies to one of them, it says so.
 | ---------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `BETTER_AUTH_URL`      | The request's origin | Where your team opens deevy, exactly as the browser sees it, such as `https://deevy.example.com`. A path in it is where deevy lives. Sign-in callbacks, the session cookie, links and the address MCP clients sign in against all follow from it. Unset, deevy follows the address each request came to, which is wrong behind a proxy that changes the host; MCP clients and the CLI can't sign in, and Slack deliveries wait.        |
 | `BETTER_AUTH_SECRET`   | None                 | **Credential.** Signs sessions and the links deevy sends, and seals sign-in providers' tokens. Generate it with `openssl rand -base64 32`. Unset, deevy doesn't run: the Docker image exits at start, and a Worker answers its API and `/healthz` with an error that names it. Changing it signs everybody out, and MCP clients and the CLI get no new tokens until you delete the OAuth signing keys it sealed (`DELETE FROM jwks;`). |
-| `DEEVY_SECRET`         | None                 | **Credential.** Seals the credentials of the tools you connect, a sender key saved under **Settings › Email**, and invitation links until they are emailed. At least 32 characters, and a different value from `BETTER_AUTH_SECRET`. Unset, deevy can't connect a tool that holds a credential, and doesn't email invitations. Losing it means connecting every tool again.                                                            |
+| `DEEVY_SECRET`         | None                 | **Credential.** Seals the credentials of the tools you connect. At least 32 characters, and a different value from `BETTER_AUTH_SECRET`. Unset, deevy can't connect a tool that holds a credential. Losing it means connecting every tool again.                                                                                                                                                                                       |
 | `DEEVY_ADMIN_EMAIL`    | None                 | The address that becomes the Workspace's admin. Its first verified sign-in creates the Workspace. Unset, no Workspace is created and nobody can join.                                                                                                                                                                                                                                                                                  |
 | `DEEVY_WORKSPACE_NAME` | `deevy`              | The name the Workspace starts with. An admin can rename it under **Settings › General**.                                                                                                                                                                                                                                                                                                                                               |
 | `DEEVY_WEB_ORIGIN`     | None                 | Only when the web app is served from an origin of its own. deevy then accepts that origin's calls and builds the links it hands a Human on it. Both the image and the Worker serve the web app themselves, so they don't need it.                                                                                                                                                                                                      |
@@ -67,27 +67,6 @@ For several deevys sharing one set of sign-in apps. See
 | `DEEVY_SIGN_IN_RELAY_URL`    | None    | On a deevy that signs in through a relay: the relay's address, which is the relay deevy's `BETTER_AUTH_URL` followed by `/relay`. Every relayed app's callback is `${DEEVY_SIGN_IN_RELAY_URL}/callback/<provider>`. |
 | `DEEVY_SIGN_IN_RELAY_ALLOW`  | None    | On the relay: the addresses it may send a sign-in back to, as comma-separated URL prefixes with at least a `/` after the host, such as `https://team-a.example.com/`.                                               |
 
-## Email
-
-Without `DEEVY_EMAIL_SENDER`, deevy sends no email, and an admin may still choose a sender under
-**Settings › Email**. See [Sending email](/self-hosting/email/).
-
-| Variable                    | Default    | What it does                                                                                                                                                                                                                          |
-| --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEEVY_EMAIL_SENDER`        | None       | `resend`, `postmark`, `sendgrid`, `mailgun`, `ses`, `smtp` (Docker only) or `cloudflare` (Workers only). Set up halfway, it stops the Docker image at startup; a Worker stays up and says what is missing under **Settings › Email**. |
-| `DEEVY_EMAIL_FROM`          | None       | Required with a sender: the address deevy sends as, such as `deevy <deevy@example.com>`, on a domain the sender has verified.                                                                                                         |
-| `RESEND_API_KEY`            | None       | **Credential.** For `resend`.                                                                                                                                                                                                         |
-| `POSTMARK_SERVER_TOKEN`     | None       | **Credential.** For `postmark`.                                                                                                                                                                                                       |
-| `POSTMARK_MESSAGE_STREAM`   | `outbound` | For `postmark`: the message stream to send on.                                                                                                                                                                                        |
-| `SENDGRID_API_KEY`          | None       | **Credential.** For `sendgrid`: a key with Mail Send.                                                                                                                                                                                 |
-| `MAILGUN_API_KEY`           | None       | **Credential.** For `mailgun`.                                                                                                                                                                                                        |
-| `MAILGUN_DOMAIN`            | None       | For `mailgun`: the sending domain, such as `mg.example.com`.                                                                                                                                                                          |
-| `MAILGUN_REGION`            | `us`       | For `mailgun`: `eu` for a domain in Mailgun's EU region.                                                                                                                                                                              |
-| `AWS_SES_REGION`            | None       | For `ses`: the region your sending identities are verified in.                                                                                                                                                                        |
-| `AWS_SES_ACCESS_KEY_ID`     | None       | **Credential.** For `ses`: an IAM key that may `ses:SendEmail` and nothing else.                                                                                                                                                      |
-| `AWS_SES_SECRET_ACCESS_KEY` | None       | **Credential.** For `ses`: that key's secret.                                                                                                                                                                                         |
-| `SMTP_URL`                  | None       | **Credential.** For `smtp`, Docker only: `smtps://user:password@host:465`, or `smtp://user:password@host:587`, which upgrades with STARTTLS.                                                                                          |
-
 ## Tools
 
 | Variable           | Default                  | What it does                                                                                                                                                      |
@@ -99,8 +78,7 @@ Without `DEEVY_EMAIL_SENDER`, deevy sends no email, and an admin may still choos
 | Variable                       | Default | What it does                                                                                                                                                                                                                |
 | ------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEEVY_RUN_STALE_MINUTES`      | `30`    | How long a Run may be silent before it counts as stale. Its next Activity undoes it.                                                                                                                                        |
-| `DEEVY_GATE_REMINDER_HOURS`    | `4`     | How often a Gate nobody has ruled on asks its approvers again.                                                                                                                                                              |
-| `DEEVY_SWEEP_INTERVAL_SECONDS` | `60`    | Docker only: how often background work runs, such as reminders, email, webhooks and the comments deevy writes in your tools. On a Worker, the Cron Trigger in `apps/web/wrangler.jsonc` runs it every minute.               |
+| `DEEVY_SWEEP_INTERVAL_SECONDS` | `60`    | Docker only: how often background work runs, such as webhooks, the Gates deevy posts in chat and the comments it writes in your tools. On a Worker, the Cron Trigger in `apps/web/wrangler.jsonc` runs it every minute.     |
 | `DEEVY_STREAM_SECONDS`         | `60`    | Workers only: how long an open page's stream of updates lasts before it reconnects. The stream asks D1 every two seconds, against a limit on queries per request, so a value much over 90 leaves it none for anything else. |
 
 ## The Docker image
@@ -124,19 +102,17 @@ These are bindings in `apps/web/wrangler.jsonc` rather than variables.
 | `DB`     | The D1 database, named `deevy`. The first `wrangler deploy` creates it.                                                                              |
 | `ASSETS` | The built web app.                                                                                                                                   |
 | `JOBS`   | Optional: a Queue, so a webhook goes out the moment it is owed rather than at the next Cron pass. Queues are a paid feature, so deevy leaves it out. |
-| `EMAIL`  | Optional: the `send_email` binding for `DEEVY_EMAIL_SENDER=cloudflare`. Commented out until you want it.                                             |
 
 ## Development only
 
-These replace a real service with a stand-in, for trying deevy on a laptop with no OAuth app, no tool and
-no email account. **Never set them in production.** The Docker image refuses to start with the sign-in, tool
-or email stand-in on; a Worker can't tell it is in production, so leave them unset there.
+These replace a real service with a stand-in, for trying deevy on a laptop with no OAuth app and no tool.
+**Never set them in production.** The Docker image refuses to start with the sign-in or tool stand-in on; a
+Worker can't tell it is in production, so leave them unset there.
 
-| Variable                    | Default      | What it does                                                                                                                                 |
-| --------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEEVY_DEV_STUB_OAUTH`      | None         | Docker only. `1` makes every sign-in provider a stand-in that signs in whatever address it is given.                                         |
-| `DEEVY_DEV_STUB_SOCKETS`    | None         | `1` adds a stand-in tool, a tracker inside deevy itself, that a Socket can connect to with no app and no tunnel.                             |
-| `DEEVY_DEV_STUB_CONTAINERS` | `acme/deevy` | What that stand-in tool holds: container names, comma-separated. Read only with `DEEVY_DEV_STUB_SOCKETS`.                                    |
-| `DEEVY_DEV_STUB_EMAIL`      | None         | `1` sends email to a stand-in instead of a sender, when no sender is set; on the Docker image, what it was asked to send is at `/dev/email`. |
+| Variable                    | Default      | What it does                                                                                                     |
+| --------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `DEEVY_DEV_STUB_OAUTH`      | None         | Docker only. `1` makes every sign-in provider a stand-in that signs in whatever address it is given.             |
+| `DEEVY_DEV_STUB_SOCKETS`    | None         | `1` adds a stand-in tool, a tracker inside deevy itself, that a Socket can connect to with no app and no tunnel. |
+| `DEEVY_DEV_STUB_CONTAINERS` | `acme/deevy` | What that stand-in tool holds: container names, comma-separated. Read only with `DEEVY_DEV_STUB_SOCKETS`.        |
 
 `GET /api/health/ping` reports `devSignIn` and `devSockets`; both are `false` when the stand-ins are off.
