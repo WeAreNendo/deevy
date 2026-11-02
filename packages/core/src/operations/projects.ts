@@ -3,6 +3,7 @@ import { z } from "zod";
 import { project as projectTable } from "@deevy/db";
 import { createProject } from "../projects.ts";
 import { ProjectSchema } from "../schemas.ts";
+import { chatHello } from "../sockets/chat-out.ts";
 import { requireSocket, scopeKeyOf, socketModuleFor } from "../sockets/registry.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
@@ -12,6 +13,7 @@ import {
   ProjectSlugLookup,
   QueryFlag,
   grantProject,
+  linkOrigin,
   loadProject,
   requireProject,
   requireProjectOrAdmin,
@@ -39,6 +41,43 @@ async function requireDefaultAgent(context: ContextFor<"member">, memberId: stri
   if (!agent) {
     throw new ORPCError("BAD_REQUEST", {
       message: "The default has to be one of this Workspace's Agents",
+    });
+  }
+}
+
+/** A chat binding as a caller states one: a chat Socket, and the channel's own id in it. */
+const ChatBindingInput = z.object({
+  socketId: z.string(),
+  /** `C0123ABCD` in Slack: one `sockets.channels` offered, or one an admin typed. */
+  channel: z.string().trim().min(1).max(80),
+});
+
+type ChatBinding = z.infer<typeof ChatBindingInput>;
+
+/**
+ * Proves a chat binding before it is saved, by posting the line that says
+ * what the channel will get (docs/plans/simplify.md, slice 8). A channel the
+ * app was never added to, or one that is archived, is refused in the tool's
+ * own words while the admin is still looking, rather than found out on the
+ * first Gate nobody sees.
+ */
+async function proveChatBinding(
+  context: ContextFor<"member">,
+  project: { name: string },
+  to: ChatBinding,
+): Promise<void> {
+  const socket = await requireSocket(context, to.socketId);
+  const module = await socketModuleFor(context, socket);
+  if (!module.chat) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: `The ${socket.name} Socket is not a chat tool`,
+    });
+  }
+  try {
+    await module.chat.post(to.channel, chatHello(project, linkOrigin(context)));
+  } catch (error) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: `${socket.name} would not take a message in that channel: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
 }
@@ -91,7 +130,8 @@ export const projects = {
 
   update: defineOperation({
     name: "projects.update",
-    summary: "Rename a Project, or change who gets its work and how a record names an Agent",
+    summary:
+      "Rename a Project, change who gets its work and how a record names an Agent, or bind its chat channel",
     method: "PATCH",
     path: "/projects/{slug}",
     auth: "member",
@@ -116,6 +156,12 @@ export const projects = {
           mention: z.boolean(),
         })
         .optional(),
+      /**
+       * The chat channel this Project's Gates are posted in, or null for none.
+       * Saving one posts a line there first, and a channel the tool refuses
+       * is not bound.
+       */
+      chat: ChatBindingInput.nullable().optional(),
     }),
     output: ProjectSchema,
     handler: async ({ input, context }) => {
@@ -143,6 +189,18 @@ export const projects = {
       if (input.routing !== undefined) {
         changes.routing = { from: found.routing, to: input.routing };
       }
+      const chatWas =
+        found.chatSocketId && found.chatChannel
+          ? { socketId: found.chatSocketId, channel: found.chatChannel }
+          : null;
+      if (
+        input.chat !== undefined &&
+        (input.chat?.socketId !== chatWas?.socketId || input.chat?.channel !== chatWas?.channel)
+      ) {
+        // Before anything is written: a refusal leaves the Project as it was.
+        if (input.chat) await proveChatBinding(context, found, input.chat);
+        changes.chat = { from: chatWas, to: input.chat };
+      }
       if (Object.keys(changes).length === 0) return loadProject(context.db, found.id);
 
       await context.db
@@ -154,6 +212,12 @@ export const projects = {
             ? {}
             : { defaultAgentMemberId: input.defaultAgentMemberId ?? null }),
           ...(input.routing === undefined ? {} : { routing: input.routing }),
+          ...(changes.chat
+            ? {
+                chatSocketId: input.chat?.socketId ?? null,
+                chatChannel: input.chat?.channel ?? null,
+              }
+            : {}),
         })
         .where(eq(projectTable.id, found.id));
       await appendEvent(context, {

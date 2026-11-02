@@ -4809,6 +4809,18 @@
                               "null"
                             ]
                           },
+                          "chatSocketId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "chatChannel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routing": {
                             "type": "object",
                             "properties": {
@@ -4853,6 +4865,8 @@
                           "trackerScope",
                           "trackerScopeKey",
                           "defaultAgentMemberId",
+                          "chatSocketId",
+                          "chatChannel",
                           "routing",
                           "createdAt",
                           "archivedAt"
@@ -4968,6 +4982,18 @@
                               "null"
                             ]
                           },
+                          "chatSocketId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "chatChannel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routing": {
                             "type": "object",
                             "properties": {
@@ -5012,6 +5038,8 @@
                           "trackerScope",
                           "trackerScopeKey",
                           "defaultAgentMemberId",
+                          "chatSocketId",
+                          "chatChannel",
                           "routing",
                           "createdAt",
                           "archivedAt"
@@ -5129,6 +5157,18 @@
                               "null"
                             ]
                           },
+                          "chatSocketId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "chatChannel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routing": {
                             "type": "object",
                             "properties": {
@@ -5173,6 +5213,8 @@
                           "trackerScope",
                           "trackerScopeKey",
                           "defaultAgentMemberId",
+                          "chatSocketId",
+                          "chatChannel",
                           "routing",
                           "createdAt",
                           "archivedAt"
@@ -5472,27 +5514,6 @@
                                 "type": "null"
                               }
                             ]
-                          },
-                          "emailStatus": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "queued",
-                                  "sent",
-                                  "failed"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "emailError": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
                           }
                         },
                         "required": [
@@ -5505,9 +5526,7 @@
                           "expiresAt",
                           "acceptedAt",
                           "acceptedMemberId",
-                          "revokedAt",
-                          "emailStatus",
-                          "emailError"
+                          "revokedAt"
                         ],
                         "additionalProperties": false
                       }
@@ -5545,10 +5564,6 @@
                       "admin",
                       "member"
                     ]
-                  },
-                  "send": {
-                    "default": true,
-                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -5628,38 +5643,11 @@
                         }
                       ]
                     },
-                    "emailStatus": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "queued",
-                            "sent",
-                            "failed"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "emailError": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
                     "url": {
                       "type": "string"
                     },
                     "path": {
                       "type": "string"
-                    },
-                    "emailNotSent": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     }
                   },
                   "required": [
@@ -5673,11 +5661,8 @@
                     "acceptedAt",
                     "acceptedMemberId",
                     "revokedAt",
-                    "emailStatus",
-                    "emailError",
                     "url",
-                    "path",
-                    "emailNotSent"
+                    "path"
                   ],
                   "additionalProperties": false
                 }
@@ -5780,27 +5765,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "emailStatus": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "queued",
-                            "sent",
-                            "failed"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "emailError": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     }
                   },
                   "required": [
@@ -5813,9 +5777,7 @@
                     "expiresAt",
                     "acceptedAt",
                     "acceptedMemberId",
-                    "revokedAt",
-                    "emailStatus",
-                    "emailError"
+                    "revokedAt"
                   ],
                   "additionalProperties": false
                 }
@@ -7214,6 +7176,73 @@
         }
       }
     },
+    "/sockets/{socketId}/channels": {
+      "get": {
+        "operationId": "sockets.channels",
+        "summary": "The channels a Project's Gates could be posted in, inside this chat tool",
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "socketId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channels": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "channels",
+                    "problem"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sockets/{socketId}/test": {
       "post": {
         "operationId": "sockets.test",
@@ -8148,6 +8177,18 @@
                               "null"
                             ]
                           },
+                          "chatSocketId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "chatChannel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "routing": {
                             "type": "object",
                             "properties": {
@@ -8192,6 +8233,8 @@
                           "trackerScope",
                           "trackerScopeKey",
                           "defaultAgentMemberId",
+                          "chatSocketId",
+                          "chatChannel",
                           "routing",
                           "createdAt",
                           "archivedAt"
@@ -8336,6 +8379,18 @@
                         "null"
                       ]
                     },
+                    "chatSocketId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "chatChannel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "routing": {
                       "type": "object",
                       "properties": {
@@ -8380,6 +8435,8 @@
                     "trackerScope",
                     "trackerScopeKey",
                     "defaultAgentMemberId",
+                    "chatSocketId",
+                    "chatChannel",
                     "routing",
                     "createdAt",
                     "archivedAt"
@@ -8468,6 +8525,18 @@
                         "null"
                       ]
                     },
+                    "chatSocketId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "chatChannel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "routing": {
                       "type": "object",
                       "properties": {
@@ -8512,6 +8581,8 @@
                     "trackerScope",
                     "trackerScopeKey",
                     "defaultAgentMemberId",
+                    "chatSocketId",
+                    "chatChannel",
                     "routing",
                     "createdAt",
                     "archivedAt"
@@ -8525,7 +8596,7 @@
       },
       "patch": {
         "operationId": "projects.update",
-        "summary": "Rename a Project, or change who gets its work and how a record names an Agent",
+        "summary": "Rename a Project, change who gets its work and how a record names an Agent, or bind its chat channel",
         "parameters": [
           {
             "in": "path",
@@ -8579,6 +8650,30 @@
                     "required": [
                       "labelPrefix",
                       "mention"
+                    ]
+                  },
+                  "chat": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "socketId": {
+                            "type": "string"
+                          },
+                          "channel": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 80
+                          }
+                        },
+                        "required": [
+                          "socketId",
+                          "channel"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
                     ]
                   }
                 }
@@ -8647,6 +8742,18 @@
                         "null"
                       ]
                     },
+                    "chatSocketId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "chatChannel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "routing": {
                       "type": "object",
                       "properties": {
@@ -8691,6 +8798,8 @@
                     "trackerScope",
                     "trackerScopeKey",
                     "defaultAgentMemberId",
+                    "chatSocketId",
+                    "chatChannel",
                     "routing",
                     "createdAt",
                     "archivedAt"
@@ -8789,6 +8898,18 @@
                         "null"
                       ]
                     },
+                    "chatSocketId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "chatChannel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "routing": {
                       "type": "object",
                       "properties": {
@@ -8833,6 +8954,8 @@
                     "trackerScope",
                     "trackerScopeKey",
                     "defaultAgentMemberId",
+                    "chatSocketId",
+                    "chatChannel",
                     "routing",
                     "createdAt",
                     "archivedAt"
@@ -11696,6 +11819,18 @@
                             "null"
                           ]
                         },
+                        "chatSocketId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "chatChannel": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "routing": {
                           "type": "object",
                           "properties": {
@@ -11740,6 +11875,8 @@
                         "trackerScope",
                         "trackerScopeKey",
                         "defaultAgentMemberId",
+                        "chatSocketId",
+                        "chatChannel",
                         "routing",
                         "createdAt",
                         "archivedAt"
@@ -12650,7 +12787,7 @@
     "/inbox": {
       "get": {
         "operationId": "inbox.list",
-        "summary": "The Notifications waiting for you, newest first",
+        "summary": "The Notifications waiting for this Agent, newest first",
         "parameters": [
           {
             "in": "query",
@@ -12712,10 +12849,8 @@
                           "kind": {
                             "type": "string",
                             "enum": [
-                              "mention",
                               "assignment",
-                              "gate_awaiting",
-                              "run_finished",
+                              "mention",
                               "run_answered"
                             ]
                           },
@@ -13306,39 +13441,10 @@
         }
       }
     },
-    "/inbox/unread": {
-      "get": {
-        "operationId": "inbox.unreadCount",
-        "summary": "How many Notifications you have not read",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "unread": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    }
-                  },
-                  "required": [
-                    "unread"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/inbox/read": {
       "post": {
         "operationId": "inbox.markRead",
-        "summary": "Mark some of your Notifications read",
+        "summary": "Mark some of this Agent's Notifications read",
         "requestBody": {
           "required": true,
           "content": {
@@ -13376,1737 +13482,6 @@
                   },
                   "required": [
                     "read"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/inbox/read-all": {
-      "post": {
-        "operationId": "inbox.markAllRead",
-        "summary": "Mark your whole inbox read",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "read": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    }
-                  },
-                  "required": [
-                    "read"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels": {
-      "get": {
-        "operationId": "channels.list",
-        "summary": "The Channels this Workspace delivers Notifications to",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "channels": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "kind": {
-                            "type": "string",
-                            "enum": [
-                              "inbox",
-                              "slack",
-                              "slack_app",
-                              "email"
-                            ]
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "webhookHost": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "socketId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "conversation": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "address": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "confirmedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "createdBy": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "createdAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "kind",
-                          "name",
-                          "webhookHost",
-                          "socketId",
-                          "conversation",
-                          "address",
-                          "confirmedAt",
-                          "createdBy",
-                          "createdAt"
-                        ],
-                        "additionalProperties": false
-                      }
-                    }
-                  },
-                  "required": [
-                    "channels"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "channels.create",
-        "summary": "Add a Slack incoming webhook as a Channel",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  },
-                  "webhookUrl": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "format": "uri",
-                    "pattern": "^https:\\/\\/.*"
-                  }
-                },
-                "required": [
-                  "name",
-                  "webhookUrl"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "inbox",
-                        "slack",
-                        "slack_app",
-                        "email"
-                      ]
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "webhookHost": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "socketId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "conversation": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "address": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "confirmedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "createdBy": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "createdAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "kind",
-                    "name",
-                    "webhookHost",
-                    "socketId",
-                    "conversation",
-                    "address",
-                    "confirmedAt",
-                    "createdBy",
-                    "createdAt"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels/email": {
-      "post": {
-        "operationId": "channels.createEmail",
-        "summary": "Add a team email address as a Channel, and mail it a confirmation",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  },
-                  "address": {
-                    "type": "string",
-                    "maxLength": 254,
-                    "format": "email",
-                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                  }
-                },
-                "required": [
-                  "name",
-                  "address"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "channel": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "enum": [
-                            "inbox",
-                            "slack",
-                            "slack_app",
-                            "email"
-                          ]
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "webhookHost": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "socketId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "conversation": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "address": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "confirmedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "createdBy": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "createdAt": {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "kind",
-                        "name",
-                        "webhookHost",
-                        "socketId",
-                        "conversation",
-                        "address",
-                        "confirmedAt",
-                        "createdBy",
-                        "createdAt"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "confirmation": {
-                      "type": "object",
-                      "properties": {
-                        "delivered": {
-                          "type": "boolean"
-                        },
-                        "status": {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        "error": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "delivered",
-                        "status",
-                        "error"
-                      ],
-                      "additionalProperties": false
-                    }
-                  },
-                  "required": [
-                    "channel",
-                    "confirmation"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels/in-socket": {
-      "post": {
-        "operationId": "channels.createInSocket",
-        "summary": "Add a room in a connected Slack app as a Channel",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  },
-                  "socketId": {
-                    "type": "string"
-                  },
-                  "conversation": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 40
-                  }
-                },
-                "required": [
-                  "name",
-                  "socketId",
-                  "conversation"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "inbox",
-                        "slack",
-                        "slack_app",
-                        "email"
-                      ]
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "webhookHost": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "socketId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "conversation": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "address": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "confirmedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "createdBy": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "createdAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "kind",
-                    "name",
-                    "webhookHost",
-                    "socketId",
-                    "conversation",
-                    "address",
-                    "confirmedAt",
-                    "createdBy",
-                    "createdAt"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels/{channelId}": {
-      "patch": {
-        "operationId": "channels.update",
-        "summary": "Rename a Channel, or point it at a new webhook",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "channelId",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  },
-                  "webhookUrl": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "format": "uri",
-                    "pattern": "^https:\\/\\/.*"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "kind": {
-                      "type": "string",
-                      "enum": [
-                        "inbox",
-                        "slack",
-                        "slack_app",
-                        "email"
-                      ]
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "webhookHost": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "socketId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "conversation": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "address": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "confirmedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "createdBy": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "createdAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "kind",
-                    "name",
-                    "webhookHost",
-                    "socketId",
-                    "conversation",
-                    "address",
-                    "confirmedAt",
-                    "createdBy",
-                    "createdAt"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "operationId": "channels.delete",
-        "summary": "Remove a Channel; the routing rules aimed at it go with it",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "channelId",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "deleted": {
-                      "type": "boolean",
-                      "const": true
-                    }
-                  },
-                  "required": [
-                    "deleted"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels/{channelId}/test": {
-      "post": {
-        "operationId": "channels.test",
-        "summary": "Post a message to this Channel now, to prove it works",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "channelId",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "delivered": {
-                      "type": "boolean"
-                    },
-                    "status": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "error": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "delivered",
-                    "status",
-                    "error"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/routing": {
-      "get": {
-        "operationId": "routing.list",
-        "summary": "Which Notifications this Workspace sends to which Channels",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "rules": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "notificationKind": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "mention",
-                                  "assignment",
-                                  "gate_awaiting",
-                                  "run_finished"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "projectId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "channelId": {
-                            "type": "string"
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "createdAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          }
-                        },
-                        "required": [
-                          "notificationKind",
-                          "projectId",
-                          "channelId",
-                          "id",
-                          "createdAt"
-                        ],
-                        "additionalProperties": false
-                      }
-                    }
-                  },
-                  "required": [
-                    "rules"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "operationId": "routing.set",
-        "summary": "Replace the routing rules with this set",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "rules": {
-                    "maxItems": 50,
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "notificationKind": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "enum": [
-                                "mention",
-                                "assignment",
-                                "gate_awaiting",
-                                "run_finished"
-                              ]
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "projectId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "channelId": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "notificationKind",
-                        "projectId",
-                        "channelId"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "rules"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "rules": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "notificationKind": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "mention",
-                                  "assignment",
-                                  "gate_awaiting",
-                                  "run_finished"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "projectId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "channelId": {
-                            "type": "string"
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "createdAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          }
-                        },
-                        "required": [
-                          "notificationKind",
-                          "projectId",
-                          "channelId",
-                          "id",
-                          "createdAt"
-                        ],
-                        "additionalProperties": false
-                      }
-                    }
-                  },
-                  "required": [
-                    "rules"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/preferences": {
-      "get": {
-        "operationId": "preferences.get",
-        "summary": "Which Notifications reach you, and in which Channels",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "preferences": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "enum": [
-                              "mention",
-                              "assignment",
-                              "gate_awaiting",
-                              "run_finished"
-                            ]
-                          },
-                          "inbox": {
-                            "type": "boolean"
-                          },
-                          "slack": {
-                            "type": "boolean"
-                          },
-                          "slackDm": {
-                            "type": "boolean"
-                          },
-                          "email": {
-                            "type": "boolean"
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "inbox",
-                          "slack",
-                          "slackDm",
-                          "email"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "emailAddress": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "preferences",
-                    "emailAddress"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "operationId": "preferences.set",
-        "summary": "Say which of your Notifications reach the inbox, Slack and your email",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "preferences": {
-                    "maxItems": 4,
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "kind": {
-                          "type": "string",
-                          "enum": [
-                            "mention",
-                            "assignment",
-                            "gate_awaiting",
-                            "run_finished"
-                          ]
-                        },
-                        "inbox": {
-                          "type": "boolean"
-                        },
-                        "slack": {
-                          "type": "boolean"
-                        },
-                        "slackDm": {
-                          "type": "boolean"
-                        },
-                        "email": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "kind",
-                        "inbox",
-                        "slack"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "preferences"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "preferences": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "enum": [
-                              "mention",
-                              "assignment",
-                              "gate_awaiting",
-                              "run_finished"
-                            ]
-                          },
-                          "inbox": {
-                            "type": "boolean"
-                          },
-                          "slack": {
-                            "type": "boolean"
-                          },
-                          "slackDm": {
-                            "type": "boolean"
-                          },
-                          "email": {
-                            "type": "boolean"
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "inbox",
-                          "slack",
-                          "slackDm",
-                          "email"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "emailAddress": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "preferences",
-                    "emailAddress"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/email": {
-      "get": {
-        "operationId": "email.status",
-        "summary": "The email sender this Workspace sends through, and where it was set",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "sender": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "cloudflare",
-                            "resend",
-                            "postmark",
-                            "sendgrid",
-                            "mailgun",
-                            "ses",
-                            "smtp",
-                            "stub"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "from": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "source": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "settings",
-                            "environment"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "runnable": {
-                      "type": "boolean"
-                    },
-                    "problem": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "available": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "cloudflare",
-                          "resend",
-                          "postmark",
-                          "sendgrid",
-                          "mailgun",
-                          "ses",
-                          "smtp",
-                          "stub"
-                        ]
-                      }
-                    },
-                    "config": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "limit": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "perDay": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "sent": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "waiting": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "nextAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "date-time",
-                                  "x-native-type": "date"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "perDay",
-                            "sent",
-                            "waiting",
-                            "nextAt"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "sender",
-                    "from",
-                    "source",
-                    "runnable",
-                    "problem",
-                    "available",
-                    "config",
-                    "limit"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "operationId": "email.configure",
-        "summary": "Set the email sender, over the environment's",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "sender": {
-                    "type": "string",
-                    "enum": [
-                      "cloudflare",
-                      "resend",
-                      "postmark",
-                      "sendgrid",
-                      "mailgun",
-                      "ses",
-                      "smtp"
-                    ]
-                  },
-                  "from": {
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 320
-                  },
-                  "config": {
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {
-                      "type": "string",
-                      "maxLength": 500
-                    }
-                  },
-                  "credentials": {
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {
-                      "type": "string",
-                      "maxLength": 4000
-                    }
-                  }
-                },
-                "required": [
-                  "sender",
-                  "from",
-                  "config",
-                  "credentials"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "sender": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "cloudflare",
-                            "resend",
-                            "postmark",
-                            "sendgrid",
-                            "mailgun",
-                            "ses",
-                            "smtp",
-                            "stub"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "from": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "source": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "settings",
-                            "environment"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "runnable": {
-                      "type": "boolean"
-                    },
-                    "problem": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "available": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "cloudflare",
-                          "resend",
-                          "postmark",
-                          "sendgrid",
-                          "mailgun",
-                          "ses",
-                          "smtp",
-                          "stub"
-                        ]
-                      }
-                    },
-                    "config": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "limit": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "perDay": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "sent": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "waiting": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "nextAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "date-time",
-                                  "x-native-type": "date"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "perDay",
-                            "sent",
-                            "waiting",
-                            "nextAt"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "sender",
-                    "from",
-                    "source",
-                    "runnable",
-                    "problem",
-                    "available",
-                    "config",
-                    "limit"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "operationId": "email.clear",
-        "summary": "Forget the email sender set here, so the environment's is used again",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "sender": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "cloudflare",
-                            "resend",
-                            "postmark",
-                            "sendgrid",
-                            "mailgun",
-                            "ses",
-                            "smtp",
-                            "stub"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "from": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "source": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "settings",
-                            "environment"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "runnable": {
-                      "type": "boolean"
-                    },
-                    "problem": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "available": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "cloudflare",
-                          "resend",
-                          "postmark",
-                          "sendgrid",
-                          "mailgun",
-                          "ses",
-                          "smtp",
-                          "stub"
-                        ]
-                      }
-                    },
-                    "config": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "limit": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "perDay": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "sent": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "waiting": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "nextAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "date-time",
-                                  "x-native-type": "date"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "perDay",
-                            "sent",
-                            "waiting",
-                            "nextAt"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "sender",
-                    "from",
-                    "source",
-                    "runnable",
-                    "problem",
-                    "available",
-                    "config",
-                    "limit"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/email/test": {
-      "post": {
-        "operationId": "email.test",
-        "summary": "Send a test email to yourself through the sender in force",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "delivered": {
-                      "type": "boolean"
-                    },
-                    "status": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "error": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "to": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "delivered",
-                    "status",
-                    "error",
-                    "to"
                   ],
                   "additionalProperties": false
                 }

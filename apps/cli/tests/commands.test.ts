@@ -58,7 +58,7 @@ describe("the command list", () => {
 
 describe("a command's name", () => {
   it("makes words out of a dotted, camelCased operation", () => {
-    expect(commandWords("inbox.markAllRead")).toEqual(["inbox", "mark-all-read"]);
+    expect(commandWords("inbox.markRead")).toEqual(["inbox", "mark-read"]);
     expect(commandWords("issues.get")).toEqual(["issues", "get"]);
     expect(commandWords("agents.keys.issue")).toEqual(["agents", "keys", "issue"]);
     expect(commandWords("oauthClients.revoke")).toEqual(["oauth-clients", "revoke"]);
@@ -139,13 +139,6 @@ describe("what the CLI cannot do", () => {
       .filter((command) => command.sessionOnly)
       .map((command) => command.operation);
     expect(sessionOnly).toEqual([
-      // The key that sends email as this Workspace is set by an admin in
-      // Settings › Email, not by a program holding a token
-      // (docs/plans/email-channel.md).
-      "email.clear",
-      "email.configure",
-      "email.status",
-      "email.test",
       // Ruling on a Gate is the decision ADR-0010 will not take from a
       // delegated credential, so it is not a command either: a Human rules in
       // deevy, from the link the CLI hands them.

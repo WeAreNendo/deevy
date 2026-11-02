@@ -13,13 +13,13 @@ tool once, then bind as many Projects to what is in it as you like.
 A Socket is one tool, connected under one identity of deevy's own there, holding the credential deevy acts
 with:
 
-| Tool   | The Socket is              | What deevy uses it for                               |
-| ------ | -------------------------- | ---------------------------------------------------- |
-| GitHub | a GitHub App               | issues as records                                    |
-| Linear | a Linear OAuth application | issues as records                                    |
-| GitLab | a GitLab account           | issues as records                                    |
-| Notion | a Notion connection        | a database's rows as records                         |
-| Slack  | a Slack app                | Gates in a channel or a direct message, with buttons |
+| Tool   | The Socket is              | What deevy uses it for                       |
+| ------ | -------------------------- | -------------------------------------------- |
+| GitHub | a GitHub App               | issues as records                            |
+| Linear | a Linear OAuth application | issues as records                            |
+| GitLab | a GitLab account           | issues as records                            |
+| Notion | a Notion connection        | a database's rows as records                 |
+| Slack  | a Slack app                | a Project's Gates in a channel, with buttons |
 
 A Socket listens and announces. It takes what the tool delivers, and it says on a record when a Gate is
 waiting and how it was ruled, written by deevy's identity in that tool and signed with the Agent and the Run
@@ -52,11 +52,14 @@ source. It holds no work of its own. It says:
 
 - where its records come from, which never changes once it is bound;
 - which Agent takes a record that nobody named, and which label routes one to an Agent;
+- which chat channel, if any, its Gates are posted in;
 - its Checkpoints, and how many Humans each one asks for.
 
 An admin binds one under **Settings › Projects** with **Bind a Project**: choose the **Tool**, then the
 **Container** it offers, then a **Name**. A Project holds nothing about code: an Agent reaches its
-repository with access you give it. The Project's **Binding** section then holds the rest, and its **Checkpoints** section its policy.
+repository with access you give it. The Project's **Binding** section then holds the rest, its **Chat** section the channel its Gates are
+posted in ([Needs me and chat](/needs-me/#post-a-projects-gates-in-a-chat-channel)), and its **Checkpoints**
+section its policy.
 
 To take records from another repository or team, bind it as a Project of its own.
 

@@ -15,26 +15,18 @@ A Gate you may approve shows up in several places at once. Answer it in whicheve
 - **Needs me**, deevy's home page, under **Gates awaiting you**: a card per Gate with its Checkpoint, the
   first line of the Proposal, the record's key, the Agent, how long it has waited, and how many approvals it
   has, such as `0 of 1`.
-- **Inbox**, as a Notification that the Agent "wants your ruling at plan". On a wide screen, choosing it opens
-  the Gate beside the list, ready to rule.
 - **Your tracker**, as a comment on the record with the Proposal and how to rule from there. See
   [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
-- **Slack**, in a room your admin routed Gates to, or as a direct message once your Slack account is linked
-  under **Settings › Identities**. Signing in to deevy with Slack doesn't link it on its own: it is linked
-  the first time you click **Approve** or **Reject** in a room, or when you type `/deevy link` in Slack.
-- **Email**, at the address your sign-in confirmed. See [Email](/notifications/email/).
+- **Slack**, in the channel the Project posts its Gates in, when an admin has bound one. Your clicks there
+  count once your Slack account is one of your Identities: you sign in to deevy with Slack, or you link it
+  the first time you click **Approve** or **Reject**, or when you type `/deevy link` in Slack. See
+  [Needs me and chat](/needs-me/).
 
 The Agent can also hand you the Gate's own link. From a terminal, `deevy gates open acme/deevy#42` opens the
 Gate waiting on that record in your browser.
 
-If a Gate is still waiting four hours later, its Notification comes back unread in the Inbox of everyone it
-is still waiting on, which leaves out whoever has already ruled, and again every four hours until the Gate
-is decided. A Run waiting on a plain question is reminded the same way.
-
-:::note[Self-hosted]
-The reminder interval is `DEEVY_GATE_REMINDER_HOURS`, 4 by default. See
-[Configuration](/self-hosting/configuration/).
-:::
+deevy doesn't email you or remind you. A Gate stays on your **Needs me**, and its message in the channel
+keeps its buttons, until it is decided.
 
 ## What the Gate's page shows
 
@@ -81,8 +73,8 @@ Once a Gate is decided the buttons are gone, and the card says **This Gate was a
 Where the Checkpoint wants somebody other than the Human the work is for, and that is you, only **Approve**
 is greyed out. The card says the Checkpoint wants somebody other than the Human this Run is for to approve
 it, and that you may still reject it. **Reject** works as it does for anybody, with `⇧R` and your Note, and
-ends the Gate. The Gate is not waiting on you, so it is not on your **Needs me** or in your Inbox, but you can
-open it from the Run, the record or its link.
+ends the Gate. The Gate is not waiting on you, so it is not on your **Needs me**, but you can open it from the
+Run, the record or its link.
 
 See [Gates that need more than one Human](/gates/more-than-one-human/).
 

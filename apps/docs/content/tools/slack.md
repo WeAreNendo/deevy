@@ -1,6 +1,6 @@
 ---
 title: Slack
-description: Create deevy's Slack app from its manifest, route Gates to a channel, and approve or reject them with a button.
+description: Create deevy's Slack app from its manifest, post a Project's Gates in a channel, and approve or reject them with a button.
 sidebar:
   order: 6
   badge:
@@ -13,9 +13,9 @@ deevy's Slack Socket is built and tested against Slack's recorded deliveries, an
 against Slack itself. Settings says **Preview** beside it until it has.
 :::
 
-A Slack Socket is a Slack app made from deevy's manifest. It holds no records, so no Project is bound to it.
-It is where deevy asks: a Gate arrives in a channel with **Approve** and **Reject** buttons, and a Human
-whose Slack account is linked can be told by direct message too.
+A Slack Socket is a Slack app made from deevy's manifest. It holds no records, so no Project takes its
+records from it. It is where deevy asks: a Project bound to a channel posts each of its Gates there, with
+**Approve** and **Reject** buttons.
 
 ## Create the app and connect it
 
@@ -37,34 +37,40 @@ would post as that person.
 
 ### What the app asks for
 
-| Scope        | Why                                                                                |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `chat:write` | To post a Gate with **Approve** and **Reject**, and change it when somebody rules. |
-| `im:write`   | To send a direct message to a Human who linked their Slack account.                |
-| `commands`   | For `/deevy link`, which is how a Human links their Slack account.                 |
+| Scope           | Why                                                                                |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `chat:write`    | To post a Gate with **Approve** and **Reject**, and change it when somebody rules. |
+| `channels:read` | To list the public channels the app is in, for a Project's **Chat**.               |
+| `groups:read`   | To list the private channels the app is in, likewise.                              |
+| `commands`      | For `/deevy link`, which is how a Human links their Slack account.                 |
 
 Nothing about people: a click already says who clicked.
 
-## Route Gates to a channel
+An app made from an earlier manifest asks for `im:write` instead of `channels:read` and `groups:read`. It
+still posts, but a Project's **Chat** can't list its channels and asks for the channel's id instead. To pick
+from the list, add `channels:read` and `groups:read` under **OAuth & Permissions** in the app's settings,
+then reinstall the app to your Slack workspace. deevy no longer uses `im:write`, so you can remove it.
+
+## Post a Project's Gates in a channel
+
+Each Project chooses its own channel, under **Chat** in its settings.
 
 1. In Slack, invite the app to the channel: `/invite @deevy`.
-2. Copy the channel's ID from its details in Slack. It looks like `C0123ABCD`.
-3. In deevy, go to **Settings › Channels**. In the form for a room in your Slack app, which appears once
-   a Slack Socket is connected, give it a **Name**, such as `#approvals`, paste the **Slack channel ID**,
-   and choose **Add room**.
-4. Under **Routing**, choose **Add rule**. Set **Notification** to **Gate awaiting**, choose a **Project** or
-   leave it at **Any**, and choose the new **Channel**. Choose **Save routing**.
-5. Choose **Test** beside the Channel to post a message there now.
+2. In deevy, go to **Settings › Projects**, open the Project, and under **Chat** choose your Slack Socket in
+   **Post Gates in**.
+3. Choose the **Channel** from the list, or choose **Type its id…** and paste the channel's id from its
+   details in Slack, such as `C0123ABCD`.
+4. Choose **Save and say hello**.
 
-When Slack refuses something, deevy says so with Slack's own code. A Test in a channel the app was not
-invited to answers that deevy is not in that channel, and to `/invite @deevy` there.
-
-See [Channels](/notifications/channels/) for the other Notifications you can route.
+deevy posts a line in the channel to prove it can, and binds the channel only if Slack takes it. When Slack
+refuses, deevy says so with Slack's own code: a channel the app was not invited to answers that deevy is not
+in that channel, and to `/invite @deevy` there. See
+[Post a Project's Gates in a chat channel](/needs-me/#post-a-projects-gates-in-a-chat-channel).
 
 ## Rule from Slack
 
-A Gate arrives in the channel with its Proposal and three buttons: **Approve**, **Reject** and **Open in
-deevy**. **Approve** rules at once; **Reject** asks why first. When anybody rules, in Slack, in deevy or in the tracker, deevy changes the message to say so:
+A Gate arrives in the Project's channel as one message, with its Proposal and three buttons: **Approve**,
+**Reject** and **Open in deevy**. **Approve** rules at once; **Reject** asks why first. When anybody rules, in Slack, in deevy or in the tracker, deevy changes the message to say so:
 the click is answered straight away and the message a moment later.
 
 A click counts only for a Slack account deevy can place as a Member:
@@ -75,19 +81,11 @@ A click counts only for a Slack account deevy can place as a Member:
   under **Link with a code** in **Code from Slack**, and choose **Check the code**. deevy names the account
   the code would link; if it is yours, choose to link it. A code lasts ten minutes.
 
+A click that rules nothing, from an account not linked yet or one the Checkpoint's rules refuse, is answered
+privately: only the person who clicked sees why, and the message stays as it was.
+
 A guest from another Slack workspace in a shared channel links the same way. See
 [Ruling from your tools](/gates/ruling-from-your-tools/).
-
-## Direct messages
-
-Once your Slack account is linked, the app also tells you by direct message when a Notification you have
-turned on arrives. Choose which under **Settings › Notifications**, in the **Direct message** column.
-
-## A channel with no app
-
-A Slack channel can also be a Channel through an incoming webhook: under **Settings › Channels**, give it a
-**Name** and its **Incoming webhook URL**, and choose **Add Channel**. deevy then posts a link to each Gate,
-and there is nothing to click in Slack.
 
 ## Rotate the signing secret
 
@@ -122,4 +120,5 @@ still post to Slack, but never hears a click or a `/deevy link`.
 ## Disconnect
 
 On the Socket's page, choose **Disconnect**, then **Disconnect it**. deevy drops the token and stops taking
-Slack's requests; the rooms routed to it stop receiving. Delete the app in Slack if you no longer want it.
+Slack's requests, and every Project that posted its Gates through it posts nowhere from then on, which its
+history says. Delete the app in Slack if you no longer want it.

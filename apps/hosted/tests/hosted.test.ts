@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { isSlug, RESERVED_SLUGS } from "../src/directory.ts";
-import { readHostedEnv, type HostedBindings } from "../src/env.ts";
+import { ownLimits, readHostedEnv, type HostedBindings } from "../src/env.ts";
 import { workspaceSecret } from "../src/secrets.ts";
 
 /**
@@ -57,19 +57,30 @@ describe("the platform's configuration", () => {
     expect(hosted.jurisdiction).toBe("eu");
     expect(hosted.passSeconds).toBe(60);
     expect(hosted.streamSeconds).toBe(300);
-    expect(hosted.limits).toEqual({ invitationsPerDay: 50, emailsPerDay: 500 });
+    expect(hosted.limits).toEqual({ invitationsPerDay: 50 });
   });
 
   it("limits every Workspace's day as the platform says, nought included", () => {
-    const hosted = readHostedEnv(
-      bindings({ DEEVY_HOSTED_INVITATIONS_PER_DAY: "0", DEEVY_HOSTED_EMAILS_PER_DAY: "2000" }),
-    );
-    expect(hosted.limits).toEqual({ invitationsPerDay: 0, emailsPerDay: 2000 });
+    const hosted = readHostedEnv(bindings({ DEEVY_HOSTED_INVITATIONS_PER_DAY: "0" }));
+    expect(hosted.limits).toEqual({ invitationsPerDay: 0 });
     // What is not a whole number is not a limit, and the default stands.
-    const odd = readHostedEnv(
-      bindings({ DEEVY_HOSTED_INVITATIONS_PER_DAY: "-1", DEEVY_HOSTED_EMAILS_PER_DAY: "lots" }),
-    );
-    expect(odd.limits).toEqual({ invitationsPerDay: 50, emailsPerDay: 500 });
+    expect(readHostedEnv(bindings({ DEEVY_HOSTED_INVITATIONS_PER_DAY: "-1" })).limits).toEqual({
+      invitationsPerDay: 50,
+    });
+    expect(readHostedEnv(bindings({ DEEVY_HOSTED_INVITATIONS_PER_DAY: "lots" })).limits).toEqual({
+      invitationsPerDay: 50,
+    });
+  });
+
+  it("keeps a Workspace's own limit only while the platform still has it", () => {
+    const platform = readHostedEnv(bindings()).limits;
+    // `emailsPerDay` was a limit until deevy stopped sending email
+    // (docs/plans/simplify.md, slice 8), and a Workspace configured before
+    // then still has it stored.
+    expect(ownLimits(platform, { invitationsPerDay: 3, emailsPerDay: 10 })).toEqual({
+      invitationsPerDay: 3,
+    });
+    expect(ownLimits(platform, undefined)).toEqual({});
   });
 
   it("refuses to run without an origin, a master secret or a relay secret", () => {
@@ -85,11 +96,11 @@ describe("the platform's configuration", () => {
   });
 
   it("keeps the development stubs to a machine's own loopback", () => {
-    expect(() => readHostedEnv(bindings({ DEEVY_DEV_STUB_EMAIL: "1" }))).toThrow(/loopback/);
+    expect(() => readHostedEnv(bindings({ DEEVY_DEV_STUB_SOCKETS: "1" }))).toThrow(/loopback/);
     expect(
       readHostedEnv(
-        bindings({ DEEVY_HOSTED_ORIGIN: "http://127.0.0.1:8788", DEEVY_DEV_STUB_EMAIL: "1" }),
-      ).devStubEmail,
+        bindings({ DEEVY_HOSTED_ORIGIN: "http://127.0.0.1:8788", DEEVY_DEV_STUB_SOCKETS: "1" }),
+      ).devStubSockets,
     ).toBe(true);
   });
 });

@@ -30,14 +30,14 @@ describe("a URL that leads nowhere", () => {
       within(page)
         .getAllByRole("link")
         .map((link) => link.getAttribute("href")),
-    ).toEqual(["/", "/inbox"]);
+    ).toEqual(["/", "/runs"]);
   });
 
   it("keeps the real crumbs on a page that exists", async () => {
-    await mountAt("/inbox");
+    await mountAt("/runs");
 
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "Runs" });
     const crumbs = screen.getByRole("navigation", { name: "breadcrumb" });
-    expect(crumbs.textContent).toBe("Inbox");
+    expect(crumbs.textContent).toBe("Runs");
   });
 });

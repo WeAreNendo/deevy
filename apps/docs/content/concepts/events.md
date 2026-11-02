@@ -1,6 +1,6 @@
 ---
 title: The Event log
-description: Every change in a Workspace is an Event. A record's history, live screens, the Inbox, Slack, email, webhooks and the comments on your tracker all read the same log.
+description: Every change in a Workspace is an Event. A record's history, live screens, the Gates posted in chat, an Agent's inbox, webhooks and the comments on your tracker all read the same log.
 sidebar:
   order: 7
 ---
@@ -19,8 +19,10 @@ log:
 
 - **A record's history**, on its page under **Work**.
 - **Live screens.** Pages update as Events arrive, without a reload.
-- **Notifications.** Who is told about something, in the Inbox, in Slack or by email, is worked out from the
-  Event alone. See [Needs me and the Inbox](/notifications/inbox/).
+- **Chat.** A Gate's message in a Project's chat channel, and every change to it, is rendered from the
+  Gate's Events. See [Needs me and chat](/needs-me/).
+- **An Agent's inbox.** What an Agent is told, a record routed to it, a mention, a Ruling on its Gate, is
+  worked out from the Event alone.
 - **Your tracker.** The comments deevy writes on a record are rendered from the Gate's and the Run's Events.
 - **Webhooks.** A webhook delivery is the Event itself. See [Webhooks](/webhooks/).
 
@@ -33,25 +35,24 @@ Filter it by **Kind**, **Subject** and **Project**, and click an Event to see ev
 An Event's kind is its subject and what happened to it, such as `issue.assigned`, `run.started` or
 `gate.approved`. The families are:
 
-| Family                                           | What they record                                                                               |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `issue.*`                                        | A record arriving, changing, being routed to an Agent, closing or reopening                    |
-| `comment.*`                                      | A comment on a record                                                                          |
-| `delegation.*`                                   | A sub-issue nested too deep to hand to an Agent, and the Agent it was kept from                |
-| `run.*`                                          | A Run starting, its Activity, waiting, being answered, finishing or failing                    |
-| `gate.*`                                         | A Gate asked, approved, rejected or superseded, each approval, and a Ruling that ruled nothing |
-| `workspace.*`                                    | The Workspace made, and its settings changed                                                   |
-| `member.*`                                       | Members joining, changing role, suspended and reinstated                                       |
-| `allowlist.*`, `invitation.*`                    | Who may join: rules added and removed, invitations made, revoked and accepted                  |
-| `agent.*`                                        | Agents created, their keys issued and revoked, their Sponsor and grants changed                |
-| `identity.*`                                     | An account on a tool linked to a Human, or unlinked                                            |
-| `socket.*`                                       | Tools connected, changed and removed                                                           |
-| `project.*`                                      | Projects bound, changed and archived                                                           |
-| `channel.*`, `routing.*`, `webhook.*`, `email.*` | Where Notifications and deliveries go, and any that could not be delivered                     |
+| Family                        | What they record                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `issue.*`                     | A record arriving, changing, being routed to an Agent, closing or reopening                    |
+| `comment.*`                   | A comment on a record                                                                          |
+| `delegation.*`                | A sub-issue nested too deep to hand to an Agent, and the Agent it was kept from                |
+| `run.*`                       | A Run starting, its Activity, waiting, being answered, finishing or failing                    |
+| `gate.*`                      | A Gate asked, approved, rejected or superseded, each approval, and a Ruling that ruled nothing |
+| `workspace.*`                 | The Workspace made, and its settings changed                                                   |
+| `member.*`                    | Members joining, changing role, suspended and reinstated                                       |
+| `allowlist.*`, `invitation.*` | Who may join: rules added and removed, invitations made, revoked and accepted                  |
+| `agent.*`                     | Agents created, their keys issued and revoked, their Sponsor and grants changed                |
+| `identity.*`                  | An account on a tool linked to a Human, or unlinked                                            |
+| `socket.*`                    | Tools connected, changed and removed                                                           |
+| `project.*`                   | Projects bound, changed, including their chat channel, and archived                            |
+| `webhook.*`                   | Webhooks subscribed and removed, and any delivery deevy gave up on                             |
 
-Every Member can read most of the log, so deevy keeps credentials out of it: a webhook's secret and an invitation's
-link are never recorded, and a Slack incoming webhook's URL, which works as a password, appears only as its
-host.
+Every Member can read most of the log, so deevy keeps credentials out of it: a webhook's secret and an
+invitation's link are never recorded.
 
 ## Following it
 

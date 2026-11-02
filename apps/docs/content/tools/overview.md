@@ -15,17 +15,17 @@ or a Linear team, and that is where deevy takes records from and hands them to A
 
 ## Which tools
 
-| Tool                              | What deevy uses it for                                     | What you set up there                                    |
-| --------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------- |
-| [GitHub](/tools/github/)          | A repository's issues as records                           | A GitHub App, which deevy writes for you                 |
-| [Linear](/tools/linear/)          | Issues in a team as records                                | An OAuth application of your own                         |
-| [GitLab](/tools/gitlab/)          | A project's issues as records                              | An access token for the account deevy acts as, a webhook |
-| [Notion](/tools/notion/)          | A database's rows as records                               | An internal connection, and a webhook subscription       |
-| [Slack](/tools/slack/)            | Gates in a channel or a direct message, ruled with buttons | An app made from deevy's manifest                        |
-| [Any other tool](/tools/generic/) | Whatever records your adapter sends                        | An adapter of yours that posts deevy's format, signed    |
+| Tool                              | What deevy uses it for                             | What you set up there                                    |
+| --------------------------------- | -------------------------------------------------- | -------------------------------------------------------- |
+| [GitHub](/tools/github/)          | A repository's issues as records                   | A GitHub App, which deevy writes for you                 |
+| [Linear](/tools/linear/)          | Issues in a team as records                        | An OAuth application of your own                         |
+| [GitLab](/tools/gitlab/)          | A project's issues as records                      | An access token for the account deevy acts as, a webhook |
+| [Notion](/tools/notion/)          | A database's rows as records                       | An internal connection, and a webhook subscription       |
+| [Slack](/tools/slack/)            | A Project's Gates in a channel, ruled with buttons | An app made from deevy's manifest                        |
+| [Any other tool](/tools/generic/) | Whatever records your adapter sends                | An adapter of yours that posts deevy's format, signed    |
 
 GitHub, Linear, GitLab, Notion and any other tool hold records, so a Project can be bound to them. Slack
-holds none: it is where deevy asks a Human to rule, and you route Notifications to it as a Channel.
+holds none: it is where deevy asks a Human to rule, in the channel a Project posts its Gates in.
 
 **Preview** beside a tool, in Settings and in this section, means deevy is built and tested against that
 tool's recorded deliveries, and has not yet been tried against the tool itself. It works the same; it is
@@ -133,7 +133,7 @@ deevy asks each tool for what it needs and nothing more.
 | Linear | Read and write, as the application itself. Installing it as an agent adds being assigned and being mentioned.                        |
 | GitLab | Whatever the account behind the token may do, with the `api` scope. Give it **Reporter** on the projects it works, and nothing more. |
 | Notion | Read content; read and insert comments; user information with email addresses. Only on the pages and databases you share with it.    |
-| Slack  | `chat:write`, `im:write` and `commands`. Nothing about people.                                                                       |
+| Slack  | `chat:write`, `channels:read`, `groups:read` and `commands`. Nothing about people.                                                   |
 
 ## A Socket's page
 

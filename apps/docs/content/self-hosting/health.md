@@ -54,8 +54,8 @@ It follows `DEEVY_PORT`, so moving the port keeps it working.
 all. What to look for:
 
 - `deevy listening on …` once it has started.
-- Why it refused to start, when it does: a `/data` it can't write, with the command that fixes it; an
-  email sender set up halfway, naming what is missing; a development stand-in under production.
+- Why it refused to start, when it does: a `/data` it can't write, with the command that fixes it; a
+  development stand-in under production.
 - A warning when its database carries migrations from a newer release, after
   [going back one release](/self-hosting/upgrading/#going-back-one-release).
 - A line when your own identity provider couldn't be reached at startup.
@@ -68,9 +68,7 @@ doesn't reliably show the Cron Trigger's runs, so a quiet tail doesn't mean the 
 
 An admin sees the rest in Settings:
 
-- **Settings › Event log** is the Workspace's whole record, newest first. A webhook or an email deevy gave
-  up on is recorded there.
-- **Settings › Email** says which sender is in use, what is wrong with it if anything, and sends a test
-  email.
+- **Settings › Event log** is the Workspace's whole record, newest first. A webhook deevy gave up on is
+  recorded there.
 
 The API reference for this deevy is at `/api/docs`.

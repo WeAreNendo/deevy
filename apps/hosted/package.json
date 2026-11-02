@@ -13,7 +13,6 @@
     "@deevy/adapters": "workspace:*",
     "@deevy/core": "workspace:*",
     "@deevy/db": "workspace:*",
-    "@deevy/email": "workspace:*",
     "@deevy/sockets": "workspace:*",
     "drizzle-orm": "catalog:"
   },

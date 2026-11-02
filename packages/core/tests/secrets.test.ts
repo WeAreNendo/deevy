@@ -29,12 +29,9 @@ afterEach(() => {
  */
 const sentinels = {
   webhookSecret: "whsec_SENTINEL_webhook_signing_secret",
-  slackUrl: "https://hooks.slack.test/SENTINEL_incoming_webhook",
   /** What a Socket authenticates as, which is the newest kind of secret here. */
   socketCredential: "ghs_SENTINEL_installation_token",
   socketWebhook: "whsec_SENTINEL_what_the_tracker_signs_with",
-  /** An email sender's key set in Settings › Email (docs/plans/email-channel.md). */
-  emailKey: "re_SENTINEL_email_sender_key",
 };
 
 /**
@@ -65,12 +62,6 @@ describe("the read surface", () => {
         sockets,
         socketSecret: testSealingSecret,
         apiKeys: betterAuthKeys(auth, db),
-        emailSenders: {
-          resend: () => ({
-            kind: "resend" as const,
-            send: () => Promise.resolve({ delivered: true as const, status: 200 }),
-          }),
-        },
       },
     });
     const socket = await asAda.sockets.connect({
@@ -114,26 +105,11 @@ describe("the read surface", () => {
       url: "https://runner.example/deevy",
       secret: sentinels.webhookSecret,
     });
-    const channel = await asAda.channels.create({
-      name: "engineering",
-      webhookUrl: sentinels.slackUrl,
-    });
-    await asAda.routing.set({
-      rules: [{ channelId: channel.id, notificationKind: null, projectId: null }],
-    });
     await asAda.agents.update({
       memberId: agent.member.id,
       webhookUrl: "https://runner.example/agent",
       webhookSecret: sentinels.webhookSecret,
     });
-
-    await asAda.email.configure({
-      sender: "resend",
-      from: "deevy <deevy@example.com>",
-      config: {},
-      credentials: { apiKey: sentinels.emailKey },
-    });
-    const emailRow = await db.query.emailSender.findFirst({});
 
     const subscriptions = await asAda.webhooks.list({});
     const reads: Record<string, unknown> = {
@@ -152,28 +128,22 @@ describe("the read surface", () => {
       "issues.list": await asAda.issues.list({ projectSlug: "deevy" }),
       "issues.get": await asAda.issues.get({ issue: issue.externalKey }),
       "events.list": await asAda.events.list({}),
-      "inbox.list": await asAda.inbox.list({}),
+      // An inbox is an Agent's own (slice 8), so it is the Agent that reads it.
+      "inbox.list": await createRouterClient(router, { context: agent }).inbox.list({}),
       "webhooks.list": subscriptions,
       "webhooks.deliveries": await asAda.webhooks.deliveries({
         subscriptionId: subscriptions.subscriptions[0]?.id ?? "",
       }),
-      "channels.list": await asAda.channels.list({}),
-      "routing.list": await asAda.routing.list({}),
-      "preferences.get": await asAda.preferences.get({}),
-      "email.status": await asAda.email.status({}),
       "oauthClients.list": await asAda.oauthClients.list({}),
     };
 
     const secret = [
       issued.key,
       sentinels.webhookSecret,
-      sentinels.slackUrl,
       sentinels.socketCredential,
       sentinels.socketWebhook,
       sealed?.credentials ?? "",
       sealed?.webhookSecret ?? "",
-      sentinels.emailKey,
-      emailRow?.credentials ?? "",
     ].filter((value) => value.length > 0);
     const leaks: string[] = [];
     for (const [name, answer] of Object.entries(reads)) {
@@ -248,6 +218,11 @@ describe("the read surface", () => {
     answers["sockets.containers"] = await asAda.sockets.containers({ socketId: socket.id });
     answers["sockets.handshake"] = await asAda.sockets.handshake({ socketId: socket.id });
     answers["sockets.rewire"] = await asAda.sockets.rewire({ socketId: socket.id });
+    // A tracker is not a chat tool, so this is a refusal; what it says is
+    // still an answer, and is asked like the rest.
+    answers["sockets.channels"] = await asAda.sockets
+      .channels({ socketId: socket.id })
+      .catch((error: unknown) => (error as Error).message);
     answers["sockets.remove"] = await asAda.sockets.remove({ socketId: socket.id });
 
     const secret = [
@@ -341,7 +316,7 @@ const socketColumnsNeverAnswered = [
 
 /**
  * What no answer anywhere may carry, by name: every sealed column (a Socket's,
- * an email sender's `credentials`, an invitation's `sealedToken`), what is
+ * and an invitation's `sealedToken`, unused since slice 8), what is
  * stored to check a secret against (`tokenHash`), and a webhook
  * subscription's `secret`, which goes in and never comes out.
  */

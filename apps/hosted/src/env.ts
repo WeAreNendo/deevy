@@ -1,12 +1,9 @@
-import type { CloudflareEmailBinding } from "@deevy/adapters/workers";
 import {
   providersFromEnv,
   type AuthProviders,
   type ProviderVariables,
   type WorkspaceLimits,
 } from "@deevy/core";
-import type { EmailSetup } from "@deevy/core/email";
-import { readEmailEnv } from "@deevy/email";
 import type { Meter } from "./meter.ts";
 
 /**
@@ -24,8 +21,6 @@ export interface HostedBindings extends ProviderVariables {
   ASSETS: Fetcher;
   /** The console, behind its own paths of the host, when the platform has one. */
   CONSOLE?: Fetcher;
-  /** Cloudflare Email Service, the platform's sender (docs/plans/email-channel.md). */
-  EMAIL?: CloudflareEmailBinding;
   /** Workers Analytics Engine: a data point per request, by Workspace (meter.ts). Optional. */
   ANALYTICS?: Meter;
   /** The Worker version serving this request (`version_metadata`): a random id under `wrangler dev`, absent where nothing binds it (unit tests). */
@@ -44,24 +39,18 @@ export interface HostedBindings extends ProviderVariables {
    * Workspace's the relay sends a browser back to.
    */
   DEEVY_HOSTED_CONSOLE_AUTH_URL?: string;
-  /** The platform's sender, by the variables every deevy reads (docs/OPERATIONS.md, "Email"). */
-  DEEVY_EMAIL_SENDER?: string;
-  DEEVY_EMAIL_FROM?: string;
   DEEVY_STREAM_SECONDS?: string;
   /** How often a Workspace's alarm runs its background work when nothing asks sooner. */
   DEEVY_HOSTED_PASS_SECONDS?: string;
   /**
    * What every Workspace may do in a day unless `Platform.configure` set its
-   * own: invitations made, and emails sent through the sender they share.
+   * own: invitations made.
    */
   DEEVY_HOSTED_INVITATIONS_PER_DAY?: string;
-  DEEVY_HOSTED_EMAILS_PER_DAY?: string;
   DEEVY_RUN_STALE_MINUTES?: string;
-  DEEVY_GATE_REMINDER_HOURS?: string;
   DEEVY_GITHUB_API?: string;
   DEEVY_DEV_STUB_SOCKETS?: string;
   DEEVY_DEV_STUB_CONTAINERS?: string;
-  DEEVY_DEV_STUB_EMAIL?: string;
 }
 
 /** The platform's configuration, read once per isolate. */
@@ -72,16 +61,12 @@ export interface HostedEnv {
   relaySecret: string;
   consoleAuthURL: string | null;
   providers: AuthProviders;
-  email: EmailSetup | null;
-  emailProblem: string | null;
   streamSeconds: number;
   passSeconds: number;
   runStaleMinutes: number;
-  gateReminderHours: number;
   githubApi: string | undefined;
   devStubSockets: boolean;
   devStubContainers: string | undefined;
-  devStubEmail: boolean;
   /** Every Workspace's limits, before its own configuration says otherwise. */
   limits: Required<WorkspaceLimits>;
 }
@@ -89,8 +74,24 @@ export interface HostedEnv {
 /** The limits a platform that says nothing gets: room for a team, not for a mailing list. */
 export const defaultHostedLimits: Required<WorkspaceLimits> = {
   invitationsPerDay: 50,
-  emailsPerDay: 500,
 };
+
+/**
+ * The limits a Workspace was given of its own, as far as the platform still
+ * has them. One stored before a limit was retired — `emailsPerDay`, until
+ * deevy stopped sending email — is dropped as it is read, rather than
+ * reported, or written back on the next `Platform.configure`, forever.
+ */
+export function ownLimits(
+  platform: Required<WorkspaceLimits>,
+  stored: object | undefined,
+): WorkspaceLimits {
+  return Object.fromEntries(
+    Object.entries(stored ?? {}).filter(
+      ([name, value]) => name in platform && typeof value === "number",
+    ),
+  ) as WorkspaceLimits;
+}
 
 /** A whole number, nought included: a limit of nought turns the thing off. */
 function whole(value: string | undefined, fallback: number): number {
@@ -107,7 +108,7 @@ function positive(value: string | undefined, fallback: number): number {
 /**
  * Whether this Worker serves a machine's own loopback, which is the only place
  * the development stubs may be on: a hosted Workspace is a team's real work,
- * and a stub would send its email nowhere and invent its tools.
+ * and a stub would invent its tools.
  */
 function isLoopback(origin: string): boolean {
   try {
@@ -138,17 +139,11 @@ export function readHostedEnv(bindings: HostedBindings): HostedEnv {
   }
   const loopback = isLoopback(origin);
   const devStubSockets = bindings.DEEVY_DEV_STUB_SOCKETS === "1";
-  const devStubEmail = bindings.DEEVY_DEV_STUB_EMAIL === "1";
-  if ((devStubSockets || devStubEmail) && !loopback) {
+  if (devStubSockets && !loopback) {
     throw new Error(
       "The development stubs run only on a loopback origin, never for a hosted Workspace",
     );
   }
-  // Every sender's variables by name, whichever the platform chose; the same
-  // reader the other two entries use (packages/email/src/env.ts).
-  const email = readEmailEnv(bindings as unknown as Record<string, string | undefined>, {
-    devStub: devStubEmail,
-  });
   return {
     origin,
     masterSecret,
@@ -156,22 +151,17 @@ export function readHostedEnv(bindings: HostedBindings): HostedEnv {
     relaySecret,
     consoleAuthURL: bindings.DEEVY_HOSTED_CONSOLE_AUTH_URL?.trim().replace(/\/+$/, "") || null,
     providers: providersFromEnv(bindings),
-    email: email.setup,
-    emailProblem: email.problem,
     streamSeconds: positive(bindings.DEEVY_STREAM_SECONDS, 300),
     passSeconds: positive(bindings.DEEVY_HOSTED_PASS_SECONDS, 60),
     runStaleMinutes: positive(bindings.DEEVY_RUN_STALE_MINUTES, 30),
-    gateReminderHours: positive(bindings.DEEVY_GATE_REMINDER_HOURS, 4),
     githubApi: bindings.DEEVY_GITHUB_API,
     devStubSockets,
     devStubContainers: bindings.DEEVY_DEV_STUB_CONTAINERS,
-    devStubEmail,
     limits: {
       invitationsPerDay: whole(
         bindings.DEEVY_HOSTED_INVITATIONS_PER_DAY,
         defaultHostedLimits.invitationsPerDay,
       ),
-      emailsPerDay: whole(bindings.DEEVY_HOSTED_EMAILS_PER_DAY, defaultHostedLimits.emailsPerDay),
     },
   };
 }

@@ -6,25 +6,18 @@ import { member, workspace } from "./workspace.ts";
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
 /**
- * Where an outbound attempt is headed: a subscriber's URL, a Slack Channel, the
- * tool a Project's records come from — deevy saying back where the work lives,
- * which is what `socket` is (ADR-0024) — or a chat tool's room (`chat`, a
- * `slack_app` Channel) or one Human's direct messages there (`chat_dm`, their
- * linked Identity), where a Gate carries its buttons (ADR-0025) — or an email:
- * to a team address (`email`, an `email` Channel) or to one Human's verified
- * address (`email_member`, the Member), or an invitation's link to the address
- * it is for (`invitation`), docs/plans/email-channel.md.
+ * Where an outbound attempt is headed: a subscriber's URL (`webhook`), the
+ * tool a Project's records come from — deevy saying a Gate on the record,
+ * which is what `socket` is (ADR-0024) — or a chat tool (`chat`), where a
+ * Gate is posted in the Project's channel with its buttons and changed as
+ * Rulings land (ADR-0025). A `chat` row names the Project it is posted for,
+ * or the chat Socket holding messages a Ruling changes.
+ *
+ * Before docs/plans/simplify.md, slice 8, a Slack incoming webhook, a Human's
+ * direct messages and four kinds of email were destinations too. Rows owed to
+ * them are found by no sweep; slice 12's empty database clears them.
  */
-export const deliveryTargets = [
-  "webhook",
-  "slack",
-  "socket",
-  "chat",
-  "chat_dm",
-  "email",
-  "email_member",
-  "invitation",
-] as const;
+export const deliveryTargets = ["webhook", "socket", "chat"] as const;
 
 /**
  * One outbound attempt, and the only record that it is owed.
@@ -35,9 +28,9 @@ export const deliveryTargets = [
  * never copied here: the Event is the source, and a row that carried its own
  * copy would be a second one.
  *
- * Webhook subscriptions and Slack Channels share this table on purpose, so
- * there is one claim query, one backoff, and one bounded sweep to keep inside
- * Cloudflare Cron's budget in M3.
+ * Webhook subscriptions, trackers and chat tools share this table on purpose,
+ * so there is one claim query, one backoff, and one bounded sweep to keep
+ * inside a single invocation's budget.
  */
 export const delivery = sqliteTable(
   "delivery",
@@ -47,12 +40,16 @@ export const delivery = sqliteTable(
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
     target: text("target", { enum: deliveryTargets }).notNull(),
-    /** The webhook_subscription or channel it is for; two tables, so no foreign key. */
+    /** The webhook_subscription, Project or Socket it is for; three tables, so no foreign key. */
     targetId: text("target_id").notNull(),
     eventSeq: integer("event_seq")
       .notNull()
       .references(() => event.seq, { onDelete: "cascade" }),
-    /** The Human it is for, when the destination is a person. Null for a room. */
+    /**
+     * Unused since docs/plans/simplify.md, slice 8: the Human a direct message
+     * or an email was for. Nothing deevy sends now goes to one person; dropped
+     * when the migration history starts afresh (slice 12).
+     */
     recipientMemberId: text("recipient_member_id").references(() => member.id, {
       onDelete: "cascade",
     }),

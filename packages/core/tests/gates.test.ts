@@ -3,7 +3,7 @@ import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { recordRuling } from "../src/gates.ts";
 import { router } from "../src/operations/index.ts";
-import { remindAboutGates, sweepStaleRuns } from "../src/work.ts";
+import { sweepStaleRuns } from "../src/work.ts";
 import { agentContext, memberContext, seedProject, testDb } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
@@ -502,6 +502,41 @@ describe("what the Gates list answers", () => {
     expect((await asBob.gates.list({ mine: true })).gates).toEqual([]);
     expect((await asPlanner.gates.list({})).gates.map((gate) => gate.status)).toEqual(["approved"]);
   });
+
+  it("finds what waits on a Human behind a page of Gates waiting on others", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda, asBob, asPlanner, carol, run, seeded } = await workspace(db);
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [{ name: "ship", approvalsRequired: 1, approverMemberIds: [carol.member.id] }],
+    });
+    const older = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "The plan",
+    });
+    for (const externalId of ["43", "44", "45"]) {
+      const issue = await seeded.record({ externalId, title: `Not Bob's ${externalId}` });
+      const other = await asPlanner.runs.start({ issue: issue.url });
+      await asPlanner.gates.request({ runId: other.id, checkpoint: "ship", proposal: "Ship it" });
+    }
+
+    // Three newer Gates wait on Carol alone; a page of one would have held
+    // only those, and Bob's would never have been read.
+    const mine = await asBob.gates.list({ mine: true, limit: 1 });
+    expect(mine.gates.map((gate) => gate.id)).toEqual([older.id]);
+  });
+
+  it("is empty for an Agent, which rules on nothing", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asPlanner, run } = await workspace(db);
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "The plan" });
+
+    expect((await asPlanner.gates.list({ mine: true })).gates).toEqual([]);
+    expect((await asPlanner.gates.list({})).gates).toHaveLength(1);
+  });
 });
 
 describe("a ruling that came from somewhere else", () => {
@@ -558,17 +593,18 @@ describe("who is asked", () => {
       checkpoints: [{ name: "ship", approvalsRequired: 1, approverMemberIds: [bob.member.id] }],
     });
 
-    await asPlanner.gates.request({
+    const asked = await asPlanner.gates.request({
       runId: run.id,
       checkpoint: "ship",
       proposal: "Ship it",
     });
 
-    const waiting = (inbox: { notifications: { kind: string }[] }) =>
-      inbox.notifications.filter((row) => row.kind === "gate_awaiting");
-    expect(waiting(await asBob.inbox.list({ unreadOnly: true }))).toHaveLength(1);
-    expect(waiting(await asCarol.inbox.list({ unreadOnly: true }))).toEqual([]);
-    expect(waiting(await asAda.inbox.list({ unreadOnly: true }))).toEqual([]);
+    // Needs me is a Human's whole inbox now (docs/plans/simplify.md, slice 8).
+    const needs = async (client: typeof asBob) =>
+      (await client.gates.list({ mine: true })).gates.map((gate) => gate.id);
+    expect(await needs(asBob)).toEqual([asked.id]);
+    expect(await needs(asCarol)).toEqual([]);
+    expect(await needs(asAda)).toEqual([]);
   });
 
   it("is every active Human where the Checkpoint names nobody, minus the one it excludes", async () => {
@@ -580,15 +616,19 @@ describe("who is asked", () => {
       checkpoints: [{ name: "ship", approvalsRequired: 1, excludeRequester: true }],
     });
 
-    await asPlanner.gates.request({ runId: run.id, checkpoint: "ship", proposal: "Ship it" });
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
 
-    const waiting = (inbox: { notifications: { kind: string }[] }) =>
-      inbox.notifications.filter((row) => row.kind === "gate_awaiting");
-    expect(waiting(await asBob.inbox.list({ unreadOnly: true }))).toHaveLength(1);
-    expect(waiting(await asCarol.inbox.list({ unreadOnly: true }))).toHaveLength(1);
+    const needs = async (client: typeof asBob) =>
+      (await client.gates.list({ mine: true })).gates.map((gate) => gate.id);
+    expect(await needs(asBob)).toEqual([asked.id]);
+    expect(await needs(asCarol)).toEqual([asked.id]);
     // Ada sponsors the Agent, and this Checkpoint wants somebody else, so
     // asking her would be asking somebody who is about to be refused.
-    expect(waiting(await asAda.inbox.list({ unreadOnly: true }))).toEqual([]);
+    expect(await needs(asAda)).toEqual([]);
   });
 });
 
@@ -609,35 +649,10 @@ describe("a Run waiting at a Gate", () => {
     expect((await asPlanner.runs.get({ runId: run.id })).status).toBe("awaiting_input");
   });
 
-  it("has its approvers asked again once it has been quiet for hours", async () => {
+  it("leaves Needs me for the Human who ruled, while it waits on the other", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { ada, asBob, asPlanner, run } = await workspace(db);
-    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "The plan" });
-    const waiting = await asBob.inbox.list({ unreadOnly: true });
-    await asBob.inbox.markRead({ ids: waiting.notifications.map((row) => row.id) });
-
-    const reminded = await remindAboutGates({
-      db,
-      workspaceId: ada.workspace.id,
-      now: new Date(Date.now() + 5 * 60 * 60_000),
-    });
-
-    expect(reminded.changed).toBe(1);
-    // The same ask, unread again, rather than a second row about one question.
-    const again = await asBob.inbox.list({ unreadOnly: true });
-    expect(again.notifications.filter((row) => row.kind === "gate_awaiting")).toHaveLength(1);
-  });
-
-  /**
-   * Until 2026-10-22 the reminder marked unread every row its Event had, so on
-   * a Gate that wants two approvals the Human who gave the first was asked for
-   * it again every four hours.
-   */
-  it("asks again only the Humans who have not ruled on it", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { ada, asAda, asBob, asCarol, asPlanner, run, seeded } = await workspace(db);
+    const { asAda, asBob, asCarol, asPlanner, run, seeded } = await workspace(db);
     await asAda.checkpoints.set({
       projectSlug: seeded.project.slug,
       checkpoints: [{ name: "ship", approvalsRequired: 2 }],
@@ -647,41 +662,32 @@ describe("a Run waiting at a Gate", () => {
       checkpoint: "ship",
       proposal: "Ship it",
     });
-    const waiting = (inbox: { notifications: { id: string; kind: string }[] }) =>
-      inbox.notifications.filter((row) => row.kind === "gate_awaiting");
-    for (const client of [asBob, asCarol]) {
-      const unread = waiting(await client.inbox.list({ unreadOnly: true }));
-      expect(unread).toHaveLength(1);
-      await client.inbox.markRead({ ids: unread.map((row) => row.id) });
-    }
+
     expect(await asBob.gates.approve({ requestId: asked.id })).toMatchObject({ status: "open" });
 
-    const reminded = await remindAboutGates({
-      db,
-      workspaceId: ada.workspace.id,
-      now: new Date(Date.now() + 5 * 60 * 60_000),
-    });
-
-    expect(reminded.changed).toBe(1);
-    expect(waiting(await asBob.inbox.list({ unreadOnly: true }))).toEqual([]);
-    expect(waiting(await asCarol.inbox.list({ unreadOnly: true }))).toHaveLength(1);
+    expect((await asBob.gates.list({ mine: true })).gates).toEqual([]);
+    expect((await asCarol.gates.list({ mine: true })).gates.map((gate) => gate.id)).toEqual([
+      asked.id,
+    ]);
   });
 
-  it("does not ask again a Human the Checkpoint stopped naming", async () => {
+  it("leaves Needs me for a Human the Checkpoint stopped naming", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { ada, asAda, asBob, asCarol, asPlanner, bob, carol, run, seeded } = await workspace(db);
+    const { asAda, asBob, asCarol, asPlanner, bob, carol, run, seeded } = await workspace(db);
     await asAda.checkpoints.set({
       projectSlug: seeded.project.slug,
       checkpoints: [{ name: "ship", approvalsRequired: 1 }],
     });
-    await asPlanner.gates.request({ runId: run.id, checkpoint: "ship", proposal: "Ship it" });
-    const waiting = (inbox: { notifications: { id: string; kind: string }[] }) =>
-      inbox.notifications.filter((row) => row.kind === "gate_awaiting");
-    for (const client of [asAda, asBob, asCarol]) {
-      const unread = waiting(await client.inbox.list({ unreadOnly: true }));
-      await client.inbox.markRead({ ids: unread.map((row) => row.id) });
-    }
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    expect((await asAda.gates.list({ mine: true })).gates.map((gate) => gate.id)).toEqual([
+      asked.id,
+    ]);
+
     // Only Bob and Carol may rule at ship now, so Ada has nothing to do here.
     await asAda.checkpoints.set({
       projectSlug: seeded.project.slug,
@@ -690,15 +696,9 @@ describe("a Run waiting at a Gate", () => {
       ],
     });
 
-    await remindAboutGates({
-      db,
-      workspaceId: ada.workspace.id,
-      now: new Date(Date.now() + 5 * 60 * 60_000),
-    });
-
-    expect(waiting(await asAda.inbox.list({ unreadOnly: true }))).toEqual([]);
-    expect(waiting(await asBob.inbox.list({ unreadOnly: true }))).toHaveLength(1);
-    expect(waiting(await asCarol.inbox.list({ unreadOnly: true }))).toHaveLength(1);
+    expect((await asAda.gates.list({ mine: true })).gates).toEqual([]);
+    expect((await asBob.gates.list({ mine: true })).gates).toHaveLength(1);
+    expect((await asCarol.gates.list({ mine: true })).gates).toHaveLength(1);
   });
 });
 

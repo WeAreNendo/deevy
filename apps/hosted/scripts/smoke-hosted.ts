@@ -102,6 +102,34 @@ async function signIn(origin: string, url: string, email: string) {
   return { redirect, back, finished, cookie: cookiesOf(finished) };
 }
 
+/**
+ * Whether the Workspace's alarm tried a delivery a write owed: a subscription
+ * to an address nobody answers, an Agent created, and the delivery's first
+ * attempt recorded. Nobody answering is the point: the attempt is the proof,
+ * and nothing outside the machine is needed to see it.
+ */
+async function attempted(url: string, cookie: string, agent: string): Promise<boolean> {
+  const subscribed = await rpc(
+    url,
+    "webhooks/create",
+    {
+      url: "https://nobody.example.invalid/hook",
+      secret: "whsec-hosted-smoke-not-a-real-one",
+      kinds: ["agent.created"],
+    },
+    cookie,
+  );
+  const subscriptionId = (subscribed.output as { id?: string } | undefined)?.id;
+  if (!subscriptionId) return false;
+  await rpc(url, "agents/create", { name: agent }, cookie);
+  return until(async () => {
+    const read = await rpc(url, "webhooks/deliveries", { subscriptionId }, cookie);
+    const deliveries = (read.output as { deliveries?: Array<{ attempts: number }> } | undefined)
+      ?.deliveries;
+    return (deliveries ?? []).some((one) => one.attempts > 0);
+  }, 20_000);
+}
+
 async function until(what: () => Promise<boolean>, ms: number, every = 500): Promise<boolean> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
@@ -250,27 +278,30 @@ async function phases(origin: string): Promise<string> {
     names.slice(0, 200),
   );
 
-  // A write owes an email; the Workspace's alarm sends it (no Cron, no queue).
   const invited = await rpc(
     acme.url,
     "invitations/create",
-    { email: "lin@example.com", role: "member", send: true },
+    { email: "lin@example.com", role: "member" },
     ada.cookie,
   );
-  check("an invitation is created", invited.status === 200, invited.text.slice(0, 200));
-  const sent = await until(async () => {
-    const list = await rpc(acme.url, "invitations/list", {}, ada.cookie);
-    return JSON.stringify(list.output).includes('"emailStatus":"sent"');
-  }, 20_000);
-  check("the Workspace's alarm sends what a write owed", sent);
+  check(
+    "an invitation is created, with the link to hand over",
+    invited.status === 200 && /\/invite\//.test(JSON.stringify(invited.output)),
+    invited.text.slice(0, 200),
+  );
+
+  // A write owes a delivery; the Workspace's alarm makes it (no Cron, no queue).
+  check(
+    "the Workspace's alarm attempts what a write owed",
+    await attempted(acme.url, ada.cookie, "Owed"),
+  );
 
   type Status = {
     version: string | null;
-    limits: { invitationsPerDay: number; emailsPerDay: number } | null;
+    limits: { invitationsPerDay: number } | null;
     counts: {
       humans: number;
       invitationsToday: number;
-      emailsToday: number;
       runsThisMonth: number;
     } | null;
     migrations: { error: unknown };
@@ -289,7 +320,6 @@ async function phases(origin: string): Promise<string> {
   check(
     "and what it did today and this month, under the platform's limits",
     status.counts?.invitationsToday === 1 &&
-      status.counts.emailsToday === 1 &&
       status.counts.runsThisMonth === 0 &&
       status.limits?.invitationsPerDay === 50,
     JSON.stringify(status),
@@ -301,13 +331,13 @@ async function phases(origin: string): Promise<string> {
   });
   check(
     "Platform.configure gives a Workspace a limit of its own",
-    limited.limits?.invitationsPerDay === 1 && limited.limits.emailsPerDay === 500,
+    limited.limits?.invitationsPerDay === 1,
     JSON.stringify(limited.limits),
   );
   const refused = await rpc(
     acme.url,
     "invitations/create",
-    { email: "max@example.com", role: "member", send: false },
+    { email: "max@example.com", role: "member" },
     ada.cookie,
   );
   check(
@@ -321,7 +351,7 @@ async function phases(origin: string): Promise<string> {
   const allowed = await rpc(
     acme.url,
     "invitations/create",
-    { email: "max@example.com", role: "member", send: false },
+    { email: "max@example.com", role: "member" },
     ada.cookie,
   );
   check(
@@ -350,17 +380,10 @@ async function phases(origin: string): Promise<string> {
   await new Promise((resolve) => setTimeout(resolve, 3_000));
   await platform(origin, "resume", "beta");
   check("and answers again when resumed", (await fetch(`${beta.url}/`)).status === 200);
-  await rpc(
-    beta.url,
-    "invitations/create",
-    { email: "dee@example.com", role: "member", send: true },
-    grace.cookie,
+  check(
+    "and does its background work again, its alarm given back",
+    await attempted(beta.url, grace.cookie, "Owed again"),
   );
-  const resumedSent = await until(async () => {
-    const list = await rpc(beta.url, "invitations/list", {}, grace.cookie);
-    return JSON.stringify(list.output).includes('"emailStatus":"sent"');
-  }, 20_000);
-  check("and does its background work again, its alarm given back", resumedSent);
   await platform(origin, "destroy", "beta");
   check("a destroyed Workspace is gone", (await fetch(`${beta.url}/`)).status === 404);
   check(
@@ -449,7 +472,7 @@ try {
     await localConfigs({
       label: "smoke",
       origin: `http://127.0.0.1:${String(port)}`,
-      vars: { DEEVY_HOSTED_PASS_SECONDS: "2", DEEVY_DEV_STUB_EMAIL: "1" },
+      vars: { DEEVY_HOSTED_PASS_SECONDS: "2" },
     }),
     { port, persistTo },
   );
@@ -461,7 +484,6 @@ try {
     await localConfigs({
       label: "smoke",
       origin: `http://127.0.0.1:${String(again)}`,
-      vars: { DEEVY_DEV_STUB_EMAIL: "1" },
     }),
     { port: again, persistTo },
   );

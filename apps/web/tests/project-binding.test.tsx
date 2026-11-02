@@ -21,6 +21,14 @@ const state = vi.hoisted(() => ({
   refuse: null as string | null,
   /** The routing somebody else saved, which the Project read back then says. */
   routing: null as { labelPrefix: string; mention: boolean } | null,
+  /** Where the Project's Gates are posted, as `projects.update` last saved it. */
+  chat: null as { socketId: string; channel: string } | null,
+  /** Why the chat tool would not list its channels, when it would not. */
+  channelsProblem: null as string | null,
+  /** What `projects.update` refuses a chat binding with, the tool's own words. */
+  chatRefusal: null as string | null,
+  /** Whether an admin paused the chat tool under Sockets. */
+  chatPaused: false,
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -33,9 +41,19 @@ vi.mock("../src/lib/orpc.ts", async () => {
   const client = stubClient({
     projects: {
       list: async () => ({ projects: [project] }),
-      get: async () => (state.routing ? { ...project, routing: state.routing } : project),
+      get: async () => ({
+        ...project,
+        ...(state.routing ? { routing: state.routing } : {}),
+        chatSocketId: state.chat?.socketId ?? null,
+        chatChannel: state.chat?.channel ?? null,
+      }),
       update: async (input: Record<string, unknown>) => {
         void calls.update(input);
+        if (input.chat !== undefined) {
+          // The hello is posted before anything is stored, so a refusal binds nothing.
+          if (state.chatRefusal && input.chat) throw new Error(state.chatRefusal);
+          state.chat = input.chat as typeof state.chat;
+        }
         return { ...project, ...input };
       },
       create: async (input: Record<string, unknown>) => {
@@ -52,8 +70,26 @@ vi.mock("../src/lib/orpc.ts", async () => {
             id: "sock_plain00000",
             name: "A tool that lists nothing",
           },
+          {
+            ...stubSocket,
+            id: "sock_slack00000",
+            provider: "slack",
+            capabilities: ["chat"],
+            name: "Team chat",
+            status: state.chatPaused ? "paused" : "active",
+          },
         ],
       }),
+      channels: async () =>
+        state.channelsProblem
+          ? { channels: null, problem: state.channelsProblem }
+          : {
+              channels: [
+                { id: "C0DEEVY01", name: "deevy-gates" },
+                { id: "C0GENERAL", name: "general" },
+              ],
+              problem: null,
+            },
       // A tool that cannot list its containers answers null, and the dialog
       // asks for the container's key instead (docs/plans/simplify.md, slice 4).
       containers: async (input: { socketId: string }) => ({
@@ -344,5 +380,124 @@ describe("binding a new Project", () => {
       slug: "acme-typed",
       tracker: { socketId: "sock_plain00000", scope: { scopeKey: "acme/typed" } },
     });
+  });
+});
+
+/**
+ * Where a Project's Gates are posted (docs/plans/simplify.md, slice 8): one
+ * message per Gate, with Approve and Reject on it. Saving posts a hello first,
+ * so a channel the app cannot post in is refused here, in the tool's words.
+ */
+describe("where a Project's Gates are posted", () => {
+  const reset = () => {
+    state.checkpoints = [];
+    state.chat = null;
+    state.channelsProblem = null;
+    state.chatRefusal = null;
+    state.chatPaused = false;
+    calls.update.mockClear();
+  };
+
+  it("picks a channel the chat tool offers, and says hello there", async () => {
+    reset();
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const chat = await screen.findByRole("region", { name: "Chat" });
+    expect(await within(chat).findByText(/Gates are posted nowhere/)).toBeTruthy();
+    // Only a chat tool is offered: a tracker has nowhere to post a Gate.
+    const tool = within(chat).getByRole("combobox", { name: "Chat tool" });
+    fireEvent.keyDown(tool, { key: "ArrowDown" });
+    const offered = await screen.findAllByRole("option");
+    expect(offered.map((option) => option.textContent)).toEqual(["Nowhere", "Team chat (Slack)"]);
+    fireEvent.mouseMove(offered[1] as HTMLElement);
+    fireEvent.keyDown(offered[1] as HTMLElement, { key: "Enter" });
+    const channel = await within(chat).findByRole("combobox", { name: "Channel" });
+    await pickOption(channel, "#deevy-gates");
+    expect(selectedLabel(tool)).toBe("Team chat (Slack)");
+    expect(selectedLabel(channel)).toBe("#deevy-gates");
+    fireEvent.click(within(chat).getByRole("button", { name: "Save and say hello" }));
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    expect(calls.update.mock.calls[0]?.[0]).toEqual({
+      slug: "acme-deevy",
+      chat: { socketId: "sock_slack00000", channel: "C0DEEVY01" },
+    });
+    await waitFor(() =>
+      expect(chat.textContent).toContain("Gates are posted in #deevy-gates on Team chat."),
+    );
+  });
+
+  it("takes the channel's id, typed, when the tool would not list them, and says why", async () => {
+    reset();
+    state.channelsProblem = "missing_scope";
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const chat = await screen.findByRole("region", { name: "Chat" });
+    await pickOption(within(chat).getByRole("combobox", { name: "Chat tool" }), /Team chat/);
+    const typed = await within(chat).findByRole("textbox", { name: "Channel" });
+    expect(
+      within(chat).getByText(/^Team chat would not list its channels \(missing_scope\)/),
+    ).toBeTruthy();
+    fireEvent.change(typed, { target: { value: " C0TYPED01 " } });
+    fireEvent.click(within(chat).getByRole("button", { name: "Save and say hello" }));
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    expect(calls.update.mock.calls[0]?.[0]).toMatchObject({
+      chat: { socketId: "sock_slack00000", channel: "C0TYPED01" },
+    });
+  });
+
+  it("shows the tool's refusal, and binds nothing", async () => {
+    reset();
+    state.chatRefusal = "Team chat would not take a message in that channel: not_in_channel";
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const chat = await screen.findByRole("region", { name: "Chat" });
+    await pickOption(within(chat).getByRole("combobox", { name: "Chat tool" }), /Team chat/);
+    await pickOption(await within(chat).findByRole("combobox", { name: "Channel" }), "#general");
+    fireEvent.click(within(chat).getByRole("button", { name: "Save and say hello" }));
+
+    expect((await within(chat).findByRole("alert")).textContent).toBe(
+      "Team chat would not take a message in that channel: not_in_channel",
+    );
+    expect(state.chat).toBeNull();
+    expect(chat.textContent).toContain("Gates are posted nowhere");
+  });
+
+  it("says when the chat tool it posts through is paused, and keeps it chosen", async () => {
+    reset();
+    state.chat = { socketId: "sock_slack00000", channel: "C0DEEVY01" };
+    state.chatPaused = true;
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const chat = await screen.findByRole("region", { name: "Chat" });
+    await waitFor(() =>
+      expect(chat.textContent).toContain(
+        "Gates are posted in #deevy-gates on Team chat, which is paused: a Gate asked while it is paused is not posted there.",
+      ),
+    );
+    expect(within(chat).getByRole("link", { name: "Resume it" }).getAttribute("href")).toBe(
+      "/settings/sockets/sock_slack00000",
+    );
+    expect(selectedLabel(within(chat).getByRole("combobox", { name: "Chat tool" }))).toBe(
+      "Team chat (Slack), paused",
+    );
+  });
+
+  it("stops posting a Project's Gates when told Nowhere", async () => {
+    reset();
+    state.chat = { socketId: "sock_slack00000", channel: "C0DEEVY01" };
+    await mountAt("/settings/projects?project=acme-deevy");
+
+    const chat = await screen.findByRole("region", { name: "Chat" });
+    await waitFor(() =>
+      expect(chat.textContent).toContain("Gates are posted in #deevy-gates on Team chat."),
+    );
+    await pickOption(within(chat).getByRole("combobox", { name: "Chat tool" }), "Nowhere");
+    fireEvent.click(within(chat).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
+    expect(calls.update.mock.calls[0]?.[0]).toEqual({ slug: "acme-deevy", chat: null });
+    await waitFor(() => expect(chat.textContent).toContain("Gates are posted nowhere"));
   });
 });

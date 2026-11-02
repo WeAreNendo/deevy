@@ -65,8 +65,8 @@ export interface ImportReport {
   forgotten: { resources: number; tokens: number };
   /**
    * Whether `DEEVY_SECRET` opens what is sealed under it, when one was given:
-   * every Socket's credentials and webhook secret, the email sender's
-   * credentials, every invitation's link. `failed` names what did not open.
+   * every Socket's credentials and webhook secret. `failed` names what did not
+   * open.
    */
   sealed: { checked: number; failed: string[] } | null;
   /** Things worth knowing that did not stop the import. */
@@ -351,7 +351,7 @@ function journalAgainst(db: DatabaseSync, known: string[]): string[] {
  * and registered clients, consents and the signing keys are kept.
  *
  * Nothing else deevy stores is bound to its address: a Socket's delivery
- * address, a Gate's link and an email's are all built from `BETTER_AUTH_URL`
+ * address, a Gate's link and an invitation's are all built from `BETTER_AUTH_URL`
  * as they are needed. What the tools themselves were told is theirs to be told
  * again, which is the operator's list, not this function's.
  */
@@ -455,26 +455,9 @@ async function openEverySealed(
       sealed.push({ what: `the ${row.name} Socket's webhook secret`, value: row.webhook_secret });
     }
   }
-  if (hasTable(db, "email_sender")) {
-    for (const { credentials } of db
-      .prepare("SELECT credentials FROM email_sender")
-      .all() as Array<{
-      credentials: string;
-    }>) {
-      sealed.push({ what: "the email sender's credentials", value: credentials });
-    }
-  }
-  // From the release that sealed it; a dump from before then has no column for it.
-  if (hasColumn(db, "invitation", "sealed_token")) {
-    for (const { email, sealed_token } of db
-      .prepare(
-        `SELECT email, sealed_token FROM invitation
-         WHERE sealed_token IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL`,
-      )
-      .all() as Array<{ email: string; sealed_token: string }>) {
-      sealed.push({ what: `the invitation link for ${email}`, value: sealed_token });
-    }
-  }
+  // An email sender's credentials and an invitation's sealed link were sealed
+  // too, until deevy stopped sending email (docs/plans/simplify.md, slice 8):
+  // nothing reads them now, so whether they open is nobody's concern.
   const failed: string[] = [];
   for (const { what, value } of sealed) {
     try {
@@ -592,12 +575,6 @@ function removeDatabase(path: string): void {
 function hasTable(db: DatabaseSync, name: string): boolean {
   return Boolean(
     db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name),
-  );
-}
-
-function hasColumn(db: DatabaseSync, table: string, column: string): boolean {
-  return Boolean(
-    db.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column),
   );
 }
 

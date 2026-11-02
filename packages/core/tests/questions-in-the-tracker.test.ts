@@ -225,13 +225,7 @@ describe("a reply in the tracker", () => {
 });
 
 describe("what a Human is no longer asked", () => {
-  it("answers no question of a Run's, over the API or as a preference", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { asAda } = await workspace(db);
-
+  it("answers no question of a Run's, over the API", () => {
     expect(Object.keys(router.runs)).not.toContain("answer");
-    const offered = (await asAda.preferences.get({})).preferences.map((row) => row.kind);
-    expect(offered).not.toContain("run_awaiting_input");
   });
 });

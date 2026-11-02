@@ -26,13 +26,22 @@ function slack(answers: Record<string, unknown> = {}) {
     fetch: async (input, init) => {
       const url = input instanceof Request ? input.url : input.toString();
       const text = typeof init?.body === "string" ? init.body : "";
+      const form = new Headers(init?.headers)
+        .get("content-type")
+        ?.startsWith("application/x-www-form-urlencoded");
       calls.push({
         url,
-        body: text ? JSON.parse(text) : null,
+        body: text
+          ? form
+            ? Object.fromEntries(new URLSearchParams(text))
+            : JSON.parse(text)
+          : null,
         authorization: new Headers(init?.headers).get("authorization"),
       });
       const method = url.split("/").pop() ?? "";
-      const answer = answers[method] ?? { ok: true };
+      // A list of answers is one per call, in order: a paged method's pages.
+      const listed = answers[method];
+      const answer = (Array.isArray(listed) ? listed.shift() : listed) ?? { ok: true };
       return answer instanceof Response ? answer : Response.json(answer);
     },
     now: () => now,
@@ -309,12 +318,52 @@ describe("what deevy asks of Slack", () => {
     expect(JSON.stringify(updated.blocks)).toContain("Approved");
   });
 
-  it("opens a direct message, asks for a reason, and answers one person alone", async () => {
+  it("lists the channels it is in, public and private, a page at a time", async () => {
     const { chat, calls } = slack({
-      "conversations.open": { ok: true, channel: { id: "D07GRACE01" } },
+      // What users.conversations answers, two pages of it.
+      "users.conversations": [
+        {
+          ok: true,
+          channels: [
+            { id: "C07DEEVY01", name: "deevy", is_private: false, is_archived: false },
+            { id: "G07OPS0001", name: "ops", is_private: true, is_archived: false },
+          ],
+          response_metadata: { next_cursor: "dXNlcjpVMDYxTkZUVDI=" },
+        },
+        {
+          ok: true,
+          channels: [{ id: "C07GATES01", name: "gates", is_private: false, is_archived: false }],
+          response_metadata: { next_cursor: "" },
+        },
+      ],
     });
 
-    expect(await chat.openDm("U07GRACE01")).toBe("D07GRACE01");
+    expect(await chat.listChannels?.()).toEqual([
+      { id: "C07DEEVY01", name: "deevy" },
+      { id: "G07OPS0001", name: "ops" },
+      { id: "C07GATES01", name: "gates" },
+    ]);
+    // A read method takes a form, not JSON, or Slack reads none of what it was asked.
+    expect(calls.map((one) => one.body)).toEqual([
+      { types: "public_channel,private_channel", exclude_archived: "true", limit: "200" },
+      {
+        types: "public_channel,private_channel",
+        exclude_archived: "true",
+        limit: "200",
+        cursor: "dXNlcjpVMDYxTkZUVDI=",
+      },
+    ]);
+    expect(calls[0]).toMatchObject({
+      url: "https://slack.com/api/users.conversations",
+      authorization: "Bearer xoxb-not-a-real-token",
+    });
+    // Nor does it open anybody's direct messages any more.
+    expect(chat).not.toHaveProperty("openDm");
+  });
+
+  it("asks for a reason, and answers one person alone", async () => {
+    const { chat, calls } = slack();
+
     await chat.askForNote("9876543210123.trigger", {
       gateRequestId: "gate_k3xr8v2m9qpw",
       checkpoint: "plan",
@@ -322,8 +371,7 @@ describe("what deevy asks of Slack", () => {
     });
     await chat.respond("https://hooks.slack.com/actions/T07ACME001/1/abc", "Linked.");
 
-    expect(calls[0]).toMatchObject({ body: { users: "U07GRACE01" } });
-    const modal = calls[1]?.body as { trigger_id: string; view: { private_metadata: string } };
+    const modal = calls[0]?.body as { trigger_id: string; view: { private_metadata: string } };
     expect(modal.trigger_id).toBe("9876543210123.trigger");
     expect(JSON.parse(modal.view.private_metadata)).toEqual({
       gateRequestId: "gate_k3xr8v2m9qpw",
@@ -331,7 +379,7 @@ describe("what deevy asks of Slack", () => {
       ts: "1758625200.000100",
     });
     // A response URL is its own credential: no token goes with it.
-    expect(calls[2]).toMatchObject({
+    expect(calls[1]).toMatchObject({
       url: "https://hooks.slack.com/actions/T07ACME001/1/abc",
       body: { response_type: "ephemeral", text: "Linked." },
       authorization: null,
@@ -343,11 +391,11 @@ describe("what deevy asks of Slack", () => {
       // What slack.com answers a made-up token, byte for byte.
       "auth.test": { ok: false, error: "invalid_auth" },
       "chat.postMessage": { ok: false, error: "not_in_channel" },
-      "conversations.open": {
+      "users.conversations": {
         ok: false,
         error: "missing_scope",
-        needed: "im:write",
-        provided: "chat:write,commands",
+        needed: "groups:read",
+        provided: "chat:write,channels:read,commands",
       },
       "chat.update": { ok: false, error: "fatal_error" },
       "views.open": new Response("upstream timed out", { status: 502 }),
@@ -359,8 +407,8 @@ describe("what deevy asks of Slack", () => {
     await expect(chat.post("C07GATES", { kind: "gate", gate: openGate })).rejects.toThrow(
       "deevy is not in that channel: /invite @deevy there (not_in_channel, chat.postMessage)",
     );
-    await expect(chat.openDm("U07GRACE01")).rejects.toThrow(
-      "The app is missing the im:write scope: add it under OAuth & Permissions and reinstall it (missing_scope, conversations.open)",
+    await expect(chat.listChannels?.()).rejects.toThrow(
+      "The app is missing the groups:read scope: add it under OAuth & Permissions and reinstall it (missing_scope, users.conversations)",
     );
     await expect(
       chat.update({ channel: "C07GATES", ts: "1.2" }, { kind: "gate", gate: openGate }),

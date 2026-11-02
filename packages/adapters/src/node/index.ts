@@ -6,9 +6,3 @@ export {
   type TimerCronOptions,
   type TimerCronStop,
 } from "./cron.ts";
-export {
-  createSmtpSender,
-  type SmtpMessage,
-  type SmtpResult,
-  type SmtpSenderInput,
-} from "./smtp.ts";

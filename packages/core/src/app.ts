@@ -1,15 +1,6 @@
 import { projectGrant, type Db } from "@deevy/db";
 import type { SocketModules } from "./sockets/port.ts";
 import { finishAccountLink } from "./account-links.ts";
-import type { EmailSenders, EmailSetup } from "./email/port.ts";
-import { confirmChannel, emailChannelOf, readConfirmToken } from "./email/team.ts";
-import { appendEvent } from "./events.ts";
-import {
-  kindLabels,
-  readUnsubscribeToken,
-  unsubscribe,
-  unsubscribePage,
-} from "./email/unsubscribe.ts";
 import { handleInbound, handleSetup } from "./sockets/hooks.ts";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
@@ -65,8 +56,7 @@ export interface AppOptions {
   /**
    * The instance secret (`BETTER_AUTH_SECRET`). What deevy hands out and must
    * know again when it comes back is signed with it: the `state` of a tool's
-   * consent or a GitHub App's setup, and an email's unsubscribe and confirm
-   * links.
+   * consent or a GitHub App's setup.
    */
   secret?: string;
   /**
@@ -77,11 +67,10 @@ export interface AppOptions {
    */
   live?: LiveOptions;
   /**
-   * What this Workspace may do in a day: invitations created, emails sent
-   * (limits.ts). Omitted, nothing is limited and nothing is counted, which is
-   * what the image and the Worker pass; the many-Workspaces Worker passes each
-   * Workspace's own, from its provisioned configuration. The sweep is told
-   * the email half separately, as `runDueWork`'s `workspaceLimits`.
+   * What this Workspace may do in a day: invitations created (limits.ts).
+   * Omitted, nothing is limited and nothing is counted, which is what the
+   * image and the Worker pass; the many-Workspaces Worker passes each
+   * Workspace's own, from its provisioned configuration.
    */
   limits?: WorkspaceLimits;
   /**
@@ -142,15 +131,6 @@ export interface AppOptions {
    */
   socketSecret?: string;
   /**
-   * The email senders this runtime can run, and the one the environment chose
-   * (docs/plans/email-channel.md). What an operation sends now — a team
-   * address's confirmation, a test email — goes through them.
-   */
-  emailSenders?: EmailSenders;
-  email?: EmailSetup | null;
-  /** Why the environment's sender could not be read: Settings › Email says it. */
-  emailProblem?: string | null;
-  /**
    * Which providers this deployment offers a Human to sign in with, from
    * `signInProviders(env)` in the entry that built the identity configuration.
    * Reported on `health.ping`, so the sign-in page renders what the server
@@ -199,28 +179,6 @@ export function isDefinedRefusal(error: unknown): boolean {
  * ADR-0006): Better Auth under /api/auth, the RPC surface under /rpc, the
  * OpenAPI surface with its reference UI under /api.
  */
-/** What a confirmation link that was changed, is too old, or names a removed Channel says. */
-const expiredConfirmation = {
-  title: "This link doesn't work any more",
-  body: "It is too old, the Channel was removed, or it was changed on the way. Ask the admin who added this address to send a new one from Settings › Channels.",
-};
-
-function confirmedPage(address: string) {
-  return {
-    title: "Confirmed",
-    body: `${address} now gets the Notifications routed to it. To stop them, ask an admin to remove the Channel.`,
-  };
-}
-
-/** What a link that was changed, or is too old, says instead. */
-function expiredLink(settingsUrl: string) {
-  return {
-    title: "This link doesn't work any more",
-    body: "It is too old, or it was changed on the way. You can still choose what deevy emails you in Settings.",
-    settingsUrl,
-  };
-}
-
 export function createApp({
   db,
   auth,
@@ -238,9 +196,6 @@ export function createApp({
   devTracker,
   sockets,
   socketSecret,
-  emailSenders,
-  email,
-  emailProblem,
   signInProviders = [],
   webURL,
   signInRelay,
@@ -255,7 +210,7 @@ export function createApp({
   };
   const app = new Hono<{ Variables: { ctx: AppContext } }>();
   // What a route outside the operations throws — the context a request is
-  // built with, a tool's delivery, an unsubscribe link — goes to the same
+  // built with, a tool's delivery, a consent's callback — goes to the same
   // reporter as an operation's failure rather than to Hono's own
   // `console.error`, so an entry that decides what may reach its log decides
   // it once (a hosted Workspace's says nothing from its database). With the
@@ -411,9 +366,6 @@ export function createApp({
     devSockets,
     ...(sockets ? { sockets } : {}),
     ...(socketSecret ? { socketSecret } : {}),
-    ...(emailSenders ? { emailSenders } : {}),
-    ...(email ? { email } : {}),
-    ...(emailProblem ? { emailProblem } : {}),
     ...(secret ? { secret } : {}),
     ...(version ? { version } : {}),
     signInProviders: await offeredProviders(),
@@ -482,72 +434,6 @@ export function createApp({
       expiresAt: new Date(context.session.session.expiresAt).getTime(),
       head: await headOf(db, context.workspace.id),
     });
-  });
-
-  // The one-click unsubscribe every personal email carries (RFC 8058,
-  // email/unsubscribe.ts). Opening it changes nothing — a mail scanner opens
-  // every link in an email — and only a POST, from the page's button or from
-  // a client's own "unsubscribe", turns the kind off. Routes rather than
-  // operations, because what answers is a page and the caller is a browser or
-  // a mail client with no session.
-  const settingsUrl = `${(webURL ?? baseURL ?? "").replace(/\/+$/, "")}/settings/notifications`;
-  routes.get("/api/email/unsubscribe/:token", async (c) => {
-    const read = secret ? await readUnsubscribeToken(secret, c.req.param("token")) : null;
-    if (!read) return c.html(unsubscribePage(expiredLink(settingsUrl)), 400);
-    return c.html(
-      unsubscribePage({
-        title: "Stop these emails?",
-        body: `You'll no longer get emails for “${kindLabels[read.kind]}”. The inbox and Slack stay as they are.`,
-        form: { action: c.req.path, label: "Stop these emails" },
-        settingsUrl,
-      }),
-    );
-  });
-  routes.post("/api/email/unsubscribe/:token", async (c) => {
-    const read = secret ? await readUnsubscribeToken(secret, c.req.param("token")) : null;
-    if (!read) return c.html(unsubscribePage(expiredLink(settingsUrl)), 400);
-    // A Member who has since left has nothing left to turn off.
-    await unsubscribe(db, read).catch(() => undefined);
-    return c.html(
-      unsubscribePage({
-        title: "Done",
-        body: `deevy won't email you for “${kindLabels[read.kind]}” any more. You can turn it back on any time.`,
-        settingsUrl,
-      }),
-    );
-  });
-
-  // The link a team address is mailed to confirm it (email/team.ts): opening
-  // it asks, as the unsubscribe does, and only the button confirms.
-  routes.get("/api/email/confirm/:token", async (c) => {
-    const found = secret ? await readConfirmToken(db, secret, c.req.param("token")) : null;
-    const email = found ? emailChannelOf(found) : null;
-    if (!found || !email) return c.html(unsubscribePage(expiredConfirmation), 400);
-    if (email.confirmedAt) return c.html(unsubscribePage(confirmedPage(email.address)));
-    return c.html(
-      unsubscribePage({
-        title: "Confirm this address?",
-        body: `${email.address} will get the Notifications routed to the Channel "${found.name}".`,
-        form: { action: c.req.path, label: "Confirm this address" },
-      }),
-    );
-  });
-  routes.post("/api/email/confirm/:token", async (c) => {
-    const found = secret ? await readConfirmToken(db, secret, c.req.param("token")) : null;
-    const email = found ? emailChannelOf(found) : null;
-    if (!found || !email) return c.html(unsubscribePage(expiredConfirmation), 400);
-    if (await confirmChannel(db, found)) {
-      await appendEvent(
-        { db, workspace: { id: found.workspaceId }, member: null },
-        {
-          kind: "channel.confirmed",
-          subjectType: "channel",
-          subjectId: found.id,
-          payload: { name: found.name, address: email.address },
-        },
-      );
-    }
-    return c.html(unsubscribePage(confirmedPage(email.address)));
   });
 
   const corsPlugin = new CORSHandlerPlugin<AppContext>({ origin, credentials: true });

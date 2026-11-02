@@ -19,7 +19,7 @@ Four things make it different:
 2. **Gates are Human decisions an Agent cannot make.** A Gate is a Run's request to go past a Checkpoint, with
    a Proposal the Human rules on, and an Agent can never rule on one.
 3. **The Event log is the audit trail.** Every change is an immutable Event with actor and timestamp; webhooks,
-   the live UI, notifications and what deevy says back in the tools all derive from it.
+   the live UI, an Agent's inbox and what deevy says back in the tools all derive from it.
 4. **deevy never runs agents, and never owns the tracker.** It triggers Agents through events and an MCP
    inbox and receives Runs back — Claude Code in CI, an Agent SDK service or a local loop does the running,
    and deevy ships none of them — and the work stays where the team keeps it.
@@ -41,16 +41,16 @@ the plan. A clean break: the first release of this shape starts from an empty da
 
 A **Workspace** holds **Members** (Humans and Agents), **Sockets**, **Projects**, and settings. A Socket is a
 connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion) and
-**chat** (Slack). A **Project** is a binding: the container in a tracker its records come from, which Agents
-may work it, the default Agent, how a record names an Agent (a label prefix, a mention), and its
-**Checkpoints**. What deevy says back in the tracker is a Gate and its Ruling, on every Project. An **Issue** is a projection of a record in a tracker — its key, URL,
+**chat** (Slack). A **Project** is a binding: the container in a tracker its records come from, optionally
+one channel in a chat tool its Gates are posted in, which Agents may work it, the default Agent, how a record
+names an Agent (a label prefix, a mention), and its **Checkpoints**. What deevy says back in the tracker is a Gate and its Ruling, on every Project. An **Issue** is a projection of a record in a tracker — its key, URL,
 title, body and state as the tool last said them — routed to one Agent; deevy authors none of it. An Agent
 working an Issue produces a **Run** that records who triggered it, posts **Activities** (thought, action,
 response, error), asks on the record when it needs to know something, asks at Checkpoints for **Gates**, attaches **Links** — the pull request it
 opened among them — and ends in a state. A Gate carries the Agent's **Proposal** and the **Rulings** on it, made in deevy, in the
-tracker or in Slack. A Human's **Identities** are their accounts on the tools, linked so a Ruling made there is
-theirs. Every change becomes an **Event**. **Notifications** derive from Events and are delivered to
-**Channels**: each Human's in-app inbox, a Slack room, a Slack direct message.
+tracker or in the Project's chat channel. A Human's **Identities** are their accounts on the tools, linked so a Ruling made there is
+theirs. Every change becomes an **Event**. **Notifications** derive from Events and are an Agent's, in its
+inbox; a Human is sent none, and what waits on them is the Gates they may rule on.
 
 ## Checkpoints
 
@@ -82,10 +82,11 @@ and only then → back to `active` when a Human rules → `completed` or `failed
 configurable silence (default 30 minutes), recoverable — but never while it waits on a Human. The Run's final
 response carries a summary and Links.
 
-**Gates.** An Agent at a Checkpoint asks with its Proposal and stops. The Humans who may rule are notified,
-deevy says so on the record in the tracker and in Slack, and a Human rules in deevy, with `/approve` or
-`/reject <why>` in a comment where they read it, or with a button in Slack — the same policy and the same
-refusals through all three doors, recorded with where it came from. The Run resumes when the Gate is decided.
+**Gates.** An Agent at a Checkpoint asks with its Proposal and stops. The Gate waits on **Needs me** for the
+Humans who may rule, deevy says so on the record in the tracker and, where the Project binds one, as a message
+in its chat channel, and a Human rules in deevy, with `/approve` or `/reject <why>` in a comment where they
+read it, or with a button on that message — the same policy and the same refusals through all three doors,
+recorded with where it came from. The Run resumes when the Gate is decided.
 
 **Code.** Not deevy's (ADR-0034). The Agent reaches its repository with access its operator gave it, opens its
 own pull request, and attaches it to its Run as a Link; merging it closes the record where the tracker does
@@ -100,10 +101,10 @@ one hop away: the triggering Human, or the Sponsor when routing or an Agent trig
   a client pair in the environment — GitLab and the OIDC provider also take an issuer — and an instance offers
   exactly the providers whose variables are set.
 - A Human who signs in with a second configured provider on the same verified address links onto the user row
-  they already have: one Human is one Member, with one handle and one inbox.
+  they already have: one Human is one Member, with one handle.
 - A Workspace admin allowlists a GitHub organization, a GitLab group, or an email domain; matching sign-ins
-  auto-join. Everyone else is invited with a link an admin sends. The first sign-in matching the configured
-  admin email becomes admin.
+  auto-join. Everyone else is invited with a link an admin copies and sends; deevy sends no email. The first
+  sign-in matching the configured admin email becomes admin.
 - Every Member is a Better Auth user. Agents are token-only users created by their Sponsor, who issues and
   rotates their API keys. A suspended Sponsor suspends their Agents until someone else sponsors them.
 - Agents get a fixed capability set scoped to granted Projects: read records, add Links, ask at Checkpoints,
@@ -123,15 +124,16 @@ One typed core, projected three ways (ADR-0005):
   with TanStack Query (ADR-0009).
 - **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
   procedures. The set is fourteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
-  `projects_get`, `links_list`, `links_add`, `links_remove`, `inbox_list`, `gates_get`, `runs_list`,
-  `runs_get` for anyone; `runs_start`, `runs_post_activity`,
-  `gates_request`, `runs_finish` for an Agent alone, because a Run is its attempt. A question is asked and
+  `projects_get`, `links_list`, `links_add`, `links_remove`, `gates_get`, `runs_list`, `runs_get` for
+  anyone; `runs_start`, `runs_post_activity`, `gates_request`, `runs_finish` for an Agent alone, because a Run
+  is its attempt, and `inbox_list`, because only an Agent has an inbox. A question is asked and
   answered on the record, in the tracker, so none is a Human's alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
   rule on, in a browser or from a tool that vouches for them.
 - **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is
   not a Member with a session.
 - **Events** delivered as signed webhooks to Agents and to generic subscribers, and consumed internally by the
-  SSE stream, the inbox, Slack and what deevy says back in the tools.
+  SSE stream, an Agent's inbox and what deevy says back in the tools: a Gate's comments on its record and its
+  message in the Project's chat channel.
 
 ## Architecture
 
@@ -166,18 +168,22 @@ packages/adapters node/ and workers/ implementations of storage, jobs, cron, ass
 tools/acceptance  the acceptance walk: a scripted Agent against every deployment
 ```
 
-## Notifications
+## Attention
 
-Notification kinds: assignment, mention, Gate awaiting you, and Run finished or failed. Channels: each Human's in-app inbox (always), a Slack room through
-an incoming webhook or a connected Slack app, and a Slack direct message for a Human whose Slack account is
-linked. Routing is both Workspace rules (this kind, for this Project, to this Channel) and per-person
-preferences. A Gate in Slack carries Approve and Reject.
+A Human is sent nothing: no inbox, no email, no direct message, no reminder. What waits on a Human is a Gate
+they may rule on, and it waits on **Needs me** (exactly the open Gates they could approve now), on the record
+in the tracker, and in the Project's chat channel where it binds one: one message per Gate with Approve and
+Reject, changed in place as Rulings land. The tracker tells them the rest. An Agent's inbox carries three
+Notification kinds — assignment, mention, and the Ruling on its Gate — and the Events behind them also go to
+its webhook. Invitations are links an admin copies.
 
 ## Milestones
 
 What each milestone built, written when it was built. Sockets removed a good deal of what M1, Four-eyes Gates
-and Live Documents describe — the Workflow, Documents, Labels, Teams, the board — so read those as the record
-of v1, and the paragraphs above as what deevy is now.
+and Live Documents describe — the Workflow, Documents, Labels, Teams, the board — and
+[simplify.md](./plans/simplify.md) took out more: M4's runtime, the inbox and Channels M1 and M2 gave a
+Human, and the email that followed Sockets. Read those as the record of what was built, and the paragraphs
+above as what deevy is now.
 
 **M0 Scaffold.** Monorepo from the Vite+ template; `packages/core` with the first oRPC contracts; Drizzle
 schema; Better Auth on Node with GitHub sign-in; CI running lint, typecheck, tests, the Node build, and the
@@ -320,7 +326,9 @@ Linear's, GitLab's, Notion's and Slack's, each walked once against the real tool
 its client reported went with the reference runtime that reported them ([simplify.md](./plans/simplify.md)). Email followed
 ([email-channel.md](./plans/email-channel.md), done 2026-10-09): a Human's Notifications at their verified
 address, team addresses as Channels, invitations by email, through whichever of seven senders the operator
-has. Hosted Workspaces followed ([hosted.md](./plans/hosted.md), built 2026-10-09; ADR-0028 to ADR-0032): one
+had. It went again, with the Human's inbox, the Channels and Gate reminders, in slice 8 of
+[simplify.md](./plans/simplify.md), when a Project gained a chat channel of its own. Hosted Workspaces
+followed ([hosted.md](./plans/hosted.md), built 2026-10-09; ADR-0028 to ADR-0032): one
 Worker serving every hosted Workspace at `app.deevy.dev/<slug>`, each Workspace's database a Durable Object of
 its own, sign-in through one relay, the release carrying that Worker for a private console and deploy
 pipeline (WeAreNendo/deevy-cloud) to run; an invite-only free beta first and billing after. It has been live

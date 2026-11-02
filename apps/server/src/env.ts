@@ -1,6 +1,4 @@
 import { providersFromEnv, signInRelayFromEnv } from "@deevy/core";
-import type { EmailSetup } from "@deevy/core/email";
-import { emailSetupFromEnv } from "@deevy/email";
 import type { AuthProviders } from "@deevy/core";
 
 export interface ServerEnv {
@@ -40,7 +38,6 @@ export interface ServerEnv {
   runStaleMinutes: number;
   /** How often the background runner sweeps for silent Runs. */
   sweepIntervalSeconds: number;
-  gateReminderHours: number;
   /**
    * Replace every sign-in provider with the stub the acceptance walk signs
    * in through (apps/web/scripts/stub-oauth.js), so a developer needs no
@@ -65,17 +62,6 @@ export interface ServerEnv {
   devStubSockets: boolean;
   /** What that stub's tracker holds: container names, separated by commas. */
   devStubContainers?: string;
-  /**
-   * The email sender this environment configures (`DEEVY_EMAIL_SENDER` and
-   * its variables), or none (docs/plans/email-channel.md).
-   */
-  email: EmailSetup | null;
-  /**
-   * Send email through the in-process stand-in, which keeps what it was asked
-   * to send for `/dev/email` (packages/email/src/stub). Refused in production
-   * for the same reason as the other stubs.
-   */
-  devStubEmail: boolean;
 }
 
 /** A positive number from the environment, or the default when it is absent or nonsense. */
@@ -166,10 +152,6 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
       "DEEVY_DEV_STUB_SOCKETS registers a Socket provider that is not a tool and cannot be set in production",
     );
   }
-  const devStubEmail = env.DEEVY_DEV_STUB_EMAIL === "1";
-  if (devStubEmail && env.NODE_ENV === "production") {
-    throw new Error("DEEVY_DEV_STUB_EMAIL sends email nowhere and cannot be set in production");
-  }
   // Better Auth reads its own list of rotated secrets from the environment and
   // prefers it to the secret deevy hands it, so honouring it would sign the
   // sessions and seal the tokens with keys other than the one deevy signs its
@@ -206,11 +188,8 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     webDist: env.DEEVY_WEB_DIST,
     runStaleMinutes: positive(env.DEEVY_RUN_STALE_MINUTES, 30),
     sweepIntervalSeconds: positive(env.DEEVY_SWEEP_INTERVAL_SECONDS, 60),
-    gateReminderHours: positive(env.DEEVY_GATE_REMINDER_HOURS, 4),
     devStubOAuth,
     devStubSockets,
     devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
-    email: emailSetupFromEnv(env, { devStub: devStubEmail }),
-    devStubEmail,
   };
 }

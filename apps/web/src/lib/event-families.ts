@@ -39,14 +39,14 @@ export const kindFamilies: KindFamily[] = [
       "project",
     ],
   },
-  { label: "Delivery", prefixes: ["channel", "routing", "webhook", "email"] },
+  { label: "Webhooks", prefixes: ["webhook"] },
 ];
 
 export const subjectFamilies: SubjectFamily[] = [
   { label: "Work", types: ["issue", "run", "gate", "project"] },
   {
     label: "Workspace",
-    types: ["member", "invitation", "allowlist_rule", "socket", "channel", "webhook", "workspace"],
+    types: ["member", "invitation", "allowlist_rule", "socket", "webhook", "workspace"],
   },
 ];
 

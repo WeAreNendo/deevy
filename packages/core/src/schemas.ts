@@ -45,14 +45,11 @@ export const AllowlistRuleSchema = createSelectSchema(allowlistRule);
  * token sealed while its email is owed, and whether that email went
  * (docs/plans/email-channel.md, slice 6).
  */
-export const InvitationSchema = createSelectSchema(invitation)
-  .omit({ tokenHash: true, sealedToken: true })
-  .extend({
-    /** `queued` while owed, `sent` once it landed, `failed` once given up on; null when never emailed. */
-    emailStatus: z.enum(["queued", "sent", "failed"]).nullable(),
-    /** What the sender said when it refused. */
-    emailError: z.string().nullable(),
-  });
+export const InvitationSchema = createSelectSchema(invitation).omit({
+  tokenHash: true,
+  // Left behind until the clean break (schema/invitation.ts): no email holds it.
+  sealedToken: true,
+});
 
 /**
  * A Socket as every surface shows one: never its credentials and never its

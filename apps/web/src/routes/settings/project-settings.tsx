@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckpointPolicy } from "@/components/checkpoint-policy";
 import { ProjectBinding } from "@/components/project-binding";
+import { ProjectChat } from "@/components/project-chat";
 import { useAutosave } from "@/lib/autosave";
 import { orpc } from "@/lib/orpc";
 
@@ -122,6 +123,7 @@ export function ProjectSettingsForm({ projectSlug }: { projectSlug: string }) {
       </form>
 
       <ProjectBinding projectSlug={projectSlug} />
+      {admin ? <ProjectChat projectSlug={projectSlug} /> : null}
       <CheckpointPolicy projectSlug={projectSlug} />
 
       {admin && !project.data.archivedAt ? (

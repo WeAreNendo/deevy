@@ -26,7 +26,7 @@ takes effect with the next build and deploy. See
 address the browser actually visits, character for character, including `https://`.
 
 Everything follows from it: each sign-in provider's callback, the cookie that keeps you signed in, the
-links deevy puts in Slack messages and emails, the address each tool delivers to, and the address MCP
+links deevy puts in Slack messages and in your tracker, the address each tool delivers to, and the address MCP
 clients and the CLI sign in against. Left unset, deevy follows the address each request came to, which is
 wrong as soon as a proxy in front of it changes the host, and it signs no tokens for MCP clients or the
 CLI at all, because then a caller could choose whom they are for.
@@ -46,14 +46,13 @@ is the same one.
 Generate each with `openssl rand -base64 32`, once, and keep them with your backups. They must be
 different values.
 
-- **`BETTER_AUTH_SECRET`** signs sessions and the links deevy sends, such as an email's unsubscribe link,
-  and seals the sign-in providers' tokens and the keys deevy signs MCP clients' and the CLI's tokens
+- **`BETTER_AUTH_SECRET`** signs sessions and the links deevy sends you back through, such as a tool's
+  consent, and seals the sign-in providers' tokens and the keys deevy signs MCP clients' and the CLI's tokens
   with. Without it, deevy doesn't run: the Docker image exits at start, and a Worker answers its API and
   `/healthz` with an error that names it. Changing it signs everybody out, and those clients get no new
   tokens until you delete the old keys (`DELETE FROM jwks;`); each then signs in again.
-- **`DEEVY_SECRET`** seals what deevy holds for the tools you connect, a key saved under **Settings ›
-  Email**, and an invitation's link until it is emailed. It must be at least 32 characters. Without it,
-  deevy refuses to connect a tool that needs a credential, and doesn't email invitations.
+- **`DEEVY_SECRET`** seals what deevy holds for the tools you connect. It must be at least 32 characters.
+  Without it, deevy refuses to connect a tool that needs a credential.
 
 They are separate so that you can sign everybody out without losing your tools' credentials. Losing `DEEVY_SECRET`
 does lose something: every tool has to be connected again.
@@ -77,31 +76,24 @@ button for each. With none, the sign-in page says so instead of offering a butto
 [Sign-in providers](/self-hosting/sign-in-providers/) covers registering each one, the order they appear
 in, and who may join.
 
-## Email, if you want it
-
-Without a sender, deevy emails nobody, and the inbox and Slack work as before. To send email, set
-`DEEVY_EMAIL_SENDER`, `DEEVY_EMAIL_FROM` and that sender's own variables, or let an admin choose one under
-**Settings › Email**. See [Sending email](/self-hosting/email/).
-
 ## Anything else
 
 The rest have defaults that suit most teams:
 
-| If you want to…                                          | Set                         |
-| -------------------------------------------------------- | --------------------------- |
-| Connect a GitHub Enterprise Server instead of github.com | `DEEVY_GITHUB_API`          |
-| Change how long a silent Run takes to count as stale     | `DEEVY_RUN_STALE_MINUTES`   |
-| Change how often an undecided Gate reminds its approvers | `DEEVY_GATE_REMINDER_HOURS` |
-| Change the order of the sign-in buttons                  | `DEEVY_SIGN_IN_ORDER`       |
-| Share sign-in apps with other deevys                     | `DEEVY_SIGN_IN_RELAY_*`     |
-| Serve the web app from an address of its own             | `DEEVY_WEB_ORIGIN`          |
+| If you want to…                                          | Set                       |
+| -------------------------------------------------------- | ------------------------- |
+| Connect a GitHub Enterprise Server instead of github.com | `DEEVY_GITHUB_API`        |
+| Change how long a silent Run takes to count as stale     | `DEEVY_RUN_STALE_MINUTES` |
+| Change the order of the sign-in buttons                  | `DEEVY_SIGN_IN_ORDER`     |
+| Share sign-in apps with other deevys                     | `DEEVY_SIGN_IN_RELAY_*`   |
+| Serve the web app from an address of its own             | `DEEVY_WEB_ORIGIN`        |
 
-What the Workspace lets in, who is invited, which Projects and Agents it has, and where Notifications go
-are not configuration: an admin sets them in **Settings**.
+What the Workspace lets in, who is invited, which Projects and Agents it has, and where each Project posts
+its Gates are not configuration: an admin sets them in **Settings**.
 
 ## What never goes in production
 
-The variables that start with `DEEVY_DEV_STUB_` replace sign-in, a tool or email with stand-ins for trying
-deevy on a laptop. The Docker image refuses to start with the sign-in, tool and email stand-ins on. A
+The variables that start with `DEEVY_DEV_STUB_` replace sign-in or a tool with stand-ins for trying deevy
+on a laptop. The Docker image refuses to start with the sign-in and tool stand-ins on. A
 Worker can't tell it is in production, so leave them unset there; `GET /api/health/ping` reports
 `devSignIn` and `devSockets` as `false` when they are off.

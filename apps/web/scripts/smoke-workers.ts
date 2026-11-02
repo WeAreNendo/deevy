@@ -661,13 +661,13 @@ async function liveUpdatesInsideAWorkersBudget(origin: string): Promise<void> {
   const cursor = typeof last?.cursor === "number" ? last.cursor : 0;
   const missed = await must(
     origin,
-    "channels/create",
-    { name: "#nobody-was-watching", webhookUrl: "https://hooks.slack.example/T0/B0/x" },
+    "allowlist/add",
+    { kind: "email_domain", value: "nobody-was-watching.example.com" },
     admin.cookie,
   );
   const resumed = watch(origin, admin.cookie, cursor);
   const caughtUp = await until(
-    () => kindsSeenBy(resumed).includes("channel.created"),
+    () => kindsSeenBy(resumed).includes("allowlist.rule_added"),
     2 * STREAM_POLL_MS,
   );
   check(

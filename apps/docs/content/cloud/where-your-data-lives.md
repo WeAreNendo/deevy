@@ -45,9 +45,6 @@ These are kept in a database in the EU too:
   else from its database.
 - **Signing in.** You sign in with GitHub or Google, so whichever you choose knows that you signed in
   to deevy.
-- **Email.** Your Workspace's email (Notifications, Gates, invitations) is sent through Cloudflare's email
-  service, from `notifications@mail.deevy.dev`, unless an admin sets a sender of your own under
-  **Settings › Email**. Each message then goes to its recipient's mailbox, wherever that is.
 - **Your tools and your Agents.** What deevy writes back to GitHub, Linear, GitLab, Notion or Slack is
   kept by those tools, where they keep it. Your Agents run wherever you run them, and what they read
   from your Workspace goes with them.

@@ -15,6 +15,7 @@ import { sealSecret } from "../src/secrets.ts";
 import { applyInbound, type ApplyInboundResult } from "../src/sockets/apply.ts";
 import type {
   ChatInteraction,
+  ChatChannel,
   ChatMessage,
   ChatMessageRef,
   ExternalComment,
@@ -501,9 +502,12 @@ export interface FakeChat {
   sockets: SocketModules;
   posted: Array<{ channel: string; message: ChatMessage; ref: ChatMessageRef }>;
   updated: Array<{ ref: ChatMessageRef; message: ChatMessage }>;
-  dms: string[];
   notes: Array<{ triggerId: string; gateRequestId: string }>;
   responses: Array<{ responseUrl: string; text: string }>;
+  /** Channels that refuse every post and update from now on, the way one the app was removed from does. */
+  refusing: Set<string>;
+  /** What happens while a post is on its way, before the tool answers it. */
+  whilePosting: (() => Promise<void>) | null;
 }
 
 /**
@@ -514,14 +518,23 @@ export interface FakeChat {
  * recorded requests in `packages/sockets`, and the whole sentence — the real
  * module behind the real route — is `packages/sockets/tests/slack-deevy.test.ts`.
  * So this signs the way the fake tracker does, carries its interaction
- * verbatim, and writes down every call.
+ * verbatim, and writes down every call. It lists the channels it is given,
+ * or none when it is given `null`, and refuses to post in `C0NOTIN` the way
+ * Slack refuses a channel its app was never added to, and in any channel a
+ * test adds to `refusing`. `whilePosting` runs before a post is answered, so a
+ * test can rule while deevy is still waiting on the tool.
  */
-export function fakeChat(): FakeChat {
+export function fakeChat({
+  channels = [{ id: "C0DEEVY", name: "deevy" }],
+}: { channels?: ChatChannel[] | null } = {}): FakeChat {
   const posted: FakeChat["posted"] = [];
   const updated: FakeChat["updated"] = [];
-  const dms: string[] = [];
   const notes: FakeChat["notes"] = [];
   const responses: FakeChat["responses"] = [];
+  const fake: Pick<FakeChat, "refusing" | "whilePosting"> = {
+    refusing: new Set(),
+    whilePosting: null,
+  };
   const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
     provider: "slack",
     capabilities: new Set(["chat"] as const),
@@ -548,18 +561,22 @@ export function fakeChat(): FakeChat {
       },
       normalizeInteraction: (_eventName, rawBody) => JSON.parse(rawBody) as ChatInteraction,
       answer: (reply) => Response.json(reply),
-      post: (channel, message) => {
+      ...(channels ? { listChannels: () => Promise.resolve(channels) } : {}),
+      post: async (channel, message) => {
+        if (channel === "C0NOTIN" || fake.refusing.has(channel)) {
+          throw new Error("Slack said not_in_channel");
+        }
         const ref = { channel, ts: `${String(posted.length + 1)}.000100` };
         posted.push({ channel, message, ref });
-        return Promise.resolve(ref);
+        await fake.whilePosting?.();
+        return ref;
       },
       update: (ref, message) => {
+        if (fake.refusing.has(ref.channel)) {
+          return Promise.reject(new Error("Slack said not_in_channel"));
+        }
         updated.push({ ref, message });
         return Promise.resolve();
-      },
-      openDm: (user) => {
-        dms.push(user);
-        return Promise.resolve(`D-${user}`);
       },
       askForNote: (triggerId, input) => {
         notes.push({ triggerId, gateRequestId: input.gateRequestId });
@@ -571,5 +588,5 @@ export function fakeChat(): FakeChat {
       },
     },
   });
-  return { sockets: { slack: module }, posted, updated, dms, notes, responses };
+  return Object.assign(fake, { sockets: { slack: module }, posted, updated, notes, responses });
 }
