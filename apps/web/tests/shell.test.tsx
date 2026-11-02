@@ -27,9 +27,12 @@ describe("the app shell", () => {
     await screen.findByText("Acme Team");
     expect(within(sidebar()).getByText("Acme Team")).toBeTruthy();
     expect(within(sidebar()).getByText("Ada Lovelace")).toBeTruthy();
-    expect(within(sidebar()).getByRole("link", { name: /Inbox/ }).getAttribute("href")).toBe(
-      "/inbox",
+    expect(within(sidebar()).getByRole("link", { name: /Runs/ }).getAttribute("href")).toBe(
+      "/runs",
     );
+    // A Human has no inbox: what waits on them is Needs me, and the chat
+    // channel a Project's Gates are posted in (docs/plans/simplify.md, slice 8).
+    expect(within(sidebar()).queryByRole("link", { name: /Inbox/ })).toBeNull();
     expect(
       within(sidebar())
         .getByRole("link", { name: /Settings/ })
@@ -43,7 +46,7 @@ describe("the app shell", () => {
     const needsMe = await screen.findByRole("region", { name: "Needs me" });
     expect(within(needsMe).getByText("Nothing needs you")).toBeTruthy();
     // The records live in a tracker and are read there (ADR-0024): the rail is
-    // the Workspace, the Inbox, Settings and the Member, and nothing else.
+    // the Workspace, Settings and the Member, and nothing else.
     expect(within(sidebar()).queryByRole("link", { name: /Projects/ })).toBeNull();
     expect(within(sidebar()).queryByRole("link", { name: /Issues/ })).toBeNull();
   });
@@ -146,11 +149,11 @@ describe("the app shell", () => {
     // Nothing to search for here: what it jumps to are deevy's own pages.
     expect(within(dialog).getByPlaceholderText("Jump to…")).toBeTruthy();
 
-    fireEvent.click(within(dialog).getByText("Inbox"));
+    fireEvent.click(within(dialog).getByText("Runs"));
     await act(async () => {
       await router.load();
     });
-    expect(router.state.location.pathname).toBe("/inbox");
+    expect(router.state.location.pathname).toBe("/runs");
   });
 
   it("jumps on the g-chords", async () => {
@@ -179,7 +182,7 @@ describe("keyboard help", () => {
     await mountAt("/");
     fireEvent.keyDown(document.body, { key: "?", shiftKey: true });
     expect(await screen.findByRole("heading", { name: "Keyboard" })).toBeTruthy();
-    expect(screen.getByText("Mark everything read")).toBeTruthy();
+    expect(screen.getByText("Fold the sidebar")).toBeTruthy();
     fireEvent.keyDown(document.body, { key: "Escape" });
     fireEvent.keyDown(document.body, { key: "k", metaKey: true });
     expect(await screen.findByRole("option", { name: /Keyboard shortcuts/ })).toBeTruthy();

@@ -26,8 +26,6 @@ export const idPrefixes = {
   notification: "ntf",
   webhook: "whk",
   delivery: "dlv",
-  channel: "chan",
-  routingRule: "rte",
   allowlistRule: "alw",
   invitation: "inv",
   // Better Auth's own models, through its generateId hook (auth.ts).

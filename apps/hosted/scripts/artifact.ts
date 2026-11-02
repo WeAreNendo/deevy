@@ -255,13 +255,6 @@ export const settings: Setting[] = [
     description:
       "Invitations each Workspace may make in any 24 hours, unless its own limit says otherwise; 50.",
   },
-  {
-    name: "DEEVY_HOSTED_EMAILS_PER_DAY",
-    kind: "var",
-    required: false,
-    description:
-      "Emails each Workspace may send in any 24 hours, unless its own limit says otherwise; 500.",
-  },
   ...providers.flatMap(([prefix, name, id, extra]): Setting[] => [
     {
       name: `${prefix}_CLIENT_ID`,
@@ -277,19 +270,6 @@ export const settings: Setting[] = [
     },
     ...extra,
   ]),
-  {
-    name: "DEEVY_EMAIL_SENDER",
-    kind: "var",
-    required: false,
-    description:
-      "The platform's sender (cloudflare, resend, postmark, sendgrid, mailgun or ses), with the variables that sender reads (docs/OPERATIONS.md, Email). No email without one.",
-  },
-  {
-    name: "DEEVY_EMAIL_FROM",
-    kind: "var",
-    required: false,
-    description: "The From address, on a domain the sender has verified. Required with a sender.",
-  },
   {
     name: "DEEVY_HOSTED_PASS_SECONDS",
     kind: "var",
@@ -307,12 +287,6 @@ export const settings: Setting[] = [
     kind: "var",
     required: false,
     description: "The silence after which a Run is stale; 30.",
-  },
-  {
-    name: "DEEVY_GATE_REMINDER_HOURS",
-    kind: "var",
-    required: false,
-    description: "How often an undecided Gate asks its approvers again; 4.",
   },
   {
     name: "DEEVY_GITHUB_API",

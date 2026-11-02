@@ -40,12 +40,12 @@ automated accounts, deevy's own included, rule nothing and get no reply.
 
 ## With the buttons in Slack
 
-A Gate posted to a room in your team's Slack app, or sent to you as a direct message, comes with
-**Approve** and **Reject**. **Reject** asks you why before it sends. The buttons follow the Checkpoint's
-rules, so the Human the work is for, where the Checkpoint leaves them out, can reject with them but not
-approve. The message changes when anybody rules,
-in Slack, in deevy or on the tracker, so the room always shows where the Gate stands. See
-[Channels and routing](/notifications/channels/) for sending Gates to a room.
+A Gate posted in its Project's chat channel comes with **Approve** and **Reject**. **Reject** asks you why
+before it sends. The buttons follow the Checkpoint's rules, so the Human the work is for, where the
+Checkpoint leaves them out, can reject with them but not approve. The message changes when anybody rules,
+in Slack, in deevy or on the tracker, so the channel always shows where the Gate stands. A click that rules
+nothing is answered privately, to the person who clicked. See
+[Needs me and chat](/needs-me/#post-a-projects-gates-in-a-chat-channel) for binding a Project's channel.
 
 ## Your account has to be yours
 

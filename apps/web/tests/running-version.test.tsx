@@ -29,7 +29,7 @@ const { sourceOf } = await import("../src/lib/source.ts");
 describe("the version deevy runs", () => {
   it("is said at the foot of a Settings page, linking to that release's source", async () => {
     stub.version = "0.10.0";
-    await mountAt("/settings/notifications");
+    await mountAt("/settings/webhooks");
 
     const source = await screen.findByRole("link", { name: "Source code" });
     expect(source.getAttribute("href")).toBe("https://github.com/WeAreNendo/deevy/tree/v0.10.0");

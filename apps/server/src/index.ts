@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import { readEnv } from "./env.ts";
 import { socketModules } from "@deevy/sockets";
 import { startRunner } from "./runner.ts";
-import { buildServer, nodeEmailSenders } from "./server.ts";
+import { buildServer } from "./server.ts";
 
 const env = readEnv();
 if (env.devStubOAuth) {
@@ -31,7 +31,6 @@ const runner = startRunner({
   cron: createTimerCron(),
   staleMinutes: env.runStaleMinutes,
   sweepIntervalSeconds: env.sweepIntervalSeconds,
-  gateReminderHours: env.gateReminderHours,
   // The origin a Slack message links back to. Without one nothing is sent, so
   // the deliveries wait in their rows until the instance knows its own URL.
   // The origin a Slack message's link is built on: the SPA's when it has one
@@ -46,11 +45,6 @@ const runner = startRunner({
     ...(env.providers.gitlab?.issuer ? { gitlabSignInIssuer: env.providers.gitlab.issuer } : {}),
   }),
   ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
-  // How email leaves this instance: the senders Node can run, and the one the
-  // environment chose (docs/plans/email-channel.md).
-  emailSenders: nodeEmailSenders(env.devStubEmail),
-  email: env.email,
-  ...(env.secret ? { secret: env.secret } : {}),
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

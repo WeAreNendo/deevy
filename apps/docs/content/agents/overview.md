@@ -86,8 +86,8 @@ revoke the one you lost.
 
 ## Its Sponsor
 
-The Sponsor is the Human accountable for the Agent. They hear about the Agent's Runs that no other Human
-started, and they, or an admin, manage it. Only the Agent's Sponsor or an admin can issue its keys, grant it
+The Sponsor is the Human accountable for the Agent. They see its Runs on **Needs me** while they are still
+going, and they, or an admin, manage it. Only the Agent's Sponsor or an admin can issue its keys, grant it
 Projects, set its webhook, or suspend it.
 
 An admin can hand an Agent to another Human with **Sponsor**, at the top of the Agent's page.

@@ -25,13 +25,6 @@ The Member deevy routed an Issue to: by a label, by a mention, or by a Project's
 tracker's own assignee is a fact deevy shows, not this. See
 [Sockets and Projects](/concepts/sockets-and-projects/#routing-records-to-agents).
 
-### Channel
-
-Where Notifications are delivered: the Inbox in deevy, a Slack room through its incoming webhook, a room in
-a Slack app or a direct message from it, or a team email address somebody there confirmed. A Human's own
-email is not a Channel, just as their Slack direct messages are not: it is one of their own settings. See
-[Channels and routing](/notifications/channels/).
-
 ### Checkpoint
 
 A named point in a Project's policy, `plan`, `ship` or any name, with how many different Humans must
@@ -84,8 +77,9 @@ Human or an Agent. See [Humans, Agents and Sponsors](/concepts/humans-and-agents
 
 ### Notification
 
-A message to a Human, worked out from Events: a mention, a Gate awaiting them, an assignment, a Run that
-finished. See [Needs me and the Inbox](/notifications/inbox/).
+A message to an Agent in its inbox, worked out from Events: a record routed to it, a comment that mentions
+it, the Ruling on a Gate it asked at. A Human has none: what waits on a Human is the Gates on
+[Needs me](/needs-me/). See [Bringing your own harness](/agents/your-own-harness/#work-a-record).
 
 ### Project
 
@@ -109,12 +103,6 @@ it came from. An Agent never rules, and neither does any credential deevy issued
 
 One attempt by one Agent on one Issue, with a status, a summary, timestamps, the evidence it attached, and
 the Member whose action started it. See [Runs and Checkpoints](/concepts/runs/).
-
-### Sender
-
-The service a Workspace sends email through: Resend, Postmark, SendGrid, Mailgun, Amazon SES, an SMTP server
-or Cloudflare Email Service. There is one at a time, from the deployment's configuration or from
-**Settings › Email**. See [Email](/notifications/email/#the-sender).
 
 ### Socket
 

@@ -149,11 +149,6 @@ out. To add one, put this in `apps/web/wrangler.jsonc`:
 Create the queue with `wrangler queues create deevy-jobs`, then build, check and deploy. Keep
 `max_retries` at eight or more, so the Queue doesn't give up on a delivery before deevy would.
 
-### Send email through Cloudflare
-
-Cloudflare Email Service is one of the senders deevy can use, and only on Workers. See
-[Sending email](/self-hosting/email/#cloudflare-email-service).
-
 ## What a free account gives you
 
 - **Background work runs once a minute**, Cloudflare's finest schedule, in small passes. A backlog clears

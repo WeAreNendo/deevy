@@ -18,7 +18,6 @@
     "@deevy/adapters": "workspace:*",
     "@deevy/core": "workspace:*",
     "@deevy/design": "workspace:*",
-    "@deevy/email": "workspace:*",
     "@deevy/sockets": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",

@@ -111,7 +111,6 @@ describe("the manifest", () => {
       "DIRECTORY",
       "ASSETS",
       "CONSOLE",
-      "EMAIL",
       "ANALYTICS",
       "CF_VERSION_METADATA",
     ]);

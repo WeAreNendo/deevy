@@ -175,7 +175,7 @@ describe("what the Event log offers to filter by", () => {
     await waitFor(() => expect(stub.listed.at(-1)).toMatchObject({ kindPrefix: "gate" }));
     fireEvent.keyDown(kind, { key: "ArrowDown" });
     expect(await screen.findByRole("option", { name: "invitation.*" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "email.*" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "webhook.*" })).toBeTruthy();
   });
 
   it("leaves invitations out for a Member who is not an admin", async () => {

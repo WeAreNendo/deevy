@@ -1,298 +1,47 @@
 import {
-  humanNotificationKinds,
-  delivery as deliveryTable,
   notification as notificationTable,
   type Db,
   type Event,
-  type HumanNotificationKind,
   type Notification,
 } from "@deevy/db";
-import { gateApprovers, policyFor, requesterFor } from "./checkpoints.ts";
 import { newId } from "./ids.ts";
 
 /**
- * Notifications derive from the Event log rather than being written a second
+ * An Agent's inbox, derived from the Event log rather than written a second
  * time (docs/PLAN.md): this runs in the same request, right after the Event is
  * appended, and reads only that Event. Nothing here decides what happened.
  *
- * Routing is two questions asked in order. Who does this Event concern — the
- * answer the Event log alone gives, unchanged since M1 — and then, for each of
- * them, which Channels it reaches: their own preferences say what they want to
- * hear, and the Workspace's routing rules say where a Slack Channel gets it
- * (docs/plans/m2.md). The first question never depends on the second, so
- * turning Slack off changes where a Human hears about something and never
- * whether it concerns them.
+ * Only an Agent is told anything (docs/plans/simplify.md, slice 8). What an
+ * Agent waits for is here: the record routing gave it, a comment that names
+ * it, and the Ruling on the Gate it stopped at. A Human's attention is the
+ * Gates they may rule on, which Needs me derives from the Gates themselves and
+ * a Project's chat channel is posted (sockets/chat-out.ts), and the tracker
+ * tells them the rest; so there is no Human row, no preference, no routing
+ * rule and no email.
  *
- * One inbox row per recipient per kind per Event, and one message per Channel
- * per Event, both of them the unique indexes' invariant rather than this
- * function's care (docs/plans/m3.md). The actor is never told about their own
- * action, and a suspended Member is told nothing at all.
- *
- * Answers the routing it derived, which is who this Event concerns as of now:
- * the reminder asks again only them (work.ts).
+ * One inbox row per recipient per kind per Event, the unique index's invariant
+ * rather than this function's care (docs/plans/m3.md). The actor is never told
+ * about their own action, and a suspended Agent is told nothing at all.
  */
-export async function deriveNotifications(db: Db, event: Event): Promise<Routing> {
-  const routing = await routeEvent(db, event);
-  const { inbox, slack, dms, emails } = routing;
-
-  if (inbox.length > 0) {
-    // One row per recipient per kind per Event, which the unique index makes
-    // true rather than this being the only caller careful enough to keep it
-    // (docs/plans/m3.md): running this a second time for the same Event owes
-    // nobody a second inbox row.
-    await db
-      .insert(notificationTable)
-      .values(
-        inbox.map(({ memberId, kind }) => ({
-          id: newId("notification"),
-          recipientMemberId: memberId,
-          kind,
-          eventId: event.seq,
-          issueId: issueOf(event),
-        })),
-      )
-      .onConflictDoNothing();
-  }
-
-  // The delivery row is the record that a message is owed, and the only one
-  // (schema/delivery.ts): the sweep renders it from this Event when it sends,
-  // so nothing here copies what it will say. One row per Channel per Event
-  // with no recipient, because a room is a room and three Humans concerned by
-  // one Event are not three messages in it; and one per Identity for a direct
-  // message, which is a person.
-  const owed = [
-    ...slack.map(({ channelId, target }) => ({
-      id: newId("delivery"),
-      workspaceId: event.workspaceId,
-      target,
-      targetId: channelId,
-      eventSeq: event.seq,
-    })),
-    ...dms.map(({ identityId, memberId }) => ({
-      id: newId("delivery"),
-      workspaceId: event.workspaceId,
-      target: "chat_dm" as const,
-      targetId: identityId,
-      eventSeq: event.seq,
-      recipientMemberId: memberId,
-    })),
-    // One per Human, at the address their sign-in verified: the unique index
-    // makes two kinds of one Event one email, which is what a person wants.
-    ...emails.map(({ memberId }) => ({
-      id: newId("delivery"),
-      workspaceId: event.workspaceId,
-      target: "email_member" as const,
-      targetId: memberId,
-      eventSeq: event.seq,
-      recipientMemberId: memberId,
-    })),
-  ];
-  if (owed.length > 0) {
-    await db.insert(deliveryTable).values(owed).onConflictDoNothing();
-  }
-  return routing;
+export async function deriveNotifications(db: Db, event: Event): Promise<void> {
+  const inbox = await recipientsFor(db, event);
+  if (inbox.length === 0) return;
+  // Running this a second time for the same Event owes nobody a second row.
+  await db
+    .insert(notificationTable)
+    .values(
+      inbox.map(({ memberId, kind }) => ({
+        id: newId("notification"),
+        recipientMemberId: memberId,
+        kind,
+        eventId: event.seq,
+        issueId: issueOf(event),
+      })),
+    )
+    .onConflictDoNothing();
 }
 
 export type Recipient = { memberId: string; kind: Notification["kind"] };
-
-/** A Recipient owed one of the kinds a Human is sent, and so one with a preference and a rule. */
-type HumanRecipient = { memberId: string; kind: HumanNotificationKind };
-
-/** Whether a Human is ever sent this kind, and so whether Slack can say it. */
-export function isHumanNotificationKind(kind: Notification["kind"]): kind is HumanNotificationKind {
-  return (humanNotificationKinds as ReadonlyArray<string>).includes(kind);
-}
-
-/**
- * Whether this Notification is a Human's. A guard on the Recipient rather than
- * on its kind, so filtering narrows what the preference lookup and the Slack
- * rules are handed rather than leaving them to trust a comment.
- */
-function isHumanRecipient(recipient: Recipient): recipient is HumanRecipient {
-  return isHumanNotificationKind(recipient.kind);
-}
-
-/**
- * One room a Notification of this kind is due to reach: an incoming webhook
- * (`slack`), which posts a link, or a room in a Slack app (`chat`), which
- * posts a Gate with its buttons (ADR-0025).
- */
-export interface SlackTarget {
-  channelId: string;
-  target: "slack" | "chat" | "email";
-  kind: Notification["kind"];
-}
-
-/** One Human's direct messages in a chat tool, through the Identity linked there. */
-export interface DirectTarget {
-  identityId: string;
-  memberId: string;
-  kind: Notification["kind"];
-}
-
-/** One Human told by email, at the address their sign-in verified. */
-export interface EmailTarget {
-  memberId: string;
-  kind: Notification["kind"];
-}
-
-/**
- * Whether a Human hears about this kind by email until they say otherwise
- * (docs/plans/email-channel.md): what waits on them, and nothing else. An inbox
- * that fills is read later; an email that arrives for every mention is
- * filtered away, and with it the one that mattered.
- */
-export function emailByDefault(kind: HumanNotificationKind): boolean {
-  return kind === "gate_awaiting";
-}
-
-/** Where one Event's Notifications go. */
-export interface Routing {
-  /** The Members who get an inbox row, and what it says. */
-  inbox: Recipient[];
-  /**
-   * The rooms the same Notification reaches, at most once each: a Channel is a
-   * room, not a person, so two recipients routed to the same one are one
-   * message.
-   */
-  slack: SlackTarget[];
-  /** The Humans told by direct message, one per linked account. */
-  dms: DirectTarget[];
-  /** The Humans told by email, only ever at a verified address. */
-  emails: EmailTarget[];
-}
-
-const noRouting: Routing = { inbox: [], slack: [], dms: [], emails: [] };
-
-/** The providers whose accounts a direct message can reach. */
-const directProviders = ["slack"];
-
-/**
- * The routing decision for one Event: recipients first, then Channels. Two
- * queries beyond the recipients, whatever the Workspace holds — the Members
- * concerned, with their preferences and their chat accounts in the same
- * statement, and the Workspace's rules with their Channels — because this runs
- * in the tail of every write.
- */
-export async function routeEvent(db: Db, event: Event): Promise<Routing> {
-  const recipients = await recipientsFor(db, event);
-  if (recipients.length === 0) return noRouting;
-
-  // An Agent's Notification takes neither road. The preference matrix and the
-  // Workspace's routing rules are a Human's answer to "what do I want to hear
-  // about, and where", and an Agent has no preferences and no Slack: its inbox
-  // is the endpoint ADR-0003 promised it (schema/notification.ts).
-  const forAgents = recipients.filter((recipient) => !isHumanRecipient(recipient));
-  const forHumans = recipients.filter(isHumanRecipient);
-  if (forHumans.length === 0) return { inbox: forAgents, slack: [], dms: [], emails: [] };
-
-  const members = await db.query.member.findMany({
-    where: { id: { in: [...new Set(forHumans.map((recipient) => recipient.memberId))] } },
-    columns: { id: true },
-    with: {
-      // Whether there is an address deevy may write to: only one the sign-in
-      // provider verified, or deevy would mail whoever a Linear account named.
-      user: { columns: { emailVerified: true } },
-      preferences: true,
-      identities: {
-        where: { provider: { in: directProviders }, revokedAt: { isNull: true } },
-        columns: { id: true },
-      },
-    },
-  });
-  const wanted = new Map(
-    members.flatMap((member) =>
-      member.preferences.map((row) => [`${row.memberId}:${row.kind}`, row] as const),
-    ),
-  );
-  const linked = new Map(members.map((member) => [member.id, member.identities]));
-  const verified = new Set(
-    members.filter((member) => member.user.emailVerified).map((member) => member.id),
-  );
-  // A Member who has never said otherwise wants everything, everywhere: the
-  // row is a preference, and its absence is the default (schema/channel.ts).
-  const wants = (recipient: HumanRecipient, where: "inbox" | "slack" | "slackDm") =>
-    wanted.get(`${recipient.memberId}:${recipient.kind}`)?.[where] ?? true;
-
-  const inbox = [...forAgents, ...forHumans.filter((recipient) => wants(recipient, "inbox"))];
-  const dms = forHumans
-    .filter((recipient) => wants(recipient, "slackDm"))
-    .flatMap((recipient) =>
-      (linked.get(recipient.memberId) ?? []).map((identity) => ({
-        identityId: identity.id,
-        memberId: recipient.memberId,
-        kind: recipient.kind,
-      })),
-    );
-  const emails = forHumans
-    .filter(
-      (recipient) =>
-        verified.has(recipient.memberId) &&
-        (wanted.get(`${recipient.memberId}:${recipient.kind}`)?.email ??
-          emailByDefault(recipient.kind)),
-    )
-    .map(({ memberId, kind }) => ({ memberId, kind }));
-  // A Slack room hears a kind when some Human it concerns wants Slack for it.
-  // A team address hears every kind its rules name: it is an admin's choice
-  // of mailbox, and one Human's Slack switch says nothing about it.
-  const slackKinds = new Set(
-    forHumans.filter((recipient) => wants(recipient, "slack")).map((recipient) => recipient.kind),
-  );
-  const allKinds = new Set(forHumans.map((recipient) => recipient.kind));
-
-  return { inbox, slack: await slackTargets(db, event, slackKinds, allKinds), dms, emails };
-}
-
-/**
- * The rooms the Workspace's rules send these kinds to. A rule with a null kind
- * or a null Project means any of them (schema/channel.ts), and a rule scoped to
- * a Project only fires for that Project's Events.
- */
-async function slackTargets(
-  db: Db,
-  event: Event,
-  slackKinds: Set<HumanNotificationKind>,
-  allKinds: Set<HumanNotificationKind>,
-): Promise<SlackTarget[]> {
-  const rules = await db.query.routingRule.findMany({
-    where: { workspaceId: event.workspaceId },
-    with: { channel: true },
-  });
-
-  const targets = new Map<string, SlackTarget>();
-  for (const rule of rules) {
-    if (rule.projectId !== null && rule.projectId !== event.projectId) continue;
-    const target = targetOf(rule.channel);
-    if (!target) continue;
-    for (const kind of target === "email" ? allKinds : slackKinds) {
-      if (rule.notificationKind !== null && rule.notificationKind !== kind) continue;
-      targets.set(`${rule.channelId}:${kind}`, { channelId: rule.channelId, target, kind });
-    }
-  }
-  return [...targets.values()];
-}
-
-/** How a Channel is reached, or null when it is not configured enough to be. */
-function targetOf(channel: {
-  kind: string;
-  config: Record<string, unknown> | null;
-}): SlackTarget["target"] | null {
-  const text = (key: string) => {
-    const value = channel.config?.[key];
-    return typeof value === "string" && value.length > 0;
-  };
-  if (channel.kind === "slack" && text("webhookUrl")) return "slack";
-  if (channel.kind === "slack_app" && text("socketId") && text("conversation")) return "chat";
-  // A team address only once somebody there confirmed it (email/team.ts).
-  if (
-    channel.kind === "email" &&
-    text("address") &&
-    typeof channel.config?.confirmedAt === "number"
-  ) {
-    return "email";
-  }
-  return null;
-}
 
 /**
  * The Issue a Notification points at. A Run is not an Issue, but it happens on
@@ -306,53 +55,20 @@ export function issueOf(event: Event): string | null {
   return typeof carried === "string" ? carried : null;
 }
 
-/** What a Run Event tells a Human, or nothing when the Event is not one. */
-const runNotificationKinds: Partial<Record<Event["kind"], Notification["kind"]>> = {
-  "run.completed": "run_finished",
-  "run.failed": "run_finished",
-};
-
 /**
  * The Gate a waiting Run stopped at, which a `run.awaiting_input` names in its
  * payload.
  *
  * A Gate is the one thing a Run waits at (docs/plans/simplify.md, slice 5), so
  * this names one on every such Event since; one from before, when an Agent
- * could leave its Run waiting on a question, names none and asks nobody. Read
- * from the row rather than looked up, because the delivery path asks hours
- * later and must stay a pure function of the Event.
+ * could leave its Run waiting on a question, names none. Read from the row
+ * rather than looked up, because the chat sweep asks later and must stay a
+ * pure function of the Event.
  */
 export function gateRequestIdOf(event: Event): string | null {
   if (event.kind !== "run.awaiting_input") return null;
   const carried = (event.payload as { gateRequestId?: unknown } | null)?.gateRequestId;
   return typeof carried === "string" ? carried : null;
-}
-
-/**
- * The one Event whose Notification is owed to the Agent rather than to a Human.
- *
- * ADR-0003 says an Agent without a webhook polls its inbox over MCP, and until
- * now the one thing it waits for never arrived there: a Gate ruling resumed its
- * Run and told nobody, so the Agent learned of it only by thinking to call
- * `runs.list` again. Everything else in this file routes to Humans because
- * everything else concerns them; this concerns the Agent, and the Human who
- * decided it is the actor and is never told about their own action
- * (docs/plans/m3.md).
- */
-const AGENT_ANSWERED: Event["kind"] = "run.answered";
-
-/**
- * What this Event tells a Human, decided from the Event alone. Delivery asks
- * this again when it sends, hours later and without the request that appended
- * the Event, so it must be a pure function of the row: the Event is the source
- * (ADR-0003), and a kind copied into the delivery row would be a second one.
- */
-export function notificationKindOf(event: Event): Notification["kind"] | null {
-  if (event.kind === "issue.assigned") return "assignment";
-  if (gateRequestIdOf(event)) return "gate_awaiting";
-  if (event.kind === "comment.created") return "mention";
-  if (event.kind === AGENT_ANSWERED) return "run_answered";
-  return runNotificationKinds[event.kind] ?? null;
 }
 
 async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
@@ -361,117 +77,54 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
     mentionedMemberIds?: unknown;
   };
 
+  // What routing gave an Agent, which is what opened its Run.
   if (event.kind === "issue.assigned") {
     const assignee = typeof payload.to === "string" ? payload.to : null;
     if (!assignee || assignee === event.actorMemberId) return [];
-    return (await active(db, [assignee], event)).map((memberId) => ({
+    return (await activeAgents(db, [assignee], event)).map((memberId) => ({
       memberId,
       kind: "assignment" as const,
     }));
   }
 
+  // A comment that names an Agent, which is how an answer in the tracker
+  // reaches it (slice 5).
   if (event.kind === "comment.created") {
     const mentioned = Array.isArray(payload.mentionedMemberIds)
       ? payload.mentionedMemberIds.filter((id): id is string => typeof id === "string")
       : [];
     const others = mentioned.filter((id) => id !== event.actorMemberId);
-    return (await active(db, others, event)).map((memberId) => ({
+    return (await activeAgents(db, others, event)).map((memberId) => ({
       memberId,
       kind: "mention" as const,
     }));
   }
 
-  // A ruling is owed to whoever asked for it, and that is the Agent.
-  if (event.kind === AGENT_ANSWERED && event.subjectType === "run") {
+  // A Ruling is owed to whoever asked for it, and that is the Agent. The
+  // Human who ruled is the actor and is never told about their own action.
+  if (event.kind === "run.answered" && event.subjectType === "run") {
     const found = await db.query.run.findFirst({
       where: { id: event.subjectId },
       columns: { agentMemberId: true },
     });
     if (!found || found.agentMemberId === event.actorMemberId) return [];
-    return (await active(db, [found.agentMemberId], event)).map((memberId) => ({
+    return (await activeAgents(db, [found.agentMemberId], event)).map((memberId) => ({
       memberId,
       kind: "run_answered" as const,
     }));
   }
 
-  // A Gate asks whoever may rule on it, which is not the same question as who
-  // the Run belongs to: the Checkpoint names them, or every active Human does.
-  const gateRequestId = gateRequestIdOf(event);
-  if (gateRequestId) return gateRecipients(db, event, gateRequestId);
-
-  // A Run belongs to the Human behind it: the Member that triggered it, or the
-  // Sponsor accountable for the Agent when an Agent triggered its own work
-  // (docs/plans/m2.md). One Human, so a finished Run is told once.
-  const runKind = runNotificationKinds[event.kind];
-  if (runKind) {
-    if (event.subjectType !== "run") return [];
-    const found = await db.query.run.findFirst({
-      where: { id: event.subjectId },
-      columns: { agentMemberId: true, triggeredByMemberId: true },
-    });
-    if (!found) return [];
-    const human = await humanBehind(db, found.triggeredByMemberId ?? found.agentMemberId);
-    if (!human || human === event.actorMemberId) return [];
-    return (await active(db, [human], event)).map((memberId) => ({ memberId, kind: runKind }));
-  }
-
   return [];
 }
 
-/**
- * Who is asked to rule on a Gate: the Humans the Checkpoint names, or every
- * active Human where it names nobody, less the one the policy excludes and
- * whoever has already ruled on it.
- *
- * Read live rather than carried in the payload, so an approver named after the
- * ask is owed a row the next time the reminder re-derives this — which is what
- * the reminder is for (work.ts) — and somebody who has ruled, been suspended or
- * stopped being named since is not asked again.
- */
-async function gateRecipients(db: Db, event: Event, requestId: string): Promise<Recipient[]> {
-  const request = await db.query.gateRequest.findFirst({
-    where: { id: requestId },
-    with: { run: true, decisions: { columns: { memberId: true } } },
-  });
-  // A Gate that is no longer open asks nobody anything.
-  if (!request || request.status !== "open") return [];
-  const policy = await policyFor(db, request.projectId, request.checkpoint);
-  const asked = await gateApprovers(db, event.workspaceId, policy);
-  // Asking the Human this Run is for, at a Checkpoint that will refuse them,
-  // is an inbox row about something they cannot do.
-  const excluded = policy.excludeRequester ? await requesterFor(db, request.run) : null;
-  // And so is asking somebody who has already ruled: on a Gate that wants two
-  // approvals, the first one in has nothing left to give.
-  const ruled = new Set(request.decisions.map((row) => row.memberId));
-  return asked
-    .filter(
-      (memberId) =>
-        memberId !== excluded && memberId !== event.actorMemberId && !ruled.has(memberId),
-    )
-    .map((memberId) => ({ memberId, kind: "gate_awaiting" as const }));
-}
-
-/**
- * The Human accountable for a Member: itself when it is a Human, its Sponsor
- * when it is an Agent (CONTEXT.md). An Agent with no Sponsor tells nobody.
- */
-async function humanBehind(db: Db, memberId: string | null): Promise<string | null> {
-  if (!memberId) return null;
-  const found = await db.query.member.findFirst({
-    where: { id: memberId },
-    columns: { kind: true, sponsorId: true },
-  });
-  if (!found) return null;
-  return found.kind === "human" ? memberId : found.sponsorId;
-}
-
-/** Of the given Members, those still able to act. Suspension silences an inbox. */
-async function active(db: Db, memberIds: string[], event: Event): Promise<string[]> {
+/** Of the given Members, the Agents still able to act. Suspension silences an inbox. */
+async function activeAgents(db: Db, memberIds: string[], event: Event): Promise<string[]> {
   if (memberIds.length === 0) return [];
   const rows = await db.query.member.findMany({
     where: {
       id: { in: memberIds },
       workspaceId: event.workspaceId,
+      kind: "agent",
       suspendedAt: { isNull: true },
     },
     columns: { id: true },

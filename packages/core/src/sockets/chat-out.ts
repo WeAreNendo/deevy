@@ -7,18 +7,21 @@ import {
 import { and, eq } from "drizzle-orm";
 import type { EventKind } from "../events.ts";
 import { newId } from "../ids.ts";
-import type { ChatGateMessage } from "./port.ts";
+import { gateRequestIdOf } from "../notifications.ts";
+import type { ChatGateMessage, ChatMessage } from "./port.ts";
 
 /**
  * What deevy says in a chat tool, and how it keeps it true (ADR-0025).
  *
- * A Gate posted to a Slack room or a Human's direct messages carries two
- * buttons, and a Ruling made anywhere — Slack, deevy, the tracker — changes
- * what the message should say. So the message is remembered where it landed
+ * A Project may bind one chat channel (docs/plans/simplify.md, slice 8), and
+ * each Gate a Run waits at there is posted in it as one message with two
+ * buttons. A Ruling made anywhere — Slack, deevy, the tracker — changes what
+ * that message should say, so the message is remembered where it landed
  * (`socket_mirror`, kind `message`), and every Event that changes a Gate owes
- * each chat tool holding one of its messages an update. The update is
- * rendered at send time from the Gate's own rows, like everything else the
- * outbox sends (ADR-0003).
+ * each chat tool holding one of its messages an update. Both are rendered at
+ * send time from the Gate's own rows, like everything else the outbox sends
+ * (ADR-0003), so a message posted after somebody already ruled says so rather
+ * than offering a button that would be refused.
  */
 
 /** The kinds that change what a Gate's message says. */
@@ -30,11 +33,43 @@ const updateKinds: ReadonlySet<string> = new Set<EventKind>([
 ]);
 
 /**
- * The deliveries a Gate's messages are owed for this Event: one per chat tool
- * that holds any, because one update pass changes every message of that Gate
- * on that tool. Pure on the kind first, so nothing else pays a query.
+ * What a chat tool is owed for this Event. A Run waiting at a Gate on a
+ * Project that binds a channel owes it the Gate's message, named by the
+ * Project so the sweep posts where the Project binds when it sends; an Event
+ * that changes a Gate owes each chat tool holding one of its messages an
+ * update. Pure on the kind first, so nothing else pays a query.
  */
-export async function deriveChatUpdates(db: Db, event: Event): Promise<string[]> {
+export async function deriveChatMessages(db: Db, event: Event): Promise<string[]> {
+  if (gateRequestIdOf(event) && event.projectId) return derivePost(db, event, event.projectId);
+  return deriveUpdates(db, event);
+}
+
+/** The Gate's one message, owed when the Project its Run waits in binds a channel. */
+async function derivePost(db: Db, event: Event, projectId: string): Promise<string[]> {
+  const bound = await db.query.project.findFirst({
+    where: { id: projectId, workspaceId: event.workspaceId },
+    columns: { chatSocketId: true, chatChannel: true },
+  });
+  if (!bound?.chatSocketId || !bound.chatChannel) return [];
+  const owed = await db
+    .insert(deliveryTable)
+    .values({
+      id: newId("delivery"),
+      workspaceId: event.workspaceId,
+      target: "chat",
+      targetId: projectId,
+      eventSeq: event.seq,
+    })
+    .onConflictDoNothing()
+    .returning({ id: deliveryTable.id });
+  return owed.map((row) => row.id);
+}
+
+/**
+ * One update per chat tool that holds any of the Gate's messages, because one
+ * update pass changes every message of that Gate on that tool.
+ */
+async function deriveUpdates(db: Db, event: Event): Promise<string[]> {
   if (!updateKinds.has(event.kind) || event.subjectType !== "gate") return [];
   const holding = await db
     .selectDistinct({ socketId: socketMirrorTable.socketId })
@@ -107,5 +142,18 @@ export function chatGateMessage(gate: GateForChat, origin: string): ChatGateMess
       (one) =>
         `${one.member?.user.name ?? "Somebody"} ${one.decision}, ${whereFrom(one.via, one.socket?.provider ?? null)}`,
     ),
+  };
+}
+
+/**
+ * The line a channel is bound with (docs/plans/simplify.md, slice 8): posting
+ * it is what proves the app may post there, while the admin is still on the
+ * page, and it tells the channel what is coming.
+ */
+export function chatHello(project: { name: string }, origin: string): ChatMessage {
+  return {
+    kind: "text",
+    text: `deevy will post the Gates of ${project.name} here, with Approve and Reject. A Gate waits until somebody who may rule on it does.`,
+    link: { url: origin.replace(/\/+$/, "") || "/", label: "Open deevy" },
   };
 }

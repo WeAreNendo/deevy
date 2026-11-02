@@ -18,32 +18,31 @@ plan documents. Read `shadcn` (component rules) and `frontend-design` (design pr
 
 ## Where things are
 
-| You want                                 | Look at                                                                                                        |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| tokens, type, both themes                | `packages/design/tokens.css` (shared with the docs site), `/dev/tokens` on a dev instance                      |
-| the frame, sidebar, top bar, member menu | `routes/shell.tsx`, `components/app-breadcrumb.tsx`                                                            |
-| ⌘K, shortcuts, `?`                       | `components/command-palette.tsx`, `lib/shortcuts.ts`, `components/shortcuts-sheet.tsx`                         |
-| what needs a Human                       | `routes/home.tsx` (Needs me)                                                                                   |
-| a list screen                            | `components/data-table.tsx`; `routes/runs/list.tsx`, `routes/work/list.tsx` with `components/work-filters.tsx` |
-| a Run                                    | `routes/runs/run.tsx`, `components/run-status.tsx`                                                             |
-| a Gate, and ruling on it                 | `routes/gates/gate.tsx`, `components/gate-controls.tsx`                                                        |
-| a record deevy projected                 | `routes/work/item.tsx`, `components/item-events.tsx`                                                           |
-| the Inbox                                | `routes/inbox.tsx`, `lib/notification-text.ts`                                                                 |
-| a Settings page                          | `components/settings-page.tsx`, `routes/settings/*`, `settingsNav` in `routes/settings/layout.tsx`             |
-| connecting a tool                        | `routes/settings/sockets.tsx`, `routes/settings/socket.tsx`, `components/connect-*.tsx`                        |
-| a Project's binding and policy           | `routes/settings/projects.tsx`, `components/bind-project.tsx`, `project-binding.tsx`, `checkpoint-policy.tsx`  |
-| a Human's linked accounts                | `routes/settings/identities.tsx`                                                                               |
-| the chips and badges                     | `components/member-chip.tsx`, `run-status.tsx`, `kbd-hint.tsx`                                                 |
-| how an Event or a Notification reads     | `lib/event-text.ts`, `lib/notification-text.ts`                                                                |
-| markdown on screen                       | `components/markdown.tsx` (read-only)                                                                          |
-| everything outside the shell             | `App.tsx` (`SignInFrame`, `DevSignIn`), `routes/consent.tsx`                                                   |
-| the accessible names tests rely on       | "Test contracts", at the end                                                                                   |
+| You want                                 | Look at                                                                                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| tokens, type, both themes                | `packages/design/tokens.css` (shared with the docs site), `/dev/tokens` on a dev instance                                         |
+| the frame, sidebar, top bar, member menu | `routes/shell.tsx`, `components/app-breadcrumb.tsx`                                                                               |
+| ⌘K, shortcuts, `?`                       | `components/command-palette.tsx`, `lib/shortcuts.ts`, `components/shortcuts-sheet.tsx`                                            |
+| what needs a Human                       | `routes/home.tsx` (Needs me)                                                                                                      |
+| a list screen                            | `components/data-table.tsx`; `routes/runs/list.tsx`, `routes/work/list.tsx` with `components/work-filters.tsx`                    |
+| a Run                                    | `routes/runs/run.tsx`, `components/run-status.tsx`                                                                                |
+| a Gate, and ruling on it                 | `routes/gates/gate.tsx`, `components/gate-controls.tsx`                                                                           |
+| a record deevy projected                 | `routes/work/item.tsx`, `components/item-events.tsx`                                                                              |
+| a Settings page                          | `components/settings-page.tsx`, `routes/settings/*`, `settingsNav` in `routes/settings/layout.tsx`                                |
+| connecting a tool                        | `routes/settings/sockets.tsx`, `routes/settings/socket.tsx`, `components/connect-*.tsx`                                           |
+| a Project's binding, chat and policy     | `routes/settings/projects.tsx`, `components/bind-project.tsx`, `project-binding.tsx`, `project-chat.tsx`, `checkpoint-policy.tsx` |
+| a Human's linked accounts                | `routes/settings/identities.tsx`                                                                                                  |
+| the chips and badges                     | `components/member-chip.tsx`, `run-status.tsx`, `kbd-hint.tsx`                                                                    |
+| how an Event reads                       | `lib/event-text.ts`                                                                                                               |
+| markdown on screen                       | `components/markdown.tsx` (read-only)                                                                                             |
+| everything outside the shell             | `App.tsx` (`SignInFrame`, `DevSignIn`), `routes/consent.tsx`                                                                      |
+| the accessible names tests rely on       | "Test contracts", at the end                                                                                                      |
 
 ## Ground rules
 
 - Vocabulary is CONTEXT.md's, in code, copy and tests: Member, Human, Agent, Sponsor, Workspace, Socket,
   Project, Issue (a projection of a record in a tracker), Checkpoint, Gate, Proposal, Ruling, Identity, Run,
-  Activity, Event, Notification, Channel. On screen a record is usually "the record" or its key, because
+  Activity, Event. On screen a record is usually "the record" or its key, because
   that is what the team calls it where it lives. Never "ticket", "task", "status", "user", "bot"; and
   Document, State, Workflow, Label and Team are not deevy's words any more — where a tool has them (a Notion
   status, a GitHub label) they are the tool's, and said as the tool says them.
@@ -89,8 +88,8 @@ Two launch configurations in `.claude/launch.json` put that together:
 The seed (`apps/server/src/seed.ts`) signs in `ada@example.com` (the admin), `grace@example.com` and
 `omar@example.com` through the stub, connects a stub Socket, creates the Agents Planner and Builder, binds two
 Projects, projects thirty-odd records, and leaves Runs in every status, Gates open and ruled — in deevy and
-`via: socket` — Links, a Slack Channel, routing and a webhook, all through the operations, so the Inbox and
-the Event log fill themselves. Sign in as any of the three with the dev form.
+`via: socket` — Links and a webhook, all through the operations, so Needs me and the Event log fill
+themselves. Sign in as any of the three with the dev form.
 
 ## Registries
 
@@ -143,16 +142,16 @@ through the catalog.
   one column under `@3xl`. Where the rail holds what a Human acts on (a Gate's ruling card, a Run's Gates) it
   comes first on a phone (`-order-1 @3xl:order-none`) and sits beside the subject above it; a record's rail
   comes after. Cards only for things that are cards (a Gate on Needs me, a
-  Channel, a Socket's section).
+  Socket's section).
 - **Motion** only in answer to an action. Nothing on load.
 
 ## Navigation and keyboard
 
-Primary sidebar: **Needs me** (`/`) · **Inbox** (the only badge) · **Runs** · **Work** · Settings (its own
-area with its own sidebar: Workspace / Work / Agents and delivery / You) · the Member's chip, with search
-(⌘K) at the top. `⌘K` palette (Go to, Settings, Help); `?` shortcuts; `g i` Inbox, `g r` Runs, `g w` Work,
-`g p` Projects, `g s` Settings; `j`/`k`/arrows/`Enter`/`o`/`Esc` in lists; in the Inbox `e` marks read, `⇧E`
-marks all read, `x` picks a row, `o` opens the record where it lives; on a Gate `⇧A`/`⇧R` choose a ruling
+Primary sidebar: **Needs me** (`/`) · **Runs** · **Work** · Settings (its own area with its own sidebar:
+Workspace / Work / Agents and delivery / You) · the Member's chip, with search (⌘K) at the top. A Human has
+no inbox and no badge: what waits on them is Needs me, and the chat channel a Project's Gates are posted in
+(docs/plans/simplify.md, slice 8). `⌘K` palette (Go to, Settings, Help); `?` shortcuts; `g r` Runs, `g w`
+Work, `g p` Projects, `g s` Settings; `j`/`k`/arrows/`Enter`/`o`/`Esc` in lists; on a Gate `⇧A`/`⇧R` choose a ruling
 and put the cursor in the Note, and `⌘Enter` — the only submit key — commits it. `src/lib/shortcuts.ts` owns a
 scope stack: an open Sheet, Dialog or palette owns the keys.
 
@@ -170,7 +169,7 @@ scope stack: an open Sheet, Dialog or palette owns the keys.
   title. A `shadcn add --overwrite` of one of those files brings the compact sizes back — re-apply them.
 - **Theme is a class.** `next-themes` (`attribute="class"`, system default) sets `.dark` on `<html>`; tokens
   live on `:root` and `.dark`, never in a media query.
-- **Shortcuts** go through `src/lib/shortcuts.ts` — `useShortcut("g i", …)`, `useShortcut("mod+k", …,
+- **Shortcuts** go through `src/lib/shortcuts.ts` — `useShortcut("g r", …)`, `useShortcut("mod+k", …,
 { global: true })`, `useShortcutScope(name, active)` on anything modal — never a raw `keydown` listener.
   Plain letters are ignored while typing; `mod+…` is not. `Shortcut keys="…"` (`kbd-hint.tsx`) draws one; the
   hints are `aria-hidden` (`data-slot="shortcut"`), so a hint inside a button never joins its accessible name.
@@ -188,13 +187,11 @@ scope stack: an open Sheet, Dialog or palette owns the keys.
 variant="icon" + EmptyTitle + EmptyDescription`, a lucide icon that says what is missing). Height flows
   down so the `flex-1` Empty centres: every page root is `flex flex-1 flex-col`. `DataTable` takes `empty={{
 icon, title, description, action? }}`. **The words say what emptied the list**: under a filter "No records
-  match your filters" with a Clear filters button, never "No records yet"; the Inbox's Unread filter says
-  "Nothing unread"; Needs me with nothing waiting says "Nothing needs you". Inline notes inside a section stay `<p>`.
+  match your filters" with a Clear filters button, never "No records yet"; Needs me with nothing waiting says "Nothing needs you". Inline notes inside a section stay `<p>`.
 - **Nowhere is a page.** `routes/not-found.tsx` is the root route's `notFoundComponent` and what a Run, a
   Gate, a record or a Socket renders when the API says `NOT_FOUND` (`isNotFound`, which the QueryClient also
-  uses to skip retries): `h1` "There is nothing here" or "There is no <what>", then Go back / Home / Inbox.
-- **Grouped buttons.** `ToggleGroup` for buttons that toggle a state (Inbox All/Unread, the Runs feed's
-  statuses), `ButtonGroup` for actions, `Tabs` for views of one thing (the coding agents in `ConnectAgent`).
+  uses to skip retries): `h1` "There is nothing here" or "There is no <what>", then Go back / Home / Runs.
+- **Grouped buttons.** `ToggleGroup` for buttons that toggle a state (the Runs feed's statuses), `ButtonGroup` for actions, `Tabs` for views of one thing (the coding agents in `ConnectAgent`).
   Joined ToggleGroups are `variant="outline" spacing={0}`; a pressed Toggle is `bg-primary/10 text-primary`
   with a `border-primary/30` edge. Their corners and half the kit's `data-*` styling depend on `@import
 "shadcn/tailwind.css"` in `index.css`; without it the kit silently degrades.
@@ -231,8 +228,7 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
   carries `min-w-0` (a deevy edit) so a wide page shrinks rather than pushing the app sideways. Under 768px
   the sidebar is a Sheet behind the trigger; review screens at ≥1280px. **The frame is the viewport's height
   and the page area is what scrolls** (`h-svh overflow-hidden` on the sidebar wrapper, `overflow-y-auto`
-  around the `Outlet`), so `h-full` means it. A page that lays out its own panes (the Inbox) declares
-  `staticData: { bleed: true }` and the shell adds no padding. **A dialog that can be taller than a laptop
+  around the `Outlet`), so `h-full` means it. **A dialog that can be taller than a laptop
   screen scrolls inside the window** (`max-h-[calc(100dvh-2rem)] overflow-y-auto`, as the connect dialogs do).
 - **Live updates.** `lib/live.ts` maps an Event's `subjectType` to the query keys it may have changed
   (`keysFor`) and coalesces invalidations per 16ms; mutations invalidate by key, never
@@ -249,10 +245,10 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
   The one column that gives way is `w-full max-w-0`: without `w-full` the table leaves it its minimum and
   hands the spare width to the others — the Runs feed's "Last" was 75px wide beside a 247px Status until
   2026-09-26 — and a narrow column of numbers is `whitespace-nowrap`.
-- **Mobile is read-and-rule, and it falls out of the containers.** The sidebar is a Sheet below 768px, the
-  Inbox folds to one pane below 1024px, a page with a rail stacks under `@3xl`. A new screen gets the same by
+- **Mobile is read-and-rule, and it falls out of the containers.** The sidebar is a Sheet below 768px, and a
+  page with a rail stacks under `@3xl`. A new screen gets the same by
   using the same containers; check it at 390px with `scrollWidth === innerWidth`.
-- **Wording lives in `lib/event-text.ts` and `lib/notification-text.ts`.** A screen never phrases an Event
+- **Wording lives in `lib/event-text.ts`.** A screen never phrases an Event
   itself; a new Event kind gets a case in `describeEvent` (with a unit test) and new payload fields carry
   names beside ids so the log reads without lookups.
 - **A rail section is named by `RailHeading`** (12px, medium, muted — metadata size). **A chip inside a
@@ -324,7 +320,7 @@ with <label>`); a provider is added by configuring one, never by editing `App.ts
   the count stands, and whether this Human may rule. The rail holds the ruling card on top, then `list "Gate
 decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitHub", with "(email)" where an
   address vouched for the Human — then "The Run that stopped here". The card is focused while the Gate is
-  open, on its own page and in the Inbox's preview alike.
+  open.
 - **`components/gate-controls.tsx` is the only place a ruling is made in deevy.** It says the arithmetic
   out loud ("1 of 2"), and says why it will not take this Human's ruling before they click — the reason is
   the server's own (`gates.get`), so the disabled button and the refusal behind it can never disagree.
@@ -339,9 +335,6 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   Runs, Gates and Links (`list "Runs"`, `list "Gates"`, `list "Links"`) and what happened (`list "Events"`,
   `components/item-events.tsx`), and a link to read the conversation where it is. Nothing on it is editable,
   and that is the design rather than a gap.
-- **The Inbox** is one flat two-line list (`list "Notifications"`), a checkbox per row and a `toolbar
-"Selection"` to mark several read; above 1024px the selected row opens beside it — the Gate page when the
-  Notification asks for a ruling, the record otherwise — and below it one pane.
 - **Connecting a tool is a dialog per provider** (`components/connect-github.tsx`, `-gitlab`, `-linear`,
   `-notion`, `-slack`), opened from `group "Connect a tool"`, whose buttons are `sockets.providers` — what
   this build can speak, the stub left out. Where the tool wants deevy's addresses written into its own
@@ -371,8 +364,11 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
 "Binding"` states the tracker and will not move it, and sets the Default Agent (which grants that Agent the
   Project), the routing label, and whether a mention routes (**Route by mention**). What deevy says on a
   record — a Gate and its Ruling — and where a team keeps its documents are not settings
-  (docs/plans/simplify.md, slice 4). `region
-"Checkpoints"` is the policy (`checkpoint-policy.tsx`).
+  (docs/plans/simplify.md, slice 4). `region "Chat"` (`project-chat.tsx`, admins only) is where its Gates
+  are posted: a chat Socket, then a channel the tool lists (`sockets.channels`) or, where it lists none or
+  will not (its `problem`, said beneath), a typed id. It saves on a button, not as it changes, because saving
+  posts a hello in the channel first and the server refuses, in the tool's words, a channel it cannot post
+  in (simplify.md, slice 8). `region "Checkpoints"` is the policy (`checkpoint-policy.tsx`).
 - **What a Run cost is how long it took**, the one thing deevy saw itself (docs/plans/simplify.md, slice 3):
   no screen shows a token or a dollar, because those were only ever a client's report. A Run's rail has
   `region "Time"` with Working, Waiting on a Human and Queued, and the feed has **Time** (working time,
@@ -385,24 +381,9 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   (**Check the code**, then **Link @x to me**), and a tool with a consent page of its own (Linear) is **Link
   <tool>**. The page reads `?linked=` and `?linkError=` off the URL a tool's callback sends the browser back
   to.
-- **Channels** add a room in a connected Slack app beside the incoming-webhook kind, and **Notifications**
-  has a Direct message column for a Human whose Slack account is linked.
-- **Notifications has an Email column** (docs/plans/email-channel.md, slice 1): `<Kind> by email` per row,
-  checked by default for Gate awaiting only, and disabled, with the reason said
-  beneath the table, when `preferences.get` answers `emailAddress: null` — deevy never emails an address the
-  sign-in did not confirm. When there is one, the line beneath names it.
-- **Channels adds a team email address** (slice 2): `form "Add an email address"` with `Team email address`
-  and `Add address`. The Channel is named after the address. The confirmation goes out as it is added, and
-  what the sender said is the line under the forms. Until somebody confirms, its row reads `<address> ·
-Waiting for confirmation`, and its Test button sends the confirmation again.
-- **Settings › Email** (slice 3, under Agents and delivery): the sender in force and where it was set
-  (`Sending through <Sender>, as <From>`), `Send a test email` (to the admin, disabled while nothing can
-  send), `Use the environment's sender` when one is set here, and `form "Set the sender here"` with `From`
-  and the sender's own fields from `lib/email-senders.ts`. A secret field is never filled back in: empty
-  keeps the saved one.
-- **An invitation is emailed too** (slice 6): the Invite dialog still shows the link once, and above it says
-  `Emailing the link to <address>.` or `Not emailed: <reason>`. An outstanding row says `Emailed`, `Email on
-its way`, or `Email failed: <the sender's words>`.
+- **An invitation is a link to copy** (simplify.md, slice 8): deevy sends no email, so the Invite dialog
+  shows the link once with **Copy the link**, and an outstanding row says who and until when, never whether
+  anything was sent.
 
 ## Where the SPA lives
 
@@ -421,8 +402,8 @@ Tests in `apps/web/tests` query by role and accessible name, mock `lib/orpc` wit
 `selectedLabel` from `tests/select.ts`, and replace `lib/leave.ts` where a screen leaves for a tool's page.
 The names a screen keeps unless a change says otherwise:
 
-- **The frame.** `navigation "breadcrumb"`; links `Needs me`, `Inbox` (with its count), `Runs`, `Work`,
-  `Settings`; `menuitemradio "Dark"` and `menuitem "Sign out"` in the Member menu; `heading "Keyboard"` on the
+- **The frame.** `navigation "breadcrumb"`; links `Needs me`, `Runs`, `Work`, `Settings`, and no
+  `Inbox`; `menuitemradio "Dark"` and `menuitem "Sign out"` in the Member menu; `heading "Keyboard"` on the
   shortcuts sheet and `option "Keyboard shortcuts"` in the palette; `heading "There is nothing here"` with
   `Go back`.
 - **Signed out.** `Continue with <provider>` per provider, the one used last described `Last used`; `More
@@ -437,8 +418,6 @@ ways to sign in` (with `aria-expanded`) past four; `form "Development sign-in"`,
   `data-focused`; `Note`, `Approve`, `Reject`; `list "Gate decisions"`; a link to the record by its key.
 - **Work.** `table "Work"`, the filters by label; on a record `region "What the record says"`, `list "Runs"`,
   `list "Gates"`, `list "Links"`, `list "Events"`, link `Read the conversation on <tool>`.
-- **Inbox.** `heading "Inbox"`, `list "Notifications"`, `checkbox "Select <what it says>"`, `toolbar
-"Selection"`, `Mark read`, `Mark all read`, the All / Unread toggles.
 - **Sockets.** `heading "Sockets"`, `list "Sockets"`, `group "Connect a tool"` with `Connect <tool>` and,
   last, `Connect another tool` (the generic Socket); a tool `sockets.providers` says is not `walked` has the
   description `Preview` on its button (a badge `aria-describedby` points at, so the name stays exact), a
@@ -463,7 +442,10 @@ webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox
 "Container"`, `Name`, `Bind it`; `region "Binding"` with `combobox "Default Agent"`, `Routing label`, `switch
-"Route by mention"`, and no Mirror, Documents, repository or base branch (ADR-0034; simplify.md, slice 4); `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
+"Route by mention"`, and no Mirror, Documents, repository or base branch (ADR-0034; simplify.md, slice 4);
+  `region "Chat"` with `combobox "Chat tool"` (`Nowhere` first), `combobox "Channel"` (`#<name>`, and `Type
+its id…`) or `textbox "Channel"`, `Save and say hello` (`Save` for Nowhere), and the tool's refusal as an
+  `alert`; `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
   `Approvals`, `checkbox "Not the Human the work is for"`, who may rule, `Save policy`.
 - **Identities.** `heading "Identities"`, `table "Identities"`, `Unlink @<login>`, `Link @<login> again`;
   `Code from Slack`, `Check the code`, `Link @<login> to me`; `region "Link an account"` with `Link
@@ -471,9 +453,9 @@ webhook"` with `Show the token`,
 - **Settings elsewhere.** The settings h1s (`Workspace`, `Members`, `Event log`, …); link `Source code` at the
   foot of each; `navigation "Settings"`
   and, below `lg`, `combobox "Settings page"` (whose classes the shell test asserts as `lg:hidden` /
-  `lg:flex`); `Who may join`, `Add rule`, `Stop allowing <value>`; `Invite someone`, `Create invitation`,
+  `lg:flex`); `Who may join`, `Add rule`, `Stop allowing <value>`; `Invite someone`, `Create invitation`, `Copy the link`,
   `Revoke the invitation for <address>`; `New Agent`, `region "Projects"`, `region "API keys"`, `region
 "Connect an Agent"` with `tablist "Coding agent"`, `Generate`, `Revoke`, `Suspend`, `Reinstate`, `heading
 "Recent Runs"`; `region "Webhook"` (its Sponsor's and admins' only) with `Webhook URL`, `Signing secret`
-  (a `SecretInput`), `Generate`, `Start deliveries` or `Save`, and `Stop deliveries`; `Add Channel`, `form "Add a Slack room"`, `Add room`, `Test`, `Save routing`; `Subscribe`,
+  (a `SecretInput`), `Generate`, `Start deliveries` or `Save`, and `Stop deliveries`; `Subscribe`,
   `Deliveries`, `Redeliver`; `table "Event log"`.

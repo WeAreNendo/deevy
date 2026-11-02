@@ -35,8 +35,8 @@ itself and joins through its own invitations and rules ([Invite your team](/get-
 - **It is free** while it is in beta.
 - **One Workspace each.** Each person has one Workspace at a time. One that is being deleted doesn't
   count, but bringing it back needs the room again ([Delete a Workspace](/cloud/delete-a-workspace/)).
-- **Daily limits.** Each Workspace can make 50 invitations and send 500 emails in any 24 hours, because
-  every Workspace sends through one shared sender ([Daily limits](/cloud/limits/)).
+- **Daily limits.** Each Workspace can make 50 invitations in any 24 hours
+  ([Daily limits](/cloud/limits/)).
 - **We look after it.** Every running Workspace is backed up each night and kept up to date with deevy's
   releases. The version yours runs is at the foot of every Settings page, with a link to its source.
 - **It is yours to take home.** Export your Workspace whenever you like and run it on a deevy of your

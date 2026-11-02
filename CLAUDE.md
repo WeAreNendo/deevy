@@ -46,7 +46,7 @@ format, so pnpm 11 is required and pinned twice over: `devEngines.packageManager
 the prompt to wipe `node_modules`, so if an install hangs with no output, check `pnpm --version` first.
 `vp dev`, `vp build`, `vp test`, `vp check` are built-ins that ignore package.json scripts; `vp run <script>`
 runs scripts, `-r` recursively, `pkg#script` for one package (package names are `web`, `server`, `core`, `db`,
-`adapters`, `sockets`, `email`, `design`, `cli`, `release`, `acceptance`, `hosted`, `docs`; `release` is
+`adapters`, `sockets`, `design`, `cli`, `release`, `acceptance`, `hosted`, `docs`; `release` is
 `tools/release`, which holds the changelog fold and the commit-message rules, `acceptance` is `tools/acceptance`, the walk, which needs the server, the Worker and
 the hosted Worker built first, `hosted` is `apps/hosted`, the many-Workspaces Worker: `vp run web#build:workers` then `vp run
 hosted#build:hosted`, and `vp run hosted#test:hosted` runs two Workspaces on workerd, `docs` is `apps/docs`,
@@ -122,8 +122,7 @@ delivers to `POST /hooks/:socketId`, mounted before everything else, where the m
 sealed under `DEEVY_SECRET` (`secrets.ts`). A provider module is tested against recorded payloads with an
 injected `fetch`, never the network, and one walk per provider puts the real module behind the real route.
 
-**Runtime boundary**: `packages/core`, `packages/db`, `packages/sockets` and `packages/email` use web-standard
-APIs only; no
+**Runtime boundary**: `packages/core`, `packages/db` and `packages/sockets` use web-standard APIs only; no
 `node:` imports and no `types: ["node"]` in their tsconfigs. Anything runtime-specific goes in `packages/adapters` (`./node`:
 `node:sqlite`, migrator, SPA serving; `./workers`: D1). The Workers build in CI is what catches a leak.
 The core uses no interactive transactions because D1 has none; multi-statement writes are sequential
@@ -138,10 +137,11 @@ Identities (`member_identity`, `packages/core/src/identities.ts`), which is what
 theirs (ADR-0025).
 
 **Events**: every write appends one through `appendEvent` (`packages/core/src/events.ts`) in the same handler,
-and its tail derives what is owed right after the insert: inbox rows and Slack deliveries
-(`deriveNotifications`), webhook deliveries, what the tracker is told at a Gate (`deriveSocketMirrors`) and
-chat message updates. The Event log is the only record of what happened: a record's history, the live stream,
-the inbox and every comment deevy writes on a record read it rather than keeping a second source. Add a new kind to the `EventKind`
+and its tail derives what is owed right after the insert: an Agent's inbox rows (`deriveNotifications`),
+webhook deliveries, what the tracker is told at a Gate (`deriveSocketMirrors`) and the one chat message a Gate
+posts in its Project's channel (`deriveChatMessages`). The Event log is the only record of what happened: a
+record's history, the live stream, an Agent's inbox and every comment deevy writes on a record read it rather
+than keeping a second source. Add a new kind to the `EventKind`
 union, with a case in the SPA's `lib/event-text.ts`.
 
 **Ids** (ADR-0015): every row deevy creates gets `<prefix>_<12 chars of 0-9a-z>` from `newId(kind)` in
@@ -162,7 +162,7 @@ to it, so the Docker runtime image carries `dist/` and the SPA only. `apps/web` 
 ## UI
 
 The SPA's decisions — Base UI only, which registries and items are allowed, the design language, the keyboard
-model, the screens the Sockets milestone left (Needs me, Inbox, Runs, a Gate, a read-only Work list, Settings)
+model, the screens the Sockets milestone left (Needs me, Runs, a Gate, a read-only Work list, Settings)
 and the accessible names the tests rely on — are the `deevy-ui` skill in `.claude/skills/deevy-ui/SKILL.md`.
 Read it before changing anything under `apps/web/src` or `apps/web/tests`; the vendored `shadcn` and
 `frontend-design` skills beside it are the component rules and the design process it leans on. To see the app

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
 import { newId } from "../src/ids.ts";
+import { maxMinePages } from "../src/operations/gates.ts";
 import { router } from "../src/operations/index.ts";
 import { sealSecret } from "../src/secrets.ts";
 import type { InboundEvent } from "../src/sockets/port.ts";
@@ -101,9 +102,12 @@ describe("reading an Issue with children", () => {
  * Twenty-four until a Socket only announced Gates (docs/plans/simplify.md,
  * slice 4): the `run.started` the delivery causes used to read its Project to
  * learn whether it mirrored Runs, and now nothing about a Run is said on the
- * record, so the kind alone says there is nothing to owe.
+ * record, so the kind alone says there is nothing to owe. Twenty-three until
+ * a Human was told nothing (docs/plans/simplify.md, slice 8): the assignment
+ * read its Agent's address and the Workspace's routing rules, to learn
+ * whether a Human's channel or email was owed it too.
  */
-const delivery = 23;
+const delivery = 21;
 
 describe(`the D1 request budget: one delivery that opens a Run costs ${String(delivery)}`, () => {
   it("is under D1's cap for the record a routing label names an Agent on", async () => {
@@ -341,9 +345,13 @@ describe(`the D1 request budget: a Slack click that rules costs ${String(slackCl
  * nothing open to be short. And the ruling no longer reads the Run it resumes:
  * the Gate was read with it. Neither writes in the Run's feed any more, which
  * is one statement off each (docs/plans/simplify.md, slice 5): the Proposal
- * and the Ruling are the Gate's own rows.
+ * and the Ruling are the Gate's own rows. The ask was twenty until a Human's
+ * attention became Needs me (slice 8): its tail worked out who may rule —
+ * the Gate, its Checkpoint, the active Humans, their addresses, the routing
+ * rules — and wrote them inbox rows, six statements, and now reads only
+ * whether the Project binds a chat channel to post the Gate in.
  */
-const asking = 20;
+const asking = 15;
 const ruling = 18;
 
 describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
@@ -422,6 +430,61 @@ describe(`the Runs feed: ${String(listingRuns)} statements a page`, () => {
     expect(page.runs).toHaveLength(3);
     expect(statements.length).toBe(one);
     expect(one).toBe(listingRuns);
+  });
+});
+
+/**
+ * Needs me is the one place a Human is told anything (docs/plans/simplify.md,
+ * slice 8), so it reads past a page of Gates waiting on others until it has a
+ * page of its own or the open Gates run out — and stops after `maxMinePages`.
+ * Its longest look is the case here: every Gate waits on somebody else, at a
+ * Checkpoint that excludes the Human the work is for, so each page also reads
+ * its Runs and the Members they name. The first page reads the Checkpoints and
+ * who is active besides; every page after costs the same four, so the look
+ * stops well inside D1's fifty.
+ */
+const needsMeLongest = 30;
+
+describe(`Needs me: at most ${String(needsMeLongest)} statements, however many Gates wait on others`, () => {
+  it("reads its pages for a fixed price, and stops", async () => {
+    const { db, close, statements } = countingDb();
+    closers.push(close);
+    const ada = await memberContext(db, { role: "admin", name: "Ada" });
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
+    const carol = await memberContext(db, { name: "Carol", email: "carol@example.com" });
+    const seeded = await seedProject(db, ada.workspace.id);
+    const planner = await agentContext(db, {
+      name: "Planner",
+      handle: "planner",
+      email: "planner@example.com",
+      sponsor: ada.member,
+      grants: [seeded.project.id],
+    });
+    const asPlanner = createRouterClient(router, { context: planner });
+    const asAda = createRouterClient(router, { context: ada });
+    await asAda.checkpoints.set({
+      projectSlug: seeded.project.slug,
+      checkpoints: [
+        {
+          name: "ship",
+          approvalsRequired: 1,
+          excludeRequester: true,
+          approverMemberIds: [bob.member.id, carol.member.id],
+        },
+      ],
+    });
+    for (let n = 1; n <= maxMinePages + 1; n += 1) {
+      const issue = await seeded.record({ externalId: String(n), title: `Record ${String(n)}` });
+      const run = await asPlanner.runs.start({ issue: issue.url });
+      await asPlanner.gates.request({ runId: run.id, checkpoint: "ship", proposal: "Ship it" });
+    }
+
+    statements.length = 0;
+    const mine = await asAda.gates.list({ mine: true, limit: 1 });
+
+    expect(mine.gates).toEqual([]);
+    expect(statements.length).toBe(needsMeLongest);
+    expect(needsMeLongest).toBeLessThan(d1StatementsPerInvocation);
   });
 });
 

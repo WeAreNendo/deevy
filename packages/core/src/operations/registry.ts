@@ -1,4 +1,3 @@
-import type { EmailSenders, EmailSetup } from "../email/port.ts";
 import type { SocketModules } from "../sockets/port.ts";
 import type { Db, Member, Workspace } from "@deevy/db";
 import type { AnySchema, InferSchemaInput, InferSchemaOutput } from "@orpc/contract";
@@ -98,19 +97,10 @@ export interface AppContext {
    */
   socketSecret?: string;
   /**
-   * The email senders this runtime can run, and the one in force
-   * (docs/plans/email-channel.md). An operation that must send now — a team
-   * address's confirmation, a test — reads them; without them it says so.
-   */
-  emailSenders?: EmailSenders;
-  email?: EmailSetup | null;
-  /** Why the environment's sender could not be read, when it names one halfway. */
-  emailProblem?: string | null;
-  /**
    * This instance's own secret (`BETTER_AUTH_SECRET`). Nothing is sealed with
    * it; what it signs is short-lived and public-facing — the `state` a
-   * provider echoes back on a redirect, an email's unsubscribe and confirm
-   * links — so rotating it ends those in flight and nothing else.
+   * provider echoes back on a redirect — so rotating it ends those in flight
+   * and nothing else.
    */
   secret?: string;
   /**

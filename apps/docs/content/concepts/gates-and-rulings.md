@@ -27,7 +27,8 @@ A **Gate** is a Run's request to pass a Checkpoint: the Agent's Proposal, the li
 Rulings on it so far. While it is open:
 
 - the Run waits, as long as it takes, and never goes quiet;
-- the Humans who may approve it are told, and reminded while nobody has decided;
+- it waits on **Needs me** for every Human who may approve it, and in the Project's chat channel when it
+  has one;
 - the record in your tracker says it is waiting, in a comment from deevy;
 - if suspending somebody leaves fewer Humans who could approve it than the approvals it still wants, the
   Gate says so, with both numbers, and an admin decides what to do about it.

@@ -241,7 +241,7 @@ describe("a shape that is not a list", () => {
 
 describe("an answer that is a count", () => {
   it("reads as a sentence rather than as a field", () => {
-    // `inbox mark-all-read` answered "read  0".
+    // `inbox mark-read` answered "read  0".
     expect(render({ read: 3 }, plain)).toBe("3 read.");
     expect(render({ unread: 0 }, plain)).toBe("0 unread.");
   });

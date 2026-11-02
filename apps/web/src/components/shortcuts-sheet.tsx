@@ -16,7 +16,6 @@ const groups: Array<{ title: string; rows: Array<[keys: string, does: string]> }
       ["mod+k", "Jump to a page, a Run or a record"],
       ["?", "This sheet"],
       ["mod+b", "Fold the sidebar"],
-      ["g i", "Inbox"],
       ["g r", "Runs"],
       ["g w", "Work"],
       ["g p", "Projects"],
@@ -38,13 +37,6 @@ const groups: Array<{ title: string; rows: Array<[keys: string, does: string]> }
       ["shift+a", "Approve: the Note, with Approve chosen for ⌘↵"],
       ["shift+r", "Reject: the same, with Reject chosen"],
       ["mod+enter", "Commit the ruling"],
-    ],
-  },
-  {
-    title: "In the Inbox",
-    rows: [
-      ["e", "Mark the selected Notification read"],
-      ["shift+e", "Mark everything read"],
     ],
   },
   {

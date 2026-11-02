@@ -766,3 +766,44 @@ the adapter where the others speak of the tool's webhook settings and its redeli
 that `gate.superseded` carried no record, that an empty `deevy-delivery` header would have made every later
 delivery its duplicate (it is no id now), and that the import's next steps, the page on leaving deevy Cloud
 and the docs' landing did not name the generic Socket. The walk has 167 checks, 41 on each deployment.
+
+**Slice 8, the inbox and a chat binding.** 6,858 lines of source out and 1,215 in, 4,779 of tests out and
+1,251 in, and 1,851 out of the two snapshots and 226 in, not counting the 7,426 lines of the migration's
+generated snapshot; `packages/email` was 1,486 of them. Seventeen operations went (`channels.*`, `email.*`,
+`preferences.*`, `routing.*`, `inbox.unreadCount`, `inbox.markAllRead`) and one came, `sockets.channels`,
+so the API has 82. The four tables stay in the schema, read by nothing, for the reason slice 2 kept its
+columns: slice 12's fresh history drops them. With Matt, two choices went past the plan. A channel is
+picked from the list the chat tool gives, through `listChannels`, which is optional on the port, so the
+Slack manifest asks for `channels:read` and `groups:read` (and no longer `im:write`) and an app installed
+before needs a reinstall; where the tool lists none, the admin types the channel's id and the Chat section
+says why. And saving a binding posts a hello first and refuses, in the tool's own words, when the hello is
+refused, so a channel the app was never added to is found while the admin is looking rather than on the
+first Gate nobody sees. A post is a `chat` delivery that names its Project and goes where the Project binds
+when it is sent, so a binding moved after the Gate was asked is obeyed; the message is remembered as a
+`socket_mirror` of kind `message`, and an update names the Socket that holds it. Asking at a Gate costs 15
+statements, from 20, since its tail no longer works out who to tell, and a delivery that opens a Run 21,
+from 23.
+
+The review found seven things. Needs me read only the newest page of open Gates and then kept the ones the
+Human may rule on, so a Gate waiting on you could hide behind a hundred waiting on others. That was older
+than this slice, but Needs me is now the only place deevy keeps a Human's Gates. `gates.list` with `mine`
+now pages back by (`askedAt`, `id`) for up to seven pages, reads each Project's Checkpoints once and the
+requesters in one query, and answers an Agent with none; its longest answer is 30 statements, inside D1's
+fifty. The changelog fold and CI's test shards still named `packages/email`, which the membership test
+checked one way only; it checks both now. **Copy the link** said Copied when the browser refused, which
+matters now that the link is the only way an invitation reaches anybody. A paused chat Socket showed as
+Nowhere while its Gates went unposted with no word; the Chat section keeps it chosen and says it is paused,
+and a post that runs out of tries appends `socket.mirror_exhausted`, as a tracker comment does. A Ruling
+made while a post was on its way owed no update, because where the message landed was not known yet, so it
+kept offering Approve; one read of the Gates just posted catches that, and the outbox retries the update if
+the tool refuses it. A hosted Workspace configured with `emailsPerDay` kept reporting it, and every
+`Platform.configure` wrote it back; a stored limit the platform no longer has is dropped as it is read. And
+the breadcrumb test, the screenshot script and three committed screenshots still showed the Inbox.
+
+The public `notifications/` pages and `self-hosting/email.md` became one page, `needs-me.md`, with
+redirects from the old addresses, and about thirty-five others lost a mention of email, the Inbox or
+routing. In the browser, the invitation link signed its address in through the seeded Workspace's
+allowlist, so the invitation's own path is the core test that makes the invited address a Member with the
+invited role. The walk still has 167 checks. deevy-cloud still binds `send_email`, sets `DEEVY_EMAIL_*`,
+checks that binding when it deploys and shows "Emails today" in its console; until it follows, a
+`Platform.configure` that names `emailsPerDay` is refused, since there is no limit called that.

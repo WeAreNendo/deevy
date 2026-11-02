@@ -45,15 +45,12 @@ export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
     group: "Agents and delivery",
     pages: [
       { label: "Agents", to: "/settings/agents" },
-      { label: "Channels", to: "/settings/channels" },
-      { label: "Email", to: "/settings/email" },
       { label: "Webhooks", to: "/settings/webhooks" },
     ],
   },
   {
     group: "You",
     pages: [
-      { label: "Notifications", to: "/settings/notifications" },
       { label: "Identities", to: "/settings/identities" },
       { label: "MCP clients", to: "/settings/mcp-clients" },
     ],

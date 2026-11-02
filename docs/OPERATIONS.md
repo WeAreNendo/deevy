@@ -36,8 +36,8 @@ about running deevy applies to a hosted Workspace too; what differs is this.
   do its nightly backups, kept 30 days; its last 30 days can also be restored to any point. The edge that
   terminates TLS and routes a request is Cloudflare's global network. Your Sockets' credentials are sealed
   under a secret derived for your Workspace alone, which no backup contains.
-- **What one Workspace may do in a day**, during the beta: 50 invitations and 500 emails, so that one team's
-  invitations cannot hurt everybody's email. Settings › Email shows where you are.
+- **What one Workspace may do in a day**, during the beta: 50 invitations. The next one in the same 24 hours
+  is refused with when it can be made.
 - **Leaving.** The console exports your Workspace: its database as SQL and the two secrets it was sealed
   and signed with. "Taking a hosted Workspace home" below loads it into the image or a Worker of your own,
   and says what to point at the new address.
@@ -89,7 +89,7 @@ openssl rand -base64 32   # DEEVY_SECRET, a different value
 
 A `$(openssl rand …)` written into the `docker run` itself would hand every new container new ones, and a new
 container is every upgrade: a new `BETTER_AUTH_SECRET` signs everybody out, and a new `DEEVY_SECRET` leaves
-every Socket's credentials, and the email sender's, sealed under a value nobody has.
+every Socket's credentials sealed under a value nobody has.
 
 ```bash
 docker run -d --name deevy -p 3000:3000 -v deevy-data:/data \
@@ -367,19 +367,15 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
   `status`, `configure`, `suspend`, `resume`, `dump`, `secrets`, `restore`, `destroy`, `list`. Whatever
   provisions Workspaces — a console — calls it; nothing on the internet can. `status` also says when the
   object last woke (`awakeSince`) and how many tabs it holds open.
-- **Each Workspace's day is limited**, because every Workspace here sends through the one sender the
-  platform configured, whose quota and reputation they share. Past `DEEVY_HOSTED_INVITATIONS_PER_DAY`
-  invitations in the last 24 hours, the next is refused (a 429) with when it can be made; past
-  `DEEVY_HOSTED_EMAILS_PER_DAY` emails, what is owed waits in its row, neither failed nor given up on, and
-  goes as the window opens, and Settings › Email says how many wait and when. A Workspace's own limit,
-  over the platform's, is `Platform.configure(slug, { limits: { invitationsPerDay: 5 } })`; `null` gives
-  it back, and `{ name }` renames the Workspace. `Platform.status` reports the limits in force and the
-  counts a console shows: Humans, Agents, Sockets, `invitationsToday` and `emailsToday` (the last 24
-  hours, the window the limits count) and `runsThisMonth` (the calendar month in UTC). These are the
-  core's `limits` option, which the image and the Worker never pass, so a self-hosted deevy is limited by
-  nothing. They are a beta's guardrails, not a plan: a plan's limits come with billing, set through the
-  same `Platform.configure`. An email sent the moment an admin asks — a team address's confirmation, a
-  test — is not counted.
+- **Each Workspace's day is limited** in invitations, because each one admits a stranger. Past
+  `DEEVY_HOSTED_INVITATIONS_PER_DAY` invitations in the last 24 hours, the next is refused (a 429) with when
+  it can be made, revoked and accepted ones counting alike. A Workspace's own limit, over the platform's, is
+  `Platform.configure(slug, { limits: { invitationsPerDay: 5 } })`; `null` gives it back, and `{ name }`
+  renames the Workspace. `Platform.status` reports the limits in force and the counts a console shows:
+  Humans, Agents, Sockets, `invitationsToday` (the last 24 hours, the window the limit counts) and
+  `runsThisMonth` (the calendar month in UTC). These are the core's `limits` option, which the image and
+  the Worker never pass, so a self-hosted deevy is limited by nothing. They are a beta's guardrails, not a
+  plan: a plan's limits come with billing, set through the same `Platform.configure`.
 - **A Workspace's two secrets** are derived from `DEEVY_HOSTED_MASTER_SECRET` and the object's key, never
   stored. `Platform.secrets` hands them over with a `Platform.dump` when a team takes its Workspace to the
   image or a Worker of its own: [Taking a hosted Workspace home](#taking-a-hosted-workspace-home).
@@ -397,11 +393,10 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
 | `DEEVY_SIGN_IN_RELAY_SECRET`       | 32 or more random characters, signing where a sign-in's callback may go. Secret.                                                                          |
 | `DEEVY_HOSTED_CONSOLE_AUTH_URL`    | Optional: the console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to.                                             |
 | `DEEVY_HOSTED_INVITATIONS_PER_DAY` | Invitations each Workspace may make in any 24 hours (50). `0` turns invitations off.                                                                      |
-| `DEEVY_HOSTED_EMAILS_PER_DAY`      | Emails each Workspace may send in any 24 hours (500); the rest wait. `0` sends none.                                                                      |
 
-Sign-in providers, email senders and the timings are the variables every deevy reads. Each provider's App is
-registered once, with `${DEEVY_HOSTED_ORIGIN}/auth/callback/<provider>`. The development stubs run only when
-the origin is a loopback address.
+Sign-in providers and the timings are the variables every deevy reads. Each provider's App is registered once,
+with `${DEEVY_HOSTED_ORIGIN}/auth/callback/<provider>`. The development stubs run only when the origin is a
+loopback address.
 
 **Every release carries it**, built at the tag: `deevy-hosted-X.Y.Z.tar.gz` on the GitHub Release, with its
 `.sha256` and a build provenance attestation, so a deployment runs what this repository released and builds
@@ -446,11 +441,10 @@ credentials, its Projects, Runs and Gates, and its Event log, which carries on n
 - **The dump**, `workspace.sql`: SQL that rebuilds the Workspace's database in a fresh SQLite file — every
   table and every row, the counter the next Event is numbered from, and the record of which migrations it
   has, so the image opens it with nothing to apply.
-- **The Workspace's two secrets**: the `BETTER_AUTH_SECRET` its sign-ins, OAuth signing keys and signed
-  links were made with, and the `DEEVY_SECRET` its Sockets' credentials, its email sender's and its
-  invitation links are sealed under. They are derived for this Workspace alone and stored nowhere, and
-  neither can be replaced by a new one: without the second, every tool has to be connected again. Keep them
-  as you keep the volume.
+- **The Workspace's two secrets**: the `BETTER_AUTH_SECRET` its sign-ins, OAuth signing keys and signed links
+  were made with, and the `DEEVY_SECRET` its Sockets' credentials are sealed under. They are derived for this
+  Workspace alone and stored nowhere, and neither can be replaced by a new one: without the second, every tool
+  has to be connected again. Keep them as you keep the volume.
 
 The dump is the Workspace at the moment it was taken, and anything written to the hosted copy afterwards
 stays there. A suspended Workspace can still be exported, so suspending it first is how to be sure.
@@ -492,11 +486,11 @@ What the import does, in order:
   resources, `https://app.deevy.dev/<slug>/mcp` and `…/api`, and every token for them. None of it is
   accepted at the new address, so it is removed, and the server registers the resources at the new one when
   it starts. Registered clients, consents and the signing keys stay. Nothing else deevy stores names its
-  own address: a Socket's delivery address, a Gate's link and an email's are built from `BETTER_AUTH_URL` as
-  they are needed.
-- **It checks `DEEVY_SECRET` when it is set**, by opening everything sealed under it, and says plainly
-  which values it could not open. `BETTER_AUTH_URL`, when it is set, fills in the real addresses in what it
-  prints. Neither is needed to import.
+  own address: a Socket's delivery address, a Gate's link and an invitation's are built from
+  `BETTER_AUTH_URL` as they are needed.
+- **It checks `DEEVY_SECRET` when it is set**, by opening every Socket's credentials and webhook secret, and
+  says plainly which values it could not open. `BETTER_AUTH_URL`, when it is set, fills in the real addresses
+  in what it prints. Neither is needed to import.
 - **It prints what it imported** — the Workspace, its Humans and admins, Agents, Sockets, Projects, the
   next Event's number, where it lived — and the list under [Pointing everything at the new
   address](#pointing-everything-at-the-new-address), with each Socket's own address filled in.
@@ -548,17 +542,17 @@ this.
 The Workspace's address changes from `https://app.deevy.dev/<slug>` to yours, and deevy cannot tell the rest
 of the world. In order:
 
-| What                        | What to change                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signing in                  | A hosted Workspace signs in through the platform's relay and its Apps. Register your own for each provider you offer, with `<BETTER_AUTH_URL>/api/auth/callback/<provider>` ([Signing in](#signing-in-and-the-origin-better_auth_url-names)); an IdP or a GitLab of your own, which the relay never served, changes its callback instead. Everybody signs in again and lands on their own Member, because a provider's account is the same whichever App asks. |
-| Agents                      | Each one's `DEEVY_URL`, to the new URL. Their API keys belong to no address and keep working.                                                                                                                                                                                                                                                                                                                                                                  |
-| The CLI and MCP clients     | `deevy login <BETTER_AUTH_URL>`, and the new URL in each MCP client. What they held was issued by the old address, and the import removed it.                                                                                                                                                                                                                                                                                                                  |
-| A GitHub Socket             | **Point GitHub at this address** on the Socket's page (`sockets.rewire`) moves the App's webhook. In the App's own settings on GitHub, the **Setup URL** becomes `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                                     |
-| A Linear Socket             | In the OAuth application: the webhook URL, `<BETTER_AUTH_URL>/hooks/<socket>`, and both **Callback URLs**, `/api/identities/linear/callback` and `/hooks/<socket>/setup` on the new URL.                                                                                                                                                                                                                                                                       |
-| A GitLab Socket             | On every project or group bound to it, the webhook's URL, `<BETTER_AUTH_URL>/hooks/<socket>`. The secret token stays.                                                                                                                                                                                                                                                                                                                                          |
-| A Notion Socket             | On the connection's **Webhooks** tab, a new subscription to `<BETTER_AUTH_URL>/hooks/<socket>`, verified with the token the Socket's page shows, then the old one deleted.                                                                                                                                                                                                                                                                                     |
-| A Slack Socket              | In the app: the **Interactivity** request URL and the `/deevy` command's URL, both `<BETTER_AUTH_URL>/hooks/<socket>`.                                                                                                                                                                                                                                                                                                                                         |
-| Channels, outgoing webhooks | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| What                    | What to change                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing in              | A hosted Workspace signs in through the platform's relay and its Apps. Register your own for each provider you offer, with `<BETTER_AUTH_URL>/api/auth/callback/<provider>` ([Signing in](#signing-in-and-the-origin-better_auth_url-names)); an IdP or a GitLab of your own, which the relay never served, changes its callback instead. Everybody signs in again and lands on their own Member, because a provider's account is the same whichever App asks. |
+| Agents                  | Each one's `DEEVY_URL`, to the new URL. Their API keys belong to no address and keep working.                                                                                                                                                                                                                                                                                                                                                                  |
+| The CLI and MCP clients | `deevy login <BETTER_AUTH_URL>`, and the new URL in each MCP client. What they held was issued by the old address, and the import removed it.                                                                                                                                                                                                                                                                                                                  |
+| A GitHub Socket         | **Point GitHub at this address** on the Socket's page (`sockets.rewire`) moves the App's webhook. In the App's own settings on GitHub, the **Setup URL** becomes `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                                     |
+| A Linear Socket         | In the OAuth application: the webhook URL, `<BETTER_AUTH_URL>/hooks/<socket>`, and both **Callback URLs**, `/api/identities/linear/callback` and `/hooks/<socket>/setup` on the new URL.                                                                                                                                                                                                                                                                       |
+| A GitLab Socket         | On every project or group bound to it, the webhook's URL, `<BETTER_AUTH_URL>/hooks/<socket>`. The secret token stays.                                                                                                                                                                                                                                                                                                                                          |
+| A Notion Socket         | On the connection's **Webhooks** tab, a new subscription to `<BETTER_AUTH_URL>/hooks/<socket>`, verified with the token the Socket's page shows, then the old one deleted.                                                                                                                                                                                                                                                                                     |
+| A Slack Socket          | In the app: the **Interactivity** request URL and the `/deevy` command's URL, both `<BETTER_AUTH_URL>/hooks/<socket>`.                                                                                                                                                                                                                                                                                                                                         |
+| Outgoing webhooks       | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Only GitHub lets deevy move a webhook itself; every other tool keeps it in its own settings
 ([Where a tool delivers](#where-a-tool-delivers)). Until a tool is pointed at the new address, nothing it
@@ -577,61 +571,45 @@ beside `wrangler.jsonc`, so run `wrangler dev` from `apps/web` and let it find i
 `.gitignore` keeps the file itself out of the repository. Nothing on the Worker reads `process.env`; the
 bindings arrive with the request.
 
-| Variable                       | Node        | Workers            | Default                  | Without it                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ----------- | ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, the OAuth server is off, and Slack deliveries wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                                                                          |
-| `BETTER_AUTH_SECRET`           | env         | secret             | —                        | deevy does not run: the Node server refuses to start, and the Worker answers every request that reaches its code (the API and `/healthz`; the SPA's assets are served before it) with a 503 naming it, because Better Auth would otherwise fall back to a key it publishes. Changing it signs everyone out.                                                   |
-| `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume.                                                |
-| `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                                                                           |
-| `DEEVY_DEV_STUB_SOCKETS`       | env         | var                | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on.                                                 |
-| `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                | `acme/deevy`             | That stub offers one container. Container names, separated by commas, say what it holds. Read only when the flag above is set.                                                                                                                                                                                                                                |
-| `GITHUB_CLIENT_ID`             | env         | secret             | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                                                                            |
-| `GITHUB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `GOOGLE_CLIENT_ID`             | env         | secret             | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                                                                        |
-| `GOOGLE_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `GITLAB_CLIENT_ID`             | env         | secret             | —                        | GitLab is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/gitlab`.                                                                                                                                                                        |
-| `GITLAB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `GITLAB_ISSUER`                | env         | var                | `https://gitlab.com`     | GitLab sign-in goes to gitlab.com. Set it to a self-hosted instance's origin; every GitLab endpoint deevy calls is built from it, and a GitLab Socket on that instance takes its accounts from sign-in.                                                                                                                                                       |
-| `DEEVY_OIDC_ISSUER`            | env         | var                | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                                                                     |
-| `DEEVY_OIDC_CLIENT_ID`         | env         | secret             | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                                                                        |
-| `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `DEEVY_OIDC_NAME`              | env         | var                | `Single sign-on`         | The button says "Continue with Single sign-on". Set it to what your teammates call the IdP.                                                                                                                                                                                                                                                                   |
-| `MICROSOFT_CLIENT_ID`          | env         | secret             | —                        | Microsoft is neither registered nor offered. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/microsoft`.                                                                                                                                                                                                                           |
-| `MICROSOFT_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `MICROSOFT_TENANT_ID`          | env         | var                | `common`                 | Work, school and personal Microsoft accounts all sign in. Set `organizations` for work and school only, or a tenant's id for that tenant only.                                                                                                                                                                                                                |
-| `LINEAR_CLIENT_ID`             | env         | secret             | —                        | Linear is neither registered nor offered. Both halves or neither. A Linear sign-in comes in by invitation only.                                                                                                                                                                                                                                               |
-| `LINEAR_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `SLACK_CLIENT_ID`              | env         | secret             | —                        | Sign in with Slack is neither registered nor offered. Both halves or neither.                                                                                                                                                                                                                                                                                 |
-| `SLACK_CLIENT_SECRET`          | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `ATLASSIAN_CLIENT_ID`          | env         | secret             | —                        | Atlassian is neither registered nor offered. Both halves or neither. An Atlassian sign-in comes in by invitation only.                                                                                                                                                                                                                                        |
-| `ATLASSIAN_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `DEEVY_SIGN_IN_ORDER`          | env         | var                | —                        | Providers are offered GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian, then your IdP. Name ids, comma-separated, to offer those first (`oidc,github`).                                                                                                                                                                                            |
-| `DEEVY_ADMIN_EMAIL`            | env         | var                | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                                                                          |
-| `DEEVY_WORKSPACE_NAME`         | env         | var                | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                                                                          |
-| `DEEVY_WEB_ORIGIN`             | env         | var                | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                                                                           |
-| `DEEVY_RUN_STALE_MINUTES`      | env         | var                | 30                       | Nothing: 30 minutes of silence makes a Run `stale`, which its next Activity undoes.                                                                                                                                                                                                                                                                           |
-| `DEEVY_SWEEP_INTERVAL_SECONDS` | env         | — the Cron Trigger | 60                       | Nothing: the sweep looks every minute. Node-only, because on Workers the schedule is `triggers.crons` in `apps/web/wrangler.jsonc`.                                                                                                                                                                                                                           |
-| `DEEVY_GATE_REMINDER_HOURS`    | env         | var                | 4                        | Nothing: an undecided Gate asks its approvers again every four hours.                                                                                                                                                                                                                                                                                         |
-| `DEEVY_STREAM_SECONDS`         | — unbounded | var                | 60                       | Nothing: a live stream on Workers ends after a minute and the browser resumes from the cursor it signed off with. Workers-only, because a Node process holds a connection for as long as the browser does.                                                                                                                                                    |
-| `DEEVY_EMAIL_SENDER`           | env         | var                | —                        | deevy sends no email; the inbox and Slack still work. `resend`, `postmark`, `sendgrid`, `mailgun`, `ses`, `smtp` (Node) or `cloudflare` (Workers), with that sender's own variables below. A sender set up halfway stops the Node server at startup, naming what is missing; a Worker stays up and says it under Settings › Email, which may set one instead. |
-| `DEEVY_EMAIL_FROM`             | env         | var                | —                        | Required with a sender: the From address, `deevy <deevy@yourcompany.com>`, on a domain that sender has verified.                                                                                                                                                                                                                                              |
-| `RESEND_API_KEY`               | env         | secret             | —                        | For `resend`.                                                                                                                                                                                                                                                                                                                                                 |
-| `POSTMARK_SERVER_TOKEN`        | env         | secret             | —                        | For `postmark`.                                                                                                                                                                                                                                                                                                                                               |
-| `POSTMARK_MESSAGE_STREAM`      | env         | var                | `outbound`               | For `postmark`: the transactional stream, unless you name another.                                                                                                                                                                                                                                                                                            |
-| `SENDGRID_API_KEY`             | env         | secret             | —                        | For `sendgrid`.                                                                                                                                                                                                                                                                                                                                               |
-| `MAILGUN_API_KEY`              | env         | secret             | —                        | For `mailgun`.                                                                                                                                                                                                                                                                                                                                                |
-| `MAILGUN_DOMAIN`               | env         | var                | —                        | For `mailgun`: the sending domain, `mg.yourcompany.com`.                                                                                                                                                                                                                                                                                                      |
-| `MAILGUN_REGION`               | env         | var                | `us`                     | For `mailgun`: `eu` for a domain in Mailgun's EU region.                                                                                                                                                                                                                                                                                                      |
-| `AWS_SES_REGION`               | env         | var                | —                        | For `ses`: the region your identities are verified in.                                                                                                                                                                                                                                                                                                        |
-| `AWS_SES_ACCESS_KEY_ID`        | env         | secret             | —                        | For `ses`, with the secret below: an IAM key that may `ses:SendEmail` and nothing else.                                                                                                                                                                                                                                                                       |
-| `AWS_SES_SECRET_ACCESS_KEY`    | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                                                                     |
-| `SMTP_URL`                     | env         | —                  | —                        | For `smtp`, Node only: `smtps://user:password@host:465`, or `smtp://…:587`, which upgrades with STARTTLS.                                                                                                                                                                                                                                                     |
-| `EMAIL`                        | —           | optional binding   | —                        | For `cloudflare`, Workers only: the `send_email` binding, commented out in `wrangler.jsonc`.                                                                                                                                                                                                                                                                  |
-| `DEEVY_DEV_STUB_EMAIL`         | env         | var                | —                        | Development only: email goes to an in-process stand-in shown at `/dev/email`, when no sender is set. Refused under `NODE_ENV=production`.                                                                                                                                                                                                                     |
-| `JOBS`                         | — the sweep | optional binding   | — no queue               | Nothing: a webhook delivery goes out at the next Cron pass instead of the moment it is owed. Workers-only, and absent from the committed `apps/web/wrangler.jsonc` because Queues are a paid feature.                                                                                                                                                         |
-| `DEEVY_DATABASE_PATH`          | env         | — the `DB` binding | `/data/deevy.sqlite`     | Node writes to `./data/deevy.sqlite`. On Workers the rows are D1's and the path means nothing.                                                                                                                                                                                                                                                                |
-| `DEEVY_PORT`                   | env         | —                  | 3000                     | Node listens on 3000. Workers has no port: the platform routes to the Worker.                                                                                                                                                                                                                                                                                 |
-| `DEEVY_WEB_DIST`               | env         | —                  | —                        | Node answers the API and serves no pages. On Workers the SPA is the asset handler's, not the app's.                                                                                                                                                                                                                                                           |
+| Variable                       | Node        | Workers            | Default                  | Without it                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ----------- | ------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, the OAuth server is off, and Slack deliveries wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                           |
+| `BETTER_AUTH_SECRET`           | env         | secret             | —                        | deevy does not run: the Node server refuses to start, and the Worker answers every request that reaches its code (the API and `/healthz`; the SPA's assets are served before it) with a 503 naming it, because Better Auth would otherwise fall back to a key it publishes. Changing it signs everyone out.    |
+| `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume. |
+| `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                            |
+| `DEEVY_DEV_STUB_SOCKETS`       | env         | var                | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on.  |
+| `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                | `acme/deevy`             | That stub offers one container. Container names, separated by commas, say what it holds. Read only when the flag above is set.                                                                                                                                                                                 |
+| `GITHUB_CLIENT_ID`             | env         | secret             | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                             |
+| `GITHUB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `GOOGLE_CLIENT_ID`             | env         | secret             | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                         |
+| `GOOGLE_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `GITLAB_CLIENT_ID`             | env         | secret             | —                        | GitLab is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/gitlab`.                                                                                                                         |
+| `GITLAB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `GITLAB_ISSUER`                | env         | var                | `https://gitlab.com`     | GitLab sign-in goes to gitlab.com. Set it to a self-hosted instance's origin; every GitLab endpoint deevy calls is built from it, and a GitLab Socket on that instance takes its accounts from sign-in.                                                                                                        |
+| `DEEVY_OIDC_ISSUER`            | env         | var                | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                      |
+| `DEEVY_OIDC_CLIENT_ID`         | env         | secret             | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                         |
+| `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `DEEVY_OIDC_NAME`              | env         | var                | `Single sign-on`         | The button says "Continue with Single sign-on". Set it to what your teammates call the IdP.                                                                                                                                                                                                                    |
+| `MICROSOFT_CLIENT_ID`          | env         | secret             | —                        | Microsoft is neither registered nor offered. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/microsoft`.                                                                                                                                                                            |
+| `MICROSOFT_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `MICROSOFT_TENANT_ID`          | env         | var                | `common`                 | Work, school and personal Microsoft accounts all sign in. Set `organizations` for work and school only, or a tenant's id for that tenant only.                                                                                                                                                                 |
+| `LINEAR_CLIENT_ID`             | env         | secret             | —                        | Linear is neither registered nor offered. Both halves or neither. A Linear sign-in comes in by invitation only.                                                                                                                                                                                                |
+| `LINEAR_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `SLACK_CLIENT_ID`              | env         | secret             | —                        | Sign in with Slack is neither registered nor offered. Both halves or neither.                                                                                                                                                                                                                                  |
+| `SLACK_CLIENT_SECRET`          | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `ATLASSIAN_CLIENT_ID`          | env         | secret             | —                        | Atlassian is neither registered nor offered. Both halves or neither. An Atlassian sign-in comes in by invitation only.                                                                                                                                                                                         |
+| `ATLASSIAN_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `DEEVY_SIGN_IN_ORDER`          | env         | var                | —                        | Providers are offered GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian, then your IdP. Name ids, comma-separated, to offer those first (`oidc,github`).                                                                                                                                             |
+| `DEEVY_ADMIN_EMAIL`            | env         | var                | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                           |
+| `DEEVY_WORKSPACE_NAME`         | env         | var                | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                           |
+| `DEEVY_WEB_ORIGIN`             | env         | var                | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                            |
+| `DEEVY_RUN_STALE_MINUTES`      | env         | var                | 30                       | Nothing: 30 minutes of silence makes a Run `stale`, which its next Activity undoes.                                                                                                                                                                                                                            |
+| `DEEVY_SWEEP_INTERVAL_SECONDS` | env         | — the Cron Trigger | 60                       | Nothing: the sweep looks every minute. Node-only, because on Workers the schedule is `triggers.crons` in `apps/web/wrangler.jsonc`.                                                                                                                                                                            |
+| `DEEVY_STREAM_SECONDS`         | — unbounded | var                | 60                       | Nothing: a live stream on Workers ends after a minute and the browser resumes from the cursor it signed off with. Workers-only, because a Node process holds a connection for as long as the browser does.                                                                                                     |
+| `JOBS`                         | — the sweep | optional binding   | — no queue               | Nothing: a webhook delivery goes out at the next Cron pass instead of the moment it is owed. Workers-only, and absent from the committed `apps/web/wrangler.jsonc` because Queues are a paid feature.                                                                                                          |
+| `DEEVY_DATABASE_PATH`          | env         | — the `DB` binding | `/data/deevy.sqlite`     | Node writes to `./data/deevy.sqlite`. On Workers the rows are D1's and the path means nothing.                                                                                                                                                                                                                 |
+| `DEEVY_PORT`                   | env         | —                  | 3000                     | Node listens on 3000. Workers has no port: the platform routes to the Worker.                                                                                                                                                                                                                                  |
+| `DEEVY_WEB_DIST`               | env         | —                  | —                        | Node answers the API and serves no pages. On Workers the SPA is the asset handler's, not the app's.                                                                                                                                                                                                            |
 
 The Worker serves the SPA, the API, the reference at `/api/docs`, the MCP challenge and, since M3 slice 5,
 signing in: `BETTER_AUTH_*`, `GITHUB_*`, `GOOGLE_*`, `GITLAB_*`, `DEEVY_OIDC_*`, `DEEVY_ADMIN_EMAIL` and
@@ -639,7 +617,7 @@ signing in: `BETTER_AUTH_*`, `GITHUB_*`, `GOOGLE_*`, `GITLAB_*`, `DEEVY_OIDC_*`,
 
 ### Background work, on a timer or on a Cron Trigger
 
-The stale sweep, the Gate reminder and the delivery loops are one function,
+The stale sweep and the delivery loops are one function,
 `runDueWork` in `packages/core/src/work.ts`, and each runtime brings its own schedule to it. Node's
 `startRunner` brings a timer every `DEEVY_SWEEP_INTERVAL_SECONDS` and drains: it goes again while a pass says
 there is more. Cloudflare owns its own schedule, so the Worker has no interval to configure — `triggers.crons`
@@ -648,7 +626,7 @@ takes one bounded pass of twenty rows and lets the next trigger find the rest. A
 minute at a time on Workers rather than in one tick, which is the trade a CPU budget and a per-invocation D1
 query cap buy.
 
-`DEEVY_RUN_STALE_MINUTES` and `DEEVY_GATE_REMINDER_HOURS` mean the same thing on both. `wrangler dev --local`
+`DEEVY_RUN_STALE_MINUTES` means the same thing on both. `wrangler dev --local`
 fires a trigger by hand at `/cdn-cgi/handler/scheduled?cron=*+*+*+*+*`, and the response waits for the pass, so
 a 500 there is the sweep's own error. `--test-scheduled`'s `/__scheduled` does not work on a Worker that also
 serves assets: the path is not one `createApp` mounts, so it is not in `assets.run_worker_first` and the asset
@@ -811,14 +789,14 @@ reports, and `allowlist.add` refuses one that is not with `PRECONDITION_FAILED` 
 sign-in, so it takes no GitLab group rule). A rule saved before its provider was taken away stays listed,
 drawn faint, with a line saying it lets nobody in until people can sign in with that provider again; removing
 it is the admin's call. An invitation admits
-one person: an admin creates it in Settings, Workspace with an address and a role, and gets a link back
-once, because deevy has no email Channel to send it with and keeps only a hash of the token. The invited
-Human clicks the link, signs in with whichever provider the instance offers, and accepting is what makes
-them a Member — the address that signs in has to be the address that was invited, so a forwarded link is not
-a second seat. An invitation is good for seven days, one address holds one live invitation at a time
-(revoke it to send another), and an admin who loses a link revokes the invitation and issues a new one.
-Neither is a Gate: nothing waits on a Human's ruling, and neither reaches an inbox — the admin is holding
-the link.
+one person: an admin creates it in Settings, Workspace with an address and a role, and gets a link back once
+(`invitations.create` answers `url` and `path`) to copy and send however they like, because deevy sends no
+email and keeps only a hash of the token. The invited Human clicks the link, signs in with whichever provider
+the instance offers, and accepting is what makes them a Member — the address that signs in has to be the
+address that was invited, so a forwarded link is not a second seat. An invitation is good for seven days,
+one address holds one live invitation at a time (revoke it to send another), and an admin who loses a link
+revokes the invitation and issues a new one. Neither is a Gate: nothing waits on a Human's ruling, and
+neither is on Needs me — the admin is holding the link.
 
 **An address counts only when the provider verified it.** `DEEVY_ADMIN_EMAIL` makes the admin, and an
 `email_domain` rule admits, only a sign-in whose provider vouched for the address. A provider that does not —
@@ -833,8 +811,8 @@ setting it is what keeps an invitation link, a Gate link and a Slack message poi
 at the API beside it.
 
 **One Human is one Member.** A teammate who signs in with one provider and later with another lands on the
-same user row: the second sign-in links onto the address the first one registered, so they keep one handle,
-one inbox and one Member rather than becoming two people who share an email.
+same user row: the second sign-in links onto the address the first one registered, so they keep one handle
+and one Member rather than becoming two people who share an email.
 
 What decides is the provider, not deevy's configuration of it. **No provider is trusted by name**: a second
 sign-in links only when the provider itself says the address is verified. GitHub and Google always do, and
@@ -1075,8 +1053,10 @@ pins that line and no earlier one. With it the consent page appears, the tool li
 from that session is the Human's in the Event log, and its inbox is the Human's.
 
 What that client is offered is decided by the same registry that authorizes it (ADR-0016): the tool set less
-the four that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request` and `runs_finish`, and a Human naming one anyway is refused with "Only an Agent can do that". Nothing in it is a Human's alone:
-a question an Agent asks is asked and answered on the record, in the tracker.
+the five that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request`, `runs_finish` and
+`inbox_list`, since only an Agent has an inbox — and a Human naming one anyway is refused with "Only an
+Agent can do that". Nothing in it is a Human's alone: a question an Agent asks is asked and answered on the
+record, in the tracker.
 [as-yourself.md](./as-yourself.md) is the worked example: the `CLAUDE.md` snippet a person puts in the
 repository they work in, beside the Agent's in [agent-loop.md](./agent-loop.md).
 
@@ -1251,89 +1231,30 @@ deevy's own implementation is `packages/core/src/webhooks.ts`, which exports `ve
 signer for exactly this reason. It uses `crypto.subtle` rather than `node:crypto` (ADR-0006); the maths is the
 same either way.
 
-## Notification Channels and routing
+## What waits on a Human, and what an Agent is told
 
-A Notification reaches a Human through Channels: their in-app inbox always, a Slack channel or a team email
-address when the Workspace routes it there, and their own email when they want it (see [Email](#email)). Four
-kinds exist — `mention`, `assignment`, `gate_awaiting`, `run_finished` — and who a Notification concerns is decided from the Event alone, never from where it is delivered. Turning
-Slack or email off changes where a Human hears about something, never whether it concerns them.
+deevy sends a Human nothing: no inbox, no email, no direct message. What waits on a Human is a Gate they may
+rule on, and it waits in up to three places:
 
-An admin adds a Channel under Settings, Channels: a name, usually the Slack channel (`#deevy`), and a Slack
-[incoming webhook](https://api.slack.com/messaging/webhooks) URL. There is a Test button that posts to it now,
-so a wrong URL is found in the room rather than three days later. The URL is a credential: it is stored in the
-Channel's config, and the Event log records only its host.
+- **Needs me**, deevy's home page, which is `gates.list` with `mine: true`: exactly the open Gates that Human
+  could approve now. A Gate whose Checkpoint keeps them from approving, or that they already approved, is not
+  waiting on them and is not there ([Gates](#gates-and-how-many-humans-they-ask-for)).
+- **The record in the tracker**, where deevy's comment asks for the Ruling and `/approve` or `/reject`
+  answers it ([Ruling from the tracker](#ruling-from-the-tracker)); every tool but the generic Socket, which
+  deevy writes nothing back to.
+- **The Project's chat channel**, when the Project binds one: each Gate is one message there with **Approve**
+  and **Reject**, changed in place as Rulings land ([Working in Slack](#working-in-slack)).
 
-Routing rules, also under Settings, Channels, say which kinds go to which Channel. A rule with no kind means
-every kind and a rule with no Project means every Project, so "everything to `#deevy`" is one rule and
-"`gate_awaiting` on the Platform Project to `#platform`" is another. Each Human then narrows their own share
-under Settings, Notifications: a matrix of kind against inbox and Slack, where a Member who has never said
-otherwise gets everything in both.
+Nothing reminds anybody of a Gate left open: it stays on Needs me until it is ruled on or superseded. The rest
+— which Agent took a record, who mentioned whom, how a Run ended — a Human reads in the tracker, where the
+work is, and on deevy's Runs.
 
-A Slack message is a durable delivery row like a webhook, retried on the same schedule machinery and given up
-on after six attempts. One message per Channel per Event, not per recipient: a Channel is a room, and three
-Humans concerned by one Event are not three messages in it.
-
-Slack messages link back to the Issue, so they are only sent when the instance knows its own URL. **Without
-`BETTER_AUTH_URL` the rows are written and wait** rather than going out with a dead link; the first tick after
-the instance is given an origin sends them.
-
-## Email
-
-deevy emails three things, through whichever service you already send with: what waits on a Human (a Gate, a
-Run's question), Notifications routed to a team address, and invitations. Nothing is emailed until a sender
-is configured; without one the inbox and Slack carry on as before (docs/plans/email-channel.md).
-
-### Choosing a sender
-
-Set `DEEVY_EMAIL_SENDER`, `DEEVY_EMAIL_FROM` and the sender's own variables ([Environment](#environment)), or
-let an admin choose under **Settings › Email**, which overrides the environment until they press **Use the
-environment's sender**. A key set there is sealed under `DEEVY_SECRET` like a tool's credentials and never
-shown again. **Send a test email** there mails the admin and says what came back, which is how to find a
-wrong key or an unverified domain before a Gate does.
-
-| Sender                   | Where it runs | What it needs                                                                                                                                                                      |
-| ------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resend                   | both          | An API key, and the From's domain verified in Resend.                                                                                                                              |
-| Postmark                 | both          | A server token; the From's domain or address verified as a sender signature.                                                                                                       |
-| SendGrid                 | both          | An API key with Mail Send; the From verified as a sender identity or domain.                                                                                                       |
-| Mailgun                  | both          | An API key and the sending domain (`MAILGUN_REGION=eu` for an EU domain).                                                                                                          |
-| Amazon SES               | both          | A region and an IAM key that may `ses:SendEmail`; the From verified in that region, and the account out of the SES sandbox to reach anyone. Signed in deevy itself, so no AWS SDK. |
-| SMTP                     | Docker        | `SMTP_URL` for your mail server or a provider's relay. A Worker cannot speak SMTP.                                                                                                 |
-| Cloudflare Email Service | Workers       | The `send_email` binding named `EMAIL` (uncomment it in `wrangler.jsonc`). A beta; reaching an address not verified on the account needs Workers Paid.                             |
-
-Whichever you choose, **the From's domain decides whether the email arrives.** Publish the SPF and DKIM
-records your sender gives you, and a DMARC record for the domain; without them most mail ends in spam or
-nowhere, and no setting in deevy can fix that. A sender's refusal it calls permanent — a bad key, an
-unverified domain, a suppressed address — is given up on at once and recorded in the Event log as
-`email.exhausted`, in the sender's own words; a throttle or an outage is tried again over about a quarter of
-an hour.
-
-### Who is emailed, and how it stops
-
-- **A Human, at their own address.** Only an address their sign-in provider verified: a Linear or Atlassian
-  sign-in is never emailed, and Settings › Notifications says why. By default they get a Gate awaiting them,
-  and switch any kind on or off in that page's Email column. Every such
-  email carries a one-click unsubscribe (RFC 8058) that turns off that kind for them alone, signed with
-  `BETTER_AUTH_SECRET` and good for six months; opening the link only asks, so a mail scanner changes
-  nothing.
-- **A team address**, added under Settings › Channels and routed like a Slack room. deevy mails it a
-  confirmation link first and sends it nothing until somebody there confirms, so an admin cannot make deevy
-  mail a stranger. One Event routed there is one email, whoever it concerns, and a Human's own Slack switch
-  has no say over it: it is the admin's mailbox. It stops where it was routed: remove the Channel or its rule.
-- **An invitation**, to the address it is for, with the link that accepts it. The link is still shown once
-  in the dialog. Its token is kept sealed under `DEEVY_SECRET` until the email lands, or until it is clear it
-  never will — refused for good, given up on, or the invitation accepted, revoked or expired — and without
-  that secret invitations are not emailed.
-
-Email goes out on the sweep's schedule, like Slack: within a minute on Workers and `DEEVY_SWEEP_INTERVAL_SECONDS`
-on Node. An email about a Gate already ruled on, or a Run already answered, by the time the sweep reaches it
-is not sent: unlike a Slack message, an email cannot be changed afterwards. Without a sender, owed emails are
-dropped rather than kept, so configuring one next week does not send a week of stale Gates at once.
-
-This section has been checked against what each sender publishes — every request and answer is tested as its
-API reference documents it, SMTP against a real SMTP server, Amazon SES's signing against AWS's own test suite
-— and walked end to end through the development stand-in, but **no sender has yet sent to a real mailbox from
-deevy**. Send yourself a test email from Settings › Email first.
+An Agent has an inbox: `inbox.list` and `inbox.markRead` over the API, `inbox_list` over MCP, and only an
+Agent may call them. Its rows are derived from the Event in the request that appended it, one per kind per
+Event: `assignment` for a record routed to it, `mention` for a comment that names it, and `run_answered` for
+the Ruling on the Gate its Run stopped at. The actor is never told of their own act, and a suspended Agent is
+told nothing. The Events behind those rows also go to the Agent's own webhook when it has one
+([Webhooks](#webhooks)), which is how an Agent that does not poll hears of them.
 
 ## Gates, and how many Humans they ask for
 
@@ -1360,9 +1281,9 @@ What is worth knowing before turning either on:
   `recordRuling` and one `rulingRefusal`. Consensus is for letting work through; one reason to stop is
   enough. Their approval is what is refused, in words that say they may still reject; the ruling screen
   disables **Approve** alone (`you.mayApprove`, `you.whyNotApprove` beside `you.mayRule`). They are not
-  asked: their inbox gets no row and `gates.list({ mine: true })` — **Needs me** — leaves the Gate out,
-  because it is not waiting on them. Asking again after a rejection is a new Gate, one visit later, and
-  the approvals before it are spent.
+  asked: `gates.list({ mine: true })` — **Needs me** — leaves the Gate out, because it is not waiting on
+  them. Asking again after a rejection is a new Gate, one visit later, and the approvals before it are
+  spent.
 - **A changed Proposal is a new question.** Asking again with the same words is the same Gate; asking with
   different ones supersedes it, and any approvals on the old one do not carry over.
 - **An approval stands for its record.** A Run that fails after its plan was approved, and the Run that tries
@@ -1404,8 +1325,9 @@ What is worth knowing before turning either on:
 
 A Gate short of its threshold appends a `gate.approval` Event carrying how many approvals are still wanted;
 `gate.approved` is appended only when the last one lands, or when an admin lowers the threshold to what the
-Gate already has, and the Run resumes with `run.answered`. A Human who has not ruled on a Gate waiting on
-them is reminded after `DEEVY_GATE_REMINDER_HOURS`.
+Gate already has, and the Run resumes with `run.answered`. A Gate still short stays on Needs me for each
+Human who could still approve it, and its message in the Project's chat channel says how many approvals it
+has of how many.
 
 ## Connecting your tools
 
@@ -1416,14 +1338,14 @@ Sockets**; a Project is then a binding to what is in it, under **Settings › Pr
 credential is sealed under `DEEVY_SECRET`, so an instance without one can connect nothing that holds a
 credential.
 
-| Tool   | What deevy uses it for                                  | What you register there, and paste into deevy                              |
-| ------ | ------------------------------------------------------- | -------------------------------------------------------------------------- |
-| GitHub | records (issues)                                        | a GitHub App deevy writes the manifest for, installed on your repositories |
-| Linear | records                                                 | an OAuth application with client credentials and a webhook                 |
-| GitLab | records                                                 | an access token for the user deevy acts as, and a webhook on each project  |
-| Notion | records (a database's rows)                             | an internal connection's token, and a webhook subscription                 |
-| Slack  | Gates in a room or a direct message, ruled with buttons | an app from deevy's manifest                                               |
-| Any    | records, through an adapter of yours                    | nothing in deevy but a name; deevy mints the secret the adapter signs with |
+| Tool   | What deevy uses it for                               | What you register there, and paste into deevy                              |
+| ------ | ---------------------------------------------------- | -------------------------------------------------------------------------- |
+| GitHub | records (issues)                                     | a GitHub App deevy writes the manifest for, installed on your repositories |
+| Linear | records                                              | an OAuth application with client credentials and a webhook                 |
+| GitLab | records                                              | an access token for the user deevy acts as, and a webhook on each project  |
+| Notion | records (a database's rows)                          | an internal connection's token, and a webhook subscription                 |
+| Slack  | a Project's Gates in its channel, ruled with buttons | an app from deevy's manifest                                               |
+| Any    | records, through an adapter of yours                 | nothing in deevy but a name; deevy mints the secret the adapter signs with |
 
 Linear, GitLab, Notion and Slack are labelled **Preview** in Settings and on their public pages until
 somebody walks them against the real tool: `walked` on each module, answered by `sockets.providers`. GitHub
@@ -1672,17 +1594,33 @@ A Slack app is a Socket too: connect it under **Settings › Sockets › Connect
 first and shows the app manifest (`docs/slack-manifest.yaml`) with this instance's own request URL in it, so
 creating the app in Slack — Create New App → From a manifest — is one trip. Install it to the
 workspace, then paste the **Bot User OAuth Token** and the **Signing Secret** back into deevy. A user's token
-is refused, because deevy would post as that person. The app asks for three scopes — `chat:write`,
-`im:write` and `commands` — and nothing about people: a click already says who clicked. The URL must be one
-Slack can reach; an instance with no public address can post to Slack but hears no clicks.
+is refused, because deevy would post as that person. The app asks for four scopes and nothing about people,
+since a click already says who clicked: `chat:write` to post a Gate and change it, `channels:read` and
+`groups:read` to list the public and private channels it is in, and `commands` for `/deevy link`. An app made
+from an older manifest has `im:write` instead of the two `:read` scopes: add them under **OAuth &
+Permissions** and reinstall the app to pick a channel from a list (until then a Project takes the channel's
+id typed in), and `im:write` can go, since deevy sends no direct message. The URL must be one Slack can
+reach; an instance with no public address can post to Slack but hears no clicks.
 
-Then, under **Settings › Channels**, add a room in the app (its Slack channel ID, after `/invite @deevy`
-there) and route `Gate awaiting` to it. A Gate arrives with **Approve** and **Reject**; Reject asks why first.
-The message is changed when anybody rules — in Slack, in deevy or in the tracker — through the same outbox
-as everything else, so a click is answered at once and the message a moment later. A Human whose Slack
-account is linked is also told by direct message, unless they turned that off under **Settings ›
-Notifications**. The incoming-webhook Channel is still there for a room with no app: it posts a link and
-takes no click.
+A Slack Socket posts nothing until a Project binds one of its channels, under **Settings › Projects ›** the
+Project **› Chat**, which only an admin may change (`projects.update` with `chat: { socketId, channel }`).
+`sockets.channels` lists the channels the app is in, public and private; where Slack will not list them it
+answers `channels: null` with the `problem` in Slack's words, and the channel's id (`C0123ABCD`, from the
+channel's details in Slack) is typed instead. Invite the app first, `/invite @deevy`, or the channel is
+neither listed nor postable. **Save and say hello** posts one line in the channel saying what it will get, and
+binds it only if Slack took the line: a channel the app is not in, an archived one or a wrong id is refused in
+Slack's words, and the Project stays as it was. `chat: null` unbinds it, and removing the Slack Socket unbinds
+every Project that posted through it, each with a `project.updated` saying so.
+
+Then every Gate a Run waits at in that Project is one message in the channel with **Approve** and
+**Reject**; Reject asks why first. The message is changed in place when anybody rules — in Slack, in deevy
+or in the tracker — and when the Gate is superseded, through the same outbox as everything else
+(`deriveChatMessages` in `packages/core/src/sockets/chat-out.ts`, `deliverDueChatMessages` in
+`packages/core/src/work.ts`), so a click is answered at once and the message a moment later. A Gate is
+posted where its Project binds when the sweep sends it, so a binding moved meanwhile is obeyed. Each message
+is a durable delivery row, retried from 30 seconds, doubling to an hour, and given up on after six attempts;
+and because it links back into deevy, it waits unsent until the instance knows its own URL
+(`BETTER_AUTH_URL`). deevy says nothing else in Slack: no Run, no record, no direct message.
 
 A click counts only for a Slack account deevy can place. A Human who signs in to deevy with Slack, to the
 Socket's team, is placed already: Sign in with Slack hands over an id token naming the team, and deevy holds
@@ -1698,7 +1636,9 @@ with** ([What a tool signs with](#what-a-tool-signs-with)), or with `sockets.upd
 deevy keeps taking the old one for a day, so the two can be changed in either order.
 
 When Slack refuses something, deevy says it in words with Slack's code: "deevy is not in that channel:
-/invite @deevy there (not_in_channel, chat.postMessage)" on a Channel's **Test**, for instance.
+/invite @deevy there (not_in_channel, chat.postMessage)" when a Project's channel is saved, for instance,
+and an app installed before it asked to read channels is told it is missing the scope beside the channel
+picker.
 
 This section has been checked against what Slack publishes — its signing docs' worked example and Bolt's
 check, the Web API's and Block Kit's types, the manifest reference, example interactions, and slack.com

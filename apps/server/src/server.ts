@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { createSmtpSender, mountSpa, openDatabase } from "@deevy/adapters/node";
+import { mountSpa, openDatabase } from "@deevy/adapters/node";
 import {
   basePathOf,
   createApp,
@@ -9,8 +9,6 @@ import {
   signInProviders,
   type AuthEnv,
 } from "@deevy/core";
-import { emailSenders, stubOutbox } from "@deevy/email";
-import type { EmailSenders } from "@deevy/core/email";
 import { devTrackerView, socketModules } from "@deevy/sockets";
 import { fetchClientMetadataResource } from "./cimd.ts";
 
@@ -50,14 +48,6 @@ function authEnv(env: ServerEnv): AuthEnv {
  * the listener rather than inside `createApp`, which owns no schedule on
  * either runtime (apps/server/src/runner.ts).
  */
-/**
- * The email senders the Node server can run: the HTTP ones every deployment
- * has, and SMTP, which only Node can speak (docs/plans/email-channel.md).
- */
-export function nodeEmailSenders(devStub: boolean): EmailSenders {
-  return { ...emailSenders({ devStub }), smtp: createSmtpSender };
-}
-
 export function buildServer(env: ServerEnv) {
   // Before anything is opened, so the server never comes up at all. Better
   // Auth would fall back to the default it publishes and refuse it only once a
@@ -104,10 +94,6 @@ export function buildServer(env: ServerEnv) {
     // And what their credentials are sealed with. Without it a tool that holds
     // one cannot be connected at all (packages/core/src/secrets.ts).
     ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
-    // How email leaves, for what an operation sends now: a team address's
-    // confirmation, a test (docs/plans/email-channel.md).
-    emailSenders: nodeEmailSenders(env.devStubEmail),
-    email: env.email,
     // What the sign-in page draws its buttons from: the providers this
     // environment configured, decided where they are registered rather than in
     // the SPA (docs/plans/sign-in.md).
@@ -115,15 +101,6 @@ export function buildServer(env: ServerEnv) {
     // A relay for other deployments' sign-ins, when this one is told to be.
     ...(env.signInRelay.server ? { signInRelay: env.signInRelay.server } : {}),
   });
-  // What the email stand-in was asked to send, for a developer and the walk:
-  // the list as JSON, and one email's HTML as a client would show it.
-  if (env.devStubEmail) {
-    app.get("/dev/email", (c) => c.json(stubOutbox()));
-    app.get("/dev/email/:index", (c) => {
-      const kept = stubOutbox()[Number(c.req.param("index"))];
-      return kept ? c.html(kept.html) : c.notFound();
-    });
-  }
   // Under the path of BETTER_AUTH_URL, which is the root unless an operator
   // serves deevy under a path (docs/OPERATIONS.md).
   if (env.webDist) mountSpa(app, resolve(env.webDist), basePathOf(env.baseURL));
