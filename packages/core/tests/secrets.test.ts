@@ -134,7 +134,6 @@ describe("the read surface", () => {
       "webhooks.deliveries": await asAda.webhooks.deliveries({
         subscriptionId: subscriptions.subscriptions[0]?.id ?? "",
       }),
-      "oauthClients.list": await asAda.oauthClients.list({}),
     };
 
     const secret = [

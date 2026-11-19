@@ -1,0 +1,17 @@
+---
+"@deevy/core": minor
+"@deevy/db": minor
+"@deevy/adapters": minor
+"@deevy/web": minor
+"@deevy/server": minor
+"@deevy/hosted": minor
+"@deevy/cli": minor
+---
+
+deevy is no longer an OAuth authorization server, and only an Agent speaks MCP. A Human's own MCP client, such as Claude Code signed in as you through deevy's consent page, no longer connects. `/mcp` now answers anything but an Agent's API key, a session cookie included, with 401 and `WWW-Authenticate: Bearer realm="deevy"`. `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`, `/.well-known/openid-configuration`, `/api/auth/jwks` and `/api/auth/oauth2/*` now answer 404, and the consent page is gone. Tokens and clients issued before the upgrade stop working. Read and rule in deevy, in your tracker or in the Project's chat channel. To have a model do deevy's part of the work, create an Agent for it under **Settings › Agents** and give the model that Agent's key. **Settings › MCP clients** is gone, and so are `oauthClients.list` and `oauthClients.revoke` (`/api/oauth-clients`). `me.get` (`GET /api/me`) now reports `principal` as `cookie`, `api_key` or `anonymous`, never `oauth`. If you serve deevy under a path behind a proxy, the proxy no longer needs to forward `/.well-known/*` from the root of the host. The OAuth tables stay in the database, unused, until a later release of this series drops them.
+
+An API key now stands only for an Agent. A key whose user is a Human now authenticates as nobody. deevy's pages never issued one, but a signed-in Human could mint one for themselves through Better Auth's own `/api/auth/api-key/*` routes, and it acted as them. Those routes now answer 404. A Sponsor still issues and revokes an Agent's keys on the Agent's page.
+
+The CLI (`@deevy/cli`) is now an Agent's tool. `deevy login` and `deevy logout` are gone, and the CLI keeps no token. It acts as the Agent whose key is in `DEEVY_API_KEY`, and as nobody without one, and it refuses a key that is not an Agent's. You can delete the token files an older CLI left in `~/.config/deevy` (or `$XDG_CONFIG_HOME/deevy`), named `<scheme>_<host>.json`, with the path after the host for a deevy under one, such as `https_app.deevy.dev%2Facme.json`. The `.capabilities.json` files beside them are still its cache. Its commands are now the operations an Agent may call, plus `deevy health ping`: `gates get`, `gates list` and `gates request`, `inbox list` and `inbox mark-read`, `issues get` and `issues list`, `links add`, `links list` and `links remove`, `me get`, `projects get` and `projects list`, and `runs start`, `runs post-activity`, `runs finish`, `runs get` and `runs list`. Every command that only a Human could run is gone: issuing keys, managing Agents, Members, invitations, Projects, Checkpoints, Sockets and webhooks, linking accounts, and ruling on Gates. `deevy events watch` is gone too, because the Event stream is a Human's. `deevy whoami` and `deevy gates open` stay. `deevy whoami --json` no longer has `via`, and its `authenticatedAs` is `agent`, `stranger` or `nobody`.
+
+The MCP tool manifest, `packages/core/mcp-tools.json`, no longer records `agents` and `agentsOnly` for each tool, because every tool is an Agent's. Importing a hosted Workspace with `import.mjs` no longer reports where the Workspace lived, and no longer removes OAuth tokens, because there are none. The hosted Worker no longer routes `/.well-known/<document>/<slug>` to a Workspace. Its request meter no longer counts a `discovery` kind.

@@ -1,11 +1,9 @@
-import { fetchClientMetadataResource as shapeCheckTransport } from "@deevy/core/cimd";
 import { MISSING_AUTH_SECRET, pagePolicy, signInProviders } from "@deevy/core";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { readEnv } from "../src/env.ts";
-import { fetchClientMetadataResource as strictTransport } from "../src/cimd.ts";
 import { buildServer } from "../src/server.ts";
 
 const migrationsFolder = new URL("../../../packages/db/drizzle", import.meta.url).pathname;
@@ -80,22 +78,6 @@ describe("server", () => {
     expect((await app.request("/_headers")).status).toBe(404);
     close();
     rmSync(webDist, { recursive: true, force: true });
-  });
-
-  /**
-   * Node is the target where the DNS-rebinding gap actually closes, and the
-   * only thing that closes it is the transport this entry passes. Asserted by
-   * identity, and on what `buildServer` handed Better Auth rather than on what
-   * the helper returns, so a refactor that inlines the object at the call site
-   * and loses the transport with it cannot leave Node quietly on the weaker,
-   * shape-checking one the Worker has to live with (docs/plans/m3.md slice 8).
-   */
-  it("dereferences a client metadata document through the pinning transport", () => {
-    const { authEnv, close } = testServer();
-
-    expect(authEnv.fetchClientMetadataResource).toBe(strictTransport);
-    expect(authEnv.fetchClientMetadataResource).not.toBe(shapeCheckTransport);
-    close();
   });
 
   /**

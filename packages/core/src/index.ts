@@ -5,10 +5,9 @@ export {
   finishAccountLink,
   type AccountCallback,
 } from "./account-links.ts";
-// The two protected resources, for anything outside this package that builds
-// a context: which surface a request reached decides the audience it accepts.
-export { API_PATH, MCP_PATH, type ResourcePath } from "./auth.ts";
-export { basePathOf, wellKnownURL, type BasePath } from "./base-path.ts";
+// Where the API and the MCP surface are mounted, for a client outside this package.
+export { API_PATH, MCP_PATH } from "./auth.ts";
+export { basePathOf, type BasePath } from "./base-path.ts";
 export { providersFromEnv, type ProviderVariables } from "./provider-env.ts";
 export {
   relaySignInCallback,
@@ -38,15 +37,6 @@ export {
   type SignInProviderKind,
 } from "./auth.ts";
 export {
-  boundMetadataResponse,
-  checkMetadataUrl,
-  createClientMetadataFetch,
-  fetchClientMetadataResource,
-  isPubliclyRoutable,
-  type ClientMetadataFetchOptions,
-  type MetadataResourceFetch,
-} from "./cimd.ts";
-export {
   appendEvent,
   type EventInput,
   type EventKind,
@@ -68,7 +58,6 @@ export { createDeevyMcp, type DeevyMcp, type DeevyMcpOptions } from "./mcp/serve
 export { generateSpec } from "./openapi.ts";
 export {
   resolvePrincipal,
-  type JwksFetch,
   type ResolvedPrincipal,
   type ResolvePrincipalOptions,
 } from "./principal.ts";

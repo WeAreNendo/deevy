@@ -1,253 +1,120 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { API_PATH } from "@deevy/core";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import {
-  credentialFor,
-  fileNameFor,
-  forgetToken,
-  readToken,
-  writeToken,
-} from "../src/credentials.ts";
-import { authorizeUrl, discover, exchange, listen, pkce, register } from "../src/login.ts";
-import { signIn, signOut, whoAmI } from "../src/identity.ts";
+import { credentialFor } from "../src/credentials.ts";
+import { whoAmI } from "../src/identity.ts";
 import { explain } from "../src/client.ts";
-import { baseURLFrom } from "../src/main.ts";
-import {
-  approveInBrowser,
-  baseURL,
-  collect,
-  consent,
-  cookieHeaders,
-  humanMember,
-  testDeevy,
-} from "./helpers.ts";
+import { addGeneratedCommands } from "../src/generate.ts";
+import { baseURLFrom, program } from "../src/main.ts";
+import { Command } from "commander";
+import { agentKey, baseURL, collect, testDeevy } from "./helpers.ts";
 
-const scratch: string[] = [];
 const closers: (() => void)[] = [];
+const scratch: string[] = [];
 afterEach(async () => {
   for (const close of closers.splice(0)) close();
   for (const dir of scratch.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "deevy-cli-"));
-  scratch.push(dir);
-  return dir;
-}
-
-describe("where a token is kept", () => {
-  it("is one file per instance, so signing into a second does not sign out the first", () => {
-    expect(fileNameFor("https://deevy.example.com")).toBe("https_deevy.example.com.json");
-    // A port is part of which instance this is, and a colon is not a file name.
-    expect(fileNameFor("http://localhost:3000")).toBe("http_localhost_3000.json");
-  });
-
-  it("counts the scheme, because http and https on one host are two instances", () => {
-    // The direct port and the same port behind a TLS proxy. Sharing a file
-    // would hand a token minted for one origin to the other.
-    expect(fileNameFor("http://host.example.com")).not.toBe(
-      fileNameFor("https://host.example.com"),
-    );
-  });
-
-  it("writes it where only this user can read it", async () => {
-    const dir = await tempDir();
-    const path = await writeToken(
+describe("who the CLI acts as", () => {
+  it("is the Agent whose key is in DEEVY_API_KEY", () => {
+    expect(credentialFor(baseURL, { DEEVY_API_KEY: " deevy_sk_x " })).toEqual({
+      token: "deevy_sk_x",
       baseURL,
-      { accessToken: "t", expiresAt: null, resource: `${baseURL}${API_PATH}` },
-      dir,
-    );
-    // It is a bearer token: the care an SSH key gets, for the same reason.
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
-    expect((await stat(dir)).mode & 0o777).toBe(0o700);
-    expect(JSON.parse(await readFile(path, "utf8")) as { accessToken: string }).toMatchObject({
-      accessToken: "t",
     });
   });
 
-  it("forgets it, and says whether there was one", async () => {
-    const dir = await tempDir();
-    expect(await forgetToken(baseURL, dir)).toBe(false);
-    await writeToken(baseURL, { accessToken: "t", expiresAt: null, resource: "r" }, dir);
-    expect(await forgetToken(baseURL, dir)).toBe(true);
-    expect(await readToken(baseURL, dir)).toBeNull();
+  it("is nobody without one: there is no token to fall back to", () => {
+    expect(credentialFor(baseURL, {})).toBeNull();
+    expect(credentialFor(baseURL, { DEEVY_API_KEY: "  " })).toBeNull();
   });
 
-  it("treats a file somebody edited by hand as signed out, not as a crash", async () => {
-    const dir = await tempDir();
-    await writeToken(baseURL, { accessToken: "t", expiresAt: null, resource: "r" }, dir);
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(join(dir, fileNameFor(baseURL)), "{ not json");
-    expect(await readToken(baseURL, dir)).toBeNull();
+  it("signs nobody in or out: login and logout are gone", () => {
+    const names = program().commands.map((command) => command.name());
+    expect(names).toContain("whoami");
+    expect(names).not.toContain("login");
+    expect(names).not.toContain("logout");
   });
 });
 
-describe("which credential the CLI uses", () => {
-  it("prefers the key in the environment, and says it is one", async () => {
-    const dir = await tempDir();
-    await writeToken(baseURL, { accessToken: "stored", expiresAt: null, resource: "r" }, dir);
-    const credential = await credentialFor(baseURL, { DEEVY_API_KEY: "deevy_sk_x" }, dir);
-    // An Agent's key is the explicit thing somebody put there for this one run,
-    // and it changes what the CLI may do — so it wins and it is named.
-    expect(credential).toMatchObject({ kind: "key", token: "deevy_sk_x" });
-  });
-
-  it("falls back to the stored token", async () => {
-    const dir = await tempDir();
-    await writeToken(baseURL, { accessToken: "stored", expiresAt: null, resource: "r" }, dir);
-    expect(await credentialFor(baseURL, {}, dir)).toMatchObject({
-      kind: "token",
-      token: "stored",
-    });
-  });
-
-  it("is nobody when there is neither", async () => {
-    expect(await credentialFor(baseURL, {}, await tempDir())).toBeNull();
-  });
-});
-
-describe("the loopback listener", () => {
-  it("carries an error back rather than hanging", async () => {
-    const loopback = await listen("s");
-    closers.push(loopback.close);
-    await fetch(`${loopback.redirectUri}?error=access_denied&state=s`);
-    await expect(loopback.code).rejects.toThrow(/access_denied/);
-  });
-});
-
-describe("signing in to a real deevy", () => {
-  /**
-   * The whole dance against a real authorization server: discover, register
-   * naming the API resource, authorize with PKCE, consent as the Human, and
-   * exchange. Only the browser is stood in for — the CLI would open one, and
-   * this follows the redirect itself.
-   */
-  it("gets a token the API accepts, and me.get then says who it is", async () => {
+/**
+ * The acceptance for slice 9 (docs/plans/simplify.md): against a real deevy,
+ * with a key its plugin minted, `whoami` names the Agent and a generated
+ * command answers.
+ */
+describe("an Agent's key, against a real deevy", () => {
+  it("is what `whoami` names", async () => {
     const deevy = testDeevy();
     closers.push(deevy.close);
-    await humanMember(deevy.db);
-
-    const metadata = await discover(baseURL, deevy.fetch);
-    expect(metadata.issuer).toBe(baseURL);
-
-    const loopback = await listen("s");
-    closers.push(loopback.close);
-    const clientId = await register(metadata, baseURL, loopback.redirectUri, deevy.fetch);
-    const { verifier, challenge } = pkce();
-    const resource = `${baseURL}${API_PATH}`;
-    const url = authorizeUrl(metadata, {
-      clientId,
-      redirectUri: loopback.redirectUri,
-      challenge,
-      state: "s",
-      resource,
-    });
-
-    // The browser's part: arrive at the authorize endpoint signed in, and take
-    // the consent that follows.
-    const cookie = await cookieHeaders(deevy.auth, "u1");
-    const redirected = await deevy.fetch(url, { headers: cookie, redirect: "manual" });
-    const code = await consent(deevy, cookie, redirected.headers.get("location") ?? "");
-    const token = await exchange(
-      metadata,
-      { code, clientId, verifier, redirectUri: loopback.redirectUri, resource },
-      deevy.fetch,
-    );
-    expect(token.accessToken).toBeTruthy();
-    expect(token.resource).toBe(resource);
-
-    const dir = await tempDir();
-    await writeToken(baseURL, token, dir);
-    const said = collect();
-    const identity = await whoAmI(baseURL, { report: said, fetchImpl: deevy.fetch, dir });
-    expect(identity).toMatchObject({ authenticatedAs: "human", via: "token", handle: "ada" });
-    expect(said.lines.out.join("\n")).toContain("ada");
-  });
-});
-
-describe("signing in, as the command does it", () => {
-  /**
-   * `signIn` itself, rather than its parts reassembled: that it registers,
-   * opens the right URL, takes the code, writes the file and closes the
-   * listener. The browser is the only stand-in — `openBrowser: false` prints
-   * the URL, and this follows it.
-   */
-  it("completes the flow and leaves a token only this user can read", async () => {
-    const deevy = testDeevy();
-    closers.push(deevy.close);
-    await humanMember(deevy.db);
-    const dir = await tempDir();
+    const key = await agentKey(deevy);
     const said = collect();
 
-    const signingIn = signIn(baseURL, {
-      openBrowser: false,
+    const identity = await whoAmI(baseURL, {
       report: said,
       fetchImpl: deevy.fetch,
-      dir,
+      environment: { DEEVY_API_KEY: key },
     });
 
-    // The Human's half, driven from the URL the CLI printed.
-    await approveInBrowser(deevy, () => said.lines.err.join("\n"), "u1");
-
-    await signingIn;
-    const stored = await readToken(baseURL, dir);
-    expect(stored?.accessToken).toBeTruthy();
-    // No refresh token is asked for or kept: nothing refreshes, and one at rest
-    // is a larger thing to lose for no benefit.
-    expect(stored).not.toHaveProperty("refreshToken");
-    expect((await stat(join(dir, fileNameFor(baseURL)))).mode & 0o777).toBe(0o600);
+    expect(identity).toMatchObject({ authenticatedAs: "agent", handle: "planner", memberId: "m2" });
+    expect(said.lines.out.join("\n")).toBe(
+      `planner at ${baseURL}, the Agent whose key is in DEEVY_API_KEY.`,
+    );
   });
 
-  it("gives up rather than waiting for a redirect that is not coming", async () => {
-    const loopback = await listen("s", 25);
-    closers.push(loopback.close);
-    await expect(loopback.code).rejects.toThrow(/not completed in time/);
+  it("lists Runs through `runs list`", async () => {
+    const deevy = testDeevy();
+    closers.push(deevy.close);
+    const key = await agentKey(deevy);
+    // Where the capabilities cache goes, so the test never writes to ~/.config.
+    const dir = await mkdtemp(join(tmpdir(), "deevy-cli-id-"));
+    scratch.push(dir);
+    const out: string[] = [];
+    const cli = addGeneratedCommands(new Command().exitOverride(), (url) => ({
+      baseURL: url ?? baseURL,
+      dir,
+      environment: { DEEVY_API_KEY: key },
+      fetchImpl: deevy.fetch,
+      out: (line) => out.push(line),
+    }));
+
+    await cli.parseAsync(["runs", "list", "--json"], { from: "user" });
+
+    expect(JSON.parse(out.join("\n"))).toMatchObject({ runs: [] });
   });
 
-  it("keeps waiting when something else on this machine probes the callback", async () => {
-    const loopback = await listen("the-state");
-    closers.push(loopback.close);
-    // A scanner, or a browser asking for a favicon: answered and ignored, so
-    // the real redirect still arrives.
-    expect((await fetch(`${loopback.redirectUri}?code=c&state=wrong`)).status).toBe(400);
-    await fetch(`${loopback.redirectUri}?code=the-code&state=the-state`);
-    expect(await loopback.code).toBe("the-code");
-  });
-});
+  it("is refused when it is not an Agent's, with what to set", async () => {
+    const deevy = testDeevy();
+    closers.push(deevy.close);
+    await agentKey(deevy);
+    const humans = await deevy.auth.api.createApiKey({ body: { userId: "u1", name: "mine" } });
 
-describe("signing out", () => {
-  it("forgets the token and says what it did", async () => {
-    const dir = await tempDir();
-    await writeToken(baseURL, { accessToken: "t", expiresAt: null, resource: "r" }, dir);
+    await expect(
+      whoAmI(baseURL, {
+        report: collect(),
+        fetchImpl: deevy.fetch,
+        environment: { DEEVY_API_KEY: humans.key },
+      }),
+    ).rejects.toThrow(/DEEVY_API_KEY has to hold an Agent's key/);
+  });
+
+  it("says how to become somebody when there is no key", async () => {
     const said = collect();
-    await signOut(baseURL, { report: said, dir });
-    expect(await readToken(baseURL, dir)).toBeNull();
-    // The consent outlives the file, and only deevy's own UI can revoke it.
-    expect(said.lines.err.join("\n")).toContain("still listed in deevy");
+    const identity = await whoAmI(baseURL, { report: said, environment: {} });
+    expect(identity).toMatchObject({ authenticatedAs: "nobody" });
+    expect(said.lines.out.join("\n")).toContain("Set DEEVY_API_KEY");
   });
 });
 
 describe("what a refusal is explained as", () => {
-  it("names the key when a key is what is being refused", () => {
-    const asAgent = { kind: "key", token: "k", baseURL } as const;
-    expect(explain({ code: "FORBIDDEN", message: "An Agent cannot do that" }, asAgent)).toContain(
-      "DEEVY_API_KEY",
+  it("names the key when the key is what is refused", () => {
+    expect(explain({ code: "UNAUTHORIZED" })).toContain("DEEVY_API_KEY");
+  });
+
+  it("relays any other refusal as deevy said it", () => {
+    expect(explain({ code: "FORBIDDEN", message: "An Agent cannot do that" })).toBe(
+      "An Agent cannot do that",
     );
-    expect(explain({ code: "UNAUTHORIZED" }, asAgent)).toContain("DEEVY_API_KEY");
-  });
-
-  it("tells a signed-in Human to sign in again", () => {
-    const asHuman = { kind: "token", token: "t", baseURL, expiresAt: null } as const;
-    expect(explain({ code: "UNAUTHORIZED" }, asHuman)).toContain("deevy login");
-  });
-
-  it("never puts the credential in the message", () => {
-    const asAgent = { kind: "key", token: "deevy_sk_secret", baseURL } as const;
-    for (const code of ["UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND"]) {
-      expect(explain({ code, message: "no" }, asAgent)).not.toContain("deevy_sk_secret");
-    }
   });
 });
 

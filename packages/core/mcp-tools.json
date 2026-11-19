@@ -4,8 +4,6 @@
     "operation": "gates.get",
     "summary": "What has been ruled on a Gate, for an Agent waiting or a Human reading",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -23,8 +21,6 @@
     "operation": "gates.request",
     "summary": "Ask the Humans to let this Run past a Checkpoint, with what you intend to do",
     "readOnly": false,
-    "agents": true,
-    "agentsOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -75,8 +71,6 @@
     "operation": "inbox.list",
     "summary": "The Notifications waiting for this Agent, newest first",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -105,8 +99,6 @@
     "operation": "issues.get",
     "summary": "One record by id, URL or the tracker's key, with its family",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -125,8 +117,6 @@
     "operation": "issues.list",
     "summary": "The records deevy has projected, newest change first",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -198,8 +188,6 @@
     "operation": "links.add",
     "summary": "Point an Issue at a pull request, a commit, a branch, or any URL",
     "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -247,8 +235,6 @@
     "operation": "links.list",
     "summary": "What an Issue points at",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -267,8 +253,6 @@
     "operation": "links.remove",
     "summary": "Stop an Issue pointing at something",
     "readOnly": false,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -286,8 +270,6 @@
     "operation": "projects.get",
     "summary": "One Project by its slug: where its Issues come from and who works them",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -306,8 +288,6 @@
     "operation": "runs.finish",
     "summary": "End your Run, completed or failed, with a summary of what happened",
     "readOnly": false,
-    "agents": true,
-    "agentsOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -339,8 +319,6 @@
     "operation": "runs.get",
     "summary": "One Run with its Activity feed in the order it happened",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -358,8 +336,6 @@
     "operation": "runs.list",
     "summary": "Runs on an Issue or by an Agent, newest first, from a cursor",
     "readOnly": true,
-    "agents": true,
-    "agentsOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -404,8 +380,6 @@
     "operation": "runs.postActivity",
     "summary": "Post one Activity to your Run: a thought, an action, a response, or an error",
     "readOnly": false,
-    "agents": true,
-    "agentsOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -453,8 +427,6 @@
     "operation": "runs.start",
     "summary": "Begin a Run on an Issue, pending until the Agent posts its first Activity",
     "readOnly": false,
-    "agents": true,
-    "agentsOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {

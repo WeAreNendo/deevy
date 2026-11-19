@@ -20,8 +20,7 @@ import { createDeevyMcp } from "./mcp/server.ts";
 import { generateSpec } from "./openapi.ts";
 import { DOCS_PATH, SCALAR_SCRIPT, docsHeaders, securityHeaders } from "./headers.ts";
 import { betterAuthKeys } from "./keys.ts";
-import type { ResourcePath } from "./auth.ts";
-import { API_PATH, AUTH_BASE_PATH } from "./auth.ts";
+import { AUTH_BASE_PATH } from "./auth.ts";
 import { basePathOf } from "./base-path.ts";
 import { relaySignInCallback, type SignInRelayServer } from "./sign-in-relay.ts";
 import { resolvePrincipal } from "./principal.ts";
@@ -40,8 +39,8 @@ export interface AppOptions {
   /** Browser origins allowed to call the API with credentials. */
   origin?: string[];
   /**
-   * The public URL of this instance: the OAuth issuer, the base of the MCP and
-   * API resources and of every link. Usually an origin; when it has a path,
+   * The public URL of this instance: the base of `/mcp`, the API and every
+   * link. Usually an origin; when it has a path,
    * everything this app answers is mounted under that path (base-path.ts).
    */
   baseURL?: string;
@@ -140,9 +139,8 @@ export interface AppOptions {
   /**
    * Where a Human's browser finds this deevy, when the SPA is not served from
    * the origin the API answers on (`DEEVY_WEB_ORIGIN`). A Gate link and an
-   * invitation link are built on it; everything bound to this instance's own
-   * identity — the OAuth issuer, the MCP resource — stays on `baseURL`
-   * (docs/plans/sign-in.md).
+   * invitation link are built on it; what a provider calls back stays on
+   * `baseURL` (docs/plans/sign-in.md).
    */
   webURL?: string;
   /**
@@ -295,22 +293,6 @@ export function createApp({
   if (auth) {
     routes.use(`${AUTH_BASE_PATH}/*`, cors({ origin, credentials: true }));
     routes.all(`${AUTH_BASE_PATH}/*`, (c) => auth.handler(c.req.raw));
-
-    // OAuth discovery lives at the origin, not under Better Auth's base path:
-    // RFC 8414 and RFC 9728 both insert the well-known segment right after the
-    // host, and a client that derives the URL rather than reading the 401's
-    // header looks nowhere else. The plugins answer these from `onRequest`,
-    // which runs on the raw request before any base-path routing, so handing
-    // them the request unchanged is all it takes (docs/plans/m2.md). Under a
-    // path, the issuer `…/acme` is described at `/.well-known/…/acme`, which
-    // the wildcards already reach, and OpenID Connect appends its segment to
-    // the issuer instead, which is the one route under the base.
-    app.all("/.well-known/oauth-authorization-server", wellKnown(auth));
-    app.all("/.well-known/oauth-authorization-server/*", wellKnown(auth));
-    app.all("/.well-known/openid-configuration", wellKnown(auth));
-    app.all("/.well-known/oauth-protected-resource", wellKnown(auth));
-    app.all("/.well-known/oauth-protected-resource/*", wellKnown(auth));
-    if (base) routes.all("/.well-known/*", wellKnown(auth));
   }
 
   // Before the oRPC handlers: the MCP surface builds its own context, because
@@ -356,7 +338,7 @@ export function createApp({
     return ids ? signInProviders.filter((provider) => ids.has(provider.id)) : signInProviders;
   };
   const contextFor = async (request: Request) => ({
-    ...(await buildContext(db, auth, request.headers, originOf(request.url), API_PATH)),
+    ...(await buildContext(db, auth, request.headers, originOf(request.url))),
     ...(live ? { live } : {}),
     ...(limits ? { limits } : {}),
     ...(liveSocket ? { liveSocket: true } : {}),
@@ -484,20 +466,6 @@ export function createApp({
 
 export type App = ReturnType<typeof createApp>;
 
-/**
- * One OAuth metadata document. It is public by definition and an MCP client
- * reads it from wherever it is running, so it answers any origin; the document
- * itself carries nothing a caller could not learn by asking for a token.
- */
-function wellKnown(auth: Auth) {
-  return async (c: { req: { raw: Request } }) => {
-    const response = await auth.handler(c.req.raw);
-    const headers = new Headers(response.headers);
-    headers.set("access-control-allow-origin", "*");
-    return new Response(response.body, { status: response.status, headers });
-  };
-}
-
 /** The methods a browser sends from any page without anything changing. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -543,7 +511,7 @@ function originsOf(configured: string[]): ReadonlySet<string> {
  * not sent. A request that says neither is refused: every browser sends
  * `Origin` on a POST, and a script or a CLI holds a bearer.
  *
- * A bearer — an Agent's key, an MCP client's token — is untouched, since no
+ * A bearer — an Agent's key — is untouched, since no
  * browser attaches one by itself; so is a read, and a request no session
  * signed in, which has nothing of anybody's to spend.
  */
@@ -562,7 +530,7 @@ function crossSiteWrite(
   if (from && (origins.has(from) || from === webOrigin(context.baseURL))) return null;
   return new ORPCError("FORBIDDEN", {
     message:
-      "deevy only takes a change signed in with your session from its own pages. Use deevy itself, or an API key or access token from a script.",
+      "deevy only takes a change signed in with your session from its own pages. Make it in deevy itself; a script acts as an Agent, with that Agent's key.",
   });
 }
 
@@ -596,18 +564,9 @@ export async function buildContext(
   db: Db,
   auth: Auth | undefined,
   headers: Headers,
-  // Not optional, so the required parameter after it may be required too; every
-  // caller already had one to pass.
   baseURL: string | undefined,
-  /**
-   * Which surface this request reached, so an access token is checked against
-   * the resource it was minted for (auth.ts). No default: every caller says
-   * which surface it is, because the one that forgets would accept tokens
-   * minted for the other.
-   */
-  resourcePath: ResourcePath,
 ): Promise<AppContext> {
-  const { principal, session } = await resolvePrincipal({ auth, headers, baseURL, resourcePath });
+  const { principal, session } = await resolvePrincipal({ auth, headers });
   // An instance without auth cannot mint keys; apiKeysOf turns that into a
   // NOT_IMPLEMENTED rather than a caller's mistake (keys.ts).
   const base = {

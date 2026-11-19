@@ -17,7 +17,6 @@ import {
 } from "@deevy/adapters/durable";
 import { createNodeDurableStorage, type NodeDurableStorage } from "@deevy/adapters/testing";
 import {
-  API_PATH,
   basePathOf,
   createApp,
   createAuth,
@@ -88,7 +87,7 @@ export async function callerFor(
   }: { db: Db; auth: Auth; baseURL: string; socketSecret: string },
   headers: HeadersInit,
 ) {
-  const context = await buildContext(db, auth, new Headers(headers), baseURL, API_PATH);
+  const context = await buildContext(db, auth, new Headers(headers), baseURL);
   if (!context.member) throw new Error("that credential is not a Member");
   return {
     member: context.member,
@@ -117,10 +116,9 @@ export interface HostedWorkspace {
 }
 
 /**
- * Two Humans, an Agent with a key, a Socket whose credential and webhook
- * secret are sealed under the Workspace's `DEEVY_SECRET`, a Project bound to
- * it, the OAuth resources the Workspace's authorization server registered at
- * its hosted address, and an MCP client's token bound to them.
+ * Two Humans, an Agent with a key, and a Socket whose credential and webhook
+ * secret are sealed under the Workspace's `DEEVY_SECRET`, with a Project bound
+ * to it.
  */
 export async function hostedWorkspace(): Promise<HostedWorkspace> {
   const storage = createNodeDurableStorage();
@@ -137,8 +135,7 @@ export async function hostedWorkspace(): Promise<HostedWorkspace> {
     adminEmail: "ada@example.com",
     workspaceName: "Acme",
   };
-  // Awaited as the object awaits it: this is where the OAuth provider registers
-  // the Workspace's two resources, at its hosted address.
+  // Awaited as the object awaits it.
   const auth = createAuth({ db, env: identity });
   await auth.$context;
   const app = createApp({
@@ -177,22 +174,6 @@ export async function hostedWorkspace(): Promise<HostedWorkspace> {
   const planner = await ada.api.agents.create({ name: "Planner" });
   if (!planner.key) throw new Error("this instance cannot mint API keys");
 
-  // An MCP client a Human signed in through, at the hosted address. Rows rather
-  // than the whole authorization-code dance: what matters to the trip is what
-  // they name, which is the address the Workspace is leaving.
-  storage.sql.exec(
-    `INSERT INTO oauth_client (id, client_id, redirect_uris) VALUES ('occ_1', 'mcp-client', '["http://127.0.0.1:7777/cb"]')`,
-  );
-  storage.sql.exec(
-    `INSERT INTO oauth_client_resource (id, client_id, resource_id) VALUES ('ocr_1', 'mcp-client', ?)`,
-    `${hostedURL}/mcp`,
-  );
-  storage.sql.exec(
-    `INSERT INTO oauth_access_token (id, token, client_id, user_id, resources, scopes)
-     VALUES ('oat_1', 'opaque', 'mcp-client', ?, ?, '["openid"]')`,
-    ada.member.userId,
-    JSON.stringify([`${hostedURL}/mcp`]),
-  );
   // The counter above the highest Event, as it stands once the newest are
   // gone: only `sqlite_sequence` remembers it, so only a dump that carries the
   // counter keeps a `seq` from being handed out twice.

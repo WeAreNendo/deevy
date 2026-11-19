@@ -57,7 +57,5 @@ invitation's link are never recorded.
 ## Following it
 
 - **A webhook** posts each Event you subscribe to as it happens. See [Webhooks](/webhooks/).
-- **The CLI**: `deevy events watch` follows the log and picks up where it left off. See
-  [The CLI](/mcp-and-cli/cli/).
 - **The API** reads the log from any `seq` onwards, or streams it as it happens. See the
   [API reference](/api/).

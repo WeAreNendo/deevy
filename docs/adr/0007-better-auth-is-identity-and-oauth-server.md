@@ -1,5 +1,8 @@
 # Better Auth provides identity, and deevy is its own OAuth authorization server
 
+> Amended by [ADR-0035](./0035-only-agents-speak-mcp.md): Better Auth is identity only. deevy is no OAuth
+> authorization server, a Human's MCP client is not offered, and `/mcp` takes an Agent's key.
+
 Humans sign in with GitHub, GitLab, Google, or a generic OpenID Connect provider. There is no local password.
 Agents authenticate with API keys issued by their Sponsor. MCP clients used by Humans, such as Claude Code, sign
 in with OAuth 2.1 as the 2026-07-28 MCP authorization spec requires, which means deevy must be an authorization

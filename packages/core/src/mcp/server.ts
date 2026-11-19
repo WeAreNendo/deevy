@@ -1,4 +1,3 @@
-import { wellKnownURL } from "../base-path.ts";
 import type { Db } from "@deevy/db";
 import type {
   CallToolResult,
@@ -8,7 +7,6 @@ import type {
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { call } from "@orpc/server";
 import type { Auth } from "../auth.ts";
-import { MCP_PATH } from "../auth.ts";
 import { buildContext } from "../app.ts";
 import type { JobQueue } from "../jobs.ts";
 import type { SocketModules } from "../sockets/port.ts";
@@ -23,9 +21,9 @@ export interface DeevyMcpOptions {
   /** Absent only in the Workers smoke build, which has no auth yet: every call is then 401. */
   auth?: Auth;
   /**
-   * The public origin of this instance, for the RFC 9728 challenge. The
-   * request's own origin is used when it is absent, which is right in
-   * development and wrong behind a proxy that rewrites the host.
+   * The public origin of this instance, which a link an Agent is handed is
+   * built on. The request's own origin is used when it is absent, which is
+   * right in development and wrong behind a proxy that rewrites the host.
    */
   baseURL?: string;
   /**
@@ -91,22 +89,18 @@ export function createDeevyMcp({
     async fetch(request) {
       const origin = baseURL ?? new URL(request.url).origin;
       const context = {
-        // MCP_PATH, not the API's: a token a Human granted to an MCP client
-        // reaches the tools and not the ninety-four operations behind them.
-        ...(await buildContext(db, auth, request.headers, origin, MCP_PATH)),
+        ...(await buildContext(db, auth, request.headers, origin)),
         ...(webURL ? { webURL } : {}),
         ...(jobs ? { jobs } : {}),
         ...(sockets ? { sockets } : {}),
         ...(socketSecret ? { socketSecret } : {}),
       };
-      // No credential at all is an authentication answer, not a tool error:
-      // the challenge is what starts the OAuth dance. Nor is a browser's
-      // session cookie one: an MCP client holds a bearer, and a cookie here
-      // would let any page a signed-in Human opens call the tools as them,
-      // since this endpoint answers no CORS question before it acts.
-      if (!context.session || context.principal?.kind === "cookie") {
-        return challenge(request, baseURL);
-      }
+      // Only an Agent speaks MCP (ADR-0035): anything but its key is an
+      // authentication answer, not a tool error. A browser's session cookie
+      // is not one either: it is a Human's, and a cookie here would let any
+      // page a signed-in Human opens call the tools as them, since this
+      // endpoint answers no CORS question before it acts.
+      if (!context.session || context.principal?.kind !== "api_key") return unauthorized();
       return handler.fetch(request, {
         authInfo: {
           // The SDK's AuthInfo is a pass-through envelope; deevy's own answer
@@ -131,9 +125,8 @@ function contextOf(authInfo: { extra?: Record<string, unknown> } | undefined): A
 /**
  * One request's server. Every projected tool is registered for every caller:
  * what a caller may do is decided by `authorize()` inside the procedure, never
- * by which tools were registered. `tools/list` is then narrowed to what this
- * caller could plausibly use, which is a courtesy to the model's context
- * window and nothing more (docs/plans/m2.md).
+ * by which tools were registered. `tools/list` offers nothing to a caller who is
+ * no Member, which is a courtesy to the model's context window and nothing more.
  */
 function serverFor(
   tools: ToolDescriptor[],
@@ -183,17 +176,14 @@ function inputSchemaJson(server: McpServer, tool: ToolDescriptor): AdvertisedSch
 }
 
 /**
- * What this caller is offered. An Agent is not shown the tools it is refused,
- * a Human is not shown the tools that are an Agent's alone (ADR-0016), and a
- * caller who is no Member of this Workspace is offered nothing, because a
- * seventy-tool list it cannot call costs it its context window for nothing.
+ * What this caller is offered: every tool, since each faces an Agent
+ * (registry.ts), unless it is no Member of this Workspace — a suspended Agent
+ * keeps its key — when a list it cannot call would cost it its context window
+ * for nothing.
  */
 export function visibleTools(tools: ToolDescriptor[], context: AppContext): ToolDescriptor[] {
   const member = context.member;
-  if (!member || !context.workspace || member.suspendedAt) return [];
-  return member.kind === "agent"
-    ? tools.filter((tool) => tool.agents)
-    : tools.filter((tool) => !tool.agentsOnly);
+  return member && context.workspace && !member.suspendedAt ? tools : [];
 }
 
 /** One tool call, which is one call of the very same procedure /api and /rpc call. */
@@ -226,29 +216,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * RFC 9728: a 401 naming where the Protected Resource Metadata lives is what
- * makes an MCP client start the OAuth dance rather than simply fail.
+ * A 401 that says what to bring (RFC 6750). There is no authorization server
+ * to point at, so no `resource_metadata`: an Agent's key is issued by its
+ * Sponsor in deevy, and an MCP client is configured with it as a header.
  */
-function challenge(request: Request, baseURL?: string): Response {
-  const base = (baseURL ?? new URL(request.url).origin).replace(/\/+$/, "");
-  // RFC 9728 forms the metadata URL by inserting the well-known segment
-  // between the host and the resource's own path, so a resource at /mcp is
-  // described at /.well-known/oauth-protected-resource/mcp. A client that
-  // derives the URL instead of reading this header looks there, so slice 7
-  // has to serve the document at this exact path. Under a path the resource is
-  // `…/acme/mcp`, and the segment still goes right after the host.
-  const metadata = `${wellKnownURL(base, "oauth-protected-resource")}${MCP_PATH}`;
+function unauthorized(): Response {
   return new Response(
     JSON.stringify({
       error: "invalid_token",
-      error_description: "This MCP endpoint needs an Agent's API key or an access token",
+      error_description: "This MCP endpoint takes an Agent's API key",
     }),
     {
       status: 401,
-      headers: {
-        "content-type": "application/json",
-        "www-authenticate": `Bearer resource_metadata="${metadata}"`,
-      },
+      headers: { "content-type": "application/json", "www-authenticate": 'Bearer realm="deevy"' },
     },
   );
 }

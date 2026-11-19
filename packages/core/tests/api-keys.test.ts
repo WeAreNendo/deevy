@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { buildContext } from "../src/app.ts";
 import { createAuth } from "../src/auth.ts";
 import { apiKeysOf, betterAuthKeys } from "../src/keys.ts";
-import { API_PATH } from "../src/auth.ts";
 import { resolvePrincipal } from "../src/principal.ts";
 import { agentContext, testDb } from "./helpers.ts";
 
@@ -36,7 +35,6 @@ describe("API keys over Better Auth", () => {
 
     const resolved = await resolvePrincipal({
       auth,
-      resourcePath: API_PATH,
       headers: new Headers({ authorization: `Bearer ${issued.key}` }),
     });
     expect(resolved.principal).toMatchObject({ kind: "api_key" });
@@ -59,7 +57,6 @@ describe("API keys over Better Auth", () => {
     expect(await keys.revoke({ userId: agent.member.userId, keyId: issued.id })).toBe(true);
     const after = await resolvePrincipal({
       auth,
-      resourcePath: API_PATH,
       headers: new Headers({ authorization: `Bearer ${issued.key}` }),
     });
     expect(after.principal).toEqual({ kind: "anonymous" });
@@ -79,13 +76,13 @@ describe("API keys over Better Auth", () => {
 describe("the request context", () => {
   it("carries a key store when the instance has auth, so a Sponsor can issue", async () => {
     const { db, auth } = testAuth();
-    const context = await buildContext(db, auth, new Headers(), undefined, API_PATH);
+    const context = await buildContext(db, auth, new Headers(), undefined);
     expect(context.apiKeys).toBeDefined();
   });
 
   it("carries none when the instance has no auth, and says so rather than failing oddly", async () => {
     const { db } = testAuth();
-    const context = await buildContext(db, undefined, new Headers(), undefined, API_PATH);
+    const context = await buildContext(db, undefined, new Headers(), undefined);
     expect(context.apiKeys).toBeUndefined();
     expect(() => apiKeysOf(context)).toThrow(/cannot issue API keys/);
   });

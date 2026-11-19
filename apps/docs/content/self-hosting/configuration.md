@@ -26,17 +26,16 @@ takes effect with the next build and deploy. See
 address the browser actually visits, character for character, including `https://`.
 
 Everything follows from it: each sign-in provider's callback, the cookie that keeps you signed in, the
-links deevy puts in Slack messages and in your tracker, the address each tool delivers to, and the address MCP
-clients and the CLI sign in against. Left unset, deevy follows the address each request came to, which is
-wrong as soon as a proxy in front of it changes the host, and it signs no tokens for MCP clients or the
-CLI at all, because then a caller could choose whom they are for.
+links deevy puts in Slack messages and in your tracker, and the address each tool delivers to. Left unset,
+deevy follows the address each request came to, which is wrong as soon as a proxy in front of it changes
+the host.
 
 To serve deevy under a path, put the path in it: `https://example.com/deevy`. See
 [Behind a proxy or under a path](/self-hosting/under-a-path/).
 
 :::caution[Changing it later]
-A new address means new callbacks with every sign-in provider, and pointing your tools, Agents, CLI and
-MCP clients at it. The list in
+A new address means new callbacks with every sign-in provider, and pointing your tools and Agents at it.
+The list in
 [Point everything at the new address](/self-hosting/from-deevy-cloud/#point-everything-at-the-new-address)
 is the same one.
 :::
@@ -47,10 +46,9 @@ Generate each with `openssl rand -base64 32`, once, and keep them with your back
 different values.
 
 - **`BETTER_AUTH_SECRET`** signs sessions and the links deevy sends you back through, such as a tool's
-  consent, and seals the sign-in providers' tokens and the keys deevy signs MCP clients' and the CLI's tokens
-  with. Without it, deevy doesn't run: the Docker image exits at start, and a Worker answers its API and
-  `/healthz` with an error that names it. Changing it signs everybody out, and those clients get no new
-  tokens until you delete the old keys (`DELETE FROM jwks;`); each then signs in again.
+  consent, and seals the sign-in providers' tokens. Without it, deevy doesn't run: the Docker image exits at
+  start, and a Worker answers its API and `/healthz` with an error that names it. Changing it signs
+  everybody out; Agents' keys keep working.
 - **`DEEVY_SECRET`** seals what deevy holds for the tools you connect. It must be at least 32 characters.
   Without it, deevy refuses to connect a tool that needs a credential.
 

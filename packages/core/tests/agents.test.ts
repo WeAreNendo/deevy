@@ -66,8 +66,8 @@ describe("the Agent capability rule", () => {
       //
       // Asking to pass a Checkpoint, reading what was ruled, and seeing what
       // it has asked for: an Agent asks and never decides (ADR-0004, ADR-0020).
-      // `gates.approve` and `gates.reject` are not here, and could not be:
-      // they are `sessionOnly`, so even a Human's own token is refused.
+      // `gates.approve` and `gates.reject` are not here: they are a Human's,
+      // and a Human reaches deevy only signed in to its pages (ADR-0035).
       "gates.get",
       "gates.list",
       "gates.request",
@@ -630,7 +630,7 @@ describe("setting an Agent's webhook", () => {
 });
 
 describe("the session rung", () => {
-  it("is not a way past the Agent rule or sessionOnly", async () => {
+  it("is not a way past the Agent rule", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
@@ -639,16 +639,10 @@ describe("the session rung", () => {
 
     // `session` is a lower rung than `member`, not a side door: an operation
     // nobody marked for Agents must refuse one however little authority it asks
-    // for. oauthClients.* manages a Human's own MCP client consents.
-    await expect(asAgent.oauthClients.list({})).rejects.toMatchObject({ code: "FORBIDDEN" });
-
-    // And a delegated credential held by a Human is refused too, which is what
-    // sessionOnly means and what the session rung was returning before.
-    const viaToken = createRouterClient(router, {
-      context: { ...ada, principal: { kind: "oauth", clientId: "c", scopes: [] } },
-    });
-    await expect(viaToken.oauthClients.revoke({ clientId: "c" })).rejects.toMatchObject({
+    // for. Accepting an invitation is how a Human joins.
+    await expect(asAgent.invitations.accept({ token: "anything" })).rejects.toMatchObject({
       code: "FORBIDDEN",
+      message: "An Agent cannot do that",
     });
   });
 });

@@ -6,9 +6,11 @@ describe("a request's data point", () => {
     expect(kindOf("/acme/rpc/gates/list")).toEqual({ slug: "acme", kind: "app" });
     expect(kindOf("/acme/gates/gate_1")).toEqual({ slug: "acme", kind: "page" });
     expect(kindOf("/acme/api/live")).toEqual({ slug: "acme", kind: "live" });
+    // No Workspace is an OAuth server any more (ADR-0035), so a discovery
+    // probe at the root of the host is nobody's in particular.
     expect(kindOf("/.well-known/oauth-authorization-server/acme")).toEqual({
-      slug: "acme",
-      kind: "discovery",
+      slug: "",
+      kind: "console",
     });
     expect(kindOf("/auth/callback/github")).toEqual({ slug: "", kind: "relay" });
     expect(kindOf("/")).toEqual({ slug: "", kind: "console" });

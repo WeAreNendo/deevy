@@ -44,8 +44,6 @@ with a few trade-offs:
 - A webhook deevy owes goes out at the next pass rather than at once, unless you add a Queue, which is a
   paid Cloudflare feature.
 - D1's free plan limits how many rows can be written in a day. A busy Workspace outgrows it.
-- When a Human's MCP client registers itself by URL, deevy fetches that URL. The image connects to exactly
-  the address it checked; a Worker checks the name but cannot pin the address it then connects to.
 
 ## What you need
 

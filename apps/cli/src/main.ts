@@ -2,12 +2,11 @@
 /**
  * The CLI's entry.
  *
- * Four verbs are written here because the registry has nothing to generate them
- * from: signing in, signing out, saying who you are, and following the Event
- * log. The last is an operation, but a streaming one — every generated command
- * awaits a value, and awaiting an async generator as if it were one waits
- * forever. Everything else a user can type is generated (generate.ts), so an
- * operation added to deevy is a command without anybody writing one.
+ * It acts as the Agent whose key is in `DEEVY_API_KEY`, and as nobody else
+ * (ADR-0035). Two verbs are written here because the registry has nothing to
+ * generate them from: saying who you are, and putting a Gate in front of a
+ * Human. Everything else a user can type is generated (generate.ts), so an
+ * operation an Agent may call is a command without anybody writing one.
  */
 import { realpathSync } from "node:fs";
 import { argv } from "node:process";
@@ -17,10 +16,9 @@ import { basePathOf } from "@deevy/core";
 import { addGeneratedCommands } from "./generate.ts";
 import { inkFor } from "./render.ts";
 import { openGate } from "./gates.ts";
-import { signIn, signOut, whoAmI } from "./identity.ts";
-import { watch } from "./watch.ts";
-import { clientFor, explain } from "./client.ts";
-import { credentialFor } from "./credentials.ts";
+import { whoAmI } from "./identity.ts";
+import { clientFor } from "./client.ts";
+import { credentialFor, noKey } from "./credentials.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
 declare const __DEEVY_CLI_VERSION__: string | undefined;
@@ -61,7 +59,7 @@ export function baseURLFrom(
   if (!given) {
     throw new Error(
       "No deevy named. Pass the instance URL, or set DEEVY_URL:\n" +
-        "  deevy login https://deevy.example.com",
+        "  deevy whoami https://deevy.example.com",
     );
   }
   // A bare host gets https, except on loopback: deevy's own dev instance is
@@ -103,37 +101,17 @@ export function program(): Command {
     .version(CLI_VERSION);
 
   cli
-    .command("login")
-    .argument(
-      "[url]",
-      "the deevy to sign in to, with its path if it has one (https://app.deevy.dev/acme); defaults to DEEVY_URL",
-    )
-    .description("Sign in as yourself, through a browser")
-    .option("--no-browser", "print the URL instead of opening it")
-    .action(async (url: string | undefined, options: { browser: boolean }) => {
-      await signIn(baseURLFrom(url), { openBrowser: options.browser });
-    });
-
-  cli
-    .command("logout")
-    .argument("[url]", "the deevy to forget; defaults to DEEVY_URL")
-    .description("Forget the token stored for an instance")
-    .action(async (url: string | undefined) => {
-      await signOut(baseURLFrom(url));
-    });
-
-  cli
     .command("whoami")
     .argument("[url]", "the deevy to ask; defaults to DEEVY_URL")
-    .description("Say who this terminal is, and how it is authenticated")
+    .description("Say which Agent this terminal is")
     .option("--json", "print the answer as JSON")
     .action(async (url: string | undefined, options: { json?: boolean }) => {
       await whoAmI(baseURLFrom(url), { json: options.json === true });
     });
 
-  // Ruling happens in deevy's own browser and nowhere else (ADR-0004,
-  // ADR-0010), so the only verb here is `open`: the CLI's job is to find the
-  // Gate and hand it over.
+  // Ruling happens where a Human is — deevy's own page, the tracker or the
+  // chat channel — and never with a key (ADR-0010), so the only verb here is
+  // `open`: the CLI's job is to find the Gate and hand it over.
   cli
     .command("gates")
     .description("Work with Gates")
@@ -144,8 +122,8 @@ export function program(): Command {
     .option("--no-browser", "print the URL instead of opening it")
     .action(async (gate: string, url: string | undefined, options: { browser?: boolean }) => {
       const baseURL = baseURLFrom(url);
-      const credential = await credentialFor(baseURL);
-      if (!credential) throw new Error(`Not signed in to ${baseURL}. Run \`deevy login\` first.`);
+      const credential = credentialFor(baseURL);
+      if (!credential) throw new Error(noKey(baseURL));
       await openGate(baseURL, gate, {
         client: clientFor(credential),
         // DEEVY_WEB_URL, when the SPA is not where the API is.
@@ -153,51 +131,6 @@ export function program(): Command {
         openBrowser: options.browser,
       });
     });
-
-  cli
-    .command("events")
-    .description("Work with events")
-    .command("watch")
-    .argument("[url]", "the deevy to follow; defaults to DEEVY_URL")
-    .description("Follow the Event log as it happens")
-    .option("--after <seq>", "resume from this Event")
-    .option("--project-id <id>", "only this Project's Events")
-    .option("--json", "print each Event as JSON")
-    .action(
-      async (
-        url: string | undefined,
-        options: { after?: string; projectId?: string; json?: boolean },
-      ) => {
-        const baseURL = baseURLFrom(url);
-        // Checked here rather than sent: NaN reaches the server as a validation
-        // failure, and a validation failure used to be retried forever.
-        const after = options.after === undefined ? undefined : Number(options.after);
-        if (after !== undefined && !Number.isInteger(after)) {
-          throw new Error(
-            `--after wants an Event's number, and "${options.after ?? ""}" is not one.`,
-          );
-        }
-        const credential = await credentialFor(baseURL);
-        if (!credential) throw new Error(`Not signed in to ${baseURL}. Run \`deevy login\` first.`);
-        // Ctrl-C ends the watch rather than the process mid-write.
-        const stopping = new AbortController();
-        // `once`, so a second Ctrl-C gets Node's default behaviour back rather
-        // than finding the default still overridden by a handler that has
-        // already done its job.
-        process.once("SIGINT", () => {
-          stopping.abort();
-          process.exitCode = 130;
-        });
-        await watch(clientFor(credential), {
-          ...(after === undefined ? {} : { after }),
-          explain: (error: unknown) => explain(error, credential),
-          ...(options.projectId ? { projectId: options.projectId } : {}),
-          json: options.json === true,
-          ink: inkFor(),
-          signal: stopping.signal,
-        });
-      },
-    );
 
   // Everything else: one command per operation, from the registry.
   addGeneratedCommands(cli, (url) => ({

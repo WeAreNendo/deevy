@@ -1,20 +1,5 @@
 import { defineRelations, defineRelationsPart } from "drizzle-orm";
-import {
-  account,
-  apikey,
-  authRelations,
-  jwks,
-  oauthAccessToken,
-  oauthClient,
-  oauthClientAssertion,
-  oauthClientResource,
-  oauthConsent,
-  oauthRefreshToken,
-  oauthResource,
-  session,
-  user,
-  verification,
-} from "./schema/auth.ts";
+import { account, apikey, authRelations, session, user, verification } from "./schema/auth.ts";
 import { agent, projectGrant } from "./schema/agent.ts";
 import { activity, run, runUsage } from "./schema/run.ts";
 import { delivery } from "./schema/delivery.ts";
@@ -43,14 +28,6 @@ export const tables = {
   account,
   verification,
   apikey,
-  jwks,
-  oauthClient,
-  oauthResource,
-  oauthClientResource,
-  oauthRefreshToken,
-  oauthAccessToken,
-  oauthConsent,
-  oauthClientAssertion,
   workspace,
   member,
   event,

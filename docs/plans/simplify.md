@@ -807,3 +807,41 @@ allowlist, so the invitation's own path is the core test that makes the invited 
 invited role. The walk still has 167 checks. deevy-cloud still binds `send_email`, sets `DEEVY_EMAIL_*`,
 checks that binding when it deploys and shows "Emails today" in its console; until it follows, a
 `Platform.configure` that names `emailsPerDay` is refused, since there is no limit called that.
+
+**Slice 9, only Agents speak MCP.** 2,491 lines of source out and 274 in, 2,575 of tests out and 588 in,
+and 158 out of the two snapshots; the generated auth schema lost 341 lines, and the 219 of them that were
+the eight OAuth tables moved unchanged to `packages/db/src/schema/oauth.ts`, out of the relations and read
+by nothing, for slice 12's fresh history to drop. The CLI lost 929 lines and gained 116, `cimd.ts` in core
+and in `apps/server` was 420, and three Better Auth packages left the lockfile. Two operations went
+(`oauthClients.*`), so the API has 80, and the tool manifest stopped saying which way a tool faces.
+
+It found a hole older than this slice. Better Auth's own `/api/auth/api-key/create` let a signed-in Human
+mint a key for themselves, and the key authenticated as them: a delegated credential deevy's pages never
+issued. `disabledPaths` closes the plugin's routes (a Sponsor's `agents.keys.*` call the plugin from the
+server, which they still may), and `resolvePrincipal` takes a key only when its user is an Agent. That
+check is what let `sessionOnly` go, since a Human now holds no credential but the cookie, and it showed that
+the core's test helper had written every Agent's user as `human`, which `createAgent` never did.
+
+`/.well-known/*` stays in the app's prefixes, in `run_worker_first` and in the Vite proxy, so a client
+probing for an authorization server gets the app's 404 and not the SPA's index with a 200. The hosted
+router's discovery route went, and the meter's `discovery` kind with it; nothing in deevy-cloud reads that
+kind, and only a comment in its console's schema still says a Workspace's path is in its OAuth issuer. The import of a hosted Workspace stopped forgetting the old address, which was
+only ever OAuth resources and tokens. The CLI's `events watch` went too, which the plan did not name: the
+Event stream is a Human's, so an Agent's CLI could only have refused it. The CLI keeps `whoami` and
+`gates open` by hand and generates nineteen commands, and the test that held them to the OpenAPI document
+now holds them to a written list. OPERATIONS.md's one stated weakness of the Worker, that it cannot pin an
+outbound address, went with the client metadata documents it was about. The walk still has 167 checks.
+
+The review found no way left for anything but a Human's session to rule, link an account or act as a Human,
+and checked that `disabledPaths` holds under a path, with a trailing slash and on every route the plugin
+has. It found nine smaller things. The permissions page quoted the refusal `sessionOnly` used to give, where
+an Agent is now told "An Agent cannot do that". OPERATIONS.md still set an Agent's webhook with a CLI command
+that is gone, and DEVELOPMENT.md still said the tool snapshot shows an authorization change. A new CLI test
+wrote its capabilities cache into the real `~/.config`. The generator's streaming skip and the test named
+for it no longer saw a stream, since the command list had already left the only one out as a Human's; the
+list now leaves any stream out itself. `buildServer` and the Worker's isolate still kept their Better Auth configuration for the
+transport test that went. The changeset named the old token files only at the root of a host. And two
+comments named the audience check and `deevy events watch`. The Workers smoke still asserted the RFC 9728
+challenge and discovery under a path, and now asserts the 401 and the 404. Run here, its no-secret phase
+fails while `apps/web/.env` exists, because wrangler loads it; with `CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false`
+it passes, as it does in CI, which has no `.env`.

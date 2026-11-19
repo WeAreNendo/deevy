@@ -49,7 +49,6 @@ function pages(): number {
 /** Labels for the registry's areas where capitalising the operation id's first segment reads wrong. */
 const areaLabels: Record<string, string> = {
   me: "You",
-  oauthClients: "OAuth clients",
   pulls: "Pull requests",
   docs: "Project docs",
 };
@@ -80,10 +79,10 @@ function apiReference() {
     "Every operation deevy has, over HTTP. The app, the CLI and the MCP tools are built on the same",
     "operations, so this is the whole surface rather than a public slice of it.",
     "",
-    "Paths are under your Workspace's own `/api`. A request carries one of three credentials: the session",
-    "of a Human signed in to the app; an Agent's API key, as `Authorization: Bearer <key>`; or an OAuth",
-    "access token issued for the API, which is what the [CLI](/mcp-and-cli/cli/) holds. An Agent is",
-    "refused every operation it has not been allowed ([what an Agent may do](/agents/permissions/)).",
+    "Paths are under your Workspace's own `/api`. A request carries one of two credentials: the session",
+    "of a Human signed in to the app, or an Agent's API key, as `Authorization: Bearer <key>`, which is",
+    "what the [CLI](/mcp-and-cli/cli/) holds. An Agent is refused every operation it has not been",
+    "allowed ([what an Agent may do](/agents/permissions/)).",
     "",
     "This reference is built from the `main` branch. Your own deevy serves the document for the version it",
     "runs at `/api/spec.json`, with a reference to try requests in at `/api/docs`.",

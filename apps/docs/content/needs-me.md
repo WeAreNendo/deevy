@@ -34,8 +34,6 @@ A Gate leaves Needs me once you have ruled on it, or once it is decided. A Gate 
 its Checkpoint wants somebody other than the Human the work is for and that is you, is not waiting on you,
 so it isn't here either; open it from the Run or the record.
 
-From a terminal, `deevy gates list --mine` lists the same Gates. See [The CLI](/mcp-and-cli/cli/).
-
 ## Post a Project's Gates in a chat channel
 
 A Project can post each of its Gates in one Slack channel, so whoever may rule sees it without opening deevy.

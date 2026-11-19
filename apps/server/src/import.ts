@@ -86,14 +86,7 @@ function summary(report: ImportReport, target: Target): string {
     ],
     ["Projects", String(report.projects)],
     ["Events", `${String(report.events)}; the next is #${String(report.nextSeq)}`],
-    ["Lived at", report.previousURL ?? "an address the dump does not say"],
     ["Schema", schemaLine(report, target)],
-    [
-      "OAuth",
-      report.forgotten.resources + report.forgotten.tokens === 0
-        ? "nothing bound to the old address"
-        : `removed ${plural(report.forgotten.resources, "resource")} and ${plural(report.forgotten.tokens, "token")} bound to the old address`,
-    ],
     ["DEEVY_SECRET", sealedLine(report)],
   ];
   const width = Math.max(...rows.map(([label]) => label.length));
@@ -147,7 +140,6 @@ function socketStep(socket: ImportReport["sockets"][number], url: string): strin
 
 function nextSteps(report: ImportReport, baseURL: string | undefined, target: Target): string {
   const url = baseURL?.replace(/\/+$/, "") ?? "<BETTER_AUTH_URL>";
-  const old = report.previousURL ?? "the hosted address";
   const sockets = report.sockets.filter(
     ({ status }) => status !== "removed" && status !== "pending",
   );
@@ -155,13 +147,12 @@ function nextSteps(report: ImportReport, baseURL: string | undefined, target: Ta
     target === "d1"
       ? `Apply it to a new, empty D1 database, in place of the first \`wrangler d1 migrations apply\`: wrangler d1 execute deevy --remote --file workspace.d1.sql${report.migrations.length > 0 ? ", then wrangler d1 migrations apply deevy --remote for what is newer than the dump" : ""}.`
       : null,
-    `Set BETTER_AUTH_SECRET and DEEVY_SECRET to the two values the export handed over${target === "d1" ? ", with wrangler secret put" : ""}. The Sockets' credentials, invitation links and the OAuth signing keys open only under them.`,
+    `Set BETTER_AUTH_SECRET and DEEVY_SECRET to the two values the export handed over${target === "d1" ? ", with wrangler secret put" : ""}. The Sockets' credentials and invitation links open only under them.`,
     `Set BETTER_AUTH_URL to this deevy's own URL${baseURL ? ` (${url})` : ""}, and register an OAuth App for each sign-in provider with ${url}/api/auth/callback/<provider>: the hosted ones were the platform's. Everybody signs in again and lands on their own account. DEEVY_ADMIN_EMAIL can stay unset: the Workspace's admins came with it.`,
-    `Point every Agent's DEEVY_URL at ${url} instead of ${old}. Their API keys still work.`,
+    `Point every Agent's DEEVY_URL and MCP client at ${url} instead of the hosted address. Their API keys still work.`,
     sockets.length > 0
       ? `Point each Socket's tool at its new address:\n${sockets.map((socket) => `       - ${socketStep(socket, url)}`).join("\n")}`
       : null,
-    `Sign the CLI and every MCP client in again: deevy login ${url}. What they held was issued by ${old}.`,
     "Once this deevy is up, delete the hosted Workspace, so nothing is written to the copy you left.",
   ].filter((step): step is string => step !== null);
   return `\nNext:\n${steps.map((step, index) => `  ${String(index + 1)}. ${step}`).join("\n")}\n`;

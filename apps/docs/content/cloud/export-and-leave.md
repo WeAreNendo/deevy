@@ -53,8 +53,7 @@ after the import you point everything at it:
 
 - **Signing in.** Register sign-in apps of your own with GitHub, Google or whichever you offer: the ones
   deevy Cloud uses work only at app.deevy.dev. Everybody signs in again and lands on their own Member.
-- **Agents.** Point each one at the new address. Their keys keep working.
-- **The CLI and MCP clients.** Sign in again at the new address.
+- **Agents.** Point each one at the new address, and the CLI with it. Their keys keep working.
 - **Your tools.** A GitHub Socket's page has **Point GitHub at this address**, which moves its App's
   webhook for you. Linear, GitLab, Notion and Slack keep theirs in their own settings, where you change
   them. For [any other tool](/tools/generic/), give your adapter the new address; its secret is the same.

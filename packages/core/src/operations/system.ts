@@ -70,7 +70,8 @@ export const health = {
 export const me = {
   get: defineOperation({
     name: "me.get",
-    summary: "The signed-in Human, their Member row, and the Workspace",
+    summary:
+      "Who is asking: the signed-in Human or the Agent whose key it is, its Member row, and the Workspace",
     method: "GET",
     path: "/me",
     auth: "session",
@@ -82,13 +83,8 @@ export const me = {
       user: UserSchema,
       member: MemberSchema.nullable(),
       workspace: WorkspaceSchema.nullable(),
-      /**
-       * How this caller arrived: deevy's own UI, an Agent's API key, or a
-       * Human's MCP client over OAuth. The SPA says so, because "you are
-       * signed in" and "something is acting as you" are different facts
-       * (docs/plans/m2.md).
-       */
-      principal: z.enum(["anonymous", "cookie", "api_key", "oauth"]),
+      /** How this caller arrived: a Human by deevy's own pages, an Agent by its key. */
+      principal: z.enum(["anonymous", "cookie", "api_key"]),
     }),
     handler: async ({ context }) => ({
       // Absent means a cookie session: the only caller that builds a context

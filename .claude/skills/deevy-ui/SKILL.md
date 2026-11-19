@@ -35,7 +35,7 @@ plan documents. Read `shadcn` (component rules) and `frontend-design` (design pr
 | the chips and badges                     | `components/member-chip.tsx`, `run-status.tsx`, `kbd-hint.tsx`                                                                    |
 | how an Event reads                       | `lib/event-text.ts`                                                                                                               |
 | markdown on screen                       | `components/markdown.tsx` (read-only)                                                                                             |
-| everything outside the shell             | `App.tsx` (`SignInFrame`, `DevSignIn`), `routes/consent.tsx`                                                                      |
+| everything outside the shell             | `App.tsx` (`SignInFrame`, `DevSignIn`)                                                                                            |
 | the accessible names tests rely on       | "Test contracts", at the end                                                                                                      |
 
 ## Ground rules

@@ -14,7 +14,6 @@ import { WorkPage } from "./routes/work/list.tsx";
 import { WorkItemPage } from "./routes/work/item.tsx";
 import { parseWorkSearch } from "./components/work-filters.tsx";
 import { HomePage } from "./routes/home.tsx";
-import { ConsentPage } from "./routes/consent.tsx";
 import { TokensPage } from "./routes/dev/tokens.tsx";
 import { NotFoundPage } from "./routes/not-found.tsx";
 import { ProjectsSettingsPage } from "./routes/settings/projects.tsx";
@@ -24,7 +23,6 @@ import { EventLogPage } from "./routes/settings/events.tsx";
 import { SettingsLayout } from "./routes/settings/layout.tsx";
 import { WebhooksPage } from "./routes/settings/webhooks.tsx";
 import { WorkspacePage } from "./routes/settings/workspace.tsx";
-import { McpClientsPage } from "./routes/settings/mcp-clients.tsx";
 import { IdentitiesPage, parseIdentitiesSearch } from "./routes/settings/identities.tsx";
 import { MembersPage } from "./routes/settings/members.tsx";
 import { AgentsPage } from "./routes/settings/agents.tsx";
@@ -220,11 +218,6 @@ const identitiesRoute = createRoute({
     return <IdentitiesPage search={identitiesRoute.useSearch()} />;
   },
 });
-const mcpClientsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: "mcp-clients",
-  component: McpClientsPage,
-});
 const eventLogRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "events",
@@ -249,12 +242,6 @@ const inviteRoute = createRoute({
     dropInvitation();
     throw redirect({ to: "/" });
   },
-});
-// Where the OAuth provider sends a Human mid-authorization (packages/core/src/auth.ts).
-const consentRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/consent",
-  component: ConsentPage,
 });
 // The design tokens, drawn: a page for reviewing the palette and the type
 // scale in both themes. Not linked from anywhere; a developer knows the URL.
@@ -287,11 +274,9 @@ const routeTree = rootRoute.addChildren([
     webhooksRoute,
     allowlistRoute,
     identitiesRoute,
-    mcpClientsRoute,
     eventLogRoute,
   ]),
   inviteRoute,
-  consentRoute,
   tokensRoute,
 ]);
 
@@ -299,9 +284,7 @@ const routeTree = rootRoute.addChildren([
  * `?a=b&c=d` to `{ a: "b", c: "d" }`: strings, whatever they look like — and a
  * key given more than once keeps every value, in order, as a list. The router
  * writes the URL back from what this returns, so a value dropped here is gone
- * from the address bar: Better Auth signs the consent page's query with a
- * repeated `ba_param`, and keeping the last one alone made every consent fail
- * its own signature (`invalid_signature`), for an MCP client and `deevy login`.
+ * from the address bar, and a link somebody pasted would come back changed.
  */
 export function parseSearch(searchStr: string): Record<string, string | string[]> {
   const out: Record<string, string | string[]> = {};

@@ -13,10 +13,8 @@ export interface Meter {
   writeDataPoint(point: { indexes?: string[]; blobs?: string[]; doubles?: number[] }): void;
 }
 
-/** What a request was, by its path: a Workspace's API, its pages, its discovery, the relay or the console. */
+/** What a request was, by its path: a Workspace's API, its pages, the relay or the console. */
 export function kindOf(pathname: string): { slug: string; kind: string } {
-  const discovery = /^\/\.well-known\/[^/]+\/([^/]+)/.exec(pathname);
-  if (discovery?.[1] && isSlug(discovery[1])) return { slug: discovery[1], kind: "discovery" };
   const first = pathname.split("/")[1] ?? "";
   if (first === "auth") return { slug: "", kind: "relay" };
   if (first === "" || RESERVED_SLUGS.has(first) || !isSlug(first))

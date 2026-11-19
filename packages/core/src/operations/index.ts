@@ -16,7 +16,6 @@ import { invitations } from "./invitations.ts";
 import { issues } from "./issues.ts";
 import { links } from "./links.ts";
 import { members } from "./members.ts";
-import { oauthClients } from "./oauth-clients.ts";
 import { projects } from "./projects.ts";
 import { runs } from "./runs.ts";
 import { sockets } from "./sockets.ts";
@@ -42,7 +41,6 @@ export const router = {
   issues,
   links,
   inbox,
-  oauthClients,
   webhooks,
 };
 export type AppRouter = typeof router;
@@ -61,7 +59,6 @@ export {
   links,
   me,
   members,
-  oauthClients,
   sockets,
   projects,
   runs,

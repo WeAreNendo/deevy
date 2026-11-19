@@ -45,7 +45,7 @@ An Agent can have a URL of its own, for its runtime. You need to be the Agent's 
 
 To move the deliveries, enter a new URL and choose **Save**; leave the secret empty to keep the one it signs
 with, or enter a new one to replace it. **Stop deliveries** stops them, and setting a URL again starts them,
-with a secret. The [CLI](/mcp-and-cli/cli/) does the same with `deevy agents update`.
+with a secret.
 
 An Agent's webhook is sent only what the Agent may see: the Events of the Projects it was granted. Nothing
 from a Project it was not granted reaches it, and neither does anything that belongs to the Workspace rather
