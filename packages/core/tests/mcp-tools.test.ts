@@ -105,23 +105,19 @@ describe("the committed tool manifest", () => {
     expect(names).not.toContain("inbox_unread_count");
   });
 
-  it("says which way each tool faces, so a client is offered only what it may call", async () => {
-    const manifest = await toolManifest();
-    const facing = (name: string) => manifest.find((tool) => tool.name === name);
-
-    // The writing side of a Run is an Agent's alone: a Run is one Agent's
-    // attempt on an Issue, and a Human is present for their own work (ADR-0016).
-    for (const name of ["runs_start", "runs_post_activity", "runs_finish"]) {
-      expect(facing(name)).toMatchObject({ agents: true, agentsOnly: true });
+  it("says nothing about which way a tool faces, because every one faces an Agent", async () => {
+    // Only an Agent speaks MCP (ADR-0035), so a tool's facing is no longer
+    // something a client is told: `mcp` is sayable only beside `agents`, and
+    // the middleware still refuses a Human's operation to an Agent.
+    for (const tool of await toolManifest()) {
+      expect(Object.keys(tool).sort()).toEqual([
+        "inputSchema",
+        "name",
+        "operation",
+        "readOnly",
+        "summary",
+      ]);
     }
-    // Its reading side is anyone's.
-    expect(facing("runs_list")).toMatchObject({ agents: true, agentsOnly: false });
-    expect(facing("runs_get")).toMatchObject({ agents: true, agentsOnly: false });
-    // And every tool is an Agent's, now that nothing is left for a Human to
-    // answer from their own client (docs/plans/simplify.md, slice 5).
-    for (const tool of manifest) expect(tool.agents).toBe(true);
-    // Nothing is an Agent's alone without being an Agent's at all.
-    for (const tool of manifest) if (tool.agentsOnly) expect(tool.agents).toBe(true);
   });
 
   it("keeps a Socket and a ruling off the tool set", async () => {

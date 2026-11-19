@@ -15,7 +15,6 @@ import {
   deliverWebhook,
   runDueWork,
   signInProviders,
-  type AuthEnv,
   type DueWorkLimits,
 } from "@deevy/core";
 import { devTrackerView, socketModules } from "@deevy/sockets";
@@ -30,10 +29,8 @@ const DEEVY_VERSION = typeof __DEEVY_VERSION__ === "string" ? __DEEVY_VERSION__ 
  * One app per isolate, not one per request. `createApp` builds the oRPC
  * handlers, the OpenAPI document and the MCP server, none of which depend on
  * the request; `buildContext` is the only per-request work. Better Auth is
- * built here for the same reason and one more: its constructor touches the
- * database, and `principal.ts` caches a verified JWKS keyed by the `Auth`
- * object, so an instance per request would re-fetch the key set for every
- * token it verifies. The key is the binding set itself, so there is no global
+ * built here for the same reason: its constructor touches the database. The
+ * key is the binding set itself, so there is no global
  * to reset between tests and an isolate serving a second environment builds a
  * second app (docs/plans/m3.md).
  */
@@ -46,14 +43,6 @@ interface Isolate {
   db: ReturnType<typeof createDb>;
   /** The bindings, read once, so the Cron Trigger configures itself like the app. */
   env: WorkerEnv;
-  /**
-   * What this isolate handed Better Auth. Kept so the one thing that differs
-   * between the two runtimes is assertable where it is decided rather than
-   * where it is assembled: a test that only checked `workerAuthEnv`'s return
-   * value would stay green through a refactor that inlined the object here and
-   * lost the transport with it (docs/plans/m3.md slice 8).
-   */
-  authEnv: AuthEnv;
   /**
    * Better Auth starts initialising inside its constructor, and that touches
    * the database. workerd abandons any I/O still in flight when the request
@@ -71,7 +60,7 @@ interface Isolate {
   ready: Promise<void>;
 }
 
-export function isolateFor(bindings: WorkerBindings): Isolate {
+function isolateFor(bindings: WorkerBindings): Isolate {
   const cached = apps.get(bindings);
   if (cached) return cached;
   const env = readWorkerEnv(bindings);
@@ -132,7 +121,6 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
     }),
     db,
     env,
-    authEnv,
     ready: auth.$context.then(
       () => undefined,
       () => undefined,

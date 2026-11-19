@@ -453,7 +453,7 @@ describe("who may read an invitation Event", () => {
 
   /**
    * The stream is the same log by another transport, and `after: 0` replays
-   * all of it, so it keeps the same rule; `deevy events watch` reads it.
+   * all of it, so it keeps the same rule; an open page of deevy's reads it.
    */
   it("keeps the address out of a Member's stream of the log, and in an admin's", async () => {
     const { db, close } = testDb();

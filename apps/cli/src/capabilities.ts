@@ -13,9 +13,9 @@
  * comparing numbers: it says which command is missing.
  */
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { API_PATH } from "@deevy/core";
-import { configDirectory, fileNameFor } from "./credentials.ts";
+import { API_PATH, basePathOf } from "@deevy/core";
 
 export interface Capabilities {
   /** Dotted operation names, as the instance's own document lists them. */
@@ -29,8 +29,36 @@ export interface Capabilities {
 /** A day: long enough not to be a per-command fetch, short enough to follow a deploy. */
 export const CAPABILITIES_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * One file per instance under `~/.config/deevy`, because somebody works in more
+ * than one: `https://deevy.example.com:8443` is
+ * `https_deevy.example.com_8443.capabilities.json`, and
+ * `https://app.deevy.dev/acme` is `https_app.deevy.dev%2Facme.capabilities.json`.
+ * An instance is its whole URL, path included: two Workspaces under one host
+ * are two deevys, and may be on two versions.
+ */
+export function cacheFileFor(baseURL: string): string {
+  const url = new URL(baseURL);
+  // The scheme is part of which instance this is: `http://host` and
+  // `https://host` are the local-development shape exactly — a direct port and
+  // the same port behind a TLS proxy — and may be two builds.
+  const scheme = url.protocol.replace(":", "");
+  // The path is escaped rather than given underscores like the port: a host
+  // has no `%` in it, so where the path starts is never in doubt, and
+  // `https://host/8443` cannot share a file with `https://host:8443`. `*` is
+  // the one character a file name on Windows refuses that the escaping keeps.
+  const path = encodeURIComponent(basePathOf(url.href)).replace(/\*/g, "%2A");
+  return `${scheme}_${url.host.replace(/:/g, "_")}${path}.capabilities.json`;
+}
+
+export function configDirectory(): string {
+  // XDG first, because somebody who set it meant it.
+  const base = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+  return join(base, "deevy");
+}
+
 function cachePath(baseURL: string, dir: string): string {
-  return join(dir, `${fileNameFor(baseURL).replace(/\.json$/, "")}.capabilities.json`);
+  return join(dir, cacheFileFor(baseURL));
 }
 
 export function operationsIn(spec: unknown): string[] {
@@ -125,10 +153,9 @@ export async function capabilitiesFor(
   const fresh = await fetchCapabilities(baseURL, options.fetchImpl ?? fetch);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   // Not a secret — it is the document the instance serves to anybody — so the
-  // mode is ordinary, unlike the token beside it. The temp-and-rename is the
-  // same though, for the other two reasons it is there: it will not write
-  // through a symlink somebody left in the way, and two CLIs running at once
-  // cannot interleave into a half-written file.
+  // mode is ordinary. It is written to a fresh file and renamed into place, so
+  // it will not write through a symlink somebody left in the way, and two CLIs
+  // running at once cannot interleave into a half-written file.
   const temporary = `${path}.${String(process.pid)}.tmp`;
   await writeFile(temporary, `${JSON.stringify(fresh, null, 2)}\n`, { flag: "wx" })
     .then(() => rename(temporary, path))

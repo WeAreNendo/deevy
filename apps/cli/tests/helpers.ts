@@ -6,24 +6,22 @@
  * middleware and the same audience check a deployed instance uses, with no port
  * to bind.
  */
+import { basePathOf, type AppRouter } from "@deevy/core";
 import { createApp } from "@deevy/core/app";
 import type { Auth } from "@deevy/core/auth";
+import { createORPCClient } from "@orpc/client";
+import { RPCLink } from "@orpc/client/fetch";
+import type { RouterClient } from "@orpc/server";
 import type { InboundEvent, SocketModule, SocketModules } from "@deevy/core/sockets";
-import { API_PATH } from "@deevy/core";
-import type { StoredToken } from "../src/credentials.ts";
 import type { Reporter } from "../src/identity.ts";
-import { authorizeUrl, discover, exchange, listen, pkce, register } from "../src/login.ts";
 import { createAuth } from "@deevy/core/auth";
 import { openDatabase } from "@deevy/adapters/node";
-import { member, user, workspace } from "@deevy/db";
+import { agent, member, user, workspace } from "@deevy/db";
 import type { Db } from "@deevy/db";
 
 const migrationsFolder = new URL("../../../packages/db/drizzle", import.meta.url).pathname;
 
-/**
- * Loopback, because Better Auth refuses a plain-http resource identifier that
- * is not — and the whole sign-in dance is built from this origin.
- */
+/** Loopback and plain http, the way deevy's own dev instance is. */
 export const baseURL = "http://localhost:3000";
 const secret = "test-secret-that-is-at-least-32-characters";
 
@@ -103,50 +101,44 @@ function fakeSockets(): SocketModules {
   return { stub: module };
 }
 
-/** A Human who is already a Member, which is what `me.get` answers about. */
-export async function humanMember(db: Db): Promise<void> {
-  await db.insert(workspace).values({ id: "w1", name: "deevy", slug: "deevy" });
-  await db.insert(user).values({ id: "u1", name: "Ada", email: "ada@example.com" });
-  await db.insert(member).values({
-    id: "m1",
-    workspaceId: "w1",
-    userId: "u1",
-    handle: "ada",
-    role: "admin",
-    kind: "human",
-  });
+/**
+ * An Agent, sponsored by an admin, and the key its Sponsor would have issued it:
+ * what the CLI holds in `DEEVY_API_KEY`, minted by the same plugin deevy's own
+ * `agents.keys.issue` calls (ADR-0035).
+ */
+export async function agentKey(deevy: TestDeevy): Promise<string> {
+  await deevy.db.insert(workspace).values({ id: "w1", name: "deevy", slug: "deevy" });
+  await deevy.db.insert(user).values([
+    { id: "u1", name: "Ada", email: "ada@example.com" },
+    { id: "u2", name: "Planner", email: "planner@agents.example.com", kind: "agent" },
+  ]);
+  await deevy.db.insert(member).values([
+    { id: "m1", workspaceId: "w1", userId: "u1", handle: "ada", role: "admin", kind: "human" },
+    {
+      id: "m2",
+      workspaceId: "w1",
+      userId: "u2",
+      handle: "planner",
+      role: "member",
+      kind: "agent",
+      sponsorId: "m1",
+    },
+  ]);
+  await deevy.db.insert(agent).values({ memberId: "m2" });
+  const { key } = await deevy.auth.api.createApiKey({ body: { userId: "u2", name: "cli" } });
+  return key;
 }
 
 /**
- * The consent a Human gives in the browser, taken by hand: the CLI's part of
- * the dance ends at the authorize URL, and this is the page it opens.
+ * Ada, the admin `agentKey` sponsored the Agent from, in deevy's own pages: a
+ * signed session cookie and the same-origin word a browser adds, so a test can
+ * connect a Socket and bind a Project the way a Human does, before the CLI
+ * reads them as the Agent.
  */
-export async function consent(
-  deevy: TestDeevy,
-  cookie: Headers,
-  location: string,
-): Promise<string> {
-  const res = await deevy.fetch(`${deevy.baseURL}${API_PATH}/auth/oauth2/consent`, {
-    method: "POST",
-    headers: { ...Object.fromEntries(cookie), "content-type": "application/json" },
-    body: JSON.stringify({ oauth_query: new URL(location, baseURL).search.slice(1), accept: true }),
-  });
-  if (res.status !== 200) throw new Error(`consent: ${String(res.status)} ${await res.text()}`);
-  const body = (await res.json()) as { url: string };
-  const code = new URL(body.url).searchParams.get("code");
-  if (!code) throw new Error(`consent returned no code: ${body.url}`);
-  return code;
-}
-
-/**
- * The cookie headers a browser would carry into the consent step.
- *
- * Better Auth signs its session cookie, so a bare token is refused: the value
- * is `<token>.<HMAC of the token>`, which is what the browser would present.
- */
-export async function cookieHeaders(auth: Auth, userId: string): Promise<Headers> {
-  const context = await auth.$context;
-  const session = await context.internalAdapter.createSession(userId);
+export async function asAdmin(deevy: TestDeevy): Promise<RouterClient<AppRouter>> {
+  const context = await deevy.auth.$context;
+  const session = await context.internalAdapter.createSession("u1");
+  // Better Auth signs its session cookie: `<token>.<HMAC of the token>`.
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -156,41 +148,17 @@ export async function cookieHeaders(auth: Auth, userId: string): Promise<Headers
   );
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(session.token));
   const value = `${session.token}.${btoa(String.fromCharCode(...new Uint8Array(signature)))}`;
-  return new Headers({
-    cookie: `${context.authCookies.sessionToken.name}=${encodeURIComponent(value)}`,
+  const link = new RPCLink({
+    // Split the way the CLI's own client splits it (client.ts).
+    origin: new URL(deevy.baseURL).origin,
+    url: `${basePathOf(deevy.baseURL)}/rpc`,
+    headers: {
+      cookie: `${context.authCookies.sessionToken.name}=${encodeURIComponent(value)}`,
+      "sec-fetch-site": "same-origin",
+    },
+    fetch: (url, init) => deevy.fetch(url, init),
   });
-}
-
-/**
- * A token for the API resource, the way `deevy login` gets one — so a test of a
- * generated command spends the credential a person would, through the same
- * audience check (ADR-0023).
- */
-export async function apiToken(deevy: TestDeevy, userId: string): Promise<StoredToken> {
-  const metadata = await discover(deevy.baseURL, deevy.fetch);
-  const loopback = await listen("s");
-  try {
-    const clientId = await register(metadata, deevy.baseURL, loopback.redirectUri, deevy.fetch);
-    const { verifier, challenge } = pkce();
-    const resource = `${deevy.baseURL}${API_PATH}`;
-    const url = authorizeUrl(metadata, {
-      clientId,
-      redirectUri: loopback.redirectUri,
-      challenge,
-      state: "s",
-      resource,
-    });
-    const cookie = await cookieHeaders(deevy.auth, userId);
-    const redirected = await deevy.fetch(url, { headers: cookie, redirect: "manual" });
-    const code = await consent(deevy, cookie, redirected.headers.get("location") ?? "");
-    return await exchange(
-      metadata,
-      { code, clientId, verifier, redirectUri: loopback.redirectUri, resource },
-      deevy.fetch,
-    );
-  } finally {
-    loopback.close();
-  }
+  return createORPCClient(link);
 }
 
 /** Everything the CLI said, so a test reads what a person would see. */
@@ -201,35 +169,6 @@ export function collect(): Reporter & { lines: { out: string[]; err: string[] } 
     out: (line: string) => lines.out.push(line),
     err: (line: string) => lines.err.push(line),
   };
-}
-
-/** Polls until the CLI has printed what the Human's browser would have opened. */
-export async function waitFor(look: () => string | undefined): Promise<string> {
-  for (let i = 0; i < 100; i += 1) {
-    const found = look();
-    if (found) return found;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error("the CLI never printed an authorize URL");
-}
-
-/**
- * The Human's half of `deevy login`, driven from the URL the CLI printed:
- * arrive at the authorize endpoint signed in, consent, and follow the redirect
- * back to the CLI's listener. Answers with the URL the CLI printed.
- */
-export async function approveInBrowser(
-  deevy: TestDeevy,
-  printed: () => string,
-  userId: string,
-): Promise<string> {
-  const url = await waitFor(() => /https?:\/\/\S+oauth2\/authorize\S*/.exec(printed())?.[0]);
-  const cookie = await cookieHeaders(deevy.auth, userId);
-  const redirected = await deevy.fetch(url, { headers: cookie, redirect: "manual" });
-  const code = await consent(deevy, cookie, redirected.headers.get("location") ?? "");
-  const asked = new URL(url).searchParams;
-  await fetch(`${asked.get("redirect_uri") ?? ""}?code=${code}&state=${asked.get("state") ?? ""}`);
-  return url;
 }
 
 /** A fetch that writes down every URL it is asked for, then asks the real one. */

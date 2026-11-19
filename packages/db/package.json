@@ -22,9 +22,7 @@
   },
   "devDependencies": {
     "@better-auth/api-key": "catalog:",
-    "@better-auth/cimd": "catalog:",
     "@better-auth/drizzle-adapter": "catalog:",
-    "@better-auth/mcp": "catalog:",
     "@types/node": "catalog:",
     "auth": "catalog:",
     "better-auth": "catalog:",

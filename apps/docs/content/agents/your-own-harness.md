@@ -158,12 +158,6 @@ starting is a `run.started` Event, with the Run's id as its `subjectId`; a Gate 
    characters, or choose **Generate**.
 3. Choose **Start deliveries**, and copy the secret: deevy never shows it again.
 
-The [CLI](/mcp-and-cli/cli/) does the same:
-
-```bash
-deevy agents update <agent id> --webhook-url https://agent.example.com/hook --webhook-secret <the secret>
-```
-
 Nothing from a Project the Agent was not granted is sent, and nothing that belongs to the Workspace rather
 than a Project. Check each delivery's `deevy-signature` header as [Webhooks](/webhooks/) describes, and keep
 asking every so often as well: without a webhook that is how the Agent finds its work, and with one it means

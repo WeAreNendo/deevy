@@ -1,5 +1,5 @@
 /**
- * Every operation in deevy's registry, as a command.
+ * Every operation an Agent may call, as a command.
  *
  * This is the fourth projection of the one typed core (ADR-0005): the same
  * `defineOperation` that becomes a REST route, an MCP tool and a typed browser
@@ -8,13 +8,17 @@
  * are all read off the definition — so an operation added tomorrow is a command
  * tomorrow, and one that changes its input changes its flags.
  *
+ * The CLI acts as the Agent whose key it holds and as nobody else (ADR-0035),
+ * so an operation only a Human may call is no command of its: one that could
+ * only ever be refused would teach nothing a reference page does not.
+ *
  * It walks the router rather than a generated file on purpose. The zod schema
  * is the thing worth having: it validates argv with the refinements and
  * coercions the operation actually declared, which a JSON Schema snapshot of it
  * would flatten away.
  */
 import { Procedure } from "@orpc/server";
-import type { AuthRule, OperationMeta } from "@deevy/core";
+import type { OperationMeta } from "@deevy/core";
 import { getOperationMeta } from "@deevy/core";
 
 /** One operation, as the CLI sees it. */
@@ -31,36 +35,12 @@ export interface CommandDescriptor {
   /** GET operations only read, which is what lets one skip a confirmation. */
   readOnly: boolean;
   /**
-   * How much authority the operation wants. Carried because it cannot be
-   * recovered later: the OpenAPI document deevy serves has no `security`, so
-   * nothing downstream could tell a caller "that one wants an admin" without
-   * reading the registry again.
-   */
-  auth: AuthRule;
-  /**
-   * Its handler returns an async generator, so a caller that awaits it as a
-   * value waits forever. One operation today, `events.subscribe`.
-   */
-  streaming: boolean;
-  /**
    * Named in the operation's `path` as `{key}`, in the order they appear, and
    * taken as positional arguments. Everything else in the input object is a
    * flag: the registry does not mark path parameters, so this is the only
    * thing that distinguishes them (`/issues/{key}/labels` → `["key"]`).
    */
   parameters: string[];
-  /** Whether an Agent's API key may call it; a Human's token may not, if agentsOnly. */
-  agents: boolean;
-  agentsOnly: boolean;
-  /**
-   * Refused to every credential a CLI can hold: it wants a cookie session,
-   * which means a Human in deevy's own browser. Two reasons live behind the one
-   * flag — a Gate ruling may not be delegated at all (ADR-0004, ADR-0010), and
-   * a delegated credential should not be able to enumerate or revoke the
-   * consents that delegated it. Kept in the list rather than dropped, so the
-   * CLI can say which of those applies instead of relaying a bare FORBIDDEN.
-   */
-  sessionOnly: boolean;
   inputSchema: unknown;
   outputSchema: unknown;
 }
@@ -120,21 +100,20 @@ export function parametersOf(path: string): string[] {
 function collect(node: unknown, found: CommandDescriptor[]): void {
   if (node instanceof Procedure) {
     const meta = getOperationMeta(node) as OperationMeta | undefined;
-    // Every operation, unlike the MCP projection: a command line has no context
-    // window to protect, so the only reason to leave one out would be that it
-    // cannot work, and that is a decision the caller makes from these flags.
-    if (!meta) return;
+    // Every operation an Agent may call, a wider list than the MCP projection's:
+    // a command line has no context window to protect. `public` answers anybody
+    // before it asks who (registry.ts), so it is an Agent's to call too.
+    if (!meta || (meta.agents !== true && meta.auth !== "public")) return;
+    // A stream's handler returns an async generator, and every command awaits
+    // a value, which for a stream waits forever. None is an Agent's today: the
+    // one there is, `events.subscribe`, is a Human's.
+    if (meta.stream === true) return;
     found.push({
       words: commandWords(meta.name),
       operation: meta.name,
       summary: meta.summary,
       readOnly: meta.method === "GET",
-      auth: meta.auth,
-      streaming: meta.stream === true,
       parameters: parametersOf(meta.path),
-      agents: meta.agents === true,
-      agentsOnly: meta.agentsOnly === true,
-      sessionOnly: meta.sessionOnly === true,
       ...schemasOf(node),
     });
     return;
@@ -145,7 +124,7 @@ function collect(node: unknown, found: CommandDescriptor[]): void {
 }
 
 /**
- * Every operation the router holds, in stable name order so a diff of the
+ * Every operation an Agent may call, in stable name order so a diff of the
  * command list moves only when the surface does.
  */
 export function commandsFor(router: unknown): CommandDescriptor[] {

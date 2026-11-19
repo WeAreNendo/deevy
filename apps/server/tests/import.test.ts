@@ -29,7 +29,6 @@ import { buildServer } from "../src/server.ts";
 import {
   callerFor,
   hostedSecrets,
-  hostedURL,
   hostedWorkspace,
   signIn,
   workspaceAt,
@@ -78,9 +77,7 @@ describe("a hosted Workspace's dump, imported into the image", () => {
       sockets: [{ id: hosted.socketId, name: "Acme tracker", provider: "stub" }],
       projects: 1,
       nextSeq: hosted.eventSeq + 1,
-      previousURL: hostedURL,
       migrations: [],
-      forgotten: { resources: 2, tokens: 1 },
       // The Socket's credential and its webhook secret, both sealed in the object.
       sealed: { checked: 2, failed: [] },
     });
@@ -138,15 +135,6 @@ describe("a hosted Workspace's dump, imported into the image", () => {
     const newest = await server.db.query.event.findFirst({ orderBy: { seq: "desc" } });
     expect(newest?.seq).toBe(hosted.eventSeq + 1);
 
-    // What named the hosted address is gone, and the server registered its
-    // resources at the new one when it started.
-    const resources = await server.db.query.oauthResource.findMany();
-    expect(resources.map(({ identifier }) => identifier).sort()).toEqual([
-      `${homeURL}/api`,
-      `${homeURL}/mcp`,
-    ]);
-    expect(await server.db.query.oauthAccessToken.findMany()).toEqual([]);
-    expect(await server.db.query.oauthClientResource.findMany()).toEqual([]);
     server.close();
 
     // Nothing was pending when the server opened it, and nothing is now.
@@ -172,8 +160,6 @@ describe("a hosted Workspace's dump, imported into the image", () => {
       checked: 2,
       failed: ["the Acme tracker Socket's credentials", "the Acme tracker Socket's webhook secret"],
     });
-    // Without BETTER_AUTH_URL, everything bound to an address is the old one's.
-    expect(report.forgotten).toEqual({ resources: 2, tokens: 1 });
   });
 
   it("brings a dump from an older release forward with the image's own migrator", async () => {
@@ -283,7 +269,6 @@ describe("a hosted Workspace's dump, for D1", () => {
     expect(one("SELECT seq FROM sqlite_sequence WHERE name = 'event'")).toEqual({
       seq: hosted.eventSeq,
     });
-    expect(one("SELECT count(*) AS n FROM oauth_resource")).toEqual({ n: 0 });
     expect(d1.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     d1.close();
   });

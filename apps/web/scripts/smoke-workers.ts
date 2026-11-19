@@ -1079,12 +1079,13 @@ async function deevyUnderAPath(origin: string): Promise<void> {
     `status ${String(reference.status)}, ${reference.headers.get("content-security-policy") ?? "no policy"}`,
   );
 
-  const discovered = await fetch(`${origin}/.well-known/oauth-authorization-server/deevy`);
-  const metadata = (await discovered.json().catch(() => ({}))) as { issuer?: string };
+  // Only an Agent speaks MCP, with its key (ADR-0035): there is no OAuth
+  // server to discover, under the path or at the root of the host.
+  const discovered = await fetch(`${here}/.well-known/oauth-authorization-server`);
   check(
-    "the issuer is the path, discovered with the path inserted after the host",
-    discovered.status === 200 && metadata.issuer === here,
-    `status ${String(discovered.status)}, issuer ${String(metadata.issuer)}`,
+    "there is no OAuth server to discover under the path",
+    discovered.status === 404,
+    `status ${String(discovered.status)}`,
   );
 
   const started = await fetch(`${here}/api/auth/sign-in/social`, {
@@ -1226,11 +1227,8 @@ async function theWorkerServesDeevy(origin: string): Promise<void> {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
   });
   check(
-    "an unauthenticated POST /mcp is the RFC 9728 challenge, at the configured origin",
-    mcp.status === 401 &&
-      (mcp.headers.get("www-authenticate") ?? "").includes(
-        `resource_metadata="${baseURL}/.well-known/oauth-protected-resource/mcp"`,
-      ),
+    "an unauthenticated POST /mcp is 401, and asks for a bearer with no metadata to read",
+    mcp.status === 401 && mcp.headers.get("www-authenticate") === 'Bearer realm="deevy"',
     `status ${String(mcp.status)}, ${mcp.headers.get("www-authenticate") ?? "no challenge"}`,
   );
 }

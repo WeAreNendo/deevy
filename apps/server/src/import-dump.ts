@@ -6,9 +6,8 @@
  * image does with the dump, and what a Worker of the team's own needs it to be
  * for D1.
  *
- * Both go through a scratch SQLite database: the dump is loaded, checked to be
- * one deevy Workspace whose rows all hold together, and what was bound to the
- * hosted address is forgotten. The image then migrates it with the migrator
+ * Both go through a scratch SQLite database: the dump is loaded and checked to
+ * be one deevy Workspace whose rows all hold together. The image then migrates it with the migrator
  * the server starts with and moves it into place; D1 gets it back as SQL, by
  * the same writer, less what D1 refuses and with wrangler's journal in place of
  * drizzle's.
@@ -31,7 +30,7 @@ import {
   type DurableStorage,
 } from "@deevy/adapters/durable";
 import { openDatabase } from "@deevy/adapters/node";
-import { API_PATH, MCP_PATH, openSecret } from "@deevy/core";
+import { openSecret } from "@deevy/core";
 
 /** Why an import did not happen, said to the person running it. Nothing was written. */
 export class ImportRefused extends Error {
@@ -51,18 +50,11 @@ export interface ImportReport {
   /** The `seq` the next Event gets: the dump carries the counter, not only the rows. */
   nextSeq: number;
   /**
-   * Where the Workspace answered before, read off the OAuth resources its
-   * authorization server registered (`<url>/mcp`); null when nothing says.
-   */
-  previousURL: string | null;
-  /**
    * The migrations this release has that the dump's did not. The image applies
    * them on import; for D1 they are what `wrangler d1 migrations apply` applies
    * afterwards.
    */
   migrations: string[];
-  /** What was bound to the old address and removed (see `forgetOldAddress`). */
-  forgotten: { resources: number; tokens: number };
   /**
    * Whether `DEEVY_SECRET` opens what is sealed under it, when one was given:
    * every Socket's credentials and webhook secret. `failed` names what did not
@@ -336,55 +328,6 @@ function journalAgainst(db: DatabaseSync, known: string[]): string[] {
   return known.filter((name) => !applied.has(name));
 }
 
-// ------------------------------------------------------- the old address
-
-/**
- * What was bound to the hosted address and is no good anywhere else. deevy is
- * an OAuth authorization server for a Human's MCP client and for the CLI, and
- * everything it issued names the address it was at (auth.ts,
- * `oauthServerPlugins`): its two protected resources, `<url>/mcp` and
- * `<url>/api`, and every access and refresh token, bound to those and to the
- * old issuer. None of them is accepted at the new address, so a client signs
- * in again either way; removing them is so that the Workspace holds no
- * credential for an address it no longer answers at. The resources at the new
- * address are registered by the server when it starts (Better Auth seeds them),
- * and registered clients, consents and the signing keys are kept.
- *
- * Nothing else deevy stores is bound to its address: a Socket's delivery
- * address, a Gate's link and an invitation's are all built from `BETTER_AUTH_URL`
- * as they are needed. What the tools themselves were told is theirs to be told
- * again, which is the operator's list, not this function's.
- */
-function forgetOldAddress(
-  db: DatabaseSync,
-  baseURL: string | undefined,
-): { previousURL: string | null; resources: number; tokens: number } {
-  const identifiers = hasTable(db, "oauth_resource")
-    ? (
-        db.prepare("SELECT identifier FROM oauth_resource").all() as Array<{ identifier: string }>
-      ).map(({ identifier }) => identifier)
-    : [];
-  const mcp = identifiers.find((identifier) => identifier.endsWith(MCP_PATH));
-  const previousURL = mcp ? mcp.slice(0, -MCP_PATH.length) : null;
-  const next = baseURL?.replace(/\/+$/, "");
-  if (next !== undefined && next === previousURL) return { previousURL, resources: 0, tokens: 0 };
-
-  const current = new Set(next === undefined ? [] : [`${next}${MCP_PATH}`, `${next}${API_PATH}`]);
-  const stale = identifiers.filter((identifier) => !current.has(identifier));
-  for (const identifier of stale) {
-    if (hasTable(db, "oauth_client_resource")) {
-      db.prepare("DELETE FROM oauth_client_resource WHERE resource_id = ?").run(identifier);
-    }
-    db.prepare("DELETE FROM oauth_resource WHERE identifier = ?").run(identifier);
-  }
-  let tokens = 0;
-  // Access tokens first: one names the refresh token it was minted beside.
-  for (const table of ["oauth_access_token", "oauth_refresh_token"]) {
-    if (hasTable(db, table)) tokens += Number(db.prepare(`DELETE FROM "${table}"`).run().changes);
-  }
-  return { previousURL, resources: stale.length, tokens };
-}
-
 // ----------------------------------------------------------------- reporting
 
 async function inspect(
@@ -392,7 +335,6 @@ async function inspect(
   options: Common,
   pending: string[],
 ): Promise<ImportReport> {
-  const forgotten = forgetOldAddress(db, options.baseURL);
   const workspace = db.prepare("SELECT name, slug FROM workspace").get() as {
     name: string;
     slug: string;
@@ -431,9 +373,7 @@ async function inspect(
     projects: count(db, "project"),
     events: count(db, "event"),
     nextSeq: highest.seq + 1,
-    previousURL: forgotten.previousURL,
     migrations: pending,
-    forgotten: { resources: forgotten.resources, tokens: forgotten.tokens },
     sealed: options.socketSecret ? await openEverySealed(db, options.socketSecret) : null,
     warnings: [],
   };
@@ -472,7 +412,7 @@ async function openEverySealed(
 // -------------------------------------------------------------- the target
 
 /** deevy's own bookkeeping, which a server writes on its first start before anybody signs in. */
-const BOOKKEEPING = new Set([JOURNAL, "oauth_resource", "jwks"]);
+const BOOKKEEPING = new Set([JOURNAL]);
 
 /**
  * Refuses a target that already holds anything. Returns true when there is a

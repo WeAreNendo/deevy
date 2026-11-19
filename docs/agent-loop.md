@@ -5,13 +5,11 @@ back; the running happens outside. This is one worked example of the outside par
 picks up a record routed to it in the team's own tracker, says what it intends to do, stops at the Gate, and
 carries on once a Human rules in deevy.
 
-Which identity a Claude Code carries is decided by its credential and by nothing else. The loop below holds
-an Agent's API key, so it is that Agent: its own Member, its own Runs, its Sponsor one hop away. The same
-Claude Code on a person's laptop, pointed at the same endpoint with no header, signs that person in over
-OAuth and is that person (docs/OPERATIONS.md, "A Human's own MCP client"): what it says on a record is theirs,
-it reads their inbox, and it cannot open a Run, because a Run is one Agent's attempt (ADR-0016).
-Nothing a Human drives is ever registered as an Agent; an Agent is only ever something a Sponsor created.
-[as-yourself.md](./as-yourself.md) is that example's own page.
+Which identity a Claude Code carries is decided by its key and by nothing else. The loop below holds an
+Agent's API key, so it is that Agent: its own Member, its own Runs, its Sponsor one hop away. Only an Agent
+speaks MCP (ADR-0035): the same Claude Code pointed at the endpoint with no key is refused, and a person
+reads and rules in deevy, in their tracker or in the Project's chat channel. An Agent is only ever something
+a Sponsor created.
 
 It is an example, not a product, and it is the CLI configuration a person can copy. deevy ships nothing that
 runs an Agent (ADR-0034): this loop, a service of your own or a CI job holds the key, and the access to the

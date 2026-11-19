@@ -32,32 +32,16 @@ describe("newId", () => {
     expect(authId("user")).toMatch(/^usr_[0-9a-z]{12}$/);
     expect(authId("session")).toMatch(/^ses_[0-9a-z]{12}$/);
     expect(authId("apikey")).toMatch(/^key_[0-9a-z]{12}$/);
-    expect(authId("oauthClient")).toMatch(/^oacl_[0-9a-z]{12}$/);
     // A new plugin table must fail loudly, not mint a prefix isId rejects.
     expect(() => authId("somethingNew")).toThrow(/somethingNew/);
-    // generateId receives the camelCase schema key, never the table name.
-    expect(() => authId("oauth_client")).toThrow();
+    // The OAuth server's tables are kept unused (docs/plans/simplify.md,
+    // slice 9), and nothing may write a row into one.
+    expect(() => authId("oauthClient")).toThrow(/oauthClient/);
   });
 
   it("knows every model Better Auth creates on this instance", () => {
-    // The auth core, the api-key and jwt plugins, and the oauth-provider
-    // plugin's tables (auth.ts). oauthClientAssertion is created with the
-    // plugin's own jti as its id, but the map keeps the prefix reserved.
-    const models = [
-      "user",
-      "session",
-      "account",
-      "verification",
-      "apikey",
-      "jwks",
-      "oauthClient",
-      "oauthResource",
-      "oauthClientResource",
-      "oauthRefreshToken",
-      "oauthAccessToken",
-      "oauthConsent",
-      "oauthClientAssertion",
-    ];
+    // The auth core and the api-key plugin's table (auth.ts).
+    const models = ["user", "session", "account", "verification", "apikey"];
     for (const model of models) {
       expect(isId(authId(model)), model).toBe(true);
     }

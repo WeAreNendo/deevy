@@ -1,5 +1,8 @@
 # The API is its own protected resource, beside MCP
 
+> Superseded by [ADR-0035](./0035-only-agents-speak-mcp.md): deevy mints no access tokens, so there is no
+> resource to protect beside `/mcp`, and the CLI acts as an Agent with its key.
+
 deevy has been its own OAuth authorization server since M2 (ADR-0007), and every token it minted was bound
 to one resource: `${baseURL}/mcp`. `principal.ts` verified that audience and no other, so an access token
 was, by construction, a token for the tools. That was right while MCP was the only surface a delegated

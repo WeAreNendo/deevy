@@ -63,10 +63,9 @@ Every Ruling is recorded with where it came from, and the Gate shows it: "in dee
 
 ## Who can never rule
 
-**An Agent never rules on a Gate**, its own or any other, whatever it has been granted. Neither does any
-credential deevy issued: an Agent's API key, a token your own MCP client holds, or the CLI signed in as you.
-A Ruling in deevy needs you there in a browser, signed in as yourself; a Ruling from a tool needs that tool's
-account to be one of your Identities.
+**An Agent never rules on a Gate**, its own or any other, whatever it has been granted, and neither does
+anything holding its API key. A Ruling in deevy needs you there in a browser, signed in as yourself; a
+Ruling from a tool needs that tool's account to be one of your Identities.
 
 That is the point of a Gate: the Agent does the work and asks, and a Human answers for letting it through.
 

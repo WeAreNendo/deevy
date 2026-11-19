@@ -139,7 +139,9 @@ export async function memberContext(
   const name = options.name ?? "Ada";
   const email = options.email ?? `${name.toLowerCase()}@example.com`;
   const userId = newId("user");
-  await db.insert(user).values({ id: userId, name, email });
+  // The user says what kind of Member it is, as `createAgent` writes it: a key
+  // stands only for a user that is an Agent's (ADR-0035).
+  await db.insert(user).values({ id: userId, name, email, kind: options.kind ?? "human" });
 
   let found = await db.query.workspace.findFirst();
   if (!found) {

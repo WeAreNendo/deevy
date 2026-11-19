@@ -22,8 +22,8 @@ A Gate you may approve shows up in several places at once. Answer it in whicheve
   the first time you click **Approve** or **Reject**, or when you type `/deevy link` in Slack. See
   [Needs me and chat](/needs-me/).
 
-The Agent can also hand you the Gate's own link. From a terminal, `deevy gates open acme/deevy#42` opens the
-Gate waiting on that record in your browser.
+The Agent can also hand you the Gate's own link: `deevy gates open acme/deevy#42` prints it for the Gate
+waiting on that record.
 
 deevy doesn't email you or remind you. A Gate stays on your **Needs me**, and its message in the channel
 keeps its buttons, until it is decided.
@@ -53,8 +53,8 @@ and whether you may rule.
 From the keyboard, `⇧A` or `⇧R` chooses and puts you in the Note, and `⌘↵` (`Ctrl+Enter`) commits. Nothing
 commits on a single key.
 
-Ruling in deevy needs you signed in to deevy in your browser. Your MCP client, the CLI and an Agent's key
-cannot approve or reject anything.
+Ruling in deevy needs you signed in to deevy in your browser. An Agent's key cannot approve or reject
+anything, over MCP, the API or the CLI.
 
 ### When you cannot rule
 
