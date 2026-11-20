@@ -15,14 +15,6 @@ export const agent = sqliteTable("agent", {
   // Where deevy delivers to lives on the Agent's webhook_subscription, not
   // here: that is the row delivery reads, and a second copy is how the URL
   // came to read back as saved while nothing was ever sent (docs/plans/m2.md).
-  /**
-   * These two are unused since deevy dropped schedules (docs/plans/simplify.md,
-   * slice 6): routing and the parent wake are what start a Run, and an Agent
-   * that wants to look again on a timer keeps its own. Read by nothing;
-   * dropped when the migration history starts afresh (slice 12).
-   */
-  scheduleMinutes: integer("schedule_minutes"),
-  scheduleRanAt: integer("schedule_ran_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
 });
 

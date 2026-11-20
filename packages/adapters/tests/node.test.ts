@@ -1,6 +1,7 @@
 import { chmod, cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { workspace } from "@deevy/db";
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -89,6 +90,27 @@ describe("node adapters", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  /**
+   * deevy's migration history started afresh in 0.12 (ADR-0031's one
+   * exception). A volume a release before it wrote has applied migrations of
+   * which this release has none, and drizzle would try to build every table
+   * again on top of the ones there. It is refused, saying what it is.
+   */
+  it("refuses a database from before the migration history started afresh, and says so", async () => {
+    const path = join(await mkdtemp(join(tmpdir(), "deevy-before-")), "deevy.sqlite");
+    const before = new DatabaseSync(path);
+    before.exec(
+      `CREATE TABLE "__drizzle_migrations" (id INTEGER PRIMARY KEY, hash text NOT NULL, created_at numeric, name text, applied_at TEXT);
+       INSERT INTO "__drizzle_migrations" (hash, created_at, name) VALUES ('', 0, '20260921073003_init'), ('', 0, '20261102093420_marvelous_mojo');
+       CREATE TABLE workspace (id text PRIMARY KEY NOT NULL, name text NOT NULL);`,
+    );
+    before.close();
+
+    expect(() => openDatabase({ path, migrationsFolder })).toThrow(
+      /from before 0\.12.*20260921073003_init.*20261102093420_marvelous_mojo.*start on an empty one/s,
+    );
   });
 
   it("serves files and falls back to index.html", async () => {

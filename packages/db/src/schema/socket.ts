@@ -23,9 +23,10 @@ export const socketProviders = [
 
 /**
  * What a Socket can be asked for. A provider module implements whichever it
- * can, and a Project's binding names one Socket per capability it uses.
+ * can: a Project binds one tracker Socket, and one chat Socket if it posts its
+ * Gates in a channel.
  */
-export const socketCapabilities = ["tracker", "docs", "chat"] as const;
+export const socketCapabilities = ["tracker", "chat"] as const;
 
 /**
  * `pending` is a Socket that exists before it has a credential: connecting a
@@ -78,12 +79,6 @@ export const socket = sqliteTable(
     status: text("status", { enum: socketStatuses }).notNull().default("active"),
     /** When a delivery last arrived, which Settings says beside the tool. */
     lastInboundAt: integer("last_inbound_at", { mode: "timestamp_ms" }),
-    /**
-     * Unused since deevy stopped asking a tool what changed
-     * (docs/plans/simplify.md, slice 4): read by nothing and written by
-     * nothing. Dropped when the migration history starts afresh (slice 12).
-     */
-    pollMinutes: integer("poll_minutes"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).default(now).notNull(),
   },
@@ -115,7 +110,7 @@ export const inboundDelivery = sqliteTable(
     socketId: text("socket_id")
       .notNull()
       .references(() => socket.id, { onDelete: "cascade" }),
-    /** The provider's id for it: `x-github-delivery`, `Linear-Delivery`, a poll's own. */
+    /** The provider's id for it: `x-github-delivery`, `Linear-Delivery`, `deevy-delivery`. */
     deliveryId: text("delivery_id").notNull(),
     /** The provider's name for what happened, which `normalize` switches on. */
     eventName: text("event_name").notNull(),

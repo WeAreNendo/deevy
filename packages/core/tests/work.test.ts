@@ -1,5 +1,4 @@
 import {
-  agent as agentTable,
   issue as issueTable,
   run as runTable,
   webhookSubscription as webhookSubscriptionTable,
@@ -116,7 +115,6 @@ async function seedRuns(
         state: "open" as const,
         stateName: "Open",
         externalUpdatedAt: new Date(),
-        createdBy: on.createdBy,
       };
     }),
   );
@@ -321,15 +319,10 @@ async function assignTo(db: Db, issueId: string, memberId: string | null) {
  * again on a timer brings its own.
  */
 describe("no schedule", () => {
-  it("leaves an Agent's assigned record alone however long it waits, whatever was once set", async () => {
+  it("leaves an Agent's assigned record alone however long it waits", async () => {
     const { db, project, issue, agent } = await workspaceWithAgent();
     const second = await seedIssue(db, project.id, issue.socketId, 2);
     await assignTo(db, second, agent.member.id);
-    // A schedule set before this slice, in the column slice 12 drops.
-    await db
-      .update(agentTable)
-      .set({ scheduleMinutes: 60 })
-      .where(eq(agentTable.memberId, agent.member.id));
 
     const result = await runDueWork({ db, now: new Date(Date.now() + 24 * 60 * MINUTE) });
 

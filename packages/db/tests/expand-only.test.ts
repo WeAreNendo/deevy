@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vite-plus/test";
 import { checkMigrations } from "../scripts/check-migrations.ts";
-import { checkExpandOnly, grandfathered } from "../scripts/expand-only.ts";
+import { beforeTheBreak, checkExpandOnly, cleanBreak } from "../scripts/expand-only.ts";
 
 const run = promisify(execFile);
 
@@ -197,22 +197,40 @@ describe("a contraction that says so", () => {
   });
 });
 
-describe("migrations written before ADR-0031", () => {
+/**
+ * The release that carries docs/plans/simplify.md started the migration
+ * history afresh, ADR-0031's one exception: there were no Workspaces to
+ * upgrade. Its previous release, 0.11, has none of the new history, so the
+ * N-1 smoke does not run it on this schema. It names that break and no other,
+ * so a history that loses its shared root again is not excused by accident.
+ */
+describe("the clean break", () => {
   const drizzleDir = new URL("../drizzle", import.meta.url).pathname;
+  const before = { release: "v0.11.4", migrations: new Set(["20261102093420_marvelous_mojo"]) };
 
-  it("are named one by one, and every name is a migration in packages/db/drizzle", async () => {
-    const folders = new Set(await readdir(drizzleDir));
-    expect([...grandfathered].filter((name) => !folders.has(name))).toEqual([]);
+  it("is where this repository's migrations begin", async () => {
+    expect((await readdir(drizzleDir)).sort()[0]).toBe(cleanBreak);
   });
 
-  it("are not judged, whatever they hold", async () => {
-    const [first] = [...grandfathered];
-    const dir = await drizzleFolder({ [first!]: "DROP TABLE `issue`;" });
-    expect(await checkExpandOnly(dir)).toEqual([]);
-  });
-
-  it("leave the repository's own migrations passing", async () => {
+  it("judges every migration, the first included", async () => {
+    const dir = await drizzleFolder({ [cleanBreak]: "DROP TABLE `issue`;" });
+    expect(await checkExpandOnly(dir)).toHaveLength(1);
     expect(await checkExpandOnly(drizzleDir)).toEqual([]);
+  });
+
+  it("excuses a previous release from before it, and says so", () => {
+    expect(beforeTheBreak(before, [cleanBreak])).toMatch(
+      new RegExp(`v0\\.11\\.4 has none of the history that began at ${cleanBreak}`),
+    );
+  });
+
+  it("excuses none from after it", () => {
+    const after = { release: "v0.12.0", migrations: new Set([cleanBreak]) };
+    expect(beforeTheBreak(after, [cleanBreak, "29991231000000_later"])).toBeNull();
+  });
+
+  it("excuses no other history that shares nothing with the previous release's", () => {
+    expect(beforeTheBreak(before, ["29991231000000_init"])).toBeNull();
   });
 });
 

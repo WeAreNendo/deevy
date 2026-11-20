@@ -68,7 +68,8 @@ What the import does, in order:
 - **It builds the database beside where it will live**, checks that it holds exactly one Workspace whose
   rows all fit together, and only then moves it into place, so a failure leaves nothing behind.
 - **It migrates it**, exactly as an upgrade would, if the dump is from an older release, and names each
-  migration it applied.
+  migration it applied. A dump from before 0.12 is refused, since 0.12 started on an empty database
+  ([Upgrading](/self-hosting/upgrading/#from-011-or-earlier)).
 - **It checks `DEEVY_SECRET`** by opening everything sealed with it, and says plainly which values it
   could not open.
 - **It prints what it imported**, and what to point at the new address, with each Socket's own address

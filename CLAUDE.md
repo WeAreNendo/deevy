@@ -140,7 +140,7 @@ one many, each in its own database (ADR-0028), and each is created by `bootstrap
 address (`DEEVY_ADMIN_EMAIL`) signs in (runs on user creation and on every new session, and is
 idempotent). Other sign-ins join through the allowlist (an email domain) or an invitation. A Human is who
 they sign in as — GitHub, Google, Microsoft or the deployment's OIDC — and their accounts on the tools mean
-nothing to deevy, because a Ruling is made in deevy (ADR-0036); `member_identity` is unread until slice 12.
+nothing to deevy, because a Ruling is made in deevy (ADR-0036).
 
 **Events**: every write appends one through `appendEvent` (`packages/core/src/events.ts`) in the same handler,
 and its tail derives what is owed right after the insert: an Agent's inbox rows (`deriveNotifications`),

@@ -16,10 +16,7 @@ import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { socketCapabilities } from "./sockets/port.ts";
 
-export const WorkspaceSchema = createSelectSchema(workspace)
-  // Left behind until the clean break (schema/workspace.ts): one ceiling on
-  // sub-issues is left, how deep a tree may go.
-  .omit({ maxChildrenPerIssue: true, maxOpenDescendants: true });
+export const WorkspaceSchema = createSelectSchema(workspace);
 export const MemberSchema = createSelectSchema(member);
 export const UserSchema = createSelectSchema(user).pick({
   id: true,
@@ -40,16 +37,7 @@ export const AllowlistRuleSchema = createSelectSchema(allowlistRule);
  * The token exists in one HTTP response, `invitations.create`'s, and nothing
  * reads it back (docs/plans/sign-in.md).
  */
-/**
- * An invitation as every surface shows one: never its token's hash, never the
- * token sealed while its email is owed, and whether that email went
- * (docs/plans/email-channel.md, slice 6).
- */
-export const InvitationSchema = createSelectSchema(invitation).omit({
-  tokenHash: true,
-  // Left behind until the clean break (schema/invitation.ts): no email holds it.
-  sealedToken: true,
-});
+export const InvitationSchema = createSelectSchema(invitation).omit({ tokenHash: true });
 
 /**
  * A Socket as every surface shows one: never its credentials and never its
@@ -64,8 +52,6 @@ export const SocketSchema = createSelectSchema(socket)
     webhookSecret: true,
     previousWebhookSecret: true,
     webhookSecretChangedAt: true,
-    // Left behind until the clean break (schema/socket.ts): deevy asks no tool.
-    pollMinutes: true,
   })
   .extend({
     identity: z.object({ login: z.string(), id: z.string(), mentionHandle: z.string() }),
@@ -83,30 +69,17 @@ export const SocketSchema = createSelectSchema(socket)
 /** One delivery, as a settings page lists what a tool has said lately. */
 export const InboundDeliverySchema = createSelectSchema(inboundDelivery);
 
-export const ProjectSchema = createSelectSchema(project)
-  // Columns left behind until the clean break (schema/project.ts): not part of a Project.
-  .omit({
-    forgeSocketId: true,
-    forgeScope: true,
-    docsSocketId: true,
-    docsScope: true,
-    mirror: true,
-    lastPolledAt: true,
-  })
-  .extend({
-    /**
-     * How a record says which Agent it is for. Declared rather than left as
-     * loose JSON, because every reader of a Project asks for these two fields
-     * and a screen should not have to narrow a column deevy itself wrote
-     * (schema/project.ts).
-     */
-    routing: z.object({ labelPrefix: z.string(), mention: z.boolean() }),
-  });
+export const ProjectSchema = createSelectSchema(project).extend({
+  /**
+   * How a record says which Agent it is for. Declared rather than left as
+   * loose JSON, because every reader of a Project asks for these two fields
+   * and a screen should not have to narrow a column deevy itself wrote
+   * (schema/project.ts).
+   */
+  routing: z.object({ labelPrefix: z.string(), mention: z.boolean() }),
+});
 
-export const IssueSchema = createSelectSchema(issue)
-  // Left behind until the clean break (schema/issue.ts): deevy opens no record,
-  // so it no longer knows who opened one.
-  .omit({ createdBy: true });
+export const IssueSchema = createSelectSchema(issue);
 
 /**
  * An Issue as a list shows one: the projection, plus the Member deevy routed it

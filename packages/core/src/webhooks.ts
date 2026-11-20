@@ -87,7 +87,6 @@ export async function deriveWebhookDeliveriesForMany(
         target: "webhook" as const,
         targetId: subscription.id,
         eventSeq: event.seq,
-        recipientMemberId: null,
       })),
   );
   // At most one attempt owed per subscription per Event, which the unique

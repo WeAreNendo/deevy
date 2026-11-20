@@ -474,11 +474,11 @@ describe("an inbox", () => {
         .map((row) => row.kind)
         .sort(),
     ).toEqual(["assignment", "mention", "run_answered"]);
-    // Nor is anything owed to a Human anywhere else: no delivery names one,
-    // and with no channel bound there is no chat message either. What the
-    // tracker is told at the Gate is the tracker's (target `socket`).
+    // Nor is anything owed to a Human anywhere else: no delivery has a
+    // column for one, and with no channel bound there is no chat message
+    // either. What the tracker is told at the Gate is the tracker's (target
+    // `socket`).
     const owed = await db.query.delivery.findMany();
-    expect(owed.filter((row) => row.recipientMemberId !== null)).toEqual([]);
     expect(owed.filter((row) => row.target === "chat")).toEqual([]);
   });
 
