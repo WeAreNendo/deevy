@@ -1,9 +1,8 @@
-import {
-  parseRulingCommand,
-  type ExternalActor,
-  type ExternalComment,
-  type ExternalIssue,
-  type InboundEvent,
+import type {
+  ExternalActor,
+  ExternalComment,
+  ExternalIssue,
+  InboundEvent,
 } from "@deevy/core/sockets";
 
 /**
@@ -161,21 +160,11 @@ export function normalizeGithub(eventName: string, payload: unknown): InboundEve
     if (!comment || !issue) {
       return [{ kind: "ignored", why: "an issue_comment delivery with no comment in it" }];
     }
-    const ruling = parseRulingCommand(comment.body);
-    const scopeKey = repositoryOf(body);
-    if (ruling) {
-      return [
-        {
-          kind: "ruling",
-          scopeKey,
-          issueExternalId: issue.externalId,
-          comment,
-          decision: ruling.decision,
-          note: ruling.note,
-        },
-      ];
-    }
-    return [{ kind: "comment", scopeKey, issueExternalId: issue.externalId, comment }];
+    // A `/approve` is a comment like any other: a Ruling is made in deevy
+    // (ADR-0036).
+    return [
+      { kind: "comment", scopeKey: repositoryOf(body), issueExternalId: issue.externalId, comment },
+    ];
   }
 
   if (eventName === "sub_issues") {

@@ -83,8 +83,8 @@ export function ConnectNotion({ onConnected }: { onConnected: () => void }) {
             Notion&apos;s Developer portal
           </a>
           , on its Configuration tab, with read content, read comments, insert comments and user
-          information with email addresses. deevy reads a page back when Notion says it changed, and
-          comments on it when a Gate waits and when it is ruled on. Not a personal access token:
+          information without email addresses. deevy reads a page back when Notion says it changed,
+          and comments on it when a Gate waits and when it is ruled on. Not a personal access token:
           deevy would write as you. deevy seals it and never shows it again.
         </FieldDescription>
       </Field>

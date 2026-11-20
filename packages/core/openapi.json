@@ -5259,9 +5259,7 @@
                           "kind": {
                             "type": "string",
                             "enum": [
-                              "email_domain",
-                              "github_org",
-                              "gitlab_group"
+                              "email_domain"
                             ]
                           },
                           "value": {
@@ -5303,7 +5301,7 @@
       },
       "post": {
         "operationId": "allowlist.add",
-        "summary": "Admit every sign-in matching an email domain, a GitHub organization or a GitLab group",
+        "summary": "Admit every sign-in whose verified address is at an email domain",
         "requestBody": {
           "required": true,
           "content": {
@@ -5314,16 +5312,14 @@
                   "kind": {
                     "type": "string",
                     "enum": [
-                      "email_domain",
-                      "github_org",
-                      "gitlab_group"
+                      "email_domain"
                     ]
                   },
                   "value": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 255,
-                    "pattern": "^[a-z0-9][a-z0-9._-]*(\\/[a-z0-9][a-z0-9._-]*)*$"
+                    "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)*$"
                   }
                 },
                 "required": [
@@ -5351,9 +5347,7 @@
                     "kind": {
                       "type": "string",
                       "enum": [
-                        "email_domain",
-                        "github_org",
-                        "gitlab_group"
+                        "email_domain"
                       ]
                     },
                     "value": {
@@ -5937,7 +5931,8 @@
                               "either",
                               "tool",
                               "handshake",
-                              "deevy"
+                              "deevy",
+                              "none"
                             ]
                           },
                           "beginRefusal": {
@@ -6546,9 +6541,6 @@
                     "setupUrl": {
                       "type": "string"
                     },
-                    "accountCallbackUrl": {
-                      "type": "string"
-                    },
                     "state": {
                       "type": "string"
                     }
@@ -6571,7 +6563,6 @@
                     "inboundUrl",
                     "webhookSecret",
                     "setupUrl",
-                    "accountCallbackUrl",
                     "state"
                   ],
                   "additionalProperties": false
@@ -6752,9 +6743,6 @@
                       "active",
                       "paused"
                     ]
-                  },
-                  "identityByEmail": {
-                    "type": "boolean"
                   },
                   "webhookSecret": {
                     "type": "string",
@@ -7571,516 +7559,6 @@
                     "updatedAt",
                     "hasCredentials",
                     "hasWebhookSecret"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/identities": {
-      "get": {
-        "operationId": "identities.list",
-        "summary": "Your accounts on the tools, and which of them may rule as you",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "identities": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "provider": {
-                            "type": "string"
-                          },
-                          "instance": {
-                            "type": "string"
-                          },
-                          "externalLogin": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "verifiedBy": {
-                            "type": "string",
-                            "enum": [
-                              "sign_in",
-                              "oauth",
-                              "link_code",
-                              "email"
-                            ]
-                          },
-                          "linkedAt": {
-                            "type": "string",
-                            "format": "date-time",
-                            "x-native-type": "date"
-                          },
-                          "revokedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "provider",
-                          "instance",
-                          "externalLogin",
-                          "verifiedBy",
-                          "linkedAt",
-                          "revokedAt"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "signIns": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "linkable": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "tools": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "socketId": {
-                            "type": "string"
-                          },
-                          "provider": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "socketId",
-                          "provider",
-                          "name"
-                        ],
-                        "additionalProperties": false
-                      }
-                    }
-                  },
-                  "required": [
-                    "identities",
-                    "signIns",
-                    "linkable",
-                    "tools"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/identities/begin": {
-      "post": {
-        "operationId": "identities.begin",
-        "summary": "Start linking your account on a tool, on that tool's own page",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "socketId": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "socketId"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "url"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/identities/{identityId}/revoke": {
-      "post": {
-        "operationId": "identities.revoke",
-        "summary": "Stop one of your accounts ruling as you",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "identityId",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "provider": {
-                      "type": "string"
-                    },
-                    "instance": {
-                      "type": "string"
-                    },
-                    "externalLogin": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "verifiedBy": {
-                      "type": "string",
-                      "enum": [
-                        "sign_in",
-                        "oauth",
-                        "link_code",
-                        "email"
-                      ]
-                    },
-                    "linkedAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    },
-                    "revokedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "provider",
-                    "instance",
-                    "externalLogin",
-                    "verifiedBy",
-                    "linkedAt",
-                    "revokedAt"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/identities/peek": {
-      "post": {
-        "operationId": "identities.peek",
-        "summary": "Say which account a link code would link to you, without linking it",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "minLength": 8,
-                    "maxLength": 20
-                  }
-                },
-                "required": [
-                  "code"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "provider": {
-                      "type": "string"
-                    },
-                    "instance": {
-                      "type": "string"
-                    },
-                    "externalLogin": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "socketName": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "expiresAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    }
-                  },
-                  "required": [
-                    "provider",
-                    "instance",
-                    "externalLogin",
-                    "socketName",
-                    "expiresAt"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/identities/link": {
-      "post": {
-        "operationId": "identities.link",
-        "summary": "Link the account a code names to you, so it rules as you",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "minLength": 8,
-                    "maxLength": 20
-                  }
-                },
-                "required": [
-                  "code"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "provider": {
-                      "type": "string"
-                    },
-                    "instance": {
-                      "type": "string"
-                    },
-                    "externalLogin": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "verifiedBy": {
-                      "type": "string",
-                      "enum": [
-                        "sign_in",
-                        "oauth",
-                        "link_code",
-                        "email"
-                      ]
-                    },
-                    "linkedAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    },
-                    "revokedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "provider",
-                    "instance",
-                    "externalLogin",
-                    "verifiedBy",
-                    "linkedAt",
-                    "revokedAt"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/identities/{identityId}/restore": {
-      "post": {
-        "operationId": "identities.restore",
-        "summary": "Let an account you unlinked rule as you again",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "identityId",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "provider": {
-                      "type": "string"
-                    },
-                    "instance": {
-                      "type": "string"
-                    },
-                    "externalLogin": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "verifiedBy": {
-                      "type": "string",
-                      "enum": [
-                        "sign_in",
-                        "oauth",
-                        "link_code",
-                        "email"
-                      ]
-                    },
-                    "linkedAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "x-native-type": "date"
-                    },
-                    "revokedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "provider",
-                    "instance",
-                    "externalLogin",
-                    "verifiedBy",
-                    "linkedAt",
-                    "revokedAt"
                   ],
                   "additionalProperties": false
                 }
@@ -9367,57 +8845,6 @@
                               "null"
                             ]
                           },
-                          "via": {
-                            "type": "string",
-                            "enum": [
-                              "web",
-                              "socket",
-                              "slack"
-                            ]
-                          },
-                          "socket": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "provider": {
-                                    "type": "string"
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "provider",
-                                  "name"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "verifiedBy": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "sign_in",
-                                  "oauth",
-                                  "link_code",
-                                  "email"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -9429,9 +8856,6 @@
                           "memberId",
                           "decision",
                           "note",
-                          "via",
-                          "socket",
-                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -9709,57 +9133,6 @@
                               "null"
                             ]
                           },
-                          "via": {
-                            "type": "string",
-                            "enum": [
-                              "web",
-                              "socket",
-                              "slack"
-                            ]
-                          },
-                          "socket": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "provider": {
-                                    "type": "string"
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "provider",
-                                  "name"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "verifiedBy": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "sign_in",
-                                  "oauth",
-                                  "link_code",
-                                  "email"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -9771,9 +9144,6 @@
                           "memberId",
                           "decision",
                           "note",
-                          "via",
-                          "socket",
-                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -10117,57 +9487,6 @@
                                     "null"
                                   ]
                                 },
-                                "via": {
-                                  "type": "string",
-                                  "enum": [
-                                    "web",
-                                    "socket",
-                                    "slack"
-                                  ]
-                                },
-                                "socket": {
-                                  "anyOf": [
-                                    {
-                                      "type": "object",
-                                      "properties": {
-                                        "id": {
-                                          "type": "string"
-                                        },
-                                        "provider": {
-                                          "type": "string"
-                                        },
-                                        "name": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "id",
-                                        "provider",
-                                        "name"
-                                      ],
-                                      "additionalProperties": false
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
-                                },
-                                "verifiedBy": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "enum": [
-                                        "sign_in",
-                                        "oauth",
-                                        "link_code",
-                                        "email"
-                                      ]
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
-                                },
                                 "createdAt": {
                                   "type": "string",
                                   "format": "date-time",
@@ -10179,9 +9498,6 @@
                                 "memberId",
                                 "decision",
                                 "note",
-                                "via",
-                                "socket",
-                                "verifiedBy",
                                 "createdAt"
                               ],
                               "additionalProperties": false
@@ -10481,57 +9797,6 @@
                               "null"
                             ]
                           },
-                          "via": {
-                            "type": "string",
-                            "enum": [
-                              "web",
-                              "socket",
-                              "slack"
-                            ]
-                          },
-                          "socket": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "provider": {
-                                    "type": "string"
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "provider",
-                                  "name"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "verifiedBy": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "sign_in",
-                                  "oauth",
-                                  "link_code",
-                                  "email"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -10543,9 +9808,6 @@
                           "memberId",
                           "decision",
                           "note",
-                          "via",
-                          "socket",
-                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false
@@ -10838,57 +10100,6 @@
                               "null"
                             ]
                           },
-                          "via": {
-                            "type": "string",
-                            "enum": [
-                              "web",
-                              "socket",
-                              "slack"
-                            ]
-                          },
-                          "socket": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "provider": {
-                                    "type": "string"
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "provider",
-                                  "name"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "verifiedBy": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "sign_in",
-                                  "oauth",
-                                  "link_code",
-                                  "email"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "createdAt": {
                             "type": "string",
                             "format": "date-time",
@@ -10900,9 +10111,6 @@
                           "memberId",
                           "decision",
                           "note",
-                          "via",
-                          "socket",
-                          "verifiedBy",
                           "createdAt"
                         ],
                         "additionalProperties": false

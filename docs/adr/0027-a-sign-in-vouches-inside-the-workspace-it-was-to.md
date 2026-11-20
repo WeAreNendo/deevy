@@ -1,5 +1,8 @@
 # A sign-in vouches inside the workspace it was to
 
+> Superseded by [ADR-0036](./0036-a-ruling-is-made-in-deevy.md): no Ruling is taken from a tool, so a
+> sign-in vouches for none, and Linear and Slack are no longer sign-in providers.
+
 Amends [ADR-0025](./0025-the-forge-may-vouch-for-the-human-who-rules.md), which let a sign-in to deevy
 vouch for a Human ruling from github.com or a GitLab instance and refused to make Linear or Slack sign-in
 providers for that purpose, and leaves its two doors, its conditions and its hole as they were.

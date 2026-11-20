@@ -33,9 +33,10 @@ it into deevy, or to keep two of everything, to get the four things above was a 
 So the tracker came out, and deevy connects to the team's tools instead: a **Socket** is one connected tool
 under one identity — a GitHub App, a Linear application, a GitLab user, a Notion connection, a Slack app.
 The plan was [sockets.md](./plans/sockets.md); the choices that are expensive to reverse are
-[ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and
-[ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md); what each slice found is at the end of
-the plan. A clean break: the first release of this shape starts from an empty database.
+[ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) and ADR-0025, which let a Human
+rule from the tool and which [ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md) has since replaced; what
+each slice found is at the end of the plan. A clean break: the first release of this shape starts from an
+empty database.
 
 ## Domain model in one paragraph
 
@@ -47,9 +48,9 @@ names an Agent (a label prefix, a mention), and its **Checkpoints**. What deevy 
 title, body and state as the tool last said them — routed to one Agent; deevy authors none of it. An Agent
 working an Issue produces a **Run** that records who triggered it, posts **Activities** (thought, action,
 response, error), asks on the record when it needs to know something, asks at Checkpoints for **Gates**, attaches **Links** — the pull request it
-opened among them — and ends in a state. A Gate carries the Agent's **Proposal** and the **Rulings** on it, made in deevy, in the
-tracker or in the Project's chat channel. A Human's **Identities** are their accounts on the tools, linked so a Ruling made there is
-theirs. Every change becomes an **Event**. **Notifications** derive from Events and are an Agent's, in its
+opened among them — and ends in a state. A Gate carries the Agent's **Proposal** and the **Rulings** on it,
+made in deevy by a signed-in Human; the record and the Project's chat channel are told of it and link to it,
+and nothing said there rules. A Human is who they sign in as. Every change becomes an **Event**. **Notifications** derive from Events and are an Agent's, in its
 inbox; a Human is sent none, and what waits on them is the Gates they may rule on.
 
 ## Checkpoints
@@ -84,9 +85,8 @@ response carries a summary and Links.
 
 **Gates.** An Agent at a Checkpoint asks with its Proposal and stops. The Gate waits on **Needs me** for the
 Humans who may rule, deevy says so on the record in the tracker and, where the Project binds one, as a message
-in its chat channel, and a Human rules in deevy, with `/approve` or `/reject <why>` in a comment where they
-read it, or with a button on that message — the same policy and the same refusals through all three doors,
-recorded with where it came from. The Run resumes when the Gate is decided.
+in its chat channel, each with a link to the Gate, and a Human rules on the Gate's page in deevy and nowhere
+else (ADR-0036): a `/approve` on the record is a comment. The Run resumes when the Gate is decided.
 
 **Code.** Not deevy's (ADR-0034). The Agent reaches its repository with access its operator gave it, opens its
 own pull request, and attaches it to its Run as a Link; merging it closes the record where the tracker does
@@ -97,21 +97,20 @@ one hop away: the triggering Human, or the Sponsor when routing or an Agent trig
 
 ## Authentication and access
 
-- Humans sign in with GitHub, GitLab, Google, or generic OpenID Connect. No local passwords. Each provider is
-  a client pair in the environment — GitLab and the OIDC provider also take an issuer — and an instance offers
+- Humans sign in with GitHub, Google, Microsoft, or generic OpenID Connect. No local passwords. Each provider
+  is a client pair in the environment — the OIDC provider also takes an issuer — and an instance offers
   exactly the providers whose variables are set.
 - A Human who signs in with a second configured provider on the same verified address links onto the user row
-  they already have: one Human is one Member, with one handle.
-- A Workspace admin allowlists a GitHub organization, a GitLab group, or an email domain; matching sign-ins
-  auto-join. Everyone else is invited with a link an admin copies and sends; deevy sends no email. The first
-  sign-in matching the configured admin email becomes admin.
+  they already have: one Human is one Member, with one handle. Two addresses are two Humans.
+- A Workspace admin allowlists an email domain; sign-ins with a verified address there auto-join. Everyone
+  else is invited with a link an admin copies and sends; deevy sends no email. The first sign-in matching the
+  configured admin email becomes admin.
 - Every Member is a Better Auth user. Agents are token-only users created by their Sponsor, who issues and
   rotates their API keys. A suspended Sponsor suspends their Agents until someone else sponsors them.
 - Agents get a fixed capability set scoped to granted Projects: read records, add Links, ask at Checkpoints,
   drive their own Runs; what an Agent reads or writes in a tool it does with its own access there. Never administer, never manage Members, never rule on a Gate.
-- A Ruling from a tool counts only when the tool signed it and the account is the Human's: the account they
-  sign in with, one they linked from a signed-in session, or — where an admin allowed it, for a tool with
-  nothing better — an address they verified (ADR-0025).
+- A Ruling is made in deevy, by a signed-in Human, and nowhere else (ADR-0036). A Human's accounts on the
+  tools mean nothing to deevy, so there is nothing to link.
 - Only Agents speak MCP: an Agent's API key is a bearer token on the MCP endpoint, and deevy is no OAuth
   authorization server (ADR-0035). A Human works in deevy's pages, the tracker and the chat channel.
 
@@ -128,7 +127,7 @@ One typed core, projected three ways (ADR-0005):
   anyone; `runs_start`, `runs_post_activity`, `gates_request`, `runs_finish` for an Agent alone, because a Run
   is its attempt, and `inbox_list`, because only an Agent has an inbox. A question is asked and
   answered on the record, in the tracker, so none is a Human's alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
-  rule on, in a browser or from a tool that vouches for them.
+  rule on, in deevy's pages.
 - **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is
   not a Member with a session.
 - **Events** delivered as signed webhooks to Agents and to generic subscribers, and consumed internally by the
@@ -151,8 +150,8 @@ One typed core, projected three ways (ADR-0005):
 - **Data**: Drizzle 1.0 release candidate, pinned to the exact rc, on the SQLite dialect; `node:sqlite` on Node,
   D1 on Workers (ADR-0008). Migrations are generated by drizzle-kit and applied by the Node migrator or by
   `wrangler d1 migrations apply`. Timestamps as integers. Postgres is a later third adapter.
-- **Auth**: Better Auth 1.7 with the GitHub, GitLab, Google, and generic OAuth providers and the API-key plugin
-  (ADR-0007). The MCP plugin that made deevy an OAuth authorization server went in
+- **Auth**: Better Auth 1.7 with the GitHub, Google, Microsoft, and generic OAuth providers and the API-key
+  plugin (ADR-0007). The MCP plugin that made deevy an OAuth authorization server went in
   [simplify.md](./plans/simplify.md), slice 9 (ADR-0035).
 - **Toolchain**: Vite+ (`vp`) on Node 22.18+; a pnpm workspace; React with shadcn on Base UI.
 
@@ -173,8 +172,8 @@ tools/acceptance  the acceptance walk: a scripted Agent against every deployment
 
 A Human is sent nothing: no inbox, no email, no direct message, no reminder. What waits on a Human is a Gate
 they may rule on, and it waits on **Needs me** (exactly the open Gates they could approve now), on the record
-in the tracker, and in the Project's chat channel where it binds one: one message per Gate with Approve and
-Reject, changed in place as Rulings land. The tracker tells them the rest. An Agent's inbox carries three
+in the tracker, and in the Project's chat channel where it binds one: one message per Gate with a link to
+rule on it in deevy, changed in place as Rulings land. The tracker tells them the rest. An Agent's inbox carries three
 Notification kinds — assignment, mention, and the Ruling on its Gate — and the Events behind them also go to
 its webhook. Invitations are links an admin copies.
 
@@ -183,7 +182,8 @@ its webhook. Invitations are links an admin copies.
 What each milestone built, written when it was built. Sockets removed a good deal of what M1, Four-eyes Gates
 and Live Documents describe — the Workflow, Documents, Labels, Teams, the board — and
 [simplify.md](./plans/simplify.md) took out more: M4's runtime, the inbox and Channels M1 and M2 gave a
-Human, and the email that followed Sockets. Read those as the record of what was built, and the paragraphs
+Human, the email that followed Sockets, and the Rulings from a tool that Sockets added, with the Identities
+and the sign-in providers they needed. Read those as the record of what was built, and the paragraphs
 above as what deevy is now.
 
 **M0 Scaffold.** Monorepo from the Vite+ template; `packages/core` with the first oRPC contracts; Drizzle
@@ -273,7 +273,8 @@ uses two of them stays one Member; a GitLab group is an allowlist rule beside a 
 invitation is a link an admin creates for one address, accepted after sign-in as an operation with a Member
 and an Event rather than a branch inside an auth hook. The dev stub that lets all of this be walked and tested
 without an account anywhere answers for every provider. Built in eight slices from
-[sign-in.md](./plans/sign-in.md).
+[sign-in.md](./plans/sign-in.md). GitLab's sign-in, and the organization and group rules, went again in slice
+10 of [simplify.md](./plans/simplify.md) (ADR-0036), which left GitHub, Google, Microsoft and OIDC.
 
 **Four-eyes Gates.** The two things M1 and M2 both deferred, and the first feature off the list below. A Gate
 now carries how many distinct Humans must approve before an Issue leaves it, and whether the Human who
@@ -312,7 +313,8 @@ sub-issues is one line in that Sponsor's inbox and not forty. Built in six slice
 **Sockets.** The first milestone to remove more than it added, built in fifteen slices from 2026-09-19 to
 2026-09-24. deevy stopped being a tracker and became the glue between a team's existing tools and its
 Agents: an Issue is a projection of a record in a Socket, a Project is bound to a Socket's container, a Gate is a request on a Run
-with a Proposal, and a Ruling may come from the tracker or from Slack as well as from deevy. GitHub first,
+with a Proposal, and a Ruling could come from the tracker or from Slack as well as from deevy, until
+ADR-0036 made deevy the one place a Ruling is made. GitHub first,
 with the acceptance walk rebuilt around a Socket and run on both deployments on every commit; then rulings
 from outside, the Slack app, Linear, GitLab and Notion, and a Project's documents read where the team keeps
 them. Plan and findings in [sockets.md](./plans/sockets.md), decisions in

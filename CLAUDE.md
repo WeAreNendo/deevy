@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 deevy is the glue between a team's tools and its Agents: the work stays in GitHub, Linear, GitLab or
 Notion, and deevy routes it to Agents, records their Runs, and holds the Gates only a Human may rule on. Use the
 vocabulary in [CONTEXT.md](CONTEXT.md) (Member, Human, Agent, Sponsor, Workspace, Socket, Project, Issue,
-Checkpoint, Gate, Proposal, Ruling, Identity, Run, Event) in code, API names, and UI copy; it lists the words to
+Checkpoint, Gate, Proposal, Ruling, Run, Event) in code, API names, and UI copy; it lists the words to
 avoid. Hard-to-reverse choices live in `docs/adr`, the plan in `docs/PLAN.md`, setup and env vars in
 `docs/DEVELOPMENT.md`, running the image, the Worker and each tool's setup in `docs/OPERATIONS.md`. History:
 M1 (Humans), M2 (Agents), M3 (Workers) and M4 (a reference runtime, since removed) built v1, each from its
@@ -14,7 +14,8 @@ invitations, four-eyes Gates (ADR-0020), live Documents (ADR-0021) and sub-issue
 the **Sockets** milestone (`docs/plans/sockets.md`, ADR-0024 and ADR-0025), done in fifteen slices, cut
 deevy's own tracker out: an Issue is a projection of a record in a Socket (a GitHub App, a Linear
 application, a GitLab user, a Notion connection, a Slack app), a Project is bound to a Socket's container, a Gate is a request on
-a Run with a Proposal, a Ruling may come from deevy, the tracker or Slack, and Documents, the Workflow,
+a Run with a Proposal, a Ruling is made in deevy and the tools are told (ADR-0036 replaced ADR-0025's Rulings
+from the tracker and Slack), and Documents, the Workflow,
 Labels, Teams, stored comments and the board are gone. What each slice found is at the end of that plan. The
 acceptance walk is a script (`vp run acceptance#walk`, `docs/acceptance.md`) that runs a record
 through every deployment on every commit with no account, App or network, with a scripted Agent that holds
@@ -34,8 +35,8 @@ whoever hosts deevy, with `docs/` kept as the internal documentation; and **one 
 (`docs/plans/design-system.md`): `@deevy/design` holds the tokens, faces and logo the app and the docs both
 wear, indigo for a Human and what a Human does, rose for an Agent, amber for a Gate. Now **simpler**
 (`docs/plans/simplify.md`, in fourteen slices): deevy ships no runtime and manages no access — an Agent is
-whatever holds its key — a Socket listens to its tool and announces only at Gates, and the breadth built
-ahead of need comes out. Build from that plan's slices in order; it says which ADRs each one supersedes.
+whatever holds its key — a Socket listens to its tool and announces only at Gates, a Gate is ruled on in
+deevy alone, and the breadth built ahead of need comes out. Build from that plan's slices in order; it says which ADRs each one supersedes.
 
 ## Commands
 
@@ -118,7 +119,8 @@ caller's Member row and the Workspace. `createApp({ db, auth?, origin })` is the
 module in `packages/sockets/src/<provider>` (github, linear, gitlab, notion, slack, and the in-process `stub`);
 the entries build the registry with `socketModules()` and pass it as `createApp({ sockets })`. A tool
 delivers to `POST /hooks/:socketId`, mounted before everything else, where the module verifies the raw body,
-`normalize` turns it into `InboundEvent`s, and `applyInbound` projects, routes and rules. Credentials are
+`normalize` turns it into `InboundEvent`s, and `applyInbound` projects and routes; nothing a tool delivers
+rules, and a chat tool delivers nothing (ADR-0036). Credentials are
 sealed under `DEEVY_SECRET` (`secrets.ts`). A provider module is tested against recorded payloads with an
 injected `fetch`, never the network, and one walk per provider puts the real module behind the real route.
 
@@ -128,13 +130,13 @@ injected `fetch`, never the network, and one walk per provider puts the real mod
 The core uses no interactive transactions because D1 has none; multi-statement writes are sequential
 (bootstrap) or batches.
 
-**Identity** (ADR-0007): every Member is a Better Auth user (`user.kind` is `human | agent`); deevy's own
+**Members and sign-in** (ADR-0007): every Member is a Better Auth user (`user.kind` is `human | agent`); deevy's own
 `workspace` and `member` tables hold roles and Sponsors. A self-hosted deployment serves one Workspace, a hosted
 one many, each in its own database (ADR-0028), and each is created by `bootstrapWorkspace` when its admin's
 address (`DEEVY_ADMIN_EMAIL`) signs in (runs on user creation and on every new session, and is
-idempotent). Other sign-ins join through the allowlist or an invitation. A Human's accounts on the tools are
-Identities (`member_identity`, `packages/core/src/identities.ts`), which is what makes a Ruling from a tool
-theirs (ADR-0025).
+idempotent). Other sign-ins join through the allowlist (an email domain) or an invitation. A Human is who
+they sign in as — GitHub, Google, Microsoft or the deployment's OIDC — and their accounts on the tools mean
+nothing to deevy, because a Ruling is made in deevy (ADR-0036); `member_identity` is unread until slice 12.
 
 **Events**: every write appends one through `appendEvent` (`packages/core/src/events.ts`) in the same handler,
 and its tail derives what is owed right after the insert: an Agent's inbox rows (`deriveNotifications`),

@@ -19,8 +19,9 @@ export interface SettingsNavPage {
 }
 
 /**
- * The Settings area's own navigation: four groups for what were eleven flat
- * links (docs/plans/ui-redesign.md). Shared with the command palette, so a
+ * The Settings area's own navigation: three groups for what were eleven flat
+ * links (docs/plans/ui-redesign.md); the fourth, You, held only Identities,
+ * which went with every Ruling made outside deevy (ADR-0036). Shared with the command palette, so a
  * page is reachable by the same name from either.
  */
 export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
@@ -47,10 +48,6 @@ export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
       { label: "Agents", to: "/settings/agents" },
       { label: "Webhooks", to: "/settings/webhooks" },
     ],
-  },
-  {
-    group: "You",
-    pages: [{ label: "Identities", to: "/settings/identities" }],
   },
 ];
 
@@ -110,7 +107,7 @@ export function SettingsLayout() {
             scrolls sideways: the last page was four swipes from General, and the
             page you were on could be scrolled off its own navigation. One
             control instead — it names where you are without being opened, opens
-            to the whole list in the four groups the wide nav uses, and costs one
+            to the whole list in the three groups the wide nav uses, and costs one
             row (Matt, 2026-09-07). */}
         <nav aria-label="Settings pages" className="mb-6 lg:hidden">
           <Select

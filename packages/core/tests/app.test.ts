@@ -116,12 +116,6 @@ describe("createApp", () => {
     expect(await providers({ google: pair })).toEqual([
       { id: "google", label: "Google", kind: "social" },
     ]);
-    // GitLab is one entry whichever instance it points at, so a self-hosted
-    // issuer changes where a sign-in goes and not what the page offers
-    // (docs/plans/sign-in.md slice 5).
-    expect(await providers({ gitlab: { ...pair, issuer: "https://gitlab.example.com" } })).toEqual([
-      { id: "gitlab", label: "GitLab", kind: "social" },
-    ]);
     // The generic OIDC entry is labelled by the deployment, so an operator
     // names their own IdP without touching the SPA, and falls back to what a
     // teammate who has never heard of it would read (docs/plans/sign-in.md
@@ -145,11 +139,6 @@ describe("createApp", () => {
     expect(await providers({ github: { clientId: "", clientSecret: "secret" } })).toEqual([]);
     expect(await providers({ github: { clientId: "id", clientSecret: "" } })).toEqual([]);
     expect(await providers({ google: { clientId: "", clientSecret: "secret" } })).toEqual([]);
-    expect(
-      await providers({
-        gitlab: { clientId: "", clientSecret: "", issuer: "https://git.example" },
-      }),
-    ).toEqual([]);
   });
 
   /**
@@ -257,22 +246,6 @@ describe("createApp", () => {
     });
   });
 
-  it("sends a browser that comes back from linking an account while signed out to say so", async () => {
-    // The route sits among the OpenAPI surface's paths, and a browser that
-    // lands on it must get a page rather than a JSON 404 (account-links.ts).
-    const context = anonymous();
-    const app = createApp({ db: context.db, baseURL: "https://deevy.test" });
-
-    const answer = await app.request(
-      "/api/identities/linear/callback?code=one-use&state=sock_x.1.forged",
-    );
-
-    expect(answer.status).toBe(302);
-    const location = new URL(answer.headers.get("location") ?? "");
-    expect(location.pathname).toBe("/settings/identities");
-    expect(location.searchParams.get("linkError")).toMatch(/Sign in to deevy/);
-  });
-
   it("rejects session and member operations for anonymous callers", async () => {
     const context = anonymous();
     const client = createRouterClient(router, { context });
@@ -287,10 +260,6 @@ describe("the sign-in providers a deployment offers", () => {
   const pair = { clientId: "id", clientSecret: "secret" };
   const everything: AuthProviders = {
     oidc: { ...pair, issuer: "https://idp.example", name: "Acme SSO" },
-    atlassian: pair,
-    slack: pair,
-    linear: pair,
-    gitlab: pair,
     microsoft: pair,
     google: pair,
     github: pair,
@@ -301,10 +270,6 @@ describe("the sign-in providers a deployment offers", () => {
       { id: "github", label: "GitHub", kind: "social" },
       { id: "google", label: "Google", kind: "social" },
       { id: "microsoft", label: "Microsoft", kind: "social" },
-      { id: "gitlab", label: "GitLab", kind: "social" },
-      { id: "linear", label: "Linear", kind: "social" },
-      { id: "slack", label: "Slack", kind: "social" },
-      { id: "atlassian", label: "Atlassian", kind: "social" },
       { id: "oidc", label: "Acme SSO", kind: "social" },
     ]);
   });
@@ -314,11 +279,11 @@ describe("the sign-in providers a deployment offers", () => {
     expect(
       signInProviders({
         providers: everything,
-        signInOrder: ["oidc", "nowhere", "slack"],
+        signInOrder: ["oidc", "nowhere", "microsoft"],
       }).map((provider) => provider.id),
-    ).toEqual(["oidc", "slack", "github", "google", "microsoft", "gitlab", "linear", "atlassian"]);
+    ).toEqual(["oidc", "microsoft", "github", "google"]);
     expect(
-      signInProviders({ providers: { github: pair }, signInOrder: ["slack"] }).map(
+      signInProviders({ providers: { github: pair }, signInOrder: ["google"] }).map(
         (provider) => provider.id,
       ),
     ).toEqual(["github"]);

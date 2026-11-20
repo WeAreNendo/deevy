@@ -34,9 +34,8 @@ export function keysFor(event: LiveEvent): QueryKey[] {
       keys.push(orpc.runs.key(), orpc.gates.key());
       break;
     case "gate":
-      // A ruling somebody else made, from deevy, the tracker or Slack: the
-      // card in front of this Human has to stop offering a decision that has
-      // already been taken (ADR-0025).
+      // A ruling somebody else made: the card in front of this Human has to
+      // stop offering a decision that has already been taken.
       keys.push(orpc.gates.key(), orpc.runs.key());
       break;
     case "socket":

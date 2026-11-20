@@ -53,16 +53,17 @@ A Member who is a person. See [Humans, Agents and Sponsors](/concepts/humans-and
 
 What names one thing deevy keeps, in a shape that says what it is: a short prefix, an underscore, and twelve
 characters. `iss_k3xr8v2m9qpw` is an Issue, `mem_…` a Member, `run_…` a Run, `proj_…` a Project, `sock_…` a
-Socket, `gate_…` a Gate, `chk_…` a Checkpoint, `mid_…` an Identity. An Issue's **key**, such as
+Socket, `gate_…` a Gate, `chk_…` a Checkpoint. An Issue's **key**, such as
 `acme/deevy#42` or `ENG-12`, is the tracker's handle for it, and its **URL** is where it really lives;
 neither is its id. An Event's **seq** is a number: its place in the log. See
 [Issues](/concepts/issues/#keys-urls-and-ids).
 
 ### Identity
 
-A Human's account on a Socket's tool, linked to their Member so that a Ruling made there is theirs. Linked by
-signing in to deevy with the same provider, or by a link the Human completes while signed in; never by a
-display name. See [Humans, Agents and Sponsors](/concepts/humans-and-agents/#identities).
+Who a Human is in deevy: the sign-in they come in with, such as their GitHub or Google account, and the
+verified address it carries. Two sign-ins on the same verified address are one Human. A Human's accounts on
+the tools a Socket connects are not Identities: nothing they write there rules on a Gate. See
+[Humans, Agents and Sponsors](/concepts/humans-and-agents/#your-accounts-on-your-tools).
 
 ### Issue
 
@@ -94,10 +95,10 @@ Gate; a changed Proposal supersedes the Gate. See
 
 ### Ruling
 
-A Human's decision on a Gate, with a note, made in deevy, on the tracker or in Slack, and recorded with where
-it came from. An Agent never rules, and neither does any credential deevy issued. See
-[Gates and Rulings](/concepts/gates-and-rulings/#ruling) and
-[Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
+A Human's decision on a Gate, approve or reject, with a note, made in deevy while signed in, and nowhere
+else: a comment on the record, `/approve` included, rules nothing. An Agent never rules,
+and neither does any credential deevy issued. See [Gates and Rulings](/concepts/gates-and-rulings/#ruling)
+and [How a Gate asks](/gates/how-a-gate-asks/).
 
 ### Run
 

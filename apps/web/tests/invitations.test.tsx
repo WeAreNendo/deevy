@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 interface StubInvitation {
@@ -32,7 +32,6 @@ const stub = vi.hoisted(() => ({
 }));
 
 const github = { id: "github", label: "GitHub", kind: "social" as const };
-const gitlab = { id: "gitlab", label: "GitLab", kind: "social" as const };
 const google = { id: "google", label: "Google", kind: "social" as const };
 
 vi.mock("../src/lib/auth.ts", () => ({
@@ -299,35 +298,19 @@ describe("signed in, not yet a Member", () => {
   });
 
   /**
-   * A GitHub organization or GitLab group rule is decided by the account
-   * somebody signed in with on that forge, so the screen names one only where
-   * people sign in with it here, as Settings › General offers it: deevy Cloud,
-   * which signs in with GitHub and Google, sent people to ask for a GitLab
-   * group rule it cannot have.
+   * Who may join is an address's domain or an invitation, wherever somebody
+   * signed in (docs/plans/simplify.md, slice 10): no organisation or group
+   * rule is offered, whatever the deployment signs in with.
    */
-  it("names only the rules this deployment can offer", async () => {
+  it("asks for the email domain alone, whatever this deployment signs in with", async () => {
     stub.session = { user: { email: "grace@example.com", emailVerified: true } };
-    const says = async (providers: (typeof stub)["providers"], sentence: string) => {
-      stub.providers = providers;
-      const pinged = stub.pinged;
-      const { unmount } = mount(<App />);
-      // Until the providers are read the screen names only the email domain,
-      // so wait for them, and for the render they cause, before reading it.
-      await waitFor(() => expect(stub.pinged).toBeGreaterThan(pinged));
-      await act(() => new Promise((settled) => setTimeout(settled, 0)));
-      const line = await screen.findByText(new RegExp(`approve your ${sentence} — then sign in`));
-      const text = line.textContent ?? "";
-      unmount();
-      return text;
-    };
-
-    expect(await says([github, google], "email domain or GitHub organization")).not.toMatch(
-      /GitLab/,
-    );
-    expect(await says([google], "email domain")).not.toMatch(/GitHub|GitLab/);
-    expect(await says([github, gitlab], "email domain, GitHub organization or GitLab group")).toBe(
-      "grace@example.com isn't a Member of this Workspace yet. Ask an admin to invite you, or to approve your email domain, GitHub organization or GitLab group — then sign in again.",
-    );
+    stub.providers = [github, google];
+    mount(<App />);
+    expect(
+      await screen.findByText(
+        "grace@example.com isn't a Member of this Workspace yet. Ask an admin to invite you, or to approve your email domain — then sign in again.",
+      ),
+    ).toBeTruthy();
   });
 
   it("asks for an invitation when the provider did not confirm the address", async () => {

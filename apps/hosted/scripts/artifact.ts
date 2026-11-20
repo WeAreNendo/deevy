@@ -164,19 +164,6 @@ const providers: Array<[prefix: string, name: string, id: string, extra: Setting
   ["GITHUB", "GitHub", "github", []],
   ["GOOGLE", "Google", "google", []],
   [
-    "GITLAB",
-    "GitLab",
-    "gitlab",
-    [
-      {
-        name: "GITLAB_ISSUER",
-        kind: "var",
-        required: false,
-        description: "A self-managed GitLab's origin; gitlab.com when unset.",
-      },
-    ],
-  ],
-  [
     "MICROSOFT",
     "Microsoft",
     "microsoft",
@@ -189,9 +176,6 @@ const providers: Array<[prefix: string, name: string, id: string, extra: Setting
       },
     ],
   ],
-  ["LINEAR", "Linear", "linear", []],
-  ["SLACK", "Slack", "slack", []],
-  ["ATLASSIAN", "Atlassian", "atlassian", []],
   [
     "DEEVY_OIDC",
     "an OpenID Connect provider",

@@ -31,7 +31,6 @@ plan documents. Read `shadcn` (component rules) and `frontend-design` (design pr
 | a Settings page                          | `components/settings-page.tsx`, `routes/settings/*`, `settingsNav` in `routes/settings/layout.tsx`                                |
 | connecting a tool                        | `routes/settings/sockets.tsx`, `routes/settings/socket.tsx`, `components/connect-*.tsx`                                           |
 | a Project's binding, chat and policy     | `routes/settings/projects.tsx`, `components/bind-project.tsx`, `project-binding.tsx`, `project-chat.tsx`, `checkpoint-policy.tsx` |
-| a Human's linked accounts                | `routes/settings/identities.tsx`                                                                                                  |
 | the chips and badges                     | `components/member-chip.tsx`, `run-status.tsx`, `kbd-hint.tsx`                                                                    |
 | how an Event reads                       | `lib/event-text.ts`                                                                                                               |
 | markdown on screen                       | `components/markdown.tsx` (read-only)                                                                                             |
@@ -41,7 +40,7 @@ plan documents. Read `shadcn` (component rules) and `frontend-design` (design pr
 ## Ground rules
 
 - Vocabulary is CONTEXT.md's, in code, copy and tests: Member, Human, Agent, Sponsor, Workspace, Socket,
-  Project, Issue (a projection of a record in a tracker), Checkpoint, Gate, Proposal, Ruling, Identity, Run,
+  Project, Issue (a projection of a record in a tracker), Checkpoint, Gate, Proposal, Ruling, Run,
   Activity, Event. On screen a record is usually "the record" or its key, because
   that is what the team calls it where it lives. Never "ticket", "task", "status", "user", "bot"; and
   Document, State, Workflow, Label and Team are not deevy's words any more — where a tool has them (a Notion
@@ -71,9 +70,9 @@ plan documents. Read `shadcn` (component rules) and `frontend-design` (design pr
 `DEEVY_DEV_STUB_OAUTH=1` makes the Node server import `apps/web/scripts/stub-oauth.js` — the same stub the
 acceptance walk and the Workers smoke prepend to their bundles — so the OAuth `code` is the email address and
 the signed-out page offers "Sign in as this email". It stands in for the client pairs too, so an environment
-that configures no provider still offers all four buttons: GitHub, Google, GitLab and one generic OpenID
-Connect entry. `DEEVY_DEV_STUB_SOCKETS=1` registers the Socket provider that is not a tool — a tracker and a
-forge in the process, `packages/sockets/src/stub` — so records arrive, route and open Runs with no App, no
+that configures no provider still offers all four buttons: GitHub, Google, Microsoft and one generic OpenID
+Connect entry. `DEEVY_DEV_STUB_SOCKETS=1` registers the Socket provider that is not a tool — a tracker in the
+process, `packages/sockets/src/stub` — so records arrive, route and open Runs with no App, no
 tunnel and no network. Both are refused under `NODE_ENV=production`; the Worker never has the first.
 `health.ping` reports `devSignIn` and `devSockets`, which is how the SPA knows.
 
@@ -87,8 +86,8 @@ Two launch configurations in `.claude/launch.json` put that together:
 
 The seed (`apps/server/src/seed.ts`) signs in `ada@example.com` (the admin), `grace@example.com` and
 `omar@example.com` through the stub, connects a stub Socket, creates the Agents Planner and Builder, binds two
-Projects, projects thirty-odd records, and leaves Runs in every status, Gates open and ruled — in deevy and
-`via: socket` — Links and a webhook, all through the operations, so Needs me and the Event log fill
+Projects, projects thirty-odd records, and leaves Runs in every status, Gates open and ruled in deevy, Links
+and a webhook, all through the operations, so Needs me and the Event log fill
 themselves. Sign in as any of the three with the dev form.
 
 ## Registries
@@ -148,7 +147,7 @@ through the catalog.
 ## Navigation and keyboard
 
 Primary sidebar: **Needs me** (`/`) · **Runs** · **Work** · Settings (its own area with its own sidebar:
-Workspace / Work / Agents and delivery / You) · the Member's chip, with search (⌘K) at the top. A Human has
+Workspace / Work / Agents and delivery) · the Member's chip, with search (⌘K) at the top. A Human has
 no inbox and no badge: what waits on them is Needs me, and the chat channel a Project's Gates are posted in
 (docs/plans/simplify.md, slice 8). `⌘K` palette (Go to, Settings, Help); `?` shortcuts; `g r` Runs, `g w`
 Work, `g p` Projects, `g s` Settings; `j`/`k`/arrows/`Enter`/`o`/`Esc` in lists; on a Gate `⇧A`/`⇧R` choose a ruling
@@ -275,19 +274,17 @@ className={sidebarMenuButtonVariants(...)}`), not `render={<SidebarMenuButton/>}
 - **The sign-in buttons wear their providers' brands**, the one place a screen shows colours that are not
   deevy's (`components/sign-in-button.tsx`, Matt, 2026-09-26): GitHub's dark button with the Octocat, light
   on a dark page; Google's and Microsoft's own light and dark themes, with the four-colour G and the four
-  squares their guidelines require; GitLab's charcoal with the orange tanuki; Slack's white button and its
-  aubergine one. Linear and Atlassian publish no button, so theirs is deevy's outline with the mark in the
-  brand's colour. The colours are `--brand-*` tokens in `index.css`; the marks are Simple Icons (CC0) and the
-  owners' published logos, `aria-hidden`, so a button's name stays `Continue with <provider>`. An OpenID
-  Connect IdP has no brand to borrow and stays deevy's outline button with a key.
-- **The sign-in card shows three, then "More ways to sign in"** (`lib/sign-in.ts`, Matt, 2026-09-26): the
-  most-used first, one disclosure for the long tail, and a last-used badge. Four or fewer all show. Past that the first
-  three of the server's order are full-width and the rest open in place under a Base UI `Collapsible` as a
-  two-column grid of compact buttons — the provider's name visible, `Continue with <provider>` as their
-  `aria-label` — with the single sign-on last on a row of its own. The button this browser used last
-  (Better Auth's `lastLoginMethod` cookie, read by `lastLoginMethodClient`) comes first with a "Last used"
-  pill on its corner; the pill is the button's description (`aria-describedby`), never part of its name,
-  and there is none when only one provider is offered.
+  squares their guidelines require. The colours are `--brand-*` tokens in `index.css`; the marks are Simple
+  Icons (CC0) and the owners' published logos, `aria-hidden`, so a button's name stays `Continue with
+<provider>`. An OpenID Connect IdP has no brand to borrow and stays deevy's outline button with a key.
+  GitLab, Linear, Slack and Atlassian are not sign-ins since simplify.md slice 10 (ADR-0036), and their
+  marks and tokens went with them.
+- **The sign-in card shows every provider** (`lib/sign-in.ts`): a deployment offers four at most — GitHub,
+  Google, Microsoft and its single sign-on — so there is no disclosure, and "More ways to sign in" went with
+  the other four (simplify.md, slice 10). They come in the server's order, except that the button this
+  browser used last (Better Auth's `lastLoginMethod` cookie, read by `lastLoginMethodClient`) comes first
+  with a "Last used" pill on its corner; the pill is the button's description (`aria-describedby`), never
+  part of its name, and there is none when only one provider is offered.
 - **Everything outside the shell** (`SignedOut`, `NotAMember`, `Suspended`) renders in `SignInFrame`. **The
   sign-in buttons are `health.ping`'s `providers`**, one per entry in the order the server sent (`Continue
 with <label>`); a provider is added by configuring one, never by editing `App.tsx`. The dev form stays
@@ -318,10 +315,12 @@ with <label>`); a provider is added by configuring one, never by editing `App.ts
 - **A Gate** (`/gates/$requestId`) is the one link an Agent hands a Human, so it answers four things at a
   glance: what is proposed (`region "Proposal"`, the markdown), which record (its key, linking out), where
   the count stands, and whether this Human may rule. The rail holds the ruling card on top, then `list "Gate
-decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitHub", with "(email)" where an
-  address vouched for the Human — then "The Run that stopped here". The card is focused while the Gate is
-  open.
-- **`components/gate-controls.tsx` is the only place a ruling is made in deevy.** It says the arithmetic
+decisions"` — each the Human who ruled, Approved or Rejected, when, and the note; it says nothing of where,
+  because every Ruling is made here (ADR-0036) — then "The Run that stopped here". The card is focused while
+  the Gate is open. The record's comment and the chat channel's message link here: this page is where a Gate
+  is ruled on.
+- **`components/gate-controls.tsx` is the only place a Ruling is made at all**: a comment on the record and a
+  message in the chat channel only say where the Gate is (ADR-0036). It says the arithmetic
   out loud ("1 of 2"), and says why it will not take this Human's ruling before they click — the reason is
   the server's own (`gates.get`), so the disabled button and the refusal behind it can never disagree.
   Approve and Reject are decided apart (`you.mayApprove` beside `you.mayRule`): the Human the work is for,
@@ -350,8 +349,9 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   secret where the tool makes one, **Mint** where deevy may, Mint alone for the generic Socket, whose secret
   only deevy makes, and no section for Notion, whose verification token is its secret), and what it has
   said lately
-  (`table "Deliveries"`). A section that only one tool has — Notion's `region "Verifying the webhook"` and
-  "Who commented", Linear's "Assigning issues to deevy", GitHub's "Where it is installed" with a link to
+  (`table "Deliveries"`). A chat tool — Slack, `webhookSecretFrom: "none"` — delivers nothing, so its page has
+  none of those three, only how it is doing (ADR-0036). A section that only one tool has — Notion's `region
+"Verifying the webhook"`, Linear's "Assigning issues to deevy", GitHub's "Where it is installed" with a link to
   install the App on more repositories — keys off `socket.provider`; what a tool _can_ do is the server's to
   say wherever it decides anything. GitHub's install link is drawn only from the App page GitHub gave
   (`config.htmlUrl`, from the manifest or learned when a pasted App connects), never built from its slug,
@@ -376,11 +376,6 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
 - **A Run that did not finish can be tried again.** A failed or stale Run's page offers **Try again**
   (`runs.retry`) in its header and goes to the fresh Run; the server decides who may, and a refusal shows in
   its own words under the button.
-- **Identities** (`routes/settings/identities.tsx`) lists the accounts that rule as this Human, how deevy
-  knows each, and lets them unlink one and link it again; a Slack code is checked before it links
-  (**Check the code**, then **Link @x to me**), and a tool with a consent page of its own (Linear) is **Link
-  <tool>**. The page reads `?linked=` and `?linkError=` off the URL a tool's callback sends the browser back
-  to.
 - **An invitation is a link to copy** (simplify.md, slice 8): deevy sends no email, so the Invite dialog
   shows the link once with **Copy the link**, and an outstanding row says who and until when, never whether
   anything was sent.
@@ -406,8 +401,8 @@ The names a screen keeps unless a change says otherwise:
   `Inbox`; `menuitemradio "Dark"` and `menuitem "Sign out"` in the Member menu; `heading "Keyboard"` on the
   shortcuts sheet and `option "Keyboard shortcuts"` in the palette; `heading "There is nothing here"` with
   `Go back`.
-- **Signed out.** `Continue with <provider>` per provider, the one used last described `Last used`; `More
-ways to sign in` (with `aria-expanded`) past four; `form "Development sign-in"`, `Sign in as this email`;
+- **Signed out.** `Continue with <provider>` per provider, every one shown, the one used last described
+  `Last used`, and no `More ways to sign in`; `form "Development sign-in"`, `Sign in as this email`;
   `Sign out and try another account` for somebody who is not a Member.
 - **Needs me.** `region "Needs me"`, `region "Gates awaiting you"` with a link per Gate,
   `region "Your Agents' Runs"`.
@@ -415,7 +410,8 @@ ways to sign in` (with `aria-expanded`) past four; `form "Development sign-in"`,
   `ol "Activity of <run id>"` and `list "Gates"`, `region "Time"`,
   `heading` named by the record, and `Try again` on a failed or stale one.
 - **A Gate.** `region "Proposal"` with the Proposal's own headings; `group "<Checkpoint> Gate"` with
-  `data-focused`; `Note`, `Approve`, `Reject`; `list "Gate decisions"`; a link to the record by its key.
+  `data-focused`; `Note`, `Approve`, `Reject`; `list "Gate decisions"`, saying nothing of where a Ruling
+  was made; a link to the record by its key.
 - **Work.** `table "Work"`, the filters by label; on a record `region "What the record says"`, `list "Runs"`,
   `list "Gates"`, `list "Links"`, `list "Events"`, link `Read the conversation on <tool>`.
 - **Sockets.** `heading "Sockets"`, `list "Sockets"`, `group "Connect a tool"` with `Connect <tool>` and,
@@ -429,8 +425,8 @@ the App on GitHub"` and `Paste an App you already have` — none of it until `so
   answered (a muted "Checking which GitHub deevy works with…", or an `alert` with `Try again` if it
   could not), and where it gives GitHub a `beginRefusal` (a GitHub Enterprise Server or GHE.com) only the
   paste, with no `Create the App on GitHub` or `Make a new App instead` and one line saying to make the App
-  there; Slack's `Show the app
-manifest` and `App manifest`; Linear's `Show the addresses`, `Callback URLs`, `Client ID`, `Client secret`,
+  there; Slack's `App manifest` (shown at once), `Copy the manifest` and `Bot User OAuth Token`, and no
+  `Signing Secret`; Linear's `Show the addresses`, `Callback URL`, `Client ID`, `Client secret`,
   `Webhook signing secret`, `Install deevy as an agent`; GitLab's `GitLab URL`, `Access token`, `Signing
 token`, `Use the signing token`; Notion's `Installation access token`, link `Notion's Developer portal` and link `Open the Socket's page`;
   `Connect`, `Done`; every secret field is `type="password"` with `autocomplete="off"`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
@@ -438,8 +434,9 @@ at this address`, `region "Where it is installed"` with link `Install it` or `In
 repositories` (only where the Socket holds an `htmlUrl`), `Pause`, `region "What it signs with"` with `New secret from <tool>` and `Use the new secret`
   (not for Notion or the generic Socket) and `Mint a webhook secret` (GitHub, GitLab, the stub and the
   generic Socket, whose copy says deevy makes it), `region "Verifying the
-webhook"` with `Show the token`,
-  `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
+webhook"` with `Show the token`, `table "Deliveries"`, `Disconnect` then `Disconnect it`; a Slack Socket's
+  page has no `Where it delivers`, `What it signs with` or `Deliveries`, and no Socket's page has a `Who
+commented` region.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox
 "Container"`, `Name`, `Bind it`; `region "Binding"` with `combobox "Default Agent"`, `Routing label`, `switch
 "Route by mention"`, and no Mirror, Documents, repository or base branch (ADR-0034; simplify.md, slice 4);
@@ -447,9 +444,6 @@ webhook"` with `Show the token`,
 its id…`) or `textbox "Channel"`, `Save and say hello` (`Save` for Nowhere), and the tool's refusal as an
   `alert`; `region "Checkpoints"` with `Add a Checkpoint`, `Name`,
   `Approvals`, `checkbox "Not the Human the work is for"`, who may rule, `Save policy`.
-- **Identities.** `heading "Identities"`, `table "Identities"`, `Unlink @<login>`, `Link @<login> again`;
-  `Code from Slack`, `Check the code`, `Link @<login> to me`; `region "Link an account"` with `Link
-<provider>`.
 - **Settings elsewhere.** The settings h1s (`Workspace`, `Members`, `Event log`, …); link `Source code` at the
   foot of each; `navigation "Settings"`
   and, below `lg`, `combobox "Settings page"` (whose classes the shell test asserts as `lg:hidden` /

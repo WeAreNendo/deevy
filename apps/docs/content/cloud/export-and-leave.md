@@ -55,8 +55,9 @@ after the import you point everything at it:
   deevy Cloud uses work only at app.deevy.dev. Everybody signs in again and lands on their own Member.
 - **Agents.** Point each one at the new address, and the CLI with it. Their keys keep working.
 - **Your tools.** A GitHub Socket's page has **Point GitHub at this address**, which moves its App's
-  webhook for you. Linear, GitLab, Notion and Slack keep theirs in their own settings, where you change
-  them. For [any other tool](/tools/generic/), give your adapter the new address; its secret is the same.
+  webhook for you. Linear, GitLab and Notion keep theirs in their own settings, where you change them, and
+  Slack needs nothing, since it never calls deevy. For [any other tool](/tools/generic/), give your adapter
+  the new address; its secret is the same.
 
 Both copies keep working until you delete the hosted one, and nothing forwards from one to the other.
 Once the new one works, [delete the hosted Workspace](/cloud/delete-a-workspace/), so that nothing still

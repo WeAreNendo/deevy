@@ -34,9 +34,12 @@ export function socketStanding(socket: {
   status: string;
   hasCredentials: boolean;
   lastInboundAt: Date | null;
+  capabilities: readonly string[];
 }): { text: string; tone: "ok" | "waiting" | "quiet" } {
   if (socket.status === "pending") return { text: "Not connected yet", tone: "waiting" };
   if (socket.status === "paused") return { text: "Resting", tone: "waiting" };
+  // A chat tool sends deevy nothing (ADR-0036), so its silence says nothing.
+  if (!socket.capabilities.includes("tracker")) return { text: "Posts here", tone: "ok" };
   if (!socket.lastInboundAt) return { text: "Has not spoken yet", tone: "quiet" };
   const quiet = Date.now() - socket.lastInboundAt.getTime() > 24 * 60 * 60_000;
   return quiet

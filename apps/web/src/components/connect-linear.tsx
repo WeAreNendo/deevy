@@ -11,10 +11,10 @@ import { orpc } from "@/lib/orpc";
  * Connecting Linear (ADR-0024, docs/OPERATIONS.md "Connecting Linear").
  *
  * deevy acts in Linear as an OAuth application of the Workspace's own, so the
- * operator makes one in Linear and pastes its client back. Linear wants three
- * of deevy's addresses written into that application, and two of them name the
- * Socket — so the Socket is started first and the addresses are shown with
- * their real values, as Slack's manifest is.
+ * operator makes one in Linear and pastes its client back. Linear wants two of
+ * deevy's addresses written into that application, and both name the Socket —
+ * so the Socket is started first and the addresses are shown with their real
+ * values.
  */
 
 /** One address to copy, as mono text that wraps rather than widening the dialog. */
@@ -103,14 +103,10 @@ export function ConnectLinear({ onConnected }: { onConnected: () => void }) {
             , and turn on <span className="font-medium">Client credentials</span>.
           </p>
           <Field>
-            <FieldLabel>Callback URLs</FieldLabel>
-            <div aria-label="Callback URLs" className="flex flex-col gap-1">
-              <Address>{begun.accountCallbackUrl}</Address>
-              <Address>{begun.setupUrl}</Address>
-            </div>
+            <FieldLabel>Callback URL</FieldLabel>
+            <Address>{begun.setupUrl}</Address>
             <FieldDescription>
-              Both of them, one per line: the first is where people come back after linking their
-              Linear account, the second where an admin comes back after installing deevy.
+              Where an admin comes back to after installing deevy as an agent.
             </FieldDescription>
           </Field>
           <Field>

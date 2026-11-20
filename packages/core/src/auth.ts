@@ -24,16 +24,6 @@ export interface OAuthClient {
 }
 
 /**
- * A GitLab client, and the instance it belongs to. `issuer` is what makes one
- * entry serve both gitlab.com and a self-hosted GitLab: every endpoint —
- * authorization, token, `/api/v4` — is built from it, so an operator points
- * deevy at their own instance without a second provider (docs/plans/sign-in.md).
- */
-export interface GitLabClient extends OAuthClient {
-  issuer?: string;
-}
-
-/**
  * A generic OpenID Connect client: the pair, the issuer everything else is
  * discovered from, and what the button should say. One entry, not a list — a
  * self-hosted instance has one IdP, and a list of them would put JSON in a
@@ -61,56 +51,35 @@ export interface MicrosoftClient extends OAuthClient {
 }
 
 /**
- * What a deployment configures: one optional entry per provider deevy offers.
- * A provider is configuration, not a constant, so offering another one is an
- * entry here and in `signInProviders` rather than an edit to the sign-in page
- * (docs/plans/sign-in.md).
+ * What a deployment configures: one optional entry per provider deevy offers,
+ * which are four (docs/plans/simplify.md, slice 10). A sign-in is who a Human
+ * is in deevy and nothing more — no account on a tool vouches for anybody
+ * (ADR-0036) — so a provider is here because a team signs in with it, not
+ * because deevy works in it.
  */
 export interface AuthProviders {
   github?: OAuthClient;
   google?: OAuthClient;
   microsoft?: MicrosoftClient;
-  gitlab?: GitLabClient;
-  /** Linear and Atlassian never say an address is verified: they come in by invitation. */
-  linear?: OAuthClient;
-  slack?: OAuthClient;
-  atlassian?: OAuthClient;
   oidc?: OidcClient;
 }
 
 /**
  * The order the sign-in page offers providers in when the operator names none
  * (docs/plans/sign-in.md, "More ways to sign in"): the ones an engineering team
- * reaches for first — GitHub, Google, Microsoft — then the tools deevy works
- * in, and the operator's own IdP last, since it sits behind "More" unless they
- * pin it with `DEEVY_SIGN_IN_ORDER`.
+ * reaches for first — GitHub, Google, Microsoft — and the operator's own IdP
+ * last, unless they pin it first with `DEEVY_SIGN_IN_ORDER`.
  */
-const DEFAULT_SIGN_IN_ORDER = [
-  "github",
-  "google",
-  "microsoft",
-  "gitlab",
-  "linear",
-  "slack",
-  "atlassian",
-  "oidc",
-] as const;
-
-/** Where a GitLab client lives when the deployment names no instance of its own. */
-const DEFAULT_GITLAB_ISSUER = "https://gitlab.com";
+const DEFAULT_SIGN_IN_ORDER = ["github", "google", "microsoft", "oidc"] as const;
 
 /**
  * The providers a relay carries: every configured one whose App is the
  * platform's. A Workspace's own OpenID Connect IdP is registered with the
- * Workspace, and so is a GitLab instance that is not gitlab.com; both come
- * back to the deevy that asked, as they would without a relay.
+ * Workspace, and comes back to the deevy that asked, as it would without a
+ * relay.
  */
 export function relayedProviders(providers: AuthProviders): string[] {
-  return Object.keys(socialProvidersOf(providers)).filter(
-    (id) =>
-      id !== OIDC_PROVIDER_ID &&
-      (id !== "gitlab" || gitlabIssuer(providers.gitlab) === DEFAULT_GITLAB_ISSUER),
-  );
+  return Object.keys(socialProvidersOf(providers)).filter((id) => id !== OIDC_PROVIDER_ID);
 }
 
 /** What deevy calls its one generic OIDC provider, in every URL it appears in. */
@@ -157,8 +126,8 @@ export interface AuthEnv {
    * A relay to sign in through, when this deevy is one of many behind one
    * set of provider Apps — a hosted Workspace, or one of an operator's several
    * deployments (`DEEVY_SIGN_IN_RELAY_URL`, sign-in-relay.ts, ADR-0030). Every
-   * provider but this deevy's own OpenID Connect IdP and a GitLab instance of
-   * its own then comes back through the relay's `/callback/<provider>`.
+   * provider but this deevy's own OpenID Connect IdP then comes back through
+   * the relay's `/callback/<provider>`.
    */
   signInRelay?: { url: string; secret: string };
   /** At least 32 random characters in production. */
@@ -276,7 +245,7 @@ export function createAuth({ db, env, logger, rethrowUnexpected = false }: Creat
       // A provider's access and refresh tokens are sealed under the instance
       // secret as Better Auth writes them, so a database dump or a table
       // viewer never shows one in the clear. The id token is not a credential
-      // and stays as it came (identities.ts reads a claim off it). A row
+      // and stays as it came. A row
       // written before this was on stays readable (`plainOAuthToken`) and is
       // sealed the next time its Human signs in with that provider.
       encryptOAuthTokens: true,
@@ -323,7 +292,7 @@ export function createAuth({ db, env, logger, rethrowUnexpected = false }: Creat
       },
     },
   });
-  // What a join asks a forge with: the token as the provider issued it, read
+  // What a join asks GitHub with: the token as the provider issued it, read
   // through the same context Better Auth sealed it with. The hooks above run
   // inside a request, long after `$context` settled.
   const readToken = async (stored: string) =>
@@ -349,10 +318,6 @@ export function signInProviders(env: Pick<AuthEnv, "providers" | "signInOrder">)
     github: configuredClient(providers.github) ? "GitHub" : null,
     google: configuredClient(providers.google) ? "Google" : null,
     microsoft: configuredClient(providers.microsoft) ? "Microsoft" : null,
-    gitlab: configuredClient(providers.gitlab) ? "GitLab" : null,
-    linear: configuredClient(providers.linear) ? "Linear" : null,
-    slack: configuredClient(providers.slack) ? "Slack" : null,
-    atlassian: configuredClient(providers.atlassian) ? "Atlassian" : null,
     oidc: oidc?.label ?? null,
   };
   const known = new Set<string>(DEFAULT_SIGN_IN_ORDER);
@@ -377,8 +342,7 @@ export function signInProviders(env: Pick<AuthEnv, "providers" | "signInOrder">)
  * mean "a provider this deployment offers"; it means "link this provider's
  * sign-in without reading whether it says the address is verified". Every
  * provider deevy ships reports a verified address when it has one — GitHub and
- * Google always do, GitLab through the `confirmed_at` its profile carries — so
- * naming them buys no case that works and costs the one refusal that matters:
+ * Google always do — so naming them buys no case that works and costs the one refusal that matters:
  * an IdP with open self-registration, telling the truth about an address it has
  * not verified, would otherwise link a stranger onto the Member who holds it
  * (docs/OPERATIONS.md).
@@ -395,22 +359,14 @@ export function signInProviders(env: Pick<AuthEnv, "providers" | "signInOrder">)
  * option is deprecated on its way to being unconditional, and a value written
  * down now is a value to delete later.
  *
- * `allowDifferentEmails: true`, because deevy has the screen that says two
- * addresses are one Human: Settings › Identities, where a Human who signed in
- * with Google links the GitHub account they rule from (ADR-0025). Better Auth
- * reads this in exactly one place — the explicit link a signed-in session
- * starts with `link-social` — and nowhere a sign-in could reach. That path
- * still wants the provider to say the second address is verified, and still
- * refuses an account already linked to somebody else; what it stops refusing
- * is a Human whose work address is not their GitHub address, which is most of
- * them. Signing in on an address somebody else holds links nothing, as before.
+ * Two sign-ins are one Human only on one verified address. Nothing in deevy
+ * links an account on another address any more — an account on a tool vouches
+ * for nobody (ADR-0036) — so Better Auth's `allowDifferentEmails` is left at
+ * its default, and its `link-social` route, which a signed-in session could
+ * still call, links only a second sign-in at the address it already has.
  */
 export function accountLinkingOf(_env: Pick<AuthEnv, "providers">) {
-  return {
-    enabled: true,
-    trustedProviders: [],
-    allowDifferentEmails: true,
-  };
+  return { enabled: true, trustedProviders: [] };
 }
 
 /**
@@ -423,21 +379,10 @@ function socialProvidersOf(providers: AuthProviders) {
   const github = configuredClient(providers.github);
   const google = configuredClient(providers.google);
   const microsoft = configuredClient(providers.microsoft);
-  const gitlab = configuredClient(providers.gitlab);
-  const linear = configuredClient(providers.linear);
-  const slack = configuredClient(providers.slack);
-  const atlassian = configuredClient(providers.atlassian);
   return {
-    ...(github
-      ? {
-          github: {
-            ...github,
-            // The organizations a github_org allowlist rule matches are only
-            // listable with this scope (docs/plans/m1.md).
-            scope: ["read:org"],
-          },
-        }
-      : {}),
+    // GitHub's default scopes are all deevy asks for: who the user is and the
+    // addresses they verified. Nothing reads their organizations any more.
+    ...(github ? { github } : {}),
     // Google's default scopes are all deevy asks for: the address and the
     // name, both of which arrive in the `id_token`. `hd` is deliberately
     // unset — a Google Workspace is an email domain, and who may join is an
@@ -455,33 +400,6 @@ function socialProvidersOf(providers: AuthProviders) {
             ...microsoft,
             tenantId: providers.microsoft?.tenantId?.trim() || "common",
             disableProfilePhoto: true,
-          },
-        }
-      : {}),
-    // Linear's narrowest scope is `read`; its sign-in says who the user is
-    // and never whether the address is verified, so it comes in by invitation.
-    ...(linear ? { linear } : {}),
-    // Sign in with Slack is OpenID Connect: `openid`, `email` and `profile`,
-    // with `email_verified` in the claims. The account is the Slack user id.
-    ...(slack ? { slack } : {}),
-    // Only who the user is: `read:me`, not Better Auth's default Jira scope.
-    // Atlassian's `/me` carries no verification, so it comes in by invitation.
-    ...(atlassian
-      ? { atlassian: { ...atlassian, disableDefaultScope: true, scope: ["read:me"] } }
-      : {}),
-    // GitLab hands `read_user` out by default, which is the profile; the
-    // groups a gitlab_group allowlist rule matches are only listable with
-    // `read_api`, the same bargain `read:org` strikes above. GitLab has no
-    // narrower scope for a user's groups, so the sign-in's token can read the
-    // API it can reach — it is stored by Better Auth, read on the join and
-    // never again (docs/OPERATIONS.md).
-    ...(gitlab
-      ? {
-          gitlab: {
-            ...gitlab,
-            issuer: gitlabIssuer(providers.gitlab),
-            scope: ["read_api"],
-            mapProfileToUser: gitlabUser,
           },
         }
       : {}),
@@ -528,29 +446,6 @@ function oidcPlugins(providers: AuthProviders) {
       ],
     }),
   ];
-}
-
-/**
- * Whether GitLab has proved the address it just handed over. Better Auth reads
- * `email_verified`, which is an OpenID Connect claim GitLab's `/api/v4/user`
- * does not carry: it says `confirmed_at`, the moment the address answered
- * GitLab's own confirmation mail. Without this mapping every GitLab sign-in
- * lands as an unverified `user` row, and `requireLocalEmailVerified` — the gate
- * one Human, one Member rests on (docs/plans/sign-in.md slice 3) — then refuses
- * that Human every later link, so a teammate whose first provider was GitLab
- * could never add a second one.
- *
- * A GitLab that does report the claim is believed first: a self-hosted instance
- * or a later release may say so directly, and what the provider states about an
- * address beats what deevy infers from a timestamp.
- */
-function gitlabUser(profile: { email_verified?: boolean; confirmed_at?: string | null }) {
-  return { emailVerified: profile.email_verified ?? Boolean(profile.confirmed_at) };
-}
-
-/** The GitLab instance this deployment signs in against. */
-function gitlabIssuer(client: GitLabClient | undefined): string {
-  return client?.issuer?.trim().replace(/\/+$/, "") || DEFAULT_GITLAB_ISSUER;
 }
 
 /**
@@ -646,7 +541,7 @@ async function admit(
   user: JoiningUser,
 ): Promise<void> {
   await bootstrapWorkspace(db, user, env);
-  await joinWorkspace(db, user, joinPorts(db, env, user.userId, readToken));
+  await joinWorkspace(db, user, joinPorts(db, user.userId, readToken));
 }
 
 /** Turns an access token as the `account` table holds it into the one the provider issued. */
@@ -659,8 +554,8 @@ export type ReadOAuthToken = (stored: string) => Promise<string>;
  *
  * Better Auth's own reader, `decryptOAuthToken`, takes a value that is not hex
  * for one written in the clear, which covers GitHub's and Google's tokens —
- * but a GitLab token is sixty-four hex characters, reads to it as sealed, and
- * throws. A sealed value is authenticated, so one that does not open was never
+ * but a token that happens to be all hex (GitLab's were sixty-four hex
+ * characters) reads to it as sealed, and throws. A sealed value is authenticated, so one that does not open was never
  * sealed: it is a row from before the option was on, and it is the token
  * itself. That is also why this opens the value directly rather than asking
  * whether the option is on: a row sealed while it was stays readable.
@@ -676,25 +571,18 @@ export async function plainOAuthToken(
   }
 }
 
-/**
- * What a join can ask a provider about this sign-in, one port per provider
- * that has something to answer. Each dispatches on the account's `providerId`,
- * so a Human with both accounts linked is asked of whichever provider the rule
- * is about, and one with neither is simply not in the group.
- *
- * Every port is lazy: a `github_org` or `gitlab_group` rule is the only reason
- * to spend a round trip, and `joinWorkspace` skips them all when an email
- * domain already matched.
- */
-/** How long a forge has to answer a question about a sign-in's memberships. */
+/** How long GitHub has to answer a question about a sign-in. */
 const FORGE_TIMEOUT_MS = 5_000;
 
-export function joinPorts(
-  db: Db,
-  env: AuthEnv,
-  userId: string,
-  readToken: ReadOAuthToken,
-): JoinOptions {
+/**
+ * What a join can ask a provider about this sign-in: the GitHub login a
+ * Human's handle is made from, which is the one thing a provider is asked
+ * about a sign-in now that who may join is an address's domain or an
+ * invitation (docs/plans/simplify.md, slice 10). Lazy, so a sign-in with no
+ * GitHub account, or one already a Member, costs no round trip.
+ */
+
+export function joinPorts(db: Db, userId: string, readToken: ReadOAuthToken): JoinOptions {
   const token = async (providerId: string) => {
     const account = await db.query.account.findFirst({ where: { userId, providerId } });
     return account?.accessToken ? await readToken(account.accessToken) : null;
@@ -708,88 +596,25 @@ export function joinPorts(
         accept,
         "user-agent": "deevy",
       },
-      // A join costs a teammate their Member and never their sign-in, which was
-      // true of a forge that fails and not of one that is merely slow: this
-      // runs inside a Better Auth hook, so a host that accepts the connection
-      // and never answers held the sign-in open for as long as the runtime
-      // allowed. The abort is caught where the ports are read, so a timed-out
-      // question is a question with no answer (docs/plans/sign-in.md).
+      // A join never costs a teammate their sign-in, which was true of a forge
+      // that fails and not of one that is merely slow: this runs inside a
+      // Better Auth hook, so a host that accepts the connection and never
+      // answers held the sign-in open for as long as the runtime allowed.
       signal: AbortSignal.timeout(FORGE_TIMEOUT_MS),
     });
     return res.ok ? ((await res.json()) as T) : null;
   };
-  /**
-   * Every page of a list, not the first one. Both forges page by default — 30
-   * organizations, 20 groups — and a rule that names the one on page two
-   * matched nothing, which looks exactly like a rule that did not match
-   * (docs/plans/sign-in.md). `PAGE_CAP` bounds a sign-in's cost at five round
-   * trips; a Human in more than five hundred groups is not the case to spend a
-   * sixth on.
-   */
-  const getAll = async <T>(providerId: string, url: string, accept: string): Promise<T[]> => {
-    const items: T[] = [];
-    const separator = url.includes("?") ? "&" : "?";
-    for (let page = 1; page <= PAGE_CAP; page++) {
-      const batch = await get<T[]>(
-        providerId,
-        `${url}${separator}per_page=${PAGE_SIZE}&page=${page}`,
-        accept,
-      );
-      // A page that failed is not the end of the list. Treating it as one
-      // handed back a short list that looked complete, so a rule naming
-      // something on the page the forge refused matched nothing and read
-      // exactly like a rule that did not match. The throw lands where a failing
-      // port already lands: no memberships, so no join.
-      if (!batch) throw new Error(`${providerId} answered no page ${String(page)}`);
-      if (batch.length === 0) break;
-      items.push(...batch);
-      if (batch.length < PAGE_SIZE) break;
-    }
-    return items;
-  };
   return {
-    listOrgs: async () => {
-      const orgs = await getAll<{ login: string }>(
-        "github",
-        "https://api.github.com/user/orgs",
-        "application/vnd.github+json",
-      );
-      return orgs.map((org) => org.login);
-    },
-    listGroups: async () => {
-      // Every group the sign-in is in at all: 10 is Guest, GitLab's lowest
-      // membership. A rule says who may join deevy, not what they may do in
-      // GitLab, so a Guest of the group the rule names is in the group.
-      const groups = await getAll<{ full_path: string }>(
-        "gitlab",
-        `${gitlabIssuer(env.providers?.gitlab)}/api/v4/groups?min_access_level=10`,
-        "application/json",
-      );
-      return groups.map((group) => group.full_path);
-    },
-    // Whichever account this sign-in has: `get` spends no round trip on a
-    // provider the Human never signed in with, so asking GitHub first costs a
-    // query rather than a request.
     login: async () => {
       const github = await get<{ login?: string }>(
         "github",
         "https://api.github.com/user",
         "application/vnd.github+json",
-      );
-      if (github?.login) return github.login;
-      const gitlab = await get<{ username?: string }>(
-        "gitlab",
-        `${gitlabIssuer(env.providers?.gitlab)}/api/v4/user`,
-        "application/json",
-      );
-      return gitlab?.username ?? null;
+      ).catch(() => null);
+      return github?.login ?? null;
     },
   };
 }
-
-/** What one page of a forge's list asks for, and how many pages a join will read. */
-const PAGE_SIZE = 100;
-const PAGE_CAP = 5;
 
 export { allocateHandle, slugify } from "./handles.ts";
 
@@ -853,36 +678,24 @@ export interface JoiningUser {
   /**
    * Whether the provider vouched for the address. Only a verified address
    * makes the admin or matches an `email_domain` rule: a provider that does
-   * not vouch — Linear, Atlassian, an Entra tenant without verified-email
-   * claims — would otherwise let anybody claim an address and be let in by it
-   * ("nOAuth"). An invitation still admits, because its link is the proof.
+   * not vouch — an Entra tenant without verified-email claims — would
+   * otherwise let anybody claim an address and be let in by it ("nOAuth"). An
+   * invitation still admits, because its link is the proof.
    */
   emailVerified: boolean;
 }
 
 export interface JoinOptions {
   /**
-   * What the provider calls this sign-in — a GitHub login, a GitLab username —
-   * preferred over a slug of the name as the handle. Provider-neutral, because
-   * a handle is deevy's and every provider hands out the same kind of thing.
+   * What the provider calls this sign-in — a GitHub login — preferred over a
+   * slug of the name as the handle. Provider-neutral, because a handle is
+   * deevy's and any provider with a login hands out the same kind of thing.
    *
    * A port rather than a string, and asked only when a Member is actually
    * being created: the sign-in's own profile is a round trip, and `admit` runs
    * on every session as well as every user (docs/plans/sign-in.md).
    */
   login?: () => Promise<string | null>;
-  /**
-   * The GitHub organizations this sign-in belongs to, for `github_org` rules.
-   * A port rather than a fetch so the rule can be decided without a network
-   * call; production supplies the sign-in's access token (needs `read:org`).
-   */
-  listOrgs?: () => Promise<string[]>;
-  /**
-   * The GitLab groups this sign-in belongs to, as full paths
-   * (`acme/platform`), for `gitlab_group` rules. A port for the same reason;
-   * production reads them from the sign-in's own token (needs `read_api`).
-   */
-  listGroups?: () => Promise<string[]>;
 }
 
 /**
@@ -899,7 +712,7 @@ export async function joinWorkspace(
   if (await db.query.member.findFirst({ where: { userId: user.userId } })) return;
   const ws = await db.query.workspace.findFirst();
   if (!ws) return;
-  if (!(await matchesAllowlist(db, ws.id, user, options))) return;
+  if (!(await matchesAllowlist(db, ws.id, user))) return;
 
   const memberId = newId("member");
   await db.insert(member).values({
@@ -936,51 +749,17 @@ export async function joinWorkspace(
     );
 }
 
-async function matchesAllowlist(
-  db: Db,
-  workspaceId: string,
-  user: JoiningUser,
-  options: JoinOptions,
-): Promise<boolean> {
+async function matchesAllowlist(db: Db, workspaceId: string, user: JoiningUser): Promise<boolean> {
   const domain = user.email.toLowerCase().split("@").at(-1) ?? "";
   const rules = await db
     .select()
     .from(allowlistRule)
     .where(eq(allowlistRule.workspaceId, workspaceId));
   // A domain rule is about the address, so it takes only one the provider
-  // verified; an organisation or a group is the provider's own word and does
-  // not rest on the address at all.
-  if (
+  // verified. It is the only rule there is: an organisation or a group on a
+  // tool admits nobody (docs/plans/simplify.md, slice 10).
+  return (
     user.emailVerified &&
     rules.some((rule) => rule.kind === "email_domain" && rule.value === domain)
-  ) {
-    return true;
-  }
-
-  // Each of these costs a round trip to a provider, so each is asked only when
-  // a rule of its kind exists and no email domain matched.
-  if (await matchesMemberships(rules, "github_org", options.listOrgs)) return true;
-  return matchesMemberships(rules, "gitlab_group", options.listGroups);
-}
-
-/**
- * One rule kind decided against what a provider says this sign-in belongs to.
- * A port that is absent, that answers with nothing, or that fails is not a
- * match: a join deevy could not verify is a join that does not happen.
- *
- * A provider that is down therefore costs a Member their join and not their
- * sign-in — this runs inside a Better Auth database hook, where a thrown error
- * is a sign-in that fails — and the next sign-in asks again, because `admit`
- * runs from the session hook every time.
- */
-async function matchesMemberships(
-  rules: Array<{ kind: string; value: string }>,
-  kind: string,
-  list: (() => Promise<string[]>) | undefined,
-): Promise<boolean> {
-  const matching = rules.filter((rule) => rule.kind === kind);
-  if (matching.length === 0 || !list) return false;
-  const memberships = await list().catch(() => []);
-  const held = new Set(memberships.map((value) => value.toLowerCase()));
-  return matching.some((rule) => held.has(rule.value));
+  );
 }

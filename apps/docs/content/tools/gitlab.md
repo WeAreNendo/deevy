@@ -88,28 +88,15 @@ GitLab's issues are open or closed and nothing else. A team's workflow in scoped
 ## What deevy writes on GitLab
 
 deevy writes about Gates and nothing else, as the account the token belongs to: a comment when an Agent asks
-at a Gate, with the Proposal and how to rule; one for each approval and for the decision; and a reply to a
-`/approve` or `/reject` that ruled nothing. See
-[Connecting your tools](/tools/overview/#what-deevy-writes-back).
+at a Gate, with the Proposal and a link to rule on it in deevy, and one for each approval and for the
+decision. See [Connecting your tools](/tools/overview/#what-deevy-writes-back). A reply on the issue, even one
+that starts `/approve` or `/reject`, is only a comment: a Gate is ruled on in deevy. See
+[How a Gate asks](/gates/how-a-gate-asks/).
 
 deevy sets no label and opens nothing. Everything else on GitLab is the Agent's, with the access you gave
 it: it reads an issue's comments, comments, labels, opens issues and opens its merge request, then attaches
 the merge request to its Run. One that says `Closes <the issue's URL>` closes the issue when it merges.
 GitLab has no parent for an issue, so an issue an Agent opens is a record of its own, routed like any other.
-
-## Rule from GitLab
-
-A Human can approve or reject a Gate by commenting `/approve` or `/reject <why>` on the issue, once deevy
-knows the GitLab account is theirs: by signing in to deevy with that GitLab, or by linking it under
-**Settings › Identities**, which offers GitLab where your deevy signs people in with it. A comment by a
-project or group access token's bot rules nothing. See
-[Ruling from your tools](/gates/ruling-from-your-tools/).
-
-:::note[deevy Cloud]
-deevy Cloud does not sign people in with GitLab, so it cannot tell whose a GitLab comment is, and a
-`/approve` written in GitLab rules nothing. Rule in deevy, or from Slack. Everything else on this page works
-as it says.
-:::
 
 ## When the token expires
 
@@ -125,8 +112,6 @@ gitlab.com and any GitLab that can reach the internet can deliver to.
 
 :::note[Self-hosted]
 The webhook URL is built from your deevy's `BETTER_AUTH_URL`, and your GitLab has to be able to reach it.
-A Ruling from GitLab needs the GitLab your deevy signs people in with, gitlab.com or the one
-`GITLAB_ISSUER` names. A Socket on any other GitLab shares no accounts with sign-in.
 :::
 
 ## Disconnect

@@ -75,32 +75,21 @@ describe("the Worker's sign-in providers", () => {
         GOOGLE_CLIENT_SECRET: "secret",
       }),
     ).toEqual(["github", "google"]);
-    expect(
-      offered({
-        GITHUB_CLIENT_ID: "id",
-        GITHUB_CLIENT_SECRET: "secret",
-        GITLAB_CLIENT_ID: "id",
-        GITLAB_CLIENT_SECRET: "secret",
-        // A self-hosted GitLab is the same entry pointed somewhere else, so an
-        // issuer alone offers nothing (docs/plans/sign-in.md slice 5).
-        GITLAB_ISSUER: "https://gitlab.example.com",
-      }),
-    ).toEqual(["github", "gitlab"]);
-    expect(offered({ GITLAB_ISSUER: "https://gitlab.example.com" })).toEqual([]);
-    // The providers added for "More ways to sign in", and the operator's order.
+    // Microsoft, and the operator's order. A binding for a provider deevy no
+    // longer signs in with (docs/plans/simplify.md, slice 10) offers nothing.
     expect(
       offered({
         MICROSOFT_CLIENT_ID: "id",
         MICROSOFT_CLIENT_SECRET: "secret",
-        LINEAR_CLIENT_ID: "id",
-        LINEAR_CLIENT_SECRET: "secret",
+        GITHUB_CLIENT_ID: "id",
+        GITHUB_CLIENT_SECRET: "secret",
+        GITLAB_CLIENT_ID: "id",
+        GITLAB_CLIENT_SECRET: "secret",
         SLACK_CLIENT_ID: "id",
         SLACK_CLIENT_SECRET: "secret",
-        ATLASSIAN_CLIENT_ID: "id",
-        ATLASSIAN_CLIENT_SECRET: "secret",
-        DEEVY_SIGN_IN_ORDER: "atlassian",
+        DEEVY_SIGN_IN_ORDER: "slack,microsoft",
       }),
-    ).toEqual(["atlassian", "microsoft", "linear", "slack"]);
+    ).toEqual(["microsoft", "github"]);
     // The generic OIDC entry needs its issuer as much as its pair: without a
     // discovery document there is nothing to register (docs/plans/sign-in.md
     // slice 6).

@@ -27,9 +27,9 @@ A **Gate** is a Run's request to pass a Checkpoint: the Agent's Proposal, the li
 Rulings on it so far. While it is open:
 
 - the Run waits, as long as it takes, and never goes quiet;
-- it waits on **Needs me** for every Human who may approve it, and in the Project's chat channel when it
-  has one;
-- the record in your tracker says it is waiting, in a comment from deevy;
+- it waits on **Needs me** for every Human who may approve it, and is posted in the Project's chat channel
+  when it has one, with a link to it;
+- the record in your tracker says it is waiting, in a comment from deevy with a link to it;
 - if suspending somebody leaves fewer Humans who could approve it than the approvals it still wants, the
   Gate says so, with both numbers, and an admin decides what to do about it.
 
@@ -51,21 +51,17 @@ superseded and a new one asks the question afresh.
 ## Ruling
 
 A **Ruling** is a Human's decision on a Gate, approve or reject, with a note if they want to add one. You
-can make it in three places, and each is the same Ruling, under the same Checkpoint's rules:
+make it in deevy, on the Gate's own page, and nowhere else. The comment on the record and the message in
+the chat channel link there; a reply on the record, even one that starts `/approve`, is only a comment.
 
-- **in deevy**, on the Gate's own page;
-- **on the tracker**, by commenting `/approve` or `/reject` with your reason on the record;
-- **in Slack**, with the **Approve** and **Reject** buttons on the Gate's message.
-
-Every Ruling is recorded with where it came from, and the Gate shows it: "in deevy", "in Slack",
-"via GitHub". See [How a Gate asks](/gates/how-a-gate-asks/) and
-[Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
+Once you rule, deevy says so on the record and in the channel, and once the Gate is decided the Agent is
+told. See
+[How a Gate asks](/gates/how-a-gate-asks/).
 
 ## Who can never rule
 
 **An Agent never rules on a Gate**, its own or any other, whatever it has been granted, and neither does
-anything holding its API key. A Ruling in deevy needs you there in a browser, signed in as yourself; a
-Ruling from a tool needs that tool's account to be one of your Identities.
+anything holding its API key. A Ruling needs you in deevy in a browser, signed in as yourself.
 
 That is the point of a Gate: the Agent does the work and asks, and a Human answers for letting it through.
 

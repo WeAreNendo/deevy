@@ -35,16 +35,15 @@ is routed to.
 deevy writes on the record about its Gates and nothing else, for every Project, with no setting to change
 it:
 
-- a comment when a Gate asks, with the Proposal, its links and how to rule;
-- a comment for each approval, and one for the decision;
-- a reply when a comment ruled nothing, saying why.
+- a comment when a Gate asks, with the Proposal, its links and a link to rule on it in deevy;
+- a comment for each approval, and one for the decision.
 
 Nothing is written about a Run starting, working or finishing, and deevy sets no label.
 
-Every comment comes from deevy's own identity in the tool. One about a Gate ends with the Agent and the
-Run it came from, like `— builder · run_k3xr8v2m9qpw · via deevy`, and the reply to a comment that ruled
-nothing ends `— deevy`. Anything else an Agent says on the record, it says in the tool with its own
-access, as its own account.
+Every comment comes from deevy's own identity in the tool, and ends with the Agent and the Run it came
+from, like `— builder · run_k3xr8v2m9qpw · via deevy`. A reply to one is only a comment, even one that
+starts `/approve`: a Gate is ruled on in deevy. Anything else an Agent says on the record, it says in the
+tool with its own access, as its own account.
 
 A pull request or merge request an Agent opens says `Closes` and the issue's URL, so merging it closes a
 GitHub or GitLab issue. A record in Linear or Notion closes only if something in that tool acts on it, such

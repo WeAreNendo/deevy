@@ -256,25 +256,19 @@ describe("the Events a Socket causes", () => {
   });
 });
 
-/**
- * Convention 5 of docs/plans/sockets.md: a new EventKind has four consumers,
- * and this is the one that is checkable. The kinds are read out of the core's
- * own union rather than listed here, so a kind added there and forgotten here
- * fails rather than printing its dotted name at somebody in the Event log.
- */
-describe("a Ruling made in the tracker", () => {
+describe("a Gate that passed", () => {
   it("says a Gate passed because an admin lowered Approvals, not that they approved it", () => {
     expect(
       describeEvent({
         kind: "gate.approved",
-        payload: { checkpoint: "ship", approvals: 2, required: 2, via: "web" },
+        payload: { checkpoint: "ship", approvals: 2, required: 2 },
         actorKind: "human",
       })?.text,
     ).toBe("let it past ship");
     expect(
       describeEvent({
         kind: "gate.approved",
-        payload: { checkpoint: "ship", approvals: 1, required: 1, loweredFrom: 2, via: "web" },
+        payload: { checkpoint: "ship", approvals: 1, required: 1, loweredFrom: 2 },
         actorKind: "human",
       }),
     ).toMatchObject({
@@ -282,61 +276,14 @@ describe("a Ruling made in the tracker", () => {
       tone: "human",
     });
   });
-
-  it("says why one counted for nothing, as the reply in the tracker did", () => {
-    expect(
-      describeEvent({
-        kind: "gate.ruling_refused",
-        payload: { externalActor: "carol-gh", reason: "unknown_identity" },
-      })?.text,
-    ).toBe(
-      "@carol-gh ruled from the tracker and it counted for nothing: an account nobody here has linked",
-    );
-    expect(
-      describeEvent({
-        kind: "gate.ruling_refused",
-        payload: {
-          externalActor: "ada",
-          reason: "refused",
-          message: "The ship Checkpoint wants somebody other than the Human this Run is for",
-        },
-      })?.text,
-    ).toContain("wants somebody other than the Human this Run is for");
-    // And the door it came through, since a Slack click is refused as well.
-    expect(
-      describeEvent({
-        kind: "gate.ruling_refused",
-        payload: { externalActor: "omar", reason: "unknown_identity", via: "slack" },
-      })?.text,
-    ).toBe("@omar ruled in Slack and it counted for nothing: an account nobody here has linked");
-    // And through a Socket whose deliveries anybody with its secret writes.
-    expect(
-      describeEvent({
-        kind: "gate.ruling_refused",
-        payload: { externalActor: "grace", reason: "unvouched" },
-      })?.text,
-    ).toBe(
-      "@grace ruled from the tracker and it counted for nothing: that tool can't vouch for who wrote it",
-    );
-  });
-
-  it("says how an account came to rule as somebody, and folds it away", () => {
-    expect(
-      describeEvent({
-        kind: "identity.linked",
-        payload: { login: "bob", instance: "github.com", verifiedBy: "sign_in" },
-      }),
-    ).toMatchObject({
-      text: "linked @bob on github.com, from the account they sign in with",
-      routine: true,
-    });
-    expect(
-      describeEvent({ kind: "identity.revoked", payload: { login: "bob", instance: "github.com" } })
-        ?.text,
-    ).toBe("unlinked @bob on github.com");
-  });
 });
 
+/**
+ * Convention 5 of docs/plans/sockets.md: a new EventKind has four consumers,
+ * and this is the one that is checkable. The kinds are read out of the core's
+ * own union rather than listed here, so a kind added there and forgotten here
+ * fails rather than printing its dotted name at somebody in the Event log.
+ */
 describe("every EventKind the core can append", () => {
   it("has a sentence, rather than falling through to its raw name", async () => {
     // Read as text by the bundler, so this needs no filesystem and no node types.

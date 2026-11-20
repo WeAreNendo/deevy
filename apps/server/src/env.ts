@@ -111,12 +111,6 @@ export function stubbedProviders(providers: AuthProviders): AuthProviders {
     microsoft: hasPair(providers.microsoft)
       ? providers.microsoft
       : { ...STUB_CLIENT, tenantId: providers.microsoft?.tenantId },
-    linear: hasPair(providers.linear) ? providers.linear : { ...STUB_CLIENT },
-    slack: hasPair(providers.slack) ? providers.slack : { ...STUB_CLIENT },
-    atlassian: hasPair(providers.atlassian) ? providers.atlassian : { ...STUB_CLIENT },
-    gitlab: hasPair(providers.gitlab)
-      ? providers.gitlab
-      : { ...STUB_CLIENT, issuer: providers.gitlab?.issuer },
     // An issuer is as load-bearing as the pair here: without one there is no
     // discovery document, so a stubbed OIDC entry gets a stubbed issuer too.
     oidc:

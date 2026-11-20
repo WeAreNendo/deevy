@@ -74,7 +74,7 @@ A `POST` with a JSON body, which is the Event itself and nothing else:
 ```
 
 `seq` is the Event's place in your Workspace's log. `actorMemberId` is the Member who did it, or `null` when
-deevy did it or it came from one of your tools; a Ruling from a tool names the Human whose account it was.
+deevy did it or it came from one of your tools. A Ruling always names the Human who made it, in deevy.
 What `payload` holds depends on the kind.
 
 And three headers:

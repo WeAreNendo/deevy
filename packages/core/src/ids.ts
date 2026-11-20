@@ -20,8 +20,6 @@ export const idPrefixes = {
   gateRequest: "gate",
   gateDecision: "dec",
   socketMirror: "mir",
-  memberIdentity: "mid",
-  linkCode: "lkc",
   activity: "act",
   notification: "ntf",
   webhook: "whk",

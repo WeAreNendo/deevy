@@ -20,15 +20,16 @@ import changed from "./fixtures/notion/page.properties_updated.json" with { type
 import commented from "./fixtures/notion/comment.created.json" with { type: "json" };
 
 /**
- * Notion, through the door deevy actually serves (ADR-0024, ADR-0025).
+ * Notion, through the door deevy actually serves (ADR-0024, ADR-0036).
  *
  * The module is proved against Notion's documented shapes in the other
  * `notion-*` tests. This puts the real module behind the real route with a real
  * database and replaces only Notion's API — so what is under test is the whole
  * sentence: Notion verifies the webhook, somebody tags a row for an Agent,
  * deevy reads the row back because Notion only said which one, the Proposal is
- * the integration's comment on it, and a Human approves by commenting once an
- * admin has allowed their address to vouch for them.
+ * the integration's comment on it with where to rule on it, a `/approve` on the
+ * row is a comment and nothing more, and a Human rules in deevy and the row is
+ * told.
  */
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -43,7 +44,6 @@ const DATA_SOURCE = changed.data.parent.data_source_id;
 const PAGE = page.id;
 const BOT = "2f4e6a8c-0b1d-4e3f-a5b7-c9d1e3f5a7b9";
 const GRACE = "c7c11cca-1d73-471d-9b6e-bdef51470190";
-const STRANGER = "9f8e7d6c-0000-4000-8000-00000000abcd";
 
 /** Notion's API, as far as deevy can tell: pages, comments, users, and what was asked. */
 function notionApi() {
@@ -56,12 +56,6 @@ function notionApi() {
       name: "Grace Hopper",
       type: "person",
       person: { email: "grace@example.com" },
-    },
-    [STRANGER]: {
-      id: STRANGER,
-      name: "A Stranger",
-      type: "person",
-      person: { email: "who@example.net" },
     },
     [BOT]: { id: BOT, name: "deevy", type: "bot", bot: {} },
   };
@@ -123,13 +117,9 @@ function contextFor(db: Db, member: Member, workspace: Workspace, extra: object 
 
 async function human(db: Db, workspaceId: string, name: string, role: Member["role"] = "member") {
   const userId = newId("user");
-  await db.insert(userTable).values({
-    id: userId,
-    name,
-    email: `${name.toLowerCase()}@example.com`,
-    // The address deevy vouches for: one the Human proved they read.
-    emailVerified: true,
-  });
+  await db
+    .insert(userTable)
+    .values({ id: userId, name, email: `${name.toLowerCase()}@example.com` });
   const id = newId("member");
   await db
     .insert(memberTable)
@@ -140,7 +130,7 @@ async function human(db: Db, workspaceId: string, name: string, role: Member["ro
 /**
  * A Workspace with a Notion Socket that has not heard from Notion yet, and a
  * Project bound to the Tasks data source. Ada is the admin and the Planner's
- * Sponsor; Grace is the Human who will rule from Notion.
+ * Sponsor; Grace is the Human who comments on the row, and rules in deevy.
  */
 async function workspaceOnNotion(db: Db) {
   const workspaceId = newId("workspace");
@@ -213,10 +203,34 @@ async function workspaceOnNotion(db: Db) {
     context: contextFor(db, planner, workspace, { ...extra, grantedProjectIds: [projectId] }),
   });
   const asAda = createRouterClient(router, { context: contextFor(db, ada, workspace, extra) });
+  const asGrace = createRouterClient(router, { context: contextFor(db, grace, workspace, extra) });
   const sweep = () =>
     runDueWork({ db, sockets, socketSecret: sealing, baseUrl: "https://deevy.test" });
 
-  return { app, api, socketId, projectId, ada, grace, planner, asPlanner, asAda, sweep };
+  return { app, api, socketId, projectId, ada, grace, planner, asPlanner, asAda, asGrace, sweep };
+}
+
+/** What deevy has said on the row, in the order it said it. */
+function saidOnNotion(api: ReturnType<typeof notionApi>): string[] {
+  return api.calls
+    .filter((call) => call.method === "POST" && call.path === "/comments")
+    .map((call) => String(call.body.markdown));
+}
+
+/** The kinds of every Event written after the one at `seq`. */
+async function kindsSince(db: Db, seq: number): Promise<string[]> {
+  const since = await db.query.event.findMany({
+    where: { seq: { gt: seq } },
+    columns: { kind: true },
+    orderBy: { seq: "asc" },
+  });
+  return since.map((event) => event.kind);
+}
+
+/** The last Event's place in the log, to read what follows it. */
+async function lastSeq(db: Db): Promise<number> {
+  const all = await db.query.event.findMany({ columns: { seq: true } });
+  return Math.max(0, ...all.map((event) => event.seq));
 }
 
 /** One delivery, signed as Notion signs: sha256 over the minified body, with its token. */
@@ -304,7 +318,7 @@ describe("somebody tags a row in Notion", () => {
     });
     expect(run).toMatchObject({ status: "pending", trigger: "assignment" });
 
-    await asPlanner.gates.request({
+    const gate = await asPlanner.gates.request({
       runId: run.id,
       checkpoint: "plan",
       proposal: "## What I will do\n\nCap the coupon at the basket total.",
@@ -316,61 +330,76 @@ describe("somebody tags a row in Notion", () => {
       parent: { page_id: PAGE },
       markdown: expect.stringContaining("Cap the coupon"),
     });
+    // With where to rule on it, which is in deevy.
+    expect(said?.body.markdown).toContain(
+      `Rule on it in deevy: https://deevy.test/gates/${gate.id}`,
+    );
+    expect(said?.body.markdown).not.toContain("/approve");
     // And that comment is all deevy writes: the row itself is left as it was.
     expect(api.calls.filter((call) => call.method !== "GET" && call.path !== "/comments")).toEqual(
       [],
     );
   });
 
-  it("is ruled on by a comment only once an admin lets a verified address vouch for its author", async () => {
+  it("and its Gate is not ruled on by a comment that starts /approve: a Human rules in deevy, and the row is told", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
-    const { app, api, asAda, asPlanner, grace, socketId, sweep, run } = await verifiedAndRouted(db);
+    const { app, api, asGrace, asPlanner, grace, socketId, sweep, run } =
+      await verifiedAndRouted(db);
     const gate = await asPlanner.gates.request({
       runId: run.id,
       checkpoint: "plan",
       proposal: "Cap the coupon.",
     });
+    await sweep();
 
-    // Notion has no account to link, and the address it reports is weaker
-    // proof than one: off until an admin turns it on (ADR-0025).
-    await app.request(
+    // Grace answers on the row, in words that once ruled: deevy reads the
+    // comment back, and it is a comment on the record and nothing more.
+    const before = await lastSeq(db);
+    const commentedOn = await app.request(
       `/hooks/${socketId}`,
       await delivery(comment(api, GRACE, "/approve cap it at the basket total")),
     );
+    expect(await commentedOn.json()).toMatchObject({ status: "applied", applied: 1 });
+    expect(await kindsSince(db, before)).toEqual(["comment.created"]);
     expect(await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } })).toEqual([]);
+    expect((await asGrace.gates.get({ requestId: gate.id })).status).toBe("open");
+    // And deevy says nothing back to it.
+    await sweep();
+    expect(saidOnNotion(api)).toHaveLength(1);
 
-    await asAda.sockets.update({ socketId, identityByEmail: true });
-    await app.request(
-      `/hooks/${socketId}`,
-      await delivery(comment(api, GRACE, "/approve cap it at the basket total")),
-    );
-
-    const [decision] = await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } });
+    // She rules in deevy, signed in, and the row is told.
+    await asGrace.gates.approve({ requestId: gate.id, note: "cap it at the basket total" });
+    const [decision, ...others] = await db.query.gateDecision.findMany({
+      where: { gateRequestId: gate.id },
+    });
+    expect(others).toEqual([]);
     expect(decision).toMatchObject({
       memberId: grace.id,
       decision: "approved",
-      via: "socket",
-      socketId,
       note: "cap it at the basket total",
     });
-    expect(await db.query.memberIdentity.findFirst({})).toMatchObject({
-      memberId: grace.id,
-      provider: "notion",
-      instance: WORKSPACE,
-      externalUserId: GRACE,
-      verifiedBy: "email",
-    });
-
-    // An address nobody here verified rules nothing, and is told where to link.
-    await app.request(`/hooks/${socketId}`, await delivery(comment(api, STRANGER, "/reject no")));
     await sweep();
-    const replies = api.calls
-      .filter((call) => call.method === "POST" && call.path === "/comments")
-      .map((call) => String(call.body.markdown));
-    expect(replies.some((body) => body.includes("ruled nothing"))).toBe(true);
-    // The integration's own comment coming back rules nothing either.
-    await app.request(`/hooks/${socketId}`, await delivery(comment(api, BOT, "/approve")));
-    expect(await db.query.gateDecision.findMany({})).toHaveLength(1);
+    const told = saidOnNotion(api);
+    expect(told).toHaveLength(2);
+    expect(told.at(-1)).toContain("**Approved** at the `plan` Checkpoint");
+    expect(told.at(-1)).toContain("> cap it at the basket total");
+  });
+
+  it("and the integration's own comment coming back is no comment anybody made", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { app, api, asPlanner, socketId, run } = await verifiedAndRouted(db);
+    await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
+    const before = await lastSeq(db);
+
+    const answered = await app.request(
+      `/hooks/${socketId}`,
+      await delivery(comment(api, BOT, "/approve")),
+    );
+
+    expect(await answered.json()).toMatchObject({ status: "skipped" });
+    expect(await kindsSince(db, before)).toEqual([]);
+    expect(await db.query.gateDecision.findMany({})).toEqual([]);
   });
 });

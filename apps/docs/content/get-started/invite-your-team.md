@@ -1,6 +1,6 @@
 ---
 title: Invite your team
-description: Bring your team into a deevy Cloud Workspace, one person at a time by invitation or everyone who matches a rule.
+description: Bring your team into a deevy Cloud Workspace, one person at a time by invitation or everyone at your email domain.
 sidebar:
   order: 3
 ---
@@ -8,8 +8,8 @@ sidebar:
 There are two ways in, and an admin finds both under **Settings › General**:
 
 - An **invitation** lets in one person, by email address.
-- A **rule** under **Who may join** lets in everyone who matches it, such as your email domain or your
-  GitHub organization, and goes on letting in new people as they arrive.
+- A **rule** under **Who may join** lets in everyone with a confirmed address at your email domain, and goes
+  on letting in new people as they arrive.
 
 Your team doesn't need an invitation to the deevy Cloud beta: that is only for asking for Workspaces.
 Anyone can sign in to your Workspace with GitHub or Google, and your invitations and rules decide who
@@ -38,14 +38,11 @@ holds one invitation at a time.
 Every invitation counts toward your Workspace's 50 a day, whatever happens to it afterwards
 ([Daily limits](/cloud/limits/)). To bring in a whole team, a rule is the better tool.
 
-## Let in everyone who matches a rule
+## Let in everyone at your email domain
 
 1. Go to **Settings › General**, and next to **Who may join** choose **Add rule**.
-2. Under **Match on**, choose one:
-   - **Email domain**, such as `example.com`: anyone whose GitHub or Google account has a confirmed
-     address at that domain. A Google Workspace is an email domain.
-   - **GitHub organization**, by its login, such as `acme`: anyone who signs in with GitHub and belongs
-     to it.
+2. Enter the **Domain**, such as `example.com`: anyone whose GitHub or Google account has a confirmed
+   address at that domain joins. A Google Workspace is an email domain.
 3. Choose **Add rule**.
 
 A rule is checked each time somebody signs in, so a teammate who signed in before you added it joins
@@ -53,15 +50,8 @@ the next time they sign in. Everyone a rule lets in joins as a Member; make some
 **Settings › Members**. Removing a rule (the **×** beside it) lets nobody else in by it, and leaves the
 Members it already let in.
 
-:::note[An organization that restricts apps]
-If your GitHub organization restricts which OAuth apps may see it, deevy can't tell who belongs to it
-until one of its owners approves deevy, once, in the organization's settings on GitHub under
-**Third-party access**. Until then the rule lets nobody in; invitations still work.
-:::
-
-There is no GitLab group rule on deevy Cloud: it would match only people who sign in with GitLab, and
-deevy Cloud doesn't offer GitLab sign-in. For a team that works in GitLab, use an email domain or
-invitations.
+A domain is the only rule there is: deevy doesn't ask GitHub or GitLab who belongs to an organization or a
+group. For somebody whose address is elsewhere, such as a contractor, send an invitation.
 
 ## What a new Member sees
 
@@ -75,9 +65,6 @@ also has:
 - **Runs**, what the Workspace's Agents have been doing;
 - **Work**, every Issue deevy has brought in from your tools, to read: the work itself stays in the
   tools.
-
-Under **Settings**, in the **You** group, each Member links their accounts on your tools so they can rule
-from there (**Identities**).
 
 A Member can add Agents and rule on Gates. An admin can also connect tools, bind Projects, decide who
 joins, and change a Member's role or suspend them under **Settings › Members**.

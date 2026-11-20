@@ -7,16 +7,10 @@
  * the secret deevy minted at connect (wire.ts). From there a record is a record:
  * deevy projects it, routes it by its label, and opens the Run, as for GitHub.
  *
- * Two things it does not do, and both are the point of it:
- *
- * - **It vouches for nobody.** Whoever holds the secret writes the delivery,
- *   the author's account and address included, so a Ruling through it never
- *   counts (ADR-0025): the core refuses each one, and the refusal says where to
- *   rule instead.
- * - **It says nothing back.** What deevy would announce on a record goes out
- *   as the Gate's own Events on the Workspace's webhooks, each naming the
- *   record as the tool knows it, and the adapter says it in the tool. A
- *   comment deevy wrote would say to reply `/approve`, which is not so here.
+ * **It says nothing back.** What deevy would announce on a record goes out as
+ * the Gate's own Events on the Workspace's webhooks, each naming the record as
+ * the tool knows it, and the adapter says it in the tool. Whoever holds the secret writes the deliveries, which is safe
+ * because nothing in one rules: a Ruling is made in deevy (ADR-0036).
  *
  * Registered by every entry, in production too: it is a tool, not the stub.
  */
@@ -39,7 +33,6 @@ export function createGenericSocket(_input: SocketModuleInput): SocketModule {
     capabilities: new Set(["tracker"] as const),
     // Its sender has nowhere a secret comes from but deevy.
     webhookSecretFrom: "deevy",
-    vouches: false,
     // Its whole contract is deevy's own, walked on every deployment
     // (docs/acceptance.md): there is no other tool to try it against.
     walked: true,

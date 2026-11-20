@@ -103,42 +103,18 @@ GitHub cannot assign an issue to an App, so there are three ways to give one to 
 deevy writes about Gates and nothing else, as the App's own account, named after the App, such as
 `acme-on-github[bot]` for an App called "acme on GitHub":
 
-- a comment when an Agent asks at a Gate, with the Proposal and how to rule;
-- a comment for each approval and for the decision;
-- a reply to a `/approve` or `/reject` that ruled nothing, saying why.
+- a comment when an Agent asks at a Gate, with the Proposal and a link to rule on it in deevy;
+- a comment for each approval and for the decision.
 
 Each ends with the Agent and the Run it came from. See
-[Connecting your tools](/tools/overview/#what-deevy-writes-back).
+[Connecting your tools](/tools/overview/#what-deevy-writes-back). A reply on the issue, even one that starts
+`/approve` or `/reject`, is only a comment: a Gate is ruled on in deevy. See
+[How a Gate asks](/gates/how-a-gate-asks/).
 
 deevy sets no label and opens nothing. Everything else on GitHub is the Agent's, with the access you gave
 it: it reads an issue's comments, comments, labels, opens sub-issues as GitHub's own and opens its pull
 request, as its own account, then attaches the pull request to its Run. One that says
 `Closes <the issue's URL>` closes the issue when it merges.
-
-## Rule from GitHub
-
-A Human can approve or reject a Gate by commenting `/approve` or `/reject <why>` on the issue. If you sign
-in to deevy with GitHub, your comments already count as you; otherwise, link your GitHub account under
-**Settings › Identities**. See [Ruling from your tools](/gates/ruling-from-your-tools/).
-
-## Sign in with GitHub, in an organization that restricts apps
-
-A Workspace can let in everybody in a GitHub organization: an admin adds a **GitHub organization** rule
-under **Settings › General**, in **Who may join**. For that, deevy has to be able to see who belongs to the
-organization when they sign in with GitHub.
-
-An organization that restricts OAuth App access has to approve deevy first. An owner of the organization
-does it once, in the organization's settings on GitHub under **Third-party access**. Until then the rule
-lets nobody in, and an invitation still works.
-
-:::note[deevy Cloud]
-The app to approve is deevy's own sign-in app, which every Workspace on deevy Cloud signs in through.
-:::
-
-:::note[Self-hosted]
-The app to approve is the GitHub OAuth App you set your deevy up with, which asks for the `read:org` scope
-for exactly this. See [Sign-in providers](/self-hosting/sign-in-providers/).
-:::
 
 ## Change the webhook secret
 
@@ -165,8 +141,7 @@ A Workspace's address on deevy Cloud never changes, so you will not need this.
 deevy builds the address from its `BETTER_AUTH_URL`. A GitHub Enterprise Server, or GHE.com, works too:
 set `DEEVY_GITHUB_API` to its API root, then make the App there and paste it, as in
 [An App the organization already has](#an-app-the-organization-already-has): deevy cannot make it there
-for you, so **Connect GitHub** offers only the paste. Its accounts are not github.com's, and deevy has no
-way to link one to a Human, so a `/approve` there rules nothing: rule in deevy, or from Slack.
+for you, so **Connect GitHub** offers only the paste.
 :::
 
 ## Disconnect

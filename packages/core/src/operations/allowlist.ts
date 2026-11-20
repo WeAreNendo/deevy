@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { allowlistRule as allowlistRuleTable } from "@deevy/db";
+import { allowlistRule as allowlistRuleTable, allowlistRuleKinds } from "@deevy/db";
 import { AllowlistRuleSchema } from "../schemas.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
 import { NoInput, defineOperation } from "./registry.ts";
-import { AllowlistRuleInput, allowlistRuleSignIn } from "./shared.ts";
+import { AllowlistRuleInput } from "./shared.ts";
 import { newId } from "../ids.ts";
 
 export const allowlist = {
@@ -18,8 +18,11 @@ export const allowlist = {
     input: NoInput,
     output: z.object({ rules: z.array(AllowlistRuleSchema) }),
     handler: async ({ context }) => {
+      // An organisation or group rule saved before slice 10 admits nobody now
+      // (docs/plans/simplify.md), so it is not a rule there is to list; slice
+      // 12 deletes the rows with the columns it cuts.
       const rules = await context.db.query.allowlistRule.findMany({
-        where: { workspaceId: context.workspace.id },
+        where: { workspaceId: context.workspace.id, kind: { in: [...allowlistRuleKinds] } },
         orderBy: { createdAt: "asc" },
       });
       return { rules };
@@ -28,24 +31,13 @@ export const allowlist = {
 
   add: defineOperation({
     name: "allowlist.add",
-    summary:
-      "Admit every sign-in matching an email domain, a GitHub organization or a GitLab group",
+    summary: "Admit every sign-in whose verified address is at an email domain",
     method: "POST",
     path: "/allowlist",
     auth: "admin",
     input: AllowlistRuleInput,
     output: AllowlistRuleSchema,
     handler: async ({ input, context }) => {
-      // A rule decided by a provider's account is a rule that admits nobody
-      // where nobody signs in with that provider, which an admin could not
-      // tell from the saved chip. What this deployment offers is what
-      // `health.ping` reports: configured, and registered (app.ts).
-      const needs = allowlistRuleSignIn[input.kind];
-      if (needs && !context.signInProviders?.some((offered) => offered.id === needs.id)) {
-        throw new ORPCError("PRECONDITION_FAILED", {
-          message: `Nobody can sign in here with ${needs.label}, so a ${needs.rule} rule would let nobody in. Add an email domain rule or invite people instead.`,
-        });
-      }
       const existing = await context.db.query.allowlistRule.findFirst({
         where: { workspaceId: context.workspace.id, kind: input.kind, value: input.value },
       });

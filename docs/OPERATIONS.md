@@ -25,9 +25,8 @@ about running deevy applies to a hosted Workspace too; what differs is this.
 - **Signing in** is with the platform's GitHub, Google and other Apps, through one relay at
   `app.deevy.dev/auth` ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)). The address you asked for the
   Workspace with becomes its admin the first time it signs in, as on any deevy. Each Workspace is its own
-  sign-in: being in one signs you in to no other. A GitHub organization that restricts OAuth App access has to
-  approve the deevy App before a `github_org` allowlist rule can see that you belong to it; until then the
-  rule admits nobody, and an invitation still works.
+  sign-in: being in one signs you in to no other. Who else joins is an address's domain on the allowlist, or
+  an invitation, as on any deevy.
 - **Your tools connect as they would to your own deevy.** A GitHub Socket is a GitHub App created by the
   manifest flow, pointed at your Workspace's address — in your organization when **Connect GitHub** is given
   its login, on your own account otherwise; Linear, GitLab, Notion and Slack are set up as in "Connecting your
@@ -97,7 +96,6 @@ docker run -d --name deevy -p 3000:3000 -v deevy-data:/data \
   -e BETTER_AUTH_SECRET='<the first value>' \
   -e DEEVY_SECRET='<the second value>' \
   -e GITHUB_CLIENT_ID=... -e GITHUB_CLIENT_SECRET=... \
-  -e GITLAB_CLIENT_ID=... -e GITLAB_CLIENT_SECRET=... \
   -e GOOGLE_CLIENT_ID=... -e GOOGLE_CLIENT_SECRET=... \
   -e DEEVY_ADMIN_EMAIL=you@example.com \
   deevy:local   # or ghcr.io/wearenendo/deevy:latest
@@ -266,7 +264,7 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
 5. **Create a client with a sign-in provider** — at least one, and any of the four does. For GitHub that is
    an OAuth App at <https://github.com/settings/developers>, with that origin as the homepage and
    `https://deevy.<subdomain>.workers.dev/api/auth/callback/github` as the Authorization callback URL; for
-   Google, GitLab or an OpenID Connect IdP it is the same origin with `/api/auth/callback/<provider>`. The table under [Signing in](#signing-in-and-the-origin-better_auth_url-names) is the full set of
+   Google, Microsoft or an OpenID Connect IdP it is the same origin with `/api/auth/callback/<provider>`. The table under [Signing in](#signing-in-and-the-origin-better_auth_url-names) is the full set of
    origins and callbacks; the rule is that `BETTER_AUTH_URL` and the callback change together or sign-in
    breaks.
 
@@ -280,12 +278,12 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
    wrangler secret put GITHUB_CLIENT_SECRET
    ```
 
-   Offering Google or GitLab as well, or instead, is `wrangler secret put GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`, or `GITLAB_CLIENT_ID` and `GITLAB_CLIENT_SECRET`, beside them; the sign-in page
-   draws whichever pairs are complete. Offering an OpenID Connect IdP is `DEEVY_OIDC_CLIENT_ID` and
-   `DEEVY_OIDC_CLIENT_SECRET` the same way. A self-hosted GitLab also wants `GITLAB_ISSUER`, and an OIDC
-   provider `DEEVY_OIDC_ISSUER` and `DEEVY_OIDC_NAME`; none of those three is a credential, so they can go
-   in the `vars` block below.
+   Offering Google or Microsoft as well, or instead, is `wrangler secret put GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`, or `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`, beside them; the sign-in
+   page draws whichever pairs are complete. Offering an OpenID Connect IdP is `DEEVY_OIDC_CLIENT_ID` and
+   `DEEVY_OIDC_CLIENT_SECRET` the same way. Microsoft may also want `MICROSOFT_TENANT_ID`, and an OIDC
+   provider wants `DEEVY_OIDC_ISSUER` and `DEEVY_OIDC_NAME`; none of those three is a credential, so they can
+   go in the `vars` block below.
 
    `wrangler secret list` shows the names you put in and no values. The rest are not credentials, so they can go in
    a `vars` block in `apps/web/wrangler.jsonc`, where a reviewer can see them:
@@ -534,16 +532,16 @@ this.
 The Workspace's address changes from `https://app.deevy.dev/<slug>` to yours, and deevy cannot tell the rest
 of the world. In order:
 
-| What              | What to change                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signing in        | A hosted Workspace signs in through the platform's relay and its Apps. Register your own for each provider you offer, with `<BETTER_AUTH_URL>/api/auth/callback/<provider>` ([Signing in](#signing-in-and-the-origin-better_auth_url-names)); an IdP or a GitLab of your own, which the relay never served, changes its callback instead. Everybody signs in again and lands on their own Member, because a provider's account is the same whichever App asks. |
-| Agents            | Each one's `DEEVY_URL`, to the new URL. Their API keys belong to no address and keep working.                                                                                                                                                                                                                                                                                                                                                                  |
-| A GitHub Socket   | **Point GitHub at this address** on the Socket's page (`sockets.rewire`) moves the App's webhook. In the App's own settings on GitHub, the **Setup URL** becomes `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                                     |
-| A Linear Socket   | In the OAuth application: the webhook URL, `<BETTER_AUTH_URL>/hooks/<socket>`, and both **Callback URLs**, `/api/identities/linear/callback` and `/hooks/<socket>/setup` on the new URL.                                                                                                                                                                                                                                                                       |
-| A GitLab Socket   | On every project or group bound to it, the webhook's URL, `<BETTER_AUTH_URL>/hooks/<socket>`. The secret token stays.                                                                                                                                                                                                                                                                                                                                          |
-| A Notion Socket   | On the connection's **Webhooks** tab, a new subscription to `<BETTER_AUTH_URL>/hooks/<socket>`, verified with the token the Socket's page shows, then the old one deleted.                                                                                                                                                                                                                                                                                     |
-| A Slack Socket    | In the app: the **Interactivity** request URL and the `/deevy` command's URL, both `<BETTER_AUTH_URL>/hooks/<socket>`.                                                                                                                                                                                                                                                                                                                                         |
-| Outgoing webhooks | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| What              | What to change                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing in        | A hosted Workspace signs in through the platform's relay and its Apps. Register your own for each provider you offer, with `<BETTER_AUTH_URL>/api/auth/callback/<provider>` ([Signing in](#signing-in-and-the-origin-better_auth_url-names)); an IdP of your own, which the relay never served, changes its callback instead. Everybody signs in again and lands on their own Member, because a provider's account is the same whichever App asks. |
+| Agents            | Each one's `DEEVY_URL`, to the new URL. Their API keys belong to no address and keep working.                                                                                                                                                                                                                                                                                                                                                      |
+| A GitHub Socket   | **Point GitHub at this address** on the Socket's page (`sockets.rewire`) moves the App's webhook. In the App's own settings on GitHub, the **Setup URL** becomes `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                         |
+| A Linear Socket   | In the OAuth application: the webhook URL, `<BETTER_AUTH_URL>/hooks/<socket>`, and the **Callback URL**, `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                                                                                 |
+| A GitLab Socket   | On every project or group bound to it, the webhook's URL, `<BETTER_AUTH_URL>/hooks/<socket>`. The secret token stays.                                                                                                                                                                                                                                                                                                                              |
+| A Notion Socket   | On the connection's **Webhooks** tab, a new subscription to `<BETTER_AUTH_URL>/hooks/<socket>`, verified with the token the Socket's page shows, then the old one deleted.                                                                                                                                                                                                                                                                         |
+| A Slack Socket    | Nothing: Slack sends deevy nothing, and a Gate's message links to wherever deevy is when it is posted. An app made from an older manifest can have **Interactivity** and the `/deevy` command turned off.                                                                                                                                                                                                                                          |
+| Outgoing webhooks | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                          |
 
 Only GitHub lets deevy move a webhook itself; every other tool keeps it in its own settings
 ([Where a tool delivers](#where-a-tool-delivers)). Until a tool is pointed at the new address, nothing it
@@ -564,7 +562,7 @@ bindings arrive with the request.
 
 | Variable                       | Node        | Workers            | Default                  | Without it                                                                                                                                                                                                                                                                                                     |
 | ------------------------------ | ----------- | ------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, and Slack deliveries wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                                                    |
+| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, and Gate messages to Slack wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                                              |
 | `BETTER_AUTH_SECRET`           | env         | secret             | —                        | deevy does not run: the Node server refuses to start, and the Worker answers every request that reaches its code (the API and `/healthz`; the SPA's assets are served before it) with a 503 naming it, because Better Auth would otherwise fall back to a key it publishes. Changing it signs everyone out.    |
 | `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume. |
 | `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                            |
@@ -574,9 +572,6 @@ bindings arrive with the request.
 | `GITHUB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
 | `GOOGLE_CLIENT_ID`             | env         | secret             | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                         |
 | `GOOGLE_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `GITLAB_CLIENT_ID`             | env         | secret             | —                        | GitLab is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/gitlab`.                                                                                                                         |
-| `GITLAB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `GITLAB_ISSUER`                | env         | var                | `https://gitlab.com`     | GitLab sign-in goes to gitlab.com. Set it to a self-hosted instance's origin; every GitLab endpoint deevy calls is built from it, and a GitLab Socket on that instance takes its accounts from sign-in.                                                                                                        |
 | `DEEVY_OIDC_ISSUER`            | env         | var                | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                      |
 | `DEEVY_OIDC_CLIENT_ID`         | env         | secret             | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                         |
 | `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
@@ -584,13 +579,7 @@ bindings arrive with the request.
 | `MICROSOFT_CLIENT_ID`          | env         | secret             | —                        | Microsoft is neither registered nor offered. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/microsoft`.                                                                                                                                                                            |
 | `MICROSOFT_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
 | `MICROSOFT_TENANT_ID`          | env         | var                | `common`                 | Work, school and personal Microsoft accounts all sign in. Set `organizations` for work and school only, or a tenant's id for that tenant only.                                                                                                                                                                 |
-| `LINEAR_CLIENT_ID`             | env         | secret             | —                        | Linear is neither registered nor offered. Both halves or neither. A Linear sign-in comes in by invitation only.                                                                                                                                                                                                |
-| `LINEAR_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `SLACK_CLIENT_ID`              | env         | secret             | —                        | Sign in with Slack is neither registered nor offered. Both halves or neither.                                                                                                                                                                                                                                  |
-| `SLACK_CLIENT_SECRET`          | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `ATLASSIAN_CLIENT_ID`          | env         | secret             | —                        | Atlassian is neither registered nor offered. Both halves or neither. An Atlassian sign-in comes in by invitation only.                                                                                                                                                                                         |
-| `ATLASSIAN_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `DEEVY_SIGN_IN_ORDER`          | env         | var                | —                        | Providers are offered GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian, then your IdP. Name ids, comma-separated, to offer those first (`oidc,github`).                                                                                                                                             |
+| `DEEVY_SIGN_IN_ORDER`          | env         | var                | —                        | Providers are offered GitHub, Google, Microsoft, then your IdP. Name ids, comma-separated, to offer those first (`oidc,github`); an id deevy does not offer is ignored.                                                                                                                                        |
 | `DEEVY_ADMIN_EMAIL`            | env         | var                | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                           |
 | `DEEVY_WORKSPACE_NAME`         | env         | var                | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                           |
 | `DEEVY_WEB_ORIGIN`             | env         | var                | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                            |
@@ -603,8 +592,13 @@ bindings arrive with the request.
 | `DEEVY_WEB_DIST`               | env         | —                  | —                        | Node answers the API and serves no pages. On Workers the SPA is the asset handler's, not the app's.                                                                                                                                                                                                            |
 
 The Worker serves the SPA, the API, the reference at `/api/docs`, the MCP challenge and, since M3 slice 5,
-signing in: `BETTER_AUTH_*`, `GITHUB_*`, `GOOGLE_*`, `GITLAB_*`, `DEEVY_OIDC_*`, `DEEVY_ADMIN_EMAIL` and
+signing in: `BETTER_AUTH_*`, `GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*`, `DEEVY_OIDC_*`, `DEEVY_ADMIN_EMAIL` and
 `DEEVY_WORKSPACE_NAME` do on Workers exactly what they do on Node, bootstrap and allowlist included.
+
+`GITLAB_*`, `LINEAR_*`, `SLACK_*` and `ATLASSIAN_*` named sign-in providers until slice 10 of
+[simplify.md](./plans/simplify.md) and are read as nothing now
+([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)): a deployment that still sets them offers the
+providers above and no others, and can remove them.
 
 ### Background work, on a timer or on a Cron Trigger
 
@@ -628,10 +622,6 @@ Which paths the Worker answers rather than the asset handler is `assets.run_work
 missing from it is answered with the SPA's `index.html` — a 200 with the wrong body — so
 `packages/core/tests/worker-routes.test.ts` asserts the list against the app's own routes, and
 `vp run web#test:workers` drives the built Worker on `wrangler dev --local` to prove it over HTTP.
-
-The GitHub OAuth App needs the `read:org` scope for `github_org` allowlist rules, and a GitLab application
-needs `read_api` for `gitlab_group` ones. deevy requests both, so a client created before the slice that
-added one will ask for the extra scope at the next sign-in.
 
 ### Queues, when the account has them
 
@@ -697,21 +687,32 @@ again each time the stream ends. The image and the self-hosted Worker offer no s
 Which providers an instance offers is what its environment sets: `createAuth` registers the entries whose
 client id and secret are both present, `health.ping` reports the same list publicly, and the sign-in page
 draws one button per entry in that order. An instance with none configured says so on the page instead of
-offering a button that goes nowhere. GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian and one
-generic OpenID Connect provider are the entries — `GITHUB_CLIENT_ID` with `GITHUB_CLIENT_SECRET`, and so on
-for `GOOGLE_`, `MICROSOFT_`, `GITLAB_`, `LINEAR_`, `SLACK_` and `ATLASSIAN_`, and `DEEVY_OIDC_CLIENT_ID` with
-`DEEVY_OIDC_CLIENT_SECRET` and `DEEVY_OIDC_ISSUER`; any of them, all of them or none (docs/plans/sign-in.md).
-Each one's redirect URI is `${BETTER_AUTH_URL}/api/auth/callback/<id>`, with the ids `github`, `google`,
-`microsoft`, `gitlab`, `linear`, `slack`, `atlassian` and `oidc`.
+offering a button that goes nowhere. GitHub, Google, Microsoft and one generic OpenID Connect provider are
+the entries — `GITHUB_CLIENT_ID` with `GITHUB_CLIENT_SECRET`, and so on for `GOOGLE_` and `MICROSOFT_`, and
+`DEEVY_OIDC_CLIENT_ID` with `DEEVY_OIDC_CLIENT_SECRET` and `DEEVY_OIDC_ISSUER`; any of them, all of them or
+none (docs/plans/sign-in.md). Each one's redirect URI is `${BETTER_AUTH_URL}/api/auth/callback/<id>`, with
+the ids `github`, `google`, `microsoft` and `oidc`. Each is asked who the Human is and for their address,
+and nothing more: GitHub gets its default scopes, `read:user` and `user:email`, and no `read:org`, since no
+allowlist rule reads an organization.
 
-They are offered in the order an engineering team reaches for them — GitHub, Google, Microsoft, GitLab,
-Linear, Slack, Atlassian — and your own IdP last. `DEEVY_SIGN_IN_ORDER` puts the ids you name first, in the
-order you name them (`oidc,github` for a company that signs in through its IdP first), and the rest follow in
-the default order. The page shows every button when there are four or fewer; past that it shows the first
-three and puts the rest behind "More ways to sign in", your IdP last among them, so name `oidc` in
-`DEEVY_SIGN_IN_ORDER` if your teammates should see it without looking. deevy also remembers, in a cookie of
-its own that holds nothing but the provider's id, which provider this browser signed in with last, so the
-page offers that one first and marks it "Last used".
+They are offered in the order an engineering team reaches for them — GitHub, Google, Microsoft — and your
+own IdP last. `DEEVY_SIGN_IN_ORDER` puts the ids you name first, in the order you name them (`oidc,github`
+for a company that signs in through its IdP first), and the rest follow in the default order; an id that is
+not one of the four is ignored. The page shows every button, since there are four at most. deevy also
+remembers, in a cookie of its own that holds nothing but the provider's id, which provider this browser
+signed in with last, so the page offers that one first and marks it "Last used".
+
+**GitLab, Linear, Slack and Atlassian are not sign-in providers** since slice 10 of
+[simplify.md](./plans/simplify.md) ([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)). They were there so
+that a sign-in could vouch for a Ruling made in that tool, or for a team that lives there, and a Ruling is
+made in deevy now. Their variables are read as nothing, and their ids in `DEEVY_SIGN_IN_ORDER` are ignored.
+A Member who signed in only with GitLab or Slack keeps their Member: they sign in with another provider at
+the same verified address, and Better Auth links that sign-in back onto the same user. Linear and Atlassian
+never said an address was verified, so the user row one of them made is unverified, and Better Auth refuses
+to link onto it (`account_not_linked`, below): another provider at that address is refused, so such a
+Member cannot get back to their row until slice 12's release starts from an empty database, and is invited
+again then. The Linear application, the GitLab user and the
+Slack app a Socket uses are not sign-ins, and connecting them is unchanged.
 
 **Microsoft** is Microsoft Entra ID: register an application under Entra ID › App registrations, add a web
 redirect URI, and give it a client secret. `MICROSOFT_TENANT_ID` says whose accounts it takes: `common` (the
@@ -722,31 +723,10 @@ ID token claims `verified_primary_email` and `verified_secondary_email`. Without
 still works, but an address it carries neither makes the admin nor matches an `email_domain` rule — it comes
 in by invitation.
 
-**Linear** and **Atlassian** never say whether an address is verified, so a sign-in through either comes in
-by invitation only, whatever the allowlist says. Linear's application (Linear › Settings › API › OAuth
-applications) is registered with `read`, the narrowest scope Linear has. Atlassian's (developer.atlassian.com
-› Developer console) needs the User identity API's `read:me` and nothing else. **Slack** is Sign in with Slack,
-which is OpenID Connect: a Slack app with the redirect URL under OAuth & Permissions and the `openid`, `email`
-and `profile` user scopes. Slack does say an address is verified, so a domain rule admits it. These are
-separate from the Linear application and the Slack app a Socket uses, which act as deevy; these act as the
-Human signing in.
-
 Google is registered with its default scopes and no `hd`, so it does not decide who may join. Who may join is
-the allowlist: a Google Workspace is an email domain, and an `email_domain` rule under Settings, Allowlist
+the allowlist: a Google Workspace is an email domain, and an `email_domain` rule under Settings › General
 admits it in the one place an admin already looks. Configuring the client pair therefore lets anyone with a
 Google account sign in — and leaves them signed in, not a Member, until a rule matches them.
-
-GitLab is one entry for both gitlab.com and a self-hosted instance: `GITLAB_ISSUER` is where it is, defaulting
-to `https://gitlab.com`, and the authorization, token and `/api/v4` endpoints are all built from it. It is
-registered with `read_user`, which is the profile, and `read_api`, which is the only scope GitLab has that
-lists a person's groups — so a `gitlab_group` rule costs the sign-in a token that can read the API it can
-reach. That token is Better Auth's, stored on the `account` row, read once on the join and never again;
-an instance with no `gitlab_group` rule never spends it, because the groups are only asked for when such a
-rule exists and no email domain matched. Note what that does and does not buy an operator who would rather
-not grant it: the scope is on the registration, so every GitLab sign-in consents to it and stores a token
-that could read the API, whether or not a group rule exists. Leaving group rules alone means the token is
-never used; it does not mean it is never issued. An operator who wants it never issued has to leave GitLab
-unconfigured.
 
 Anything that speaks OpenID Connect is the fourth entry, and one is all there is: a self-hosted instance has
 one IdP, and a list of them would put JSON in a secret to serve a case nobody has. `DEEVY_OIDC_ISSUER` is
@@ -771,16 +751,12 @@ the runtime's own connect timeout. Point `DEEVY_OIDC_ISSUER` at something reacha
 sends none — can sign a teammate in, but cannot become the _second_ provider for a Human who already has one
 here: that link is refused, for the reason under **One Human is one Member** below.
 
-**Who may join, and who is invited.** A rule admits a category — an email domain, a GitHub organization, a
-GitLab group — and it goes on admitting everybody who matches it, this month and next. An organization or a
-group is asked of the account the Human signed in with on that forge, so a `github_org` rule admits only a
-GitHub sign-in and a `gitlab_group` rule only a GitLab one. Where that provider is not offered the rule could
-admit nobody, so Settings › General offers a kind only when its provider is among the sign-ins `health.ping`
-reports, and `allowlist.add` refuses one that is not with `PRECONDITION_FAILED` (deevy Cloud has no GitLab
-sign-in, so it takes no GitLab group rule). A rule saved before its provider was taken away stays listed,
-drawn faint, with a line saying it lets nobody in until people can sign in with that provider again; removing
-it is the admin's call. An invitation admits
-one person: an admin creates it in Settings, Workspace with an address and a role, and gets a link back once
+**Who may join, and who is invited.** A rule admits a category — every verified address at one email
+domain — and it goes on admitting everybody who matches it, this month and next. It is the only kind of rule
+there is: the GitHub-organization and GitLab-group rules, which read a tool's organizations through the
+sign-in's token, went with slice 10 of [simplify.md](./plans/simplify.md). `allowlist.add` refuses either
+kind, a rule of either saved before is not listed and admits nobody, and the Members who joined by one stay
+Members. An invitation admits one person: an admin creates it in Settings, Workspace with an address and a role, and gets a link back once
 (`invitations.create` answers `url` and `path`) to copy and send however they like, because deevy sends no
 email and keeps only a hash of the token. The invited Human clicks the link, signs in with whichever provider
 the instance offers, and accepting is what makes them a Member — the address that signs in has to be the
@@ -790,42 +766,40 @@ revokes the invitation and issues a new one. Neither is a Gate: nothing waits on
 neither is on Needs me — the admin is holding the link.
 
 **An address counts only when the provider verified it.** `DEEVY_ADMIN_EMAIL` makes the admin, and an
-`email_domain` rule admits, only a sign-in whose provider vouched for the address. A provider that does not —
+`email_domain` rule admits, only a sign-in whose provider verified the address. A provider that does not —
 an OpenID Connect IdP that omits `email_verified`, or any provider that lets somebody put an address on an
 account they do not own — would otherwise let anybody claim `you@example.com` and be let in by it (the
-"nOAuth" hole). Such a sign-in still works by invitation, since the link is the proof, and a GitHub
-organization or a GitLab group rule does not rest on the address at all.
+"nOAuth" hole). Such a sign-in still works by invitation, since the link is the proof.
 
 The link points where a browser finds deevy, which is `BETTER_AUTH_URL` in the image and on the Worker,
 since both serve the SPA themselves. Where the SPA has an origin of its own, that is `DEEVY_WEB_ORIGIN`, and
 setting it is what keeps an invitation link, a Gate link and a Slack message pointing at the page rather than
 at the API beside it.
 
-**One Human is one Member.** A teammate who signs in with one provider and later with another lands on the
-same user row: the second sign-in links onto the address the first one registered, so they keep one handle
-and one Member rather than becoming two people who share an email.
+**One Human is one Member.** A teammate who signs in with one provider and later with another, on the same
+address, lands on the same user row: the second sign-in links onto the address the first one registered, so
+they keep one handle and one Member rather than becoming two people who share an email.
 
 What decides is the provider, not deevy's configuration of it. **No provider is trusted by name**: a second
-sign-in links only when the provider itself says the address is verified. GitHub and Google always do, and
-GitLab says so with the `confirmed_at` stamp on its profile, so for those three the rule is invisible. It is
-not invisible for an OpenID Connect IdP that omits the claim — Microsoft Entra omits it — where the second
+sign-in links only when the provider itself says the address is verified. GitHub and Google always do, so
+for those two the rule is invisible. It is not invisible for an OpenID Connect IdP that omits the claim — Microsoft Entra omits it — where the second
 sign-in is refused with `account_not_linked` and the teammate has to keep using the provider they started
 with. That is the deliberate direction to fail in: the alternative, trusting whatever an operator configured,
 means an IdP with open self-registration can hand somebody an account on a colleague's address and have it
 linked onto that colleague's Member, even when the IdP truthfully reports the address as unverified.
 
 The other end of the link is guarded the same way. Better Auth also refuses to link onto a local row that is
-itself unverified, so somebody who signed in first with an address a provider would not vouch for does not
+itself unverified, so somebody who signed in first with an address a provider would not verify does not
 collect the real owner's next sign-in; that one fails at the callback with `account_not_linked`, and no
 second Human is created on the address. Note what that row's flag is: deevy never writes it, so it holds
 whatever the provider that created the row reported. A Human whose first sign-in was unverified therefore
-stays on that provider until an operator changes the row. Linking is also same-address only — two addresses are two Humans, and deevy has no
-screen that says otherwise.
+stays on that provider until an operator changes the row. Linking is also same-address only: Better Auth's
+`allowDifferentEmails` is left at its default, since nothing in deevy links an account on another address
+any more ([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)), so two addresses are two Humans, and deevy
+has no screen that says otherwise.
 
 Whether a provider proved the address is the provider's own answer, and they word it differently. GitHub and
-Google say so directly. GitLab does not: its `/api/v4/user` has no `email_verified` at all, only
-`confirmed_at`, the moment the address answered GitLab's confirmation mail — so deevy reads that as the proof
-it is, and a GitLab account whose address was never confirmed lands unverified. A generic OIDC provider is
+Google say so directly, and Microsoft through the optional claims above. A generic OIDC provider is
 taken at the `email_verified` claim of its `id_token`, and an IdP that publishes no such claim — Entra is one
 — therefore leaves every Human it signs in unverified: they sign in and become Members as usual, but a second
 provider on the same address is refused with `account_not_linked` until that IdP asserts the claim. An
@@ -833,10 +807,8 @@ operator behind such an IdP should offer it alone rather than beside a second pr
 to release `email_verified`.
 
 `BETTER_AUTH_URL` has to be the origin the browser actually visits, character for character. Better Auth
-builds the OAuth callback from it and sets the session cookie for it, and `packages/core/src/auth.ts` pins
-the token issuer and the RFC 8707 resource identifier to it as well. A value naming a host nobody visits
-therefore mints tokens bound to that host and a cookie the browser never sends back — and it cannot be
-guessed from the request instead, because then a caller would choose the audience of the tokens deevy signs.
+builds the OAuth callback from it and sets the session cookie for it, so a value naming a host nobody visits
+sends every provider's callback to that host and sets a cookie the browser never sends back.
 
 Every provider's callback follows from it, and each ends in the provider's own id:
 
@@ -849,14 +821,13 @@ Every provider's callback follows from it, and each ends in the provider's own i
 
 `<provider>` is `github` for the GitHub OAuth App's Authorization callback URL, `google` for the Authorized
 redirect URI of the Google OAuth client (an OAuth 2.0 Client ID of type "Web application" in a Google Cloud
-project's Credentials, with the consent screen's scopes left at email and profile), `gitlab` for the
-Redirect URI of the GitLab application (User settings › Applications, confidential, scopes `read_user` and
-`read_api`), and `oidc` for the Redirect URI of the OpenID Connect client — deevy's own name for the provider,
+project's Credentials, with the consent screen's scopes left at email and profile), `microsoft` for the
+web redirect URI of the Entra application (App registrations › Authentication), and `oidc` for the Redirect URI of the OpenID Connect client — deevy's own name for the provider,
 whatever the IdP is, so `DEEVY_OIDC_NAME` changes the button and never the URL.
 
 A GitHub OAuth App holds one callback URL, so a Worker reachable both on its `workers.dev` subdomain and on a
-custom domain needs an App for each, or a decision that sign-in happens on one of them; a Google client and a
-GitLab application each hold a list, so one of those can carry both. Move between origins by changing `wrangler secret put BETTER_AUTH_URL`
+custom domain needs an App for each, or a decision that sign-in happens on one of them; a Google client and an
+Entra application each hold a list, so one of those can carry both. Move between origins by changing `wrangler secret put BETTER_AUTH_URL`
 and the callbacks together: either one alone leaves sign-in refused by the provider or the session cookie set
 for an origin nobody is on.
 
@@ -891,8 +862,8 @@ key.
 A provider's access and refresh tokens are sealed under `BETTER_AUTH_SECRET` as Better Auth writes them
 (`account.encryptOAuthTokens`). A row written before deevy sealed them stays readable, and is sealed the next time its
 Human signs in with that provider. Rotating `BETTER_AUTH_SECRET` therefore also leaves the sealed tokens
-unreadable until each Human signs in again, which costs only the GitHub organization and GitLab group checks
-a join makes in the meantime.
+unreadable until each Human signs in again, which costs only the GitHub login a join reads for a new Member's
+handle in the meantime: the handle is made from their name instead.
 
 ### Signing in through a relay
 
@@ -907,8 +878,9 @@ code with the App's secret, so each still holds the client ids and secrets.
 | `DEEVY_SIGN_IN_RELAY_URL`    | each deevy behind it     | The relay's URL. Every App's callback is `${DEEVY_SIGN_IN_RELAY_URL}/callback/<provider>`.         |
 | `DEEVY_SIGN_IN_RELAY_ALLOW`  | the relay                | Comma-separated URL prefixes the relay may send a callback to, such as `https://app.example.com/`. |
 
-A deevy is a relay at `${BETTER_AUTH_URL}/relay`, so `DEEVY_SIGN_IN_RELAY_URL` names that. Its own OpenID
-Connect IdP and a self-managed GitLab are never relayed; their callbacks stay the deevy's own.
+A deevy is a relay at `${BETTER_AUTH_URL}/relay`, so `DEEVY_SIGN_IN_RELAY_URL` names that. A relay carries
+GitHub, Google and Microsoft, whichever of them are configured (ADR-0030, as ADR-0036 amends it). A deevy's
+own OpenID Connect IdP is never relayed; its callback stays the deevy's own.
 
 ### Under a path
 
@@ -991,8 +963,8 @@ are 404.
 An Agent can do less than a Human by construction: in the Projects it was granted it can read records, add
 Links, ask at a Checkpoint, and drive its own Runs; whatever it reads or writes in the tracker or a repository
 it does with its own access there. It can never administer the Workspace,
-manage Members, or rule on a Gate — a Gate is decided by a Human, in deevy's browser or from a tool that
-vouches for them (ADR-0004, ADR-0010, ADR-0025). Which
+manage Members, or rule on a Gate — a Gate is decided by a Human signed in to deevy, and nowhere else
+(ADR-0004, ADR-0010, ADR-0036). Which
 operations an Agent may call at all is default-deny, per operation (ADR-0011).
 
 **How long a Run took is what deevy says about what it cost**, because it is the one thing deevy saw: its
@@ -1100,11 +1072,13 @@ rule on, and it waits in up to three places:
 - **Needs me**, deevy's home page, which is `gates.list` with `mine: true`: exactly the open Gates that Human
   could approve now. A Gate whose Checkpoint keeps them from approving, or that they already approved, is not
   waiting on them and is not there ([Gates](#gates-and-how-many-humans-they-ask-for)).
-- **The record in the tracker**, where deevy's comment asks for the Ruling and `/approve` or `/reject`
-  answers it ([Ruling from the tracker](#ruling-from-the-tracker)); every tool but the generic Socket, which
-  deevy writes nothing back to.
-- **The Project's chat channel**, when the Project binds one: each Gate is one message there with **Approve**
-  and **Reject**, changed in place as Rulings land ([Working in Slack](#working-in-slack)).
+- **The record in the tracker**, where deevy's comment says the Gate is waiting and ends with a link to rule
+  on it in deevy ([A Ruling is made in deevy](#a-ruling-is-made-in-deevy)); every tool but the generic
+  Socket, which deevy writes nothing back to.
+- **The Project's chat channel**, when the Project binds one: each Gate is one message there with a link to
+  rule on it in deevy, changed in place as Rulings land ([Working in Slack](#working-in-slack)).
+
+The last two only say where the Gate is. A Human rules on it in deevy, signed in, and nowhere else.
 
 Nothing reminds anybody of a Gate left open: it stays on Needs me until it is ruled on or superseded. The rest
 — which Agent took a record, who mentioned whom, how a Run ended — a Human reads in the tracker, where the
@@ -1137,10 +1111,9 @@ routing started it — the Human accountable for what the Agent is about to do.
 
 What is worth knowing before turning either on:
 
-- **One rejection ends it, whatever the threshold**, and the Human the work is for may still reject — in
-  deevy, with `/reject` on the record, or with Slack's button, since every door goes through one
-  `recordRuling` and one `rulingRefusal`. Consensus is for letting work through; one reason to stop is
-  enough. Their approval is what is refused, in words that say they may still reject; the ruling screen
+- **One rejection ends it, whatever the threshold**, and the Human the work is for may still reject: every
+  Ruling goes through one `recordRuling` and one `rulingRefusal`. Consensus is for letting work through; one
+  reason to stop is enough. Their approval is what is refused, in words that say they may still reject; the ruling screen
   disables **Approve** alone (`you.mayApprove`, `you.whyNotApprove` beside `you.mayRule`). They are not
   asked: `gates.list({ mine: true })` — **Needs me** — leaves the Gate out, because it is not waiting on
   them. Asking again after a rejection is a new Gate, one visit later, and the approvals before it are
@@ -1171,7 +1144,7 @@ What is worth knowing before turning either on:
   had the threshold been that low when the last of them landed. It is the same settling as the approval
   that meets the count (`settleGate` in `gates.ts`): the Gate's status, `gate.approved`, the Run resuming
   with `run.answered`, the comment on the record and the chat messages changed. The actor is the admin who
-  saved, `via` is `web`, and both Events carry `loweredFrom` (the old threshold; `required` is the new
+  saved, and both Events carry `loweredFrom` (the old threshold; `required` is the new
   one), so the history says the threshold passed it rather than claiming a Ruling: the record's comment
   reads "Approved at the `ship` Checkpoint — 1 of 1, once Approvals was lowered from 2 to 1", the Run's
   feed "@ada lowered Approvals on the ship Checkpoint from 2 to 1, so it passed with the 1 approval it
@@ -1199,14 +1172,14 @@ Sockets**; a Project is then a binding to what is in it, under **Settings › Pr
 credential is sealed under `DEEVY_SECRET`, so an instance without one can connect nothing that holds a
 credential.
 
-| Tool   | What deevy uses it for                               | What you register there, and paste into deevy                              |
-| ------ | ---------------------------------------------------- | -------------------------------------------------------------------------- |
-| GitHub | records (issues)                                     | a GitHub App deevy writes the manifest for, installed on your repositories |
-| Linear | records                                              | an OAuth application with client credentials and a webhook                 |
-| GitLab | records                                              | an access token for the user deevy acts as, and a webhook on each project  |
-| Notion | records (a database's rows)                          | an internal connection's token, and a webhook subscription                 |
-| Slack  | a Project's Gates in its channel, ruled with buttons | an app from deevy's manifest                                               |
-| Any    | records, through an adapter of yours                 | nothing in deevy but a name; deevy mints the secret the adapter signs with |
+| Tool   | What deevy uses it for                                  | What you register there, and paste into deevy                              |
+| ------ | ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| GitHub | records (issues)                                        | a GitHub App deevy writes the manifest for, installed on your repositories |
+| Linear | records                                                 | an OAuth application with client credentials and a webhook                 |
+| GitLab | records                                                 | an access token for the user deevy acts as, and a webhook on each project  |
+| Notion | records (a database's rows)                             | an internal connection's token, and a webhook subscription                 |
+| Slack  | a Project's Gates in its channel, each linking to deevy | an app from deevy's manifest, and its bot token                            |
+| Any    | records, through an adapter of yours                    | nothing in deevy but a name; deevy mints the secret the adapter signs with |
 
 Linear, GitLab, Notion and Slack are labelled **Preview** in Settings and on their public pages until
 somebody walks them against the real tool: `walked` on each module, answered by `sockets.providers`. GitHub
@@ -1242,13 +1215,17 @@ answered per provider by `sockets.providers`), and both the page and `sockets.ro
 - **`either`** — GitHub and GitLab, whose settings take a secret typed in. Paste the tool's new one into
   **New secret from** the tool and choose **Use the new secret** (`sockets.update` with `webhookSecret`), or
   **Mint a webhook secret** (`sockets.rotate`), which shows a new one once for you to paste into the tool.
-- **`tool`** — Slack's signing secret and a Linear application's webhook signing secret, which the tool
-  makes and nothing deevy minted can be pasted into. Only the paste; `sockets.rotate` refuses, saying so.
+- **`tool`** — a Linear application's webhook signing secret, which Linear makes and nothing deevy minted
+  can be pasted into. Only the paste; `sockets.rotate` refuses, saying so.
 - **`handshake`** — Notion, which signs with the verification token it sends when its subscription is made.
   The page has no such section, since **Verifying the webhook** shows that token, and `sockets.rotate`
   refuses, because a minted secret would replace the token and break the webhook.
 - **`deevy`** — the generic Socket, whose adapter has a secret from nowhere but deevy. `sockets.connect`
   mints one and answers it once, and the page offers only **Mint a webhook secret**.
+- **`none`** — Slack, which sends deevy nothing ([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)), so
+  there is nothing to sign. Its page has no **What it signs with**, and no **Where it delivers** or
+  deliveries either; `sockets.rotate` refuses, and so do `sockets.connect` and `sockets.update` given a
+  secret, and `/hooks/<socket>` answers anything sent to it with 400.
 
 Whichever way it changes, deevy keeps taking the old secret for a day (`PREVIOUS_SECRET_MS`, the sealed
 `previousWebhookSecret` and `webhookSecretChangedAt` on the Socket row), so the two sides can change in
@@ -1295,30 +1272,33 @@ with `links_add`. A pull request that says `Closes <issue URL>` closes the issue
 does for anyone, and deevy hears the issue close.
 
 This section was walked against github.com on 2026-09-25: an App made from the manifest on a personal
-account, installed on one private repository, and a record taken from a label to a merged pull request with
-the ruling made by commenting `/approve` (docs/plans/sockets.md, "The GitHub walk").
+account, installed on one private repository, and a record taken from a label to a merged pull request, with
+the ruling made, as it was then, by commenting `/approve` (docs/plans/sockets.md, "The GitHub walk"). That
+comment rules nothing now.
 
-**Ruling from GitHub** needs no linking step for a Human who signs in to deevy with GitHub: github.com's
-accounts are the ones deevy signs people in with ([Ruling from the tracker](#ruling-from-the-tracker)). A
-GitHub Enterprise Server is the same module with `DEEVY_GITHUB_API` (or the Socket's own API address) pointing
-at its API root, with two differences. deevy cannot make the App there, because a page's policy lets the
-manifest's form go only to github.com
+**A Gate on GitHub** is deevy's comment on the issue: the Checkpoint, the Proposal and its Links, ending
+`Rule on it in deevy:` and the Gate's address. The Ruling is made there, in deevy, and each one is said back
+on the issue as a comment of its own, with how many approvals the Gate has of how many. A comment on the
+issue that starts `/approve` or `/reject` is a comment like any other, and deevy answers nothing
+([A Ruling is made in deevy](#a-ruling-is-made-in-deevy)).
+
+A GitHub Enterprise Server is the same module with `DEEVY_GITHUB_API` (or the Socket's own API address)
+pointing at its API root, with one difference. deevy cannot make the App there, because a page's policy lets
+the manifest's form go only to github.com
 ([What a page may run](#what-a-page-may-run-and-where-a-change-may-come-from)): **Connect GitHub** offers
 only **Paste an App you already have**, `sockets.begin` refuses, and the App is made on the server and
-pasted. And it shares nothing with sign-in and has no sign-in of its own to link an account through, so a
-comment there is no Human's Ruling.
+pasted.
 
 ### Working in Linear
 
 A Linear workspace is a Socket: connect it under **Settings › Sockets › Connect Linear**. deevy acts in Linear
 as an OAuth application of your own, so the first step is making one, and deevy starts the Socket before you
-do so that it can show you the three addresses the application needs with their real values:
+do so that it can show you the two addresses the application needs with their real values:
 
 1. In Linear, **Settings › API › New OAuth application**. Call it deevy; that is the name every comment
    deevy writes appears under.
-2. Under **Callback URLs**, both addresses deevy shows, one per line: where a Human comes back after linking
-   their Linear account (`/api/identities/linear/callback`), and where an admin comes back after installing
-   deevy as an agent (`/hooks/<socket>/setup`).
+2. Under **Callback URLs**, the one address deevy shows as the callback: where an admin comes back after
+   installing deevy as an agent (`<BETTER_AUTH_URL>/hooks/<socket>/setup`).
 3. Turn on **Client credentials**. This is how deevy works as the application rather than as whoever
    connected it: it mints its own token from the client id and secret, and mints another when Linear stops
    taking one. Linear's other tokens last a day and change their refresh token on every use, which is why
@@ -1343,13 +1323,11 @@ back. After that, assigning an issue to deevy in Linear makes the application th
 Human who assigned it stays its assignee — and the Project's default Agent takes it. A Project with no
 default Agent routes nothing that way; a label still works.
 
-**Ruling from Linear** is the same `/approve` and `/reject <why>` as on GitHub
-([Ruling from the tracker](#ruling-from-the-tracker)). A Human who signs in to deevy with Linear, with an
-account in the Socket's workspace, rules with no linking step: a Linear account is one workspace's, and it is
-the same id on both sides (ADR-0027). Anybody else links theirs once, under **Settings › Identities › Link
-Linear**: Linear asks them to consent on its own page, deevy reads which account and which workspace said
-yes, and gives the token back at once. An account in another Linear workspace is refused. Rotating the application's client secret in Linear ends every token
-deevy minted with the old one, and a connected Socket takes no new credentials (`sockets.connect` refuses one
+**A Gate on Linear** is deevy's comment on the issue, by the application, ending with a link to rule on it in
+deevy, and each Ruling is said back on the issue as on GitHub. A comment that starts `/approve` or `/reject`
+is a comment, and rules nothing ([A Ruling is made in deevy](#a-ruling-is-made-in-deevy)).
+
+Rotating the application's client secret in Linear ends every token deevy minted with the old one, and a connected Socket takes no new credentials (`sockets.connect` refuses one
 already connected, and `sockets.update` takes none): connect a new Socket with the new secret, bind each
 Project again to it under a new slug, archive the old Project, then disconnect the old Socket.
 
@@ -1366,7 +1344,7 @@ GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
 1. A dedicated user called deevy, with a **personal access token**, or the bot user GitLab makes for a
    **project** or **group access token**, where your GitLab tier offers those. The token needs
    the `api` scope. Give its user **Reporter** on each project deevy works, and nothing more: every comment
-   and label is by that user.
+   deevy writes is by that user.
 2. Paste the token, and the instance's address if it is not gitlab.com. Connecting asks GitLab who the token
    belongs to and what it may do, and a token that cannot answer, or has no `api` scope, is refused rather
    than stored, in GitLab's words.
@@ -1377,7 +1355,7 @@ GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
    GitLab then signs each delivery and its time rather than sending the secret with it, and a signed delivery
    more than five minutes old is refused.
 
-Bind a Project to a GitLab project under **Settings › Projects**, as its tracker and its repository. deevy
+Bind a Project to a GitLab project under **Settings › Projects**, as its tracker. deevy
 stores the project's id, so renaming it or moving it to another group breaks nothing. A label `agent:<handle>`
 routes an issue to that Agent; deevy sets no label of its own. GitLab's issues are open or closed and nothing
 else: a team's workflow is in its scoped labels, which deevy reads as labels. GitLab has no parent for an
@@ -1388,12 +1366,12 @@ and nothing wakes it when the last one closes.
 project yourself, and it opens its own merge request and attaches it to its Run with `links_add`; one that
 says `Closes <issue URL>` closes the issue when it merges.
 
-**Ruling from GitLab** is `/approve` and `/reject <why>` in a comment, as on GitHub
-([Ruling from the tracker](#ruling-from-the-tracker)). A Socket on the instance this deevy signs people in
-with — gitlab.com, or `GITLAB_ISSUER` — takes its accounts from sign-in, so a Human who signs in with GitLab
-rules with no linking step, and one who signs in otherwise links GitLab under **Settings › Identities**. A
-Socket on any other GitLab shares nothing with sign-in. A comment by a project or group access token's bot
-rules nothing. A connected Socket takes no new token, so before the token expires, connect a new Socket with a
+**A Gate on GitLab** is deevy's comment on the issue, by the token's user, ending with a link to rule on it
+in deevy, and each Ruling is said back there as on GitHub. A comment that starts `/approve` or `/reject` is a
+comment, and rules nothing ([A Ruling is made in deevy](#a-ruling-is-made-in-deevy)), on gitlab.com and on
+an instance of your own alike.
+
+A connected Socket takes no new token, so before the token expires, connect a new Socket with a
 new one, bind each Project again to it under a new slug, archive the old Project, then disconnect the old
 Socket.
 
@@ -1410,12 +1388,11 @@ internal integration until it renamed them:
 1. In Notion's [Developer portal](https://app.notion.com/developers/connections), which a Workspace Owner can
    use, **Build › Internal connections › Create a new connection** called deevy — every comment it writes is
    by that name. On its **Configuration** tab give it **read content**, **read comments**, **insert
-   comments** and **user information with email addresses** — it reads a row back and comments on it, and
-   writes nothing else — and
+   comments** and **user information without email addresses** — it reads a row back and comments on it,
+   writes nothing else, and asks Notion for a comment's author only by name, never for an address — and
    paste its **installation access token** into deevy. Connecting asks Notion who the connection is, and a
    token that cannot answer is refused rather than stored. So is a personal access token: it acts as the
-   person who made it, so deevy would write as them and take their comments — their `/approve` too — for
-   its own.
+   person who made it, so deevy would write its Gate comments as them and drop their comments as its own.
 2. **Give the connection each database deevy should read**: on its **Content access** tab (**Edit access**),
    or from a database's own **••• › Connections › Add connection**. The connection sees what it is given and the pages under it, and nothing else, which is
    Notion's rule and a good one.
@@ -1439,11 +1416,11 @@ page not shared with the connection, or a kind of block it does not write as mar
 an embed — each gap is marked `<unknown>` in the body deevy keeps, which ends saying so, with the page's link.
 A Project's other pages are not deevy's to read: an Agent reads them with Notion access of its own.
 
-**Ruling from Notion** is `/approve` and `/reject <why>` in a comment, as elsewhere, with one difference:
-Notion has no account a Human can link, so the only proof of who wrote a comment is the address Notion reports
-for its author. It counts only on a Socket where an admin turned on **Take a verified address as proof** on
-the Socket's page, only against an address a Member verified in deevy, and the Gate's page marks every
-Ruling it makes "(email)" ([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)).
+**A Gate on Notion** is deevy's comment on the row, by the connection, ending with a link to rule on it in
+deevy, and each Ruling is said back there as on GitHub. A comment that starts `/approve` or `/reject` is a
+comment, and rules nothing ([A Ruling is made in deevy](#a-ruling-is-made-in-deevy)). The Socket's page has
+no **Who commented** section any more: a verified address Notion reports for a comment's author proves
+nothing to deevy, because nothing in a comment rules.
 
 This section has been checked against what Notion publishes — its SDK's types, its API reference, its example
 deliveries and its signing helper, and api.notion.com answering a made-up token — but **not yet walked in a
@@ -1451,17 +1428,22 @@ Notion workspace** (docs/plans/sockets.md, "The Notion check").
 
 ### Working in Slack
 
-A Slack app is a Socket too: connect it under **Settings › Sockets › Connect Slack**. deevy starts the Socket
-first and shows the app manifest (`docs/slack-manifest.yaml`) with this instance's own request URL in it, so
-creating the app in Slack — Create New App → From a manifest — is one trip. Install it to the
-workspace, then paste the **Bot User OAuth Token** and the **Signing Secret** back into deevy. A user's token
-is refused, because deevy would post as that person. The app asks for four scopes and nothing about people,
-since a click already says who clicked: `chat:write` to post a Gate and change it, `channels:read` and
-`groups:read` to list the public and private channels it is in, and `commands` for `/deevy link`. An app made
-from an older manifest has `im:write` instead of the two `:read` scopes: add them under **OAuth &
-Permissions** and reinstall the app to pick a channel from a list (until then a Project takes the channel's
-id typed in), and `im:write` can go, since deevy sends no direct message. The URL must be one Slack can
-reach; an instance with no public address can post to Slack but hears no clicks.
+A Slack app is a Socket too: connect it under **Settings › Sockets › Connect Slack**. deevy only posts in
+Slack, and Slack sends deevy nothing ([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)), so the app holds
+no address of deevy's: the dialog shows the app manifest as it is committed (`docs/slack-manifest.yaml`),
+and creating the app in Slack — Create New App → From a manifest — is one trip. Install it to the workspace,
+then paste the **Bot User OAuth Token** back into deevy; that token is all the Socket holds. A user's token
+is refused, because deevy would post as that person. The app asks for three scopes and nothing about people:
+`chat:write` to post a Gate and change it, and `channels:read` and `groups:read` to list the public and
+private channels it is in. It has no request URL, no interactivity and no slash command, and needs no
+public address of deevy's, so an instance behind a NAT posts to Slack as well as any.
+
+An app made from an older manifest asked for more. Turn off **Interactivity & Shortcuts** and delete the
+`/deevy` command in the app's settings: Slack would send clicks and commands to an address that now answers
+400, and the signing secret it signed them with is no longer read. The `commands` scope can go with them.
+One older still has `im:write` instead of the two `:read` scopes: add them under **OAuth & Permissions** and
+reinstall the app to pick a channel from a list (until then a Project takes the channel's id typed in), and
+`im:write` can go, since deevy sends no direct message.
 
 A Slack Socket posts nothing until a Project binds one of its channels, under **Settings › Projects ›** the
 Project **› Chat**, which only an admin may change (`projects.update` with `chat: { socketId, channel }`).
@@ -1473,38 +1455,28 @@ binds it only if Slack took the line: a channel the app is not in, an archived o
 Slack's words, and the Project stays as it was. `chat: null` unbinds it, and removing the Slack Socket unbinds
 every Project that posted through it, each with a `project.updated` saying so.
 
-Then every Gate a Run waits at in that Project is one message in the channel with **Approve** and
-**Reject**; Reject asks why first. The message is changed in place when anybody rules — in Slack, in deevy
-or in the tracker — and when the Gate is superseded, through the same outbox as everything else
-(`deriveChatMessages` in `packages/core/src/sockets/chat-out.ts`, `deliverDueChatMessages` in
-`packages/core/src/work.ts`), so a click is answered at once and the message a moment later. A Gate is
+Then every Gate a Run waits at in that Project is one message in the channel: the Checkpoint, the record,
+the Proposal, how many approvals it has of how many, and a link, **Rule on it in deevy**, where a button used
+to be. Nothing in the channel rules, so a Human follows the link and rules on the Gate's page. The message is
+changed in place when anybody rules and when the Gate is superseded, through the same outbox as everything
+else (`deriveChatMessages` in `packages/core/src/sockets/chat-out.ts`, `deliverDueChatMessages` in
+`packages/core/src/work.ts`), and once the Gate is decided its link reads **Open it in deevy**. A Gate is
 posted where its Project binds when the sweep sends it, so a binding moved meanwhile is obeyed. Each message
 is a durable delivery row, retried from 30 seconds, doubling to an hour, and given up on after six attempts;
 and because it links back into deevy, it waits unsent until the instance knows its own URL
 (`BETTER_AUTH_URL`). deevy says nothing else in Slack: no Run, no record, no direct message.
 
-A click counts only for a Slack account deevy can place. A Human who signs in to deevy with Slack, to the
-Socket's team, is placed already: Sign in with Slack hands over an id token naming the team, and deevy holds
-the click against it (ADR-0027). For anybody else — another sign-in, another team, a guest from another team
-in a shared channel — linking is its own step: an unlinked click, or `/deevy link`, gets a code only that
-person sees, which they enter under **Settings › Identities** within ten minutes. deevy names the account before linking it,
-because a code handed over by somebody else would link _their_ account. Codes are kept only as a hash.
-
-Slack signs every request with a timestamp, and one more than five minutes from deevy's clock, either way, is
-refused however it is signed, as Slack's docs say.
-Slack's signing secret is rotated in Slack; paste the new one on the Socket's page, under **What it signs
-with** ([What a tool signs with](#what-a-tool-signs-with)), or with `sockets.update` (`webhookSecret`), and
-deevy keeps taking the old one for a day, so the two can be changed in either order.
+The Socket's page shows how the Socket is doing, and no **Where it delivers**, **What it signs with** or
+deliveries, since Slack delivers nothing ([What a tool signs with](#what-a-tool-signs-with)).
 
 When Slack refuses something, deevy says it in words with Slack's code: "deevy is not in that channel:
 /invite @deevy there (not_in_channel, chat.postMessage)" when a Project's channel is saved, for instance,
 and an app installed before it asked to read channels is told it is missing the scope beside the channel
 picker.
 
-This section has been checked against what Slack publishes — its signing docs' worked example and Bolt's
-check, the Web API's and Block Kit's types, the manifest reference, example interactions, and slack.com
-answering a made-up token — but **not yet walked in a Slack workspace** (docs/plans/sockets.md, "The Slack
-check").
+This section has been checked against what Slack publishes — the Web API's and Block Kit's types, the
+manifest reference, and slack.com answering a made-up token — but **not yet walked in a Slack workspace**
+(docs/plans/sockets.md, "The Slack check").
 
 ### Working in any other tool
 
@@ -1517,40 +1489,43 @@ with `deevy-delivery` as its id. The public page `tools/generic` is the contract
 script, an n8n flow. The stub (`packages/sockets/src/stub`) reads and signs the same wire, so every test that
 delivers to the stub exercises it.
 
-It is registered by every entry, in production too, and it is safe there because of two rules. **It vouches
-for nobody** (`vouches: false`): a `/approve` through it is refused before any Identity or address is looked
-up, as `gate.ruling_refused` with reason `unvouched`. **It writes nothing back**: `createComment` answers
+It is registered by every entry, in production too, and it is safe there because of two rules. **Nothing in
+a delivery rules**: whoever holds the secret writes the deliveries, and they carry records and comments,
+never a Ruling, which is made in deevy ([A Ruling is made in deevy](#a-ruling-is-made-in-deevy)); an event of
+any kind but `issue` and `comment` is skipped with a line saying so. **It writes nothing back**: `createComment` answers
 `null` and no mirror row is kept, so a Gate is announced only as its `gate.*` Events on the Workspace's
 webhooks, each carrying `issueExternalId`, `issueKey` and `issueUrl` for the adapter to say it in the tool,
 and `issueSocketId` for it to tell its own tool's records from another's. A secret typed in is refused at
 connect and on `sockets.update`: only deevy makes this one.
 A Project is bound to it by a typed key, since it cannot list containers.
 
-## Ruling from the tracker
+## A Ruling is made in deevy
 
-A Human can approve or reject a Gate by commenting `/approve` or `/reject <why>` on the record in the tracker,
-where deevy's own comment asked for the ruling
-([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md)). It is the same Ruling as the button
-in deevy — the same Checkpoint policy, the same refusals in the same words — recorded with where it came from.
+A Human approves or rejects a Gate on its page in deevy, signed in, and nowhere else
+([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)). The tools are told: the record gets deevy's comment
+when the Gate waits, ending `Rule on it in deevy:` and the Gate's address, and one more for each Ruling, with
+how many approvals the Gate has of how many; the Project's chat channel, where it binds one, gets one message
+with the same link, changed in place as Rulings land. Nothing said in a tool rules.
 
-It counts only when deevy can prove which Member wrote the comment, and deevy never matches a login: those are
-renamed and reused. What it matches is the tool's own account id, against one of:
+- **A comment is a comment.** One whose first line is `/approve` or `/reject <why>` is projected like any
+  other, and deevy answers nothing: no Ruling, no Event about a Gate, no reply on the record. It stays on the
+  record for the team to read.
+- **A chat message is a link.** It has no buttons, and the Slack app takes no request from Slack.
+- **A Human's accounts on the tools mean nothing to deevy.** deevy ties no account on a tool a Socket
+  connects to a Member, so there is nothing to link or unlink, and no Settings page for it. A Human is who
+  they sign in to deevy as; even a GitHub sign-in says who they are in deevy, not who wrote a comment on
+  GitHub.
 
-- **The account the Human signs in to deevy with.** A Human who signs in with GitHub rules from github.com with
-  no further step. A GitHub Enterprise Server's accounts are not github.com's and are not matched this way.
-  Linear and Slack sign-ins count too, in the workspace or team they were to (ADR-0027).
-- **An account they linked** under **Settings › Identities**, from a signed-in session — how a Human who signs
-  in with Google rules from GitHub. The linked account may carry a different address from theirs; that link is
-  the only place deevy accepts one.
-- **The address the tool reports**, matched to one a Member has verified — only on a Socket where an admin
-  turned it on (`sockets.update` with `identityByEmail`), because it is a weaker proof. It is meant for a tool
-  with nothing better to offer, and the Gate's page marks every Ruling it makes "(email)".
+That was not always so. Until slice 10 of [simplify.md](./plans/simplify.md), a `/approve` comment or a Slack
+button could rule when deevy could place its author through a linked Identity
+([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md), superseded). A team that ruled that
+way now follows the link. The `member_identity` and `link_code` tables, and the `via`, `socket_id` and
+`external_ref` of a Ruling's row, stay in the schema unread until slice 12 drops them; a Ruling in the API is
+`{ id, memberId, decision, note, createdAt }`.
 
-A comment by an account deevy cannot place rules nothing, and deevy says so on the record with a link to
-Settings › Identities; so does a comment the Checkpoint refuses, and one on a record with nothing waiting. A
-comment by a bot — deevy's own included — rules nothing and is not answered. A Human who unlinks an account
-under Settings › Identities stays unlinked: nothing links it again until they do. Every link and every refusal
-is in the Event log (`identity.linked`, `identity.revoked`, `gate.ruling_refused`).
+What a Ruling is has not changed: the Checkpoint's policy, four eyes and Approvals, an approval standing for
+its record, the Run resuming, and Needs me as the list of what waits on a Human
+([Gates](#gates-and-how-many-humans-they-ask-for)). An Agent never rules (ADR-0004).
 
 ## How deep sub-issues may go
 

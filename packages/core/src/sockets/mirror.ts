@@ -8,8 +8,8 @@ import type { EventKind } from "../events.ts";
  * The whole point of the Sockets milestone is that a team keeps reading their
  * own tracker: so a Gate an Agent is waiting at, and the ruling that let it
  * past, show up as comments on the record itself. A Human who never opens
- * deevy still knows what is happening, and can rule from there once ADR-0025's
- * identities land.
+ * deevy still knows what is happening, and follows the comment's link to rule
+ * on it, in deevy, where every Ruling is made (ADR-0036).
  *
  * The derivation is the fourth in `appendEvent`'s tail, after the webhook one,
  * and it owes a `delivery` row exactly as those do: the row is the record that
@@ -29,9 +29,6 @@ const announcedKinds: ReadonlySet<string> = new Set<EventKind>([
   "gate.approval",
   "gate.approved",
   "gate.rejected",
-  // A Ruling made in the tracker that ruled nothing is answered where it was
-  // made, because that is where its author is reading (ADR-0025).
-  "gate.ruling_refused",
 ]);
 
 /**
@@ -52,10 +49,6 @@ export function announces(kind: string): boolean {
  */
 export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[]> {
   if (!announces(event.kind) || !event.projectId) return [];
-  // A Ruling refused in Slack was answered in Slack, to the one who clicked:
-  // telling the record's tracker too would say it to everybody else
-  // (sockets/chat.ts).
-  if (event.kind === "gate.ruling_refused" && payloadVia(event) === "slack") return [];
   const project = await db.query.project.findFirst({
     where: { id: event.projectId },
     columns: { trackerSocketId: true },
@@ -78,15 +71,6 @@ export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[
   return row ? [row.id] : [];
 }
 
-function payloadVia(event: Event): string | null {
-  return payloadText(event, "via");
-}
-
-function payloadText(event: Pick<Event, "payload">, key: string): string | null {
-  const value = (event.payload as Record<string, unknown> | null)?.[key];
-  return typeof value === "string" ? value : null;
-}
-
 export interface MirrorSubject {
   /** The Checkpoint a Gate is about, and what the Agent proposed. */
   gate?: {
@@ -98,7 +82,7 @@ export interface MirrorSubject {
   /** Who was working, for the signature line. */
   agentName?: string | null;
   runId?: string | null;
-  /** Where a Human opens the ruling in deevy. */
+  /** Where a Human rules on it, in deevy. */
   origin?: string;
 }
 
@@ -149,14 +133,9 @@ export function mirrorFor(
       `**Waiting on a ruling at the \`${gate.checkpoint}\` Checkpoint.**`,
       gate.proposal,
       links,
-      // The two ways to answer: here, in a comment, or in deevy. Both end up
-      // in the same place (ADR-0025).
-      [
-        "Reply `/approve` or `/reject <why>` to rule from here.",
-        url ? `Or open it in deevy: ${url}` : "",
-      ]
-        .filter((line) => line !== "")
-        .join("\n"),
+      // Where to rule, which is in deevy and nowhere else (ADR-0036): a
+      // reply here is a comment, and says nothing to the Gate.
+      url ? `Rule on it in deevy: ${url}` : "Rule on it in deevy.",
       signature(subject),
     );
   }
@@ -197,24 +176,6 @@ export function mirrorFor(
       note ? quoted(note) : "",
       signature(subject),
     );
-  }
-
-  if (event.kind === "gate.ruling_refused") {
-    const who = text("externalActor");
-    const origin = subject.origin ?? "";
-    const why =
-      text("reason") === "unknown_identity"
-        ? `This account isn't linked to anybody in deevy yet: link it at ${origin}/settings/identities, then say it again.`
-        : text("reason") === "nothing_waiting"
-          ? "Nothing on this record is waiting on a ruling."
-          : text("reason") === "unvouched"
-            ? // Said for a tool that takes deevy's comments at all; the generic
-              // Socket takes none, and its adapter hears the Event instead.
-              [text("message"), url ? `Rule on it in deevy: ${url}` : ""]
-                .filter((part) => part !== "")
-                .join(" ")
-            : text("message") || "deevy would not take it.";
-    return paragraphs(`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "— deevy");
   }
 
   return null;

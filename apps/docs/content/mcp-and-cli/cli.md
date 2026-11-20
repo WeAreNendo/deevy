@@ -83,7 +83,7 @@ deevy gates open ENG-12 --no-browser
 ```
 
 `gates open` takes a Gate's id, or the key of the record waiting at one, and prints the address of its
-ruling screen. A Gate is ruled there, or from your tools, by a Human, and never with a key.
+ruling screen. A Gate is ruled there, by a Human signed in, and never with a key.
 
 **Point the record at what the Agent made:**
 

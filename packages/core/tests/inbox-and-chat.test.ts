@@ -1,11 +1,10 @@
-import { memberIdentity, socket as socketTable, type Db } from "@deevy/db";
+import { socket as socketTable, type Db } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
 import { newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
-import { sealSecret } from "../src/secrets.ts";
-import type { ChatInteraction, InboundEvent } from "../src/sockets/port.ts";
+import type { InboundEvent } from "../src/sockets/port.ts";
 import { deliverDueChatMessages, runDueWork } from "../src/work.ts";
 import {
   agentContext,
@@ -24,12 +23,11 @@ afterEach(() => {
   for (const close of closers.splice(0)) close();
 });
 
-const signingSecret = "a-slack-signing-secret-for-tests";
-
 /**
  * A Human's attention is the Gates they may rule on (docs/plans/simplify.md,
  * slice 8): Needs me in deevy, and the one chat channel a Project binds, where
- * each Gate is a message with Approve and Reject that changes as Rulings land.
+ * each Gate is a message with a link to rule on it in deevy (slice 10) that
+ * changes as Rulings land.
  * Nothing else is sent to a Human: no inbox row, no direct message, no email.
  * An inbox is an Agent's, and says what it was assigned, who mentioned it and
  * how its Gate was ruled.
@@ -67,19 +65,7 @@ async function workspace(db: Db, options: { channels?: boolean } = {}) {
     name: "Acme Slack",
     identity: { login: "deevy", id: "U0DEEVY", mentionHandle: "@deevy" },
     config: { teamId: "T0TEST" },
-    webhookSecret: await sealSecret(testSealingSecret, signingSecret),
   });
-  await db.insert(memberIdentity).values({
-    id: newId("memberIdentity"),
-    workspaceId: ada.workspace.id,
-    memberId: grace.member.id,
-    provider: "slack",
-    instance: "T0TEST",
-    externalUserId: "U0GRACE",
-    externalLogin: "grace",
-    verifiedBy: "link_code",
-  });
-
   const app = createApp({
     db,
     sockets,
@@ -95,28 +81,6 @@ async function workspace(db: Db, options: { channels?: boolean } = {}) {
       baseUrl: "https://deevy.test",
       ...options,
     });
-  const click = async (user: string, gateRequestId: string) => {
-    const body = JSON.stringify({
-      kind: "ruling",
-      actor: { team: "T0TEST", user, login: user },
-      gateRequestId,
-      decision: "approved",
-      note: null,
-      wantsNote: false,
-      message: chat.posted.find((one) => one.message.kind === "gate")?.ref ?? null,
-      responseUrl: `https://hooks.slack.test/actions/${user}`,
-      triggerId: null,
-    } satisfies ChatInteraction);
-    return app.request(`/hooks/${slackId}`, {
-      method: "POST",
-      headers: {
-        "x-test-event": "block_actions",
-        "x-test-timestamp": String(Math.floor(Date.now() / 1000)),
-        "x-test-signature": `${signingSecret}:${String(body.length)}`,
-      },
-      body,
-    });
-  };
   const as = (context: MemberContext) =>
     createRouterClient(router, {
       context: { ...context, sockets, socketSecret: testSealingSecret },
@@ -132,7 +96,6 @@ async function workspace(db: Db, options: { channels?: boolean } = {}) {
     slackId,
     app,
     send,
-    click,
     asAda: as(ada),
     asGrace: as(grace),
     asOmar: as(omar),
@@ -287,11 +250,11 @@ describe("a Project's chat channel", () => {
 });
 
 describe("a Gate on a Project bound to a chat channel", () => {
-  it("posts one message with Approve and Reject, and changes it in place on each Ruling", async () => {
+  it("posts one message, and changes it in place on each Ruling", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const context = await workspace(db);
-    const { asAda, asPlanner, chat, slackId, send, click } = context;
+    const { asAda, asGrace, asPlanner, chat, slackId, send } = context;
     await asAda.projects.update({ slug: "deevy", chat: { socketId: slackId, channel: "C0DEEVY" } });
     await asAda.checkpoints.set({
       projectSlug: "deevy",
@@ -314,15 +277,15 @@ describe("a Gate on a Project bound to a chat channel", () => {
     });
     const ref = posted[0]?.ref;
 
-    // Grace rules from the button, her Slack account linked: it counts.
-    expect((await click("U0GRACE", gate.id)).status).toBe(200);
+    // Grace rules in deevy.
+    await asGrace.gates.approve({ requestId: gate.id });
     await send();
     expect(chat.updated.at(-1)).toMatchObject({
       ref,
       message: { gate: { status: "open", approvals: 1, required: 2 } },
     });
 
-    // Ada rules in deevy, and the same message says so.
+    // Then Ada, and the same message says so.
     await asAda.gates.approve({ requestId: gate.id });
     await send();
     expect(chat.updated.at(-1)).toMatchObject({
@@ -331,30 +294,6 @@ describe("a Gate on a Project bound to a chat channel", () => {
     });
     expect(chat.updated.every((one) => one.ref.ts === ref?.ts)).toBe(true);
     expect(chat.posted.filter((one) => one.message.kind === "gate")).toHaveLength(1);
-  });
-
-  it("answers a click from an account nobody linked in private, and rules nothing", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const context = await workspace(db);
-    const { asAda, asPlanner, chat, slackId, send, click } = context;
-    await asAda.projects.update({ slug: "deevy", chat: { socketId: slackId, channel: "C0DEEVY" } });
-    const runId = await runOn(context, "42");
-    const gate = await asPlanner.gates.request({ runId, checkpoint: "plan", proposal: "Ship it" });
-    await send();
-
-    expect((await click("U0OMAR", gate.id)).status).toBe(200);
-    expect(chat.responses).toEqual([
-      expect.objectContaining({
-        responseUrl: "https://hooks.slack.test/actions/U0OMAR",
-        text: expect.stringMatching(/doesn't know whose Slack account/),
-      }),
-    ]);
-    expect((await asAda.gates.get({ requestId: gate.id })).status).toBe("open");
-    const refused = await db.query.event.findMany({ where: { kind: "gate.ruling_refused" } });
-    expect(refused.map((row) => (row.payload as { reason?: string }).reason)).toEqual([
-      "unknown_identity",
-    ]);
   });
 
   it("is posted nowhere when the Project binds no channel", async () => {
@@ -368,7 +307,7 @@ describe("a Gate on a Project bound to a chat channel", () => {
     expect(context.chat.posted).toEqual([]);
   });
 
-  it("says a Ruling made while it was being posted, rather than offering buttons that would be refused", async () => {
+  it("says a Ruling made while it was being posted, rather than a Gate still waiting", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const context = await workspace(db);

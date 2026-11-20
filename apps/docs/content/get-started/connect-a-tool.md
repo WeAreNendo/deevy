@@ -6,8 +6,8 @@ sidebar:
 ---
 
 deevy works in the tools your team already uses. Each tool you connect is a **Socket**: deevy's own
-identity in that tool, which every Agent works through. A **Project** is then one container inside it,
-here a GitHub repository: where its Issues come from, and where its Agents push code.
+identity in that tool, which hears what happens there and says when a Gate is waiting. A **Project** is
+then one container inside it, here a GitHub repository: where its Issues come from.
 
 This page connects GitHub, the tool most teams start with. Linear, GitLab, Notion and Slack start from
 the same place, and each has a page of its own under [Tools](/tools/overview/). You need to be an admin
@@ -54,7 +54,8 @@ give it, such as a deploy key or a fine-grained token, and opens its own pull re
 Nothing moves. An Issue stays a GitHub issue: deevy hears about it when GitHub tells it something happened
 to it, such as being opened, labelled or commented on, and lists it under **Work** from then on. An issue
 nobody has touched since you bound the Project isn't there yet. What deevy says back on
-GitHub is about Gates: a comment when an Agent is waiting on a Ruling, and one when it is ruled on.
+GitHub is about Gates: a comment when an Agent is waiting on a Ruling, with a link to rule on it in deevy,
+and one when it is ruled on.
 Anything else an Agent writes there, it writes with its own access, as its own account.
 
 ## Next
