@@ -31,14 +31,13 @@ const packageDirs = [
   "packages/design",
   "apps/web",
   "apps/server",
-  "apps/agent",
   "apps/cli",
   "apps/hosted",
   "tools/release",
   "tools/acceptance",
 ];
 
-/** `@deevy/agent` is the area `agent`; the scope carries no meaning here. */
+/** `@deevy/hosted` is the area `hosted`; the scope carries no meaning here. */
 const areaOf = (name: string) => name.replace(/^@deevy\//, "");
 
 type Bullet = { areas: string[]; text: string };

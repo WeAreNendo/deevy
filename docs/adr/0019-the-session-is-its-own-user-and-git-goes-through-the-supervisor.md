@@ -1,5 +1,8 @@
 # The session is its own user, and git goes through the supervisor
 
+> Superseded by [ADR-0034](./0034-deevy-runs-no-agent-and-manages-no-access.md): deevy holds no git credential
+> for a Run, and the supervisor this describes is gone.
+
 > Three things below were not quite so. The supervisor did run untrusted code: the clone, `.git` included, is
 > the session's, git runs whatever a clone's configuration and hooks name, and the supervisor's own git in it —
 > the delivery, and reading what moved — ran as root. It now runs as the session's user, with an environment

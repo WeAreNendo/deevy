@@ -103,9 +103,8 @@ describe("the Run lifecycle", () => {
      * only a Human un-waits it: `runs.answer`, or a Ruling on the Gate. An
      * Activity that moved it back to `active` would put it under the stale
      * sweep, and a Human watching would be told it is working when it is
-     * waiting on them. The supervisor writes one of these itself, after the
-     * session that asked has ended, which is how this was found
-     * (apps/agent/src/work.ts).
+     * waiting on them. The reference runtime wrote one of these itself, after
+     * the session that asked had ended, which is how this was found.
      */
     expect(said.run.status).toBe("awaiting_input");
     // And nobody is told twice about one question: `run.awaiting_input` is the

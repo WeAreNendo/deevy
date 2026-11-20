@@ -477,13 +477,13 @@ function Webhook({ memberId, url }: { memberId: string; url: string | null }) {
     <SettingsSection
       aria-label="Webhook"
       title="Webhook"
-      description="Give this Agent's runtime a URL and deevy posts to it the moment there is work in the Projects it was granted, signed with a secret you choose. Without one, the Agent still finds its work by asking every so often."
+      description="Give deevy a URL for this Agent and it posts there the moment there is work in the Projects it was granted, signed with a secret you choose. Without one, the Agent still finds its work by asking every so often."
     >
       {shown ? (
         <div className="flex flex-col gap-2 rounded-md border border-gate/50 bg-gate/10 p-3">
           <p className="text-sm font-medium">
-            Copy this secret now: deevy never shows it again. Give it to the runtime, which checks
-            every delivery against it.
+            Copy this secret now: deevy never shows it again. Give it to whatever receives the
+            deliveries, so it can check each one against it.
           </p>
           <code className="overflow-x-auto rounded bg-background px-2 py-1 font-mono text-sm">
             {shown}

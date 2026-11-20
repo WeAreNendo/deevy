@@ -198,8 +198,8 @@ describe("connecting an Agent over MCP", () => {
     const panel = await screen.findByRole("region", { name: /connect an agent/i });
     expect(within(panel).getByText(`${window.location.origin}/mcp`)).toBeTruthy();
 
-    // Claude Code is the first tab, and every other CLI the runtime drives is
-    // a tab beside it, so nobody has to translate a command into their own.
+    // Claude Code is the first tab, and every other CLI the docs connect is a
+    // tab beside it, so nobody has to translate a command into their own.
     const tabs = within(panel).getByRole("tablist", { name: /coding agent/i });
     const labels = within(tabs)
       .getAllByRole("tab")

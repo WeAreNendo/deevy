@@ -23,7 +23,6 @@ const packages = [
   "packages/design",
   "apps/web",
   "apps/server",
-  "apps/agent",
   "apps/cli",
   "apps/hosted",
   "tools/release",
@@ -110,13 +109,13 @@ const withChanges = {
 - @deevy/adapters@0.5.1
   - @deevy/core@0.5.1
 `,
-  "apps/agent": `# @deevy/agent
+  "apps/hosted": `# @deevy/hosted
 
 ## 0.5.0
 
 ### Patch Changes
 
-- The runtime stops polling after a fifth consecutive authentication failure.
+- A hosted Workspace retries an alarm that failed, once a minute.
 `,
   "packages/db": "# @deevy/db\n\n## 0.5.0\n\nNo changes in this release.\n",
 };
@@ -142,7 +141,7 @@ describe("folding the per-package changelogs", { timeout: 30_000 }, () => {
     expect(changelog.indexOf("### Minor Changes")).toBeLessThan(
       changelog.indexOf("### Patch Changes"),
     );
-    expect(changelog).toContain("- **agent** — The runtime stops polling");
+    expect(changelog).toContain("- **hosted** — A hosted Workspace retries an alarm");
   });
 
   it("drops dependency bullets in all three shapes changesets writes them", async () => {

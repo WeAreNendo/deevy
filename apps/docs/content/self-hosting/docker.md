@@ -168,6 +168,6 @@ To let your team in, add a rule or an invitation under **Settings › General**.
 ## Next
 
 - [Configure deevy](/self-hosting/configuration/): every setting, in the order you need them.
-- [Connect a tool](/tools/overview/), then [add an Agent](/agents/overview/). The reference runtime that
-  runs an Agent is an image of its own; see [The reference runtime](/agents/reference-runtime/).
+- [Connect a tool](/tools/overview/), then [add an Agent](/agents/overview/) and
+  [connect the coding agent that runs it](/agents/your-own-harness/).
 - [Backup and restore](/self-hosting/backup-and-restore/), before the Workspace holds anything you'd miss.

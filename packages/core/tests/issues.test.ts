@@ -376,7 +376,7 @@ describe("what a Project asks of a Run", () => {
 
     // The names only, and in a settled order. The arithmetic behind each one is
     // a Human's business; what an Agent needs is which ones exist, so it knows
-    // where to stop (apps/agent/src/instructions.md).
+    // where to stop (docs/agent-loop.md, step 3).
     expect((await client.issues.get({ issue: issue.url })).checkpoints).toEqual(["plan", "ship"]);
   });
 });
