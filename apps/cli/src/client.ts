@@ -2,8 +2,8 @@
  * deevy over RPC, typed by the router deevy itself defines.
  *
  * This is `apps/web/src/lib/orpc.ts` with two changes: the URL is whichever
- * instance the CLI was pointed at, and the credential is a bearer rather than a
- * cookie. Everything else — the wire format, the error codes, the types — is
+ * instance the CLI was pointed at, and the credential is an Agent's key as a
+ * bearer rather than a cookie. Everything else — the wire format, the error codes, the types — is
  * the browser client's, because it is the same client (ADR-0005).
  */
 import { basePathOf, type AppRouter } from "@deevy/core";
@@ -33,11 +33,10 @@ export function clientFor(credential: Credential, fetchImpl = fetch): DeevyClien
  * What a refusal means, in words rather than in a code.
  *
  * oRPC answers a refusal as JSON carrying the code the handler threw, so the
- * CLI can say something better than the HTTP status — and for the two refusals
- * a CLI earns by being a CLI, it should: an Agent's key reaching an operation
- * only Humans may call, and any delegated credential reaching a Gate.
+ * CLI can say something better than the HTTP status — and for the refusal a
+ * CLI earns by being a CLI, a key deevy does not take, it should.
  */
-export function explain(error: unknown, credential: Credential): string {
+export function explain(error: unknown): string {
   const failure = error as {
     code?: string;
     message?: string;
@@ -62,12 +61,9 @@ export function explain(error: unknown, credential: Credential): string {
       .join("\n");
   }
   if (code === "UNAUTHORIZED") {
-    return credential.kind === "key"
-      ? "That key was refused. Check DEEVY_API_KEY, or unset it to use the Human you signed in as."
-      : "Signed out, or the token has expired. Run `deevy login` again.";
-  }
-  if (code === "FORBIDDEN" && credential.kind === "key") {
-    return `${message}\nThe CLI is acting as an Agent, because DEEVY_API_KEY is set. Unset it to act as yourself.`;
+    // A key stands only for an Agent (ADR-0035), so a Human's own key, a
+    // revoked one and a typo are all refused the same way.
+    return "That key was refused. DEEVY_API_KEY has to hold an Agent's key, as its Sponsor issued it in deevy.";
   }
   return message;
 }

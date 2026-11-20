@@ -90,14 +90,13 @@ export default defineConfig({
       "/api": apiOrigin,
       "/rpc": apiOrigin,
       "/healthz": apiOrigin,
-      // An MCP client pointed at the dev origin has to reach the server, and
-      // discovery has to answer from the same origin as the endpoint it
-      // describes, or the OAuth dance in slice 7 looks at the wrong server.
+      // An Agent's MCP client pointed at the dev origin has to reach the server.
       "/mcp": apiOrigin,
       // Where a tool delivers (ADR-0024). A Socket's address is built on the
       // instance's own origin, which in the dev loop is this one, so a tunnel
       // pointed here has to reach the server rather than the SPA.
       "/hooks": apiOrigin,
+      // So a client probing for OAuth discovery is told there is none.
       "/.well-known": apiOrigin,
     },
   },

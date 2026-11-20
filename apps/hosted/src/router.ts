@@ -11,10 +11,9 @@ import type { WorkspaceObject } from "./workspace.ts";
  *
  * - `/<slug>/…` is a Workspace. The SPA's pages and files come from the
  *   Worker's own assets, so no object wakes for a script; the app's paths —
- *   `/api`, `/rpc`, `/mcp`, `/hooks`, `/healthz`, `/.well-known` — go to the
- *   Workspace's object, which runs deevy.
- * - `/.well-known/<document>/<slug>…` is a Workspace's OAuth discovery, which
- *   RFC 8414 and RFC 9728 put at the root of the host (ADR-0029).
+ *   `/api`, `/rpc`, `/mcp`, `/hooks`, `/healthz`, and `/.well-known`, which
+ *   the app answers with a 404 (ADR-0035) — go to the Workspace's object,
+ *   which runs deevy.
  * - `/auth/…` is the sign-in relay every provider's App calls back to (ADR-0030).
  * - Everything else is the console's, when the platform has one bound.
  *
@@ -38,15 +37,6 @@ export async function route(
       version: VERSION ?? null,
       versionId: bindings.CF_VERSION_METADATA?.id ?? null,
     });
-  }
-
-  const discovery =
-    /^\/\.well-known\/(oauth-authorization-server|oauth-protected-resource|openid-configuration)\/([^/]+)(\/.*)?$/.exec(
-      path,
-    );
-  if (discovery) {
-    const entry = await lookup(bindings.DIRECTORY, discovery[2] ?? "");
-    return entry ? toWorkspace(request, bindings, hosted, entry) : notFound();
   }
 
   const first = path.split("/")[1] ?? "";

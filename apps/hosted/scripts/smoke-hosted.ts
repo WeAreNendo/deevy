@@ -230,12 +230,13 @@ async function phases(origin: string): Promise<string> {
   const asset = script ? await fetch(`${acme.url}/${script}`) : null;
   check("its assets are served under the path", asset?.status === 200, String(asset?.status));
 
-  const discovered = await fetch(`${origin}/.well-known/oauth-authorization-server/acme`);
-  const metadata = (await discovered.json().catch(() => ({}))) as { issuer?: string };
+  // Only an Agent speaks MCP, with its key (ADR-0035): no Workspace is an
+  // OAuth server, so a client looking for one is told there is none.
+  const discovered = await fetch(`${acme.url}/.well-known/oauth-authorization-server`);
   check(
-    "each Workspace is its own issuer, discovered by its path",
-    metadata.issuer === acme.url,
-    String(metadata.issuer),
+    "no Workspace is an OAuth server to discover",
+    discovered.status === 404,
+    String(discovered.status),
   );
 
   const ada = await signIn(origin, acme.url, "ada@example.com");

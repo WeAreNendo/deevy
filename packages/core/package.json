@@ -7,7 +7,6 @@
     ".": "./src/index.ts",
     "./app": "./src/app.ts",
     "./auth": "./src/auth.ts",
-    "./cimd": "./src/cimd.ts",
     "./openapi": "./src/openapi.ts",
     "./package.json": "./package.json",
     "./router": "./src/operations/index.ts",
@@ -19,9 +18,7 @@
   },
   "dependencies": {
     "@better-auth/api-key": "catalog:",
-    "@better-auth/cimd": "catalog:",
     "@better-auth/drizzle-adapter": "catalog:",
-    "@better-auth/mcp": "catalog:",
     "@deevy/db": "workspace:*",
     "@modelcontextprotocol/server": "catalog:",
     "@orpc/client": "catalog:",

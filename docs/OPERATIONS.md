@@ -21,7 +21,7 @@ about running deevy applies to a hosted Workspace too; what differs is this.
 
 - **Its address is a path.** Your Workspace lives at `https://app.deevy.dev/<slug>` — its pages, its API at
   `…/<slug>/api`, its MCP endpoint at `…/<slug>/mcp`, its tools' webhooks at `…/<slug>/hooks/…`. An Agent's
-  `DEEVY_URL` and `deevy login` take that whole URL. A slug does not change once it is chosen.
+  `DEEVY_URL`, the CLI's included, takes that whole URL. A slug does not change once it is chosen.
 - **Signing in** is with the platform's GitHub, Google and other Apps, through one relay at
   `app.deevy.dev/auth` ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)). The address you asked for the
   Workspace with becomes its admin the first time it signs in, as on any deevy. Each Workspace is its own
@@ -342,9 +342,6 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
 - **Nothing deploys the Worker from CI.** `vp run web#check:workers` proves the artifact on every pull
   request; uploading it is `wrangler deploy` by a person. The Docker image is the half CI does publish, on a
   version tag.
-- **A deployed Worker cannot pin an outbound address**, which is the one place where the Cloudflare deployment
-  is weaker than the Docker one. It is a workerd limitation and it is written out in full under
-  [Client registration](#client-registration-and-what-is-known-to-be-weak).
 
 ## The many-Workspaces Worker
 
@@ -356,7 +353,7 @@ a company with several teams can run it too. Nothing is created per Workspace bu
 upgrades them all; a Workspace applies its own migrations when it next wakes.
 
 - **The router** reads the first path segment: a Workspace's slug, the sign-in relay at `/auth`
-  ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)), discovery at `/.well-known/…/<slug>`, or anything else,
+  ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)), or anything else,
   which goes to a `CONSOLE` service binding when one is bound. A slug the `DIRECTORY` KV namespace does not
   know is a 404 and never an object.
 - **A Workspace's object** reads who it is from its own storage, migrates, and runs the app; its alarm runs
@@ -441,7 +438,7 @@ credentials, its Projects, Runs and Gates, and its Event log, which carries on n
 - **The dump**, `workspace.sql`: SQL that rebuilds the Workspace's database in a fresh SQLite file — every
   table and every row, the counter the next Event is numbered from, and the record of which migrations it
   has, so the image opens it with nothing to apply.
-- **The Workspace's two secrets**: the `BETTER_AUTH_SECRET` its sign-ins, OAuth signing keys and signed links
+- **The Workspace's two secrets**: the `BETTER_AUTH_SECRET` its sign-ins and signed links
   were made with, and the `DEEVY_SECRET` its Sockets' credentials are sealed under. They are derived for this
   Workspace alone and stored nowhere, and neither can be replaced by a new one: without the second, every tool
   has to be connected again. Keep them as you keep the volume.
@@ -481,18 +478,13 @@ What the import does, in order:
   an older release is brought forward exactly as an [upgrade](#upgrading) would be, and the import names
   each migration it applied. One from a newer release than the image is refused, because this image would
   run on a schema it does not know: import with an image at least as new as the hosted one.
-- **It forgets what was bound to the hosted address.** deevy is the OAuth authorization server for a Human's
-  MCP client and for the CLI, and what it issued names the address it lived at: its two protected
-  resources, `https://app.deevy.dev/<slug>/mcp` and `…/api`, and every token for them. None of it is
-  accepted at the new address, so it is removed, and the server registers the resources at the new one when
-  it starts. Registered clients, consents and the signing keys stay. Nothing else deevy stores names its
-  own address: a Socket's delivery address, a Gate's link and an invitation's are built from
-  `BETTER_AUTH_URL` as they are needed.
+- **Nothing it stores names the hosted address.** A Socket's delivery address, a Gate's link and an
+  invitation's are built from `BETTER_AUTH_URL` as they are needed, and an Agent's key belongs to no address.
 - **It checks `DEEVY_SECRET` when it is set**, by opening every Socket's credentials and webhook secret, and
   says plainly which values it could not open. `BETTER_AUTH_URL`, when it is set, fills in the real addresses
   in what it prints. Neither is needed to import.
 - **It prints what it imported** — the Workspace, its Humans and admins, Agents, Sockets, Projects, the
-  next Event's number, where it lived — and the list under [Pointing everything at the new
+  next Event's number — and the list under [Pointing everything at the new
   address](#pointing-everything-at-the-new-address), with each Socket's own address filled in.
 
 From a checkout instead of the image: `vp run server#build`, then
@@ -542,17 +534,16 @@ this.
 The Workspace's address changes from `https://app.deevy.dev/<slug>` to yours, and deevy cannot tell the rest
 of the world. In order:
 
-| What                    | What to change                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signing in              | A hosted Workspace signs in through the platform's relay and its Apps. Register your own for each provider you offer, with `<BETTER_AUTH_URL>/api/auth/callback/<provider>` ([Signing in](#signing-in-and-the-origin-better_auth_url-names)); an IdP or a GitLab of your own, which the relay never served, changes its callback instead. Everybody signs in again and lands on their own Member, because a provider's account is the same whichever App asks. |
-| Agents                  | Each one's `DEEVY_URL`, to the new URL. Their API keys belong to no address and keep working.                                                                                                                                                                                                                                                                                                                                                                  |
-| The CLI and MCP clients | `deevy login <BETTER_AUTH_URL>`, and the new URL in each MCP client. What they held was issued by the old address, and the import removed it.                                                                                                                                                                                                                                                                                                                  |
-| A GitHub Socket         | **Point GitHub at this address** on the Socket's page (`sockets.rewire`) moves the App's webhook. In the App's own settings on GitHub, the **Setup URL** becomes `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                                     |
-| A Linear Socket         | In the OAuth application: the webhook URL, `<BETTER_AUTH_URL>/hooks/<socket>`, and both **Callback URLs**, `/api/identities/linear/callback` and `/hooks/<socket>/setup` on the new URL.                                                                                                                                                                                                                                                                       |
-| A GitLab Socket         | On every project or group bound to it, the webhook's URL, `<BETTER_AUTH_URL>/hooks/<socket>`. The secret token stays.                                                                                                                                                                                                                                                                                                                                          |
-| A Notion Socket         | On the connection's **Webhooks** tab, a new subscription to `<BETTER_AUTH_URL>/hooks/<socket>`, verified with the token the Socket's page shows, then the old one deleted.                                                                                                                                                                                                                                                                                     |
-| A Slack Socket          | In the app: the **Interactivity** request URL and the `/deevy` command's URL, both `<BETTER_AUTH_URL>/hooks/<socket>`.                                                                                                                                                                                                                                                                                                                                         |
-| Outgoing webhooks       | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| What              | What to change                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing in        | A hosted Workspace signs in through the platform's relay and its Apps. Register your own for each provider you offer, with `<BETTER_AUTH_URL>/api/auth/callback/<provider>` ([Signing in](#signing-in-and-the-origin-better_auth_url-names)); an IdP or a GitLab of your own, which the relay never served, changes its callback instead. Everybody signs in again and lands on their own Member, because a provider's account is the same whichever App asks. |
+| Agents            | Each one's `DEEVY_URL`, to the new URL. Their API keys belong to no address and keep working.                                                                                                                                                                                                                                                                                                                                                                  |
+| A GitHub Socket   | **Point GitHub at this address** on the Socket's page (`sockets.rewire`) moves the App's webhook. In the App's own settings on GitHub, the **Setup URL** becomes `<BETTER_AUTH_URL>/hooks/<socket>/setup`.                                                                                                                                                                                                                                                     |
+| A Linear Socket   | In the OAuth application: the webhook URL, `<BETTER_AUTH_URL>/hooks/<socket>`, and both **Callback URLs**, `/api/identities/linear/callback` and `/hooks/<socket>/setup` on the new URL.                                                                                                                                                                                                                                                                       |
+| A GitLab Socket   | On every project or group bound to it, the webhook's URL, `<BETTER_AUTH_URL>/hooks/<socket>`. The secret token stays.                                                                                                                                                                                                                                                                                                                                          |
+| A Notion Socket   | On the connection's **Webhooks** tab, a new subscription to `<BETTER_AUTH_URL>/hooks/<socket>`, verified with the token the Socket's page shows, then the old one deleted.                                                                                                                                                                                                                                                                                     |
+| A Slack Socket    | In the app: the **Interactivity** request URL and the `/deevy` command's URL, both `<BETTER_AUTH_URL>/hooks/<socket>`.                                                                                                                                                                                                                                                                                                                                         |
+| Outgoing webhooks | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Only GitHub lets deevy move a webhook itself; every other tool keeps it in its own settings
 ([Where a tool delivers](#where-a-tool-delivers)). Until a tool is pointed at the new address, nothing it
@@ -573,7 +564,7 @@ bindings arrive with the request.
 
 | Variable                       | Node        | Workers            | Default                  | Without it                                                                                                                                                                                                                                                                                                     |
 | ------------------------------ | ----------- | ------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, the OAuth server is off, and Slack deliveries wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                           |
+| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, and Slack deliveries wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                                                    |
 | `BETTER_AUTH_SECRET`           | env         | secret             | —                        | deevy does not run: the Node server refuses to start, and the Worker answers every request that reaches its code (the API and `/healthz`; the SPA's assets are served before it) with a 503 naming it, because Better Auth would otherwise fall back to a key it publishes. Changing it signs everyone out.    |
 | `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume. |
 | `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                            |
@@ -894,8 +885,8 @@ to `/rpc` or `/api` that the cookie authenticated is refused with `403 FORBIDDEN
 `Sec-Fetch-Site: same-origin`, or sends an `Origin` that is `BETTER_AUTH_URL` or `DEEVY_WEB_ORIGIN` (with
 `BETTER_AUTH_URL` unset, the origin the request arrived on). A proxy that strips both headers, or rewrites `Origin`, makes every change in
 the SPA fail that way; a SPA served from an origin of its own needs that origin in `DEEVY_WEB_ORIGIN`, as it
-already did for CORS. A bearer — an Agent's key, a CLI or MCP client's token — is unaffected, and `/mcp`
-takes nothing but a bearer.
+already did for CORS. A bearer — an Agent's key — is unaffected, and `/mcp` takes nothing but an Agent's
+key.
 
 A provider's access and refresh tokens are sealed under `BETTER_AUTH_SECRET` as Better Auth writes them
 (`account.encryptOAuthTokens`). A row written before deevy sealed them stays readable, and is sealed the next time its
@@ -929,51 +920,40 @@ path of `BETTER_AUTH_URL`, and everything follows it.
 - Every route is under the path: `/deevy/api`, `/deevy/rpc`, `/deevy/mcp`, `/deevy/hooks/<socket>`, the SPA
   at `/deevy/`. `/healthz` answers at the root as well, so a container's health check needs no change.
 - Each provider's callback is `${BETTER_AUTH_URL}/api/auth/callback/<provider>`, which now carries the path.
-- deevy is its own OAuth issuer, `https://company.example.com/deevy`. RFC 8414 and RFC 9728 put the
-  well-known segment after the host, so a client discovers it at
-  `/.well-known/oauth-authorization-server/deevy` and the MCP resource at
-  `/.well-known/oauth-protected-resource/deevy/mcp` — **at the root of the host, outside the path**. A proxy
-  that forwards only `/deevy/*` has to forward `/.well-known/*/deevy*` to deevy too, or a Human's MCP client
-  finds no authorization server. deevy also answers `/deevy/.well-known/oauth-authorization-server` and
-  `/deevy/.well-known/openid-configuration`, which is where the CLI looks next.
+- Nothing has to be forwarded from the root of the host. deevy is no OAuth authorization server
+  ([ADR-0035](adr/0035-only-agents-speak-mcp.md)), so there is no discovery document at
+  `/.well-known/…` for a proxy to pass on.
 - The session cookie is scoped to the path, so two deevys on one host never share a sign-in.
 - The SPA's built files are the same; the index is served with `<base href="/deevy/">`, and everything the
   page loads and calls is relative to it.
 - On the Worker, set `assets.run_worker_first` to `true` in `wrangler.jsonc`: the platform's asset handler
   knows nothing of the path, so every request under it has to reach the Worker, which serves the SPA itself
   through the `ASSETS` binding.
-- An Agent's `DEEVY_URL` names the whole URL, path included.
-- So does `deevy login`, from this release of the CLI on: after `deevy login https://company.example.com/deevy`
-  every command talks to the deevy under the path, and its token is kept apart from any other on the host. An
-  older CLI reduces the URL to its origin and reaches no deevy under a path.
+- An Agent's `DEEVY_URL` names the whole URL, path included, and so does the CLI's: with
+  `DEEVY_URL=https://company.example.com/deevy` every command talks to the deevy under the path.
 
 ## The CLI
 
-`deevy` is deevy from a terminal (`docs/plans/cli.md`). It signs in through the same OAuth server a browser
-uses and holds a token for the API resource, so what it may do is exactly what the Human signing in may do —
-including nothing a delegated credential may do, which is a Gate ruling
-([ADR-0010](./adr/0010-a-delegated-credential-cannot-decide-a-gate.md)).
+`deevy` is deevy from a terminal (`docs/plans/cli.md`), and it is an Agent's tool: it acts as the Agent
+whose key is in `DEEVY_API_KEY`, and as nobody without one ([ADR-0035](./adr/0035-only-agents-speak-mcp.md)).
+Its commands are generated from the operations an Agent may call, so a script working an Issue reads records,
+adds Links, asks at a Checkpoint and drives its Run exactly as an MCP client would. What only a Human may do
+— issuing a key, connecting a tool, ruling — is done in deevy's pages and is no command of the CLI's.
 
 ```bash
 npm install -g @deevy/cli               # or npx @deevy/cli
-deevy login https://deevy.example.com   # opens a browser; stores a token
-deevy whoami                            # says who this terminal is, and how
-deevy logout                            # forgets the token
+export DEEVY_URL=https://deevy.example.com DEEVY_API_KEY=deevy_sk_...
+deevy whoami                            # says which Agent this terminal is
+deevy runs list
 ```
 
-| Variable          | Default     | What it does                                                                                                                                                     |
-| ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEEVY_URL`       | —           | The instance every command talks to, path included, when one is not named as an argument.                                                                        |
-| `DEEVY_API_KEY`   | —           | An Agent's API key. Set it and the CLI acts as that Agent for the run, which is what a script wants; it wins over a signed-in Human, and `deevy whoami` says so. |
-| `DEEVY_WEB_URL`   | `DEEVY_URL` | Where the SPA is, when that is not where the API is. Only `deevy gates open` uses it, and a link built on the wrong one opens a 404.                             |
-| `XDG_CONFIG_HOME` | `~/.config` | Where the token is kept: `<that>/deevy/<scheme>_<host>.json`, mode 0600, with the path after the host for a deevy under one (`https_app.deevy.dev%2Facme.json`). |
-| `NO_COLOR`        | —           | Turns colour off. It is off for a pipe either way.                                                                                                               |
-
-One file per instance, so signing into a second deevy does not sign you out of the first. `deevy logout`
-forgets the token on this machine; the consent it was issued under stays listed under Settings until a Human
-revokes it there, because revoking a consent wants a cookie session and a CLI has none.
-
-Each sign-in registers a new OAuth client, so a Human who signs in repeatedly accumulates rows in that list.
+| Variable          | Default     | What it does                                                                                                                         |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `DEEVY_URL`       | —           | The instance every command talks to, path included, when one is not named as an argument.                                            |
+| `DEEVY_API_KEY`   | —           | An Agent's API key, as its Sponsor issued it. The CLI acts as that Agent. A key that is not an Agent's is refused.                   |
+| `DEEVY_WEB_URL`   | `DEEVY_URL` | Where the SPA is, when that is not where the API is. Only `deevy gates open` uses it, and a link built on the wrong one opens a 404. |
+| `XDG_CONFIG_HOME` | `~/.config` | Where the CLI caches what each instance can do, a day at a time: `<that>/deevy/<scheme>_<host>.capabilities.json`.                   |
+| `NO_COLOR`        | —           | Turns colour off. It is off for a pipe either way.                                                                                   |
 
 ## Agents and MCP
 
@@ -1002,15 +982,17 @@ The MCP endpoint is `POST ${BETTER_AUTH_URL}/mcp`, and the Agent authenticates w
 claude mcp add --transport http deevy "$DEEVY_URL/mcp" --header "Authorization: Bearer $DEEVY_AGENT_KEY"
 ```
 
-It is stateless, so any instance answers any request and nothing has to stick to one process. An
-unauthenticated request answers 401 naming its Protected Resource Metadata, which is how a client knows to
-start an OAuth flow rather than simply failing.
+It is stateless, so any instance answers any request and nothing has to stick to one process. Only an
+Agent speaks MCP ([ADR-0035](./adr/0035-only-agents-speak-mcp.md)): a request without an Agent's key, a
+Human's session cookie included, answers 401 with `WWW-Authenticate: Bearer realm="deevy"`. There is no
+OAuth flow for a client to start, so `/.well-known/oauth-authorization-server` and the documents beside it
+are 404.
 
 An Agent can do less than a Human by construction: in the Projects it was granted it can read records, add
 Links, ask at a Checkpoint, and drive its own Runs; whatever it reads or writes in the tracker or a repository
 it does with its own access there. It can never administer the Workspace,
-manage Members, or rule on a Gate, and neither can anything holding a delegated credential — a Gate is decided
-by a Human, in deevy's browser or from a tool that vouches for them (ADR-0004, ADR-0010, ADR-0025). Which
+manage Members, or rule on a Gate — a Gate is decided by a Human, in deevy's browser or from a tool that
+vouches for them (ADR-0004, ADR-0010, ADR-0025). Which
 operations an Agent may call at all is default-deny, per operation (ADR-0011).
 
 **How long a Run took is what deevy says about what it cost**, because it is the one thing deevy saw: its
@@ -1022,126 +1004,6 @@ deevy ships nothing that runs an Agent: whatever does — a coding agent on a la
 CI job — holds the Agent's key and the access to its code that its operator gives it.
 [agent-loop.md](./agent-loop.md) is a worked example: the MCP configuration a Claude Code loop needs, the
 instructions that tell it how to work an Issue, and what the Human does at the Gate.
-
-## A Human's own MCP client
-
-A Human points their own client at the same endpoint with no header at all, and acts as themselves rather
-than as an Agent. The same Claude Code that is an Agent when it carries an Agent's key is that Human when it
-carries none: the credential decides the identity, never the software, and nothing a Human drives is ever
-registered as an Agent.
-
-```bash
-claude mcp add --transport http deevy "$DEEVY_URL/mcp"
-claude mcp login deevy
-```
-
-deevy is its own OAuth 2.1 authorization server (ADR-0007). The client discovers it from the 401 challenge,
-sends the Human to deevy in a browser to sign in and consent, and is issued an access token bound to
-`${BETTER_AUTH_URL}/mcp`. `claude mcp add` only records the server; the dance starts from `claude mcp login`,
-or from the `/mcp` menu of an interactive session. `--no-browser` prints the authorization URL instead of
-opening one, and expects the redirect URL pasted back, so it needs a terminal. The Human sees every client
-that consented under Settings, MCP clients, and can revoke one there. Revoking removes the consent and the
-refresh token; an access token already issued expires on its own within the hour.
-
-**Walked on 2026-09-06 with Claude Code 2.1.261**, against a local instance. Claude Code identifies itself
-by a Client ID Metadata Document, `https://claude.ai/oauth/claude-code-client-metadata`, sends PKCE S256 and
-`resource`, and redirects to `http://localhost:<ephemeral port>/callback` while its document registers
-`http://localhost/callback` with no port. Better Auth 1.7.2 refused that with `invalid_redirect`: its matcher
-granted RFC 8252's loopback port variance to IP literals only, though its CIMD plugin had accepted the name
-into the same client row (better-auth#10937). 1.7.3 extends the variance to `localhost`, which is why deevy
-pins that line and no earlier one. With it the consent page appears, the tool list loads, a comment posted
-from that session is the Human's in the Event log, and its inbox is the Human's.
-
-What that client is offered is decided by the same registry that authorizes it (ADR-0016): the tool set less
-the five that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request`, `runs_finish` and
-`inbox_list`, since only an Agent has an inbox — and a Human naming one anyway is refused with "Only an
-Agent can do that". Nothing in it is a Human's alone: a question an Agent asks is asked and answered on the
-record, in the tracker.
-[as-yourself.md](./as-yourself.md) is the worked example: the `CLAUDE.md` snippet a person puts in the
-repository they work in, beside the Agent's in [agent-loop.md](./agent-loop.md).
-
-Two documents make this discoverable, and both are served from the instance origin rather than from under
-`/api/auth`, because RFC 8414 and RFC 9728 both build a metadata URL by inserting the well-known segment
-right after the host:
-
-- `${BETTER_AUTH_URL}/.well-known/oauth-protected-resource/mcp` — and the root form beside it.
-- `${BETTER_AUTH_URL}/.well-known/oauth-authorization-server`, and `/.well-known/openid-configuration`.
-
-`BETTER_AUTH_URL` is what all of it is built from, so **the OAuth server is off when it is unset**. It has to
-be, since a resource identifier is an absolute URL and one guessed per request would bind tokens to whatever
-host the caller sent. The rest of deevy runs unchanged; only a Human's MCP client is refused.
-
-### Two resources, and why a token only works where it was meant to
-
-This instance issues access tokens for two protected resources (RFC 8707, [ADR-0023](./adr/0023-the-api-is-its-own-protected-resource.md)):
-
-| Resource                 | Reached at        | Held by                                                 |
-| ------------------------ | ----------------- | ------------------------------------------------------- |
-| `${BETTER_AUTH_URL}/mcp` | `/mcp`            | a Human's MCP client                                    |
-| `${BETTER_AUTH_URL}/api` | `/api` and `/rpc` | a Human's CLI, and anything else driving the operations |
-
-A token is checked against the resource it was minted for, in both directions: an MCP client's token is
-refused at the API, and an API client's is refused at MCP. That is the point — consenting to an MCP client
-grants it the tools deevy projects, not every operation behind them.
-
-A client is linked to the API resource only if it names it when it registers. An MCP client that registers
-without asking cannot obtain an API token at all, and one that asks anyway is refused with RFC 8707's
-`invalid_target` — so adding the second resource widened nothing for the clients that already existed.
-
-Only the MCP resource publishes RFC 9728 metadata. A client that wants the API resource reads
-`/.well-known/oauth-authorization-server` and names the resource in its authorization request; it does not
-need a 401 to find its way there, because it was given the instance URL to begin with.
-
-Gate rulings are outside all of this: `gates.approve` and `gates.reject` want a cookie session, so no
-delegated credential decides a Gate whatever it was minted for
-([ADR-0004](./adr/0004-agents-never-approve-gates.md), [ADR-0010](./adr/0010-a-delegated-credential-cannot-decide-a-gate.md)).
-
-### Client registration, and what is known to be weak
-
-A client identifies itself in one of two ways, both enabled:
-
-- **Client ID Metadata Documents** (CIMD), which MCP 2026-07-28 prefers: the `client_id` is an HTTPS URL, and
-  deevy fetches the document at it. `client_id_metadata_document_supported: true` is advertised.
-- **Dynamic client registration** at `/api/auth/oauth2/register`, unauthenticated. It is deprecated in the
-  2026-07-28 revision and stays on only because the clients that do not speak CIMD cannot be asked to change.
-  Anyone who can reach the instance can create a client row; a client is worth nothing until a Human consents
-  to it, so the cost of that is rows, not access.
-
-**How a document is fetched, and what is still weak.** Dereferencing a Client ID Metadata Document means
-fetching a URL an unknown caller chose, so the transport is the SSRF boundary. Both runtimes refuse every
-non-HTTPS scheme, every URL carrying credentials, every host that is not publicly routable by its shape,
-every redirect and every response over 128 KB, and bound the request to five seconds. They differ in one
-thing, and it is the thing that matters — whether the address checked is the address connected to.
-
-| Target      | Transport                   | How a name is checked                                                                  | Residual risk                                                                                                                                               |
-| ----------- | --------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Node**    | `apps/server/src/cimd.ts`   | `node:dns` resolves once; every answer must be publicly routable; the first is pinned. | None of this kind. The connection uses the address that passed, with the name kept for the Host header, TLS SNI and certificate validation.                 |
-| **Workers** | `packages/core/src/cimd.ts` | A resolver is asked over HTTPS for A and AAAA; any private answer refuses the name.    | A name that answers publicly to the resolver and privately to `fetch` a moment later is not caught. `fetch` resolves the name again and nothing can pin it. |
-
-Node's is wired in as `AuthEnv.fetchClientMetadataResource`, the seam the plugin provides for exactly this.
-The Workers pre-resolution asks `https://cloudflare-dns.com/dns-query`; there is no knob for it, and a
-deployment that wants a different resolver passes one to `createClientMetadataFetch`.
-
-The Workers gap is a workerd limitation rather than a choice, and M3 measured both ways out before accepting
-it. `cf.resolveOverride` only redirects to a host proxied on the Worker's own Cloudflare zone, so it says
-nothing about a third party's name. `connect()` from `cloudflare:sockets` can dial a chosen address and still
-validate the certificate against the original name, through an undocumented
-`startTls({ expectedServerHostname })` — which works in `wrangler dev --local` — but deployed Workers block
-outbound TCP to Cloudflare's own IP ranges, and a large share of the internet's CIMD hosts sit behind
-Cloudflare. Local workerd blocks neither those ranges nor loopback, so no test on `wrangler dev --local`
-could tell a working pin from one that fails only in production. Revisit if Cloudflare documents
-`expectedServerHostname` and lifts the IP-range block, or when a Durable Object could hold a socket pool.
-
-Either way the reachable outcome is a blind GET from the instance: nothing of the response is returned to the
-caller. Put the instance behind an egress policy if that matters, or pass a stricter transport as
-`AuthEnv.fetchClientMetadataResource`.
-
-Scopes ride on the token and are enforced by nothing in v1: a Human's MCP client can do whatever that Human
-can, less the one thing below.
-
-**Except a Gate.** `gates.approve` and `gates.reject` require a browser session. A Human's own MCP client
-holding a valid token for that same Human is refused, deliberately: an approval is a Human's act in deevy's
-UI, and a delegated credential is not that Human (ADR-0004, docs/plans/m2.md).
 
 ## Webhooks
 
@@ -1157,8 +1019,7 @@ sponsor. The URL must be `https`. The kind filter takes exact kinds (`issue.assi
 Project.
 
 An Agent's own webhook is the subscription its page sets (Settings, Agents, the Agent, **Webhook**, or
-`agents.update` with `webhookUrl` and `webhookSecret`; `deevy agents update --webhook-url --webhook-secret`
-from the CLI): it belongs to the Agent, and its Sponsor or an admin sets, moves and stops it there. What
+`agents.update` with `webhookUrl` and `webhookSecret` from a Human's session): it belongs to the Agent, and its Sponsor or an admin sets, moves and stops it there. What
 belongs to an Agent is owed only what that Agent may see, whatever the filter says: Events whose Project is
 one it was granted, and none from a Project it was not, nor any Event that has no Project (Members,
 invitations, Sockets, the Agent's own settings). That is the same wall `projectVisible` puts round every
@@ -1320,8 +1181,8 @@ What is worth knowing before turning either on:
   their Rulings and Runs, however many there are. So the short Gate's sentence offers lowering wherever
   there is an approval to pass it with or somebody left to give one, and names only reinstating where
   there is neither.
-- **An Agent still never rules** (ADR-0004), whatever these are set to, and neither does a Human's delegated
-  credential (ADR-0010). A policy that names who may rule may only name Humans.
+- **An Agent still never rules** (ADR-0004), whatever these are set to. A policy that names who may rule may
+  only name Humans.
 
 A Gate short of its threshold appends a `gate.approval` Event carrying how many approvals are still wanted;
 `gate.approved` is appended only when the last one lands, or when an admin lowers the threshold to what the

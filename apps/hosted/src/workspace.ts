@@ -21,7 +21,6 @@ import {
   type WorkspaceLimits,
   type LiveReader,
 } from "@deevy/core";
-import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import { member, run, socket } from "@deevy/db";
 import { migrations } from "@deevy/db/durable-migrations";
 import { devTrackerView, socketModules } from "@deevy/sockets";
@@ -445,7 +444,6 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       workspaceName: config.name,
       // Every Workspace signs in through the relay this Worker is, at /auth (ADR-0030).
       signInRelay: { url: `${this.#hosted.origin}/auth`, secret: this.#hosted.relaySecret },
-      fetchClientMetadataResource,
     };
     const auth = createAuth({
       db: this.#db,

@@ -67,9 +67,9 @@ describe("an answer that is only that it happened", () => {
 
 describe("what it will not pretend to understand", () => {
   it("still prints a nested shape rather than dropping it", () => {
-    const said = render({ member: { handle: "ada" }, principal: { kind: "oauth" } }, plain);
+    const said = render({ member: { handle: "ada" }, principal: { kind: "api_key" } }, plain);
     expect(said).toContain("ada");
-    expect(said).toContain("oauth");
+    expect(said).toContain("api_key");
   });
 
   it("prints nothing for nothing", () => {

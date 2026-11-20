@@ -99,12 +99,6 @@ deevy the new one:
 
 deevy keeps accepting the old secret for a day, so you can change the two in either order.
 
-The [CLI](/mcp-and-cli/cli/) does the same, with the Socket's id from its page's address:
-
-```bash
-deevy sockets update <socket id> --webhook-secret <the new signing secret>
-```
-
 Slack signs every request with a timestamp, and deevy refuses one more than five minutes from its own clock.
 
 :::note[deevy Cloud]

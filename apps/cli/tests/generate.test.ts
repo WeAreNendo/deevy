@@ -1,15 +1,13 @@
-import { rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Command } from "commander";
 import { router } from "@deevy/core/router";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { commandsFor } from "../src/commands.ts";
 import { coerce, fieldsOf, flagNameFor } from "../src/flags.ts";
-import { addGeneratedCommands, inputFor, sessionOnlyRefusal } from "../src/generate.ts";
-import { writeToken } from "../src/credentials.ts";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { apiToken, baseURL, humanMember, testDeevy } from "./helpers.ts";
+import { addGeneratedCommands, inputFor } from "../src/generate.ts";
+import { agentKey, asAdmin, baseURL, testDeevy, type TestDeevy } from "./helpers.ts";
 
 const commands = commandsFor(router);
 const byOperation = new Map(commands.map((command) => [command.operation, command]));
@@ -25,8 +23,48 @@ function built(): Command {
   return addGeneratedCommands(root, () => ({ baseURL: "http://localhost:3000" }));
 }
 
+/**
+ * What a Human sets up in deevy's own pages before an Agent has anything to
+ * read: a Socket, a Project bound to a container in it, and the Agent granted
+ * that Project. None of it is the CLI's to do (ADR-0035).
+ */
+async function boundProjects(deevy: TestDeevy, scopes: Record<string, string>) {
+  const admin = await asAdmin(deevy);
+  const socket = await admin.sockets.connect({
+    provider: "stub",
+    name: "Example tracker",
+    webhookSecret: "a-secret-the-tracker-signs-with",
+  });
+  for (const [slug, scopeKey] of Object.entries(scopes)) {
+    const project = await admin.projects.create({
+      slug,
+      name: slug,
+      tracker: { socketId: socket.id, scope: { scopeKey } },
+    });
+    await admin.agents.grants.add({ memberId: "m2", projectId: project.id });
+  }
+  return socket;
+}
+
+/** The generated commands as the Agent whose key is given, at the test's deevy. */
+async function asAgent(deevy: TestDeevy, key: string) {
+  const dir = await mkdtemp(join(tmpdir(), "deevy-cli-gen-"));
+  scratch.push(dir);
+  const said: string[] = [];
+  const root = new Command().name("deevy").exitOverride();
+  addGeneratedCommands(root, () => ({
+    baseURL,
+    // Where the capabilities cache goes, so a test never writes to ~/.config.
+    dir,
+    environment: { DEEVY_API_KEY: key },
+    fetchImpl: deevy.fetch,
+    out: (line) => said.push(line),
+  }));
+  return { root, said };
+}
+
 describe("what the registry turns into", () => {
-  it("gives every operation a command, except the one that streams", () => {
+  it("gives every operation an Agent may call a command, and nothing else", () => {
     const root = built();
     const found: string[] = [];
     const walk = (node: Command, prefix: string[]) => {
@@ -37,48 +75,31 @@ describe("what the registry turns into", () => {
       }
     };
     walk(root, []);
-    const expected = commands
-      .filter((command) => !command.streaming)
-      .map((command) => command.words.join(" "));
+    const expected = commands.map((command) => command.words.join(" "));
     // Equality both ways: a subset check would pass an extra command nobody
     // meant to generate as happily as the right set.
     expect(found.filter((one) => one !== "help").sort()).toEqual([...expected].sort());
-    // And the stream is genuinely absent rather than merely unasserted.
-    expect(found).not.toContain("events subscribe");
+    // And a Human's operation is genuinely absent rather than merely
+    // unasserted: the Event stream, a Gate's ruling, a Sponsor's key.
+    for (const human of ["events subscribe", "gates approve", "agents keys issue"]) {
+      expect(found).not.toContain(human);
+    }
   });
 
   it("reads every input schema in the router, and names what it cannot explain", () => {
     // A field the generator cannot name is one a user has to hand-write JSON
     // for, and an array *of* json counts — the first version of this test
-    // looked only at the field's own kind and reported one. A binding and a
-    // Socket's configuration are both shapes a provider decides, so they are
-    // written down here rather than flattened into flags nobody could guess.
-    const opaque = commands
-      .filter((command) => !command.streaming)
-      .flatMap((command) =>
-        fieldsOf(command.inputSchema)
-          .filter((field) => field.kind === "json" || field.element === "json")
-          .map((field) => `${command.operation}.${field.name}`),
-      );
+    // looked only at the field's own kind and reported one.
+    const opaque = commands.flatMap((command) =>
+      fieldsOf(command.inputSchema)
+        .filter((field) => field.kind === "json" || field.element === "json")
+        .map((field) => `${command.operation}.${field.name}`),
+    );
     expect(opaque.sort()).toEqual([
-      // A Project's whole policy in one argument, and the evidence a Proposal
-      // points at: both are lists of objects, and flattening either into flags
-      // would be guessing at a shape a team decides (ADR-0020).
-      "checkpoints.set.checkpoints",
+      // The evidence a Proposal points at: a list of objects, and flattening it
+      // into flags would be guessing at a shape a team decides (ADR-0020).
       "gates.request.links",
-      "projects.create.tracker",
-      // A Project's chat channel: a Socket and a channel in it, bound together
-      // or not at all (docs/plans/simplify.md, slice 8).
-      "projects.update.chat",
-      // The rest of a binding, changed after the fact: how a record names the
-      // Agent it is for (ADR-0024).
-      "projects.update.routing",
       "runs.postActivity.payload",
-      // The configuration a provider's own flow needs before there is a
-      // credential to go with it: a shape that provider decides (ADR-0024).
-      "sockets.begin.config",
-      "sockets.connect.config",
-      "sockets.connect.credentials",
     ]);
   });
 
@@ -90,14 +111,14 @@ describe("what the registry turns into", () => {
   });
 
   it("lets a boolean be said either way", () => {
-    // `webhooks update --disabled false` is how a webhook is switched back on,
-    // and a bare switch could only ever have said true.
-    const update = built()
-      .commands.find((c) => c.name() === "webhooks")
-      ?.commands.find((c) => c.name() === "update");
-    const disabled = (update?.options ?? []).find((option) => option.long === "--disabled");
-    expect(disabled?.argChoices).toEqual(["true", "false"]);
-    expect(disabled?.required).toBe(false);
+    // `issues list --open false` is how closed records are asked for, and a
+    // bare switch could only ever have said true.
+    const list = built()
+      .commands.find((c) => c.name() === "issues")
+      ?.commands.find((c) => c.name() === "list");
+    const open = (list?.options ?? []).find((option) => option.long === "--open");
+    expect(open?.argChoices).toEqual(["true", "false"]);
+    expect(open?.required).toBe(false);
   });
 
   it("makes a flag out of every field that is not a positional", () => {
@@ -173,76 +194,17 @@ describe("the input an operation is called with", () => {
   });
 });
 
-describe("the ones the CLI cannot do", () => {
-  // Ruling on a Gate is the other reason a command is refused before it is
-  // sent, and it has no operation to be refused on until a Gate is a request
-  // on a Run (docs/plans/sockets.md, slice 2).
-  it("gives the consents their own reason, which is not the Gate one", () => {
-    const revoke = byOperation.get("oauthClients.revoke");
-    const said = sessionOnlyRefusal(revoke!);
-    expect(said).toContain("cannot list or revoke the consents that delegated it");
-    expect(said).not.toContain("Gate");
-  });
-});
-
 describe("a generated command against a real deevy", () => {
   /**
-   * The claim the whole slice rests on: a command nobody wrote, built from the
+   * The claim the whole CLI rests on: a command nobody wrote, built from the
    * registry, reaching a real instance over the real transport with a real
-   * token, and coming back with the thing it asked for.
+   * Agent's key, and coming back with the thing it asked for.
    */
   it("reads back a record the tracker delivered, by list and by its key", async () => {
     const deevy = testDeevy();
     closers.push(deevy.close);
-    await humanMember(deevy.db);
-    const dir = await mkdtemp(join(tmpdir(), "deevy-cli-gen-"));
-    scratch.push(dir);
-    await writeToken(baseURL, await apiToken(deevy, "u1"), dir);
-
-    const said: string[] = [];
-    const root = new Command().name("deevy").exitOverride();
-    addGeneratedCommands(root, () => ({
-      baseURL,
-      dir,
-      environment: {},
-      fetchImpl: deevy.fetch,
-      out: (line) => said.push(line),
-    }));
-
-    // The Socket and the Project bound to it come from generated commands too,
-    // which is two more things nobody wrote working against the real thing.
-    // `--json` because this asserts on the exact answer, which is what the
-    // flag is for; the shaped output is the default and is tested in render.
-    await root.parseAsync(
-      [
-        "sockets",
-        "connect",
-        "--provider",
-        "stub",
-        "--name",
-        "Example tracker",
-        "--webhook-secret",
-        "a-secret-the-tracker-signs-with",
-        "--json",
-      ],
-      { from: "user" },
-    );
-    const socket = JSON.parse(said.at(-1) ?? "{}") as { id: string };
-
-    await root.parseAsync(
-      [
-        "projects",
-        "create",
-        "--slug",
-        "acme-deevy",
-        "--name",
-        "Dev",
-        "--tracker",
-        JSON.stringify({ socketId: socket.id, scope: { scopeKey: "acme/deevy" } }),
-        "--json",
-      ],
-      { from: "user" },
-    );
+    const key = await agentKey(deevy);
+    const socket = await boundProjects(deevy, { "acme-deevy": "acme/deevy" });
 
     // The record is opened in the tracker, by whoever opens records there, and
     // deevy hears of it in a delivery (docs/plans/simplify.md, slice 4).
@@ -273,6 +235,9 @@ describe("a generated command against a real deevy", () => {
     });
     expect(delivered.status).toBe(200);
 
+    // `--json` because this asserts on the exact answer, which is what the
+    // flag is for; the shaped output is the default and is tested in render.
+    const { root, said } = await asAgent(deevy, key);
     await root.parseAsync(["issues", "list", "--project-slug", "acme-deevy", "--json"], {
       from: "user",
     });
@@ -288,54 +253,37 @@ describe("a generated command against a real deevy", () => {
   it("hands back what zod actually said, not 'Input validation failed'", async () => {
     const deevy = testDeevy();
     closers.push(deevy.close);
-    await humanMember(deevy.db);
-    const dir = await mkdtemp(join(tmpdir(), "deevy-cli-bad-"));
-    scratch.push(dir);
-    await writeToken(baseURL, await apiToken(deevy, "u1"), dir);
+    const { root } = await asAgent(deevy, await agentKey(deevy));
 
-    const root = new Command().name("deevy").exitOverride();
-    addGeneratedCommands(root, () => ({
-      baseURL,
-      dir,
-      environment: {},
-      fetchImpl: deevy.fetch,
-      out: () => {},
-    }));
-
-    // An uppercase Project slug. oRPC's own message is "Input validation
-    // failed"; the sentence worth reading is the one the schema wrote, and it
-    // only arrives if `explain` digs it out of data.issues.
-    const badSlug = [
-      "projects",
-      "create",
-      "--slug",
-      "DEV",
-      "--name",
-      "Nope",
-      "--tracker",
-      JSON.stringify({ socketId: "sock_000000000", scope: { scopeKey: "acme/deevy" } }),
-    ];
-    await expect(root.parseAsync(badSlug, { from: "user" })).rejects.toThrow(/Lowercase letters/);
+    // oRPC's own message is "Input validation failed"; the sentence worth
+    // reading is the one the schema wrote, and it only arrives if `explain`
+    // digs it out of data.issues.
+    const notANumber = ["runs", "list", "--limit", "many"];
+    await expect(root.parseAsync(notANumber, { from: "user" })).rejects.toThrow(/number/);
     // And it names the flag the user typed, not the field the schema calls it.
-    await expect(root.parseAsync(badSlug, { from: "user" })).rejects.toThrow(/--slug/);
+    await expect(root.parseAsync(notANumber, { from: "user" })).rejects.toThrow(/--limit/);
   });
 
-  it("refuses what an Agent may not do, and says the key is why", async () => {
+  it("refuses a key that is not an Agent's, and says what DEEVY_API_KEY wants", async () => {
     const deevy = testDeevy();
     closers.push(deevy.close);
-    const said: string[] = [];
+    await agentKey(deevy);
+    // Better Auth mints a key for anybody it is asked to; deevy takes one only
+    // as an Agent's (ADR-0035).
+    const humans = await deevy.auth.api.createApiKey({ body: { userId: "u1", name: "mine" } });
+    const { root } = await asAgent(deevy, humans.key);
+
+    await expect(root.parseAsync(["runs", "list"], { from: "user" })).rejects.toThrow(
+      /DEEVY_API_KEY has to hold an Agent's key/,
+    );
+  });
+
+  it("asks for a key before it asks deevy anything", async () => {
     const root = new Command().name("deevy").exitOverride();
-    addGeneratedCommands(root, () => ({
-      baseURL,
-      dir: "/nonexistent",
-      // An Agent's key, which `agents.keys.issue` is a Sponsor's business.
-      environment: { DEEVY_API_KEY: "deevy_sk_whatever" },
-      fetchImpl: deevy.fetch,
-      out: (line) => said.push(line),
-    }));
-    await expect(
-      root.parseAsync(["agents", "keys", "issue", "mem_1", "--name", "k"], { from: "user" }),
-    ).rejects.toThrow(/DEEVY_API_KEY/);
+    addGeneratedCommands(root, () => ({ baseURL, environment: {}, out: () => {} }));
+    await expect(root.parseAsync(["runs", "list"], { from: "user" })).rejects.toThrow(
+      /Set DEEVY_API_KEY/,
+    );
   });
 });
 
@@ -343,43 +291,16 @@ describe("what a person sees by default", () => {
   it("is the shaped answer, and --json is the exact one", async () => {
     const deevy = testDeevy();
     closers.push(deevy.close);
-    await humanMember(deevy.db);
-    const dir = await mkdtemp(join(tmpdir(), "deevy-cli-out-"));
-    scratch.push(dir);
-    await writeToken(baseURL, await apiToken(deevy, "u1"), dir);
+    const key = await agentKey(deevy);
+    await boundProjects(deevy, { "acme-deevy": "acme/deevy", "acme-ops": "acme/ops" });
+    const { root, said } = await asAgent(deevy, key);
 
-    const said: string[] = [];
-    const root = new Command().name("deevy").exitOverride();
-    addGeneratedCommands(root, () => ({
-      baseURL,
-      dir,
-      environment: {},
-      fetchImpl: deevy.fetch,
-      out: (line) => said.push(line),
-    }));
-
-    await root.parseAsync(
-      ["sockets", "connect", "--provider", "stub", "--name", "Example tracker", "--json"],
-      { from: "user" },
-    );
-    const socket = JSON.parse(said.at(-1) ?? "{}") as { id: string };
-    const bound = (slug: string, scopeKey: string) => [
-      "projects",
-      "create",
-      "--slug",
-      slug,
-      "--name",
-      slug,
-      "--tracker",
-      JSON.stringify({ socketId: socket.id, scope: { scopeKey } }),
-    ];
-
-    await root.parseAsync(bound("acme-deevy", "acme/deevy"), { from: "user" });
+    await root.parseAsync(["projects", "get", "acme-deevy"], { from: "user" });
     // Fields a person reads, not a JSON document they have to.
     expect(said.at(-1)).toContain("acme-deevy");
     expect(said.at(-1)).not.toContain('"slug":');
 
-    await root.parseAsync([...bound("acme-ops", "acme/ops"), "--json"], { from: "user" });
+    await root.parseAsync(["projects", "get", "acme-ops", "--json"], { from: "user" });
     expect(JSON.parse(said.at(-1) ?? "{}") as { slug: string }).toMatchObject({
       slug: "acme-ops",
     });

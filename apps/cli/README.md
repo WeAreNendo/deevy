@@ -2,66 +2,55 @@
 
 ```bash
 npm install -g @deevy/cli
-deevy login https://deevy.example.com
-deevy issues list --project-slug dev
+export DEEVY_URL=https://deevy.example.com DEEVY_API_KEY=deevy_sk_...
+deevy whoami
+deevy runs list
 ```
 
-`deevy` talks to a [deevy](https://github.com/WeAreNendo/deevy) instance over its API, as the Human you
-signed in as. Almost every command is generated from deevy's own operation registry rather than written by hand, so the
-CLI has the same surface the API and the MCP tools have and cannot drift from them. The generating happens
-when the CLI is built, so a new operation arrives here in the next release of this — and until then, a
-command this CLI has that your instance does not is refused by name rather than failing at it.
+`deevy` talks to a [deevy](https://github.com/WeAreNendo/deevy) instance over its API, as the **Agent** whose
+key is in `DEEVY_API_KEY`. It is an Agent's tool, for a script or a loop that works an Issue: it reads
+records, adds Links, asks at a Checkpoint and drives its Run, exactly as an MCP client holding the same key
+would. Every command but two is generated from deevy's own operation registry, so the CLI has the surface an
+Agent has on the API and the MCP tools, and cannot drift from them. The generating happens when the CLI is
+built, so a new operation arrives here in the next release of this. Until then, a command this CLI has that
+your instance does not is refused by name rather than failing at it.
 
-## Signing in
+## The key
 
-`deevy login <url>` opens a browser, takes the consent you would give any other client, and keeps a token at
-`~/.config/deevy/<scheme>_<host>.json` — mode 0600, one file per instance, so signing into a second deevy
-does not sign you out of the first. `deevy logout` forgets it; the consent stays listed in deevy's Settings
-until a Human revokes it there, because revoking one wants a browser session and a CLI has none.
+An Agent's key is issued by its Sponsor in deevy, under Settings › Agents, and shown once. Put it in
+`DEEVY_API_KEY`; the CLI reads it on every run and stores nothing. Without one the CLI is nobody, and a key
+that is not an Agent's is refused. A Human signs in to deevy in a browser, and has no key.
 
 A URL may include a path, for a deevy that lives under one — a hosted Workspace, or one served behind a
 proxy:
 
 ```bash
-deevy login https://app.deevy.dev/acme
+DEEVY_URL=https://app.deevy.dev/acme deevy whoami
 ```
 
-Every command then talks to that deevy under its path, and its token is kept apart from any other on the same
-host, in a file named for the path too, each slash written `%2F`: `https_app.deevy.dev%2Facme.json`. A token
-an older CLI stored for a deevy at the root of its host is still where this one looks.
-
-Set `DEEVY_API_KEY` and the CLI acts as that **Agent** instead, which is what a script wants. It wins over a
-signed-in Human, and `deevy whoami` says which of the two answered — that changes what the CLI may do.
+Every command then talks to that deevy under its path.
 
 | Variable          | What it does                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `DEEVY_URL`       | The instance every command talks to, path included, when one is not named. `--deevy-url` overrides it per command. |
 | `DEEVY_API_KEY`   | An Agent's key. The CLI acts as that Agent.                                                                        |
 | `DEEVY_WEB_URL`   | Where the SPA is, if that is not where the API is. Only `deevy gates open` uses it.                                |
-| `XDG_CONFIG_HOME` | Where the token is kept. Defaults to `~/.config`.                                                                  |
+| `XDG_CONFIG_HOME` | Where the CLI caches what each instance can do, for a day. Defaults to `~/.config`.                                |
 | `NO_COLOR`        | Turns colour off. It is off for a pipe either way.                                                                 |
 
 ## What it can and cannot do
 
-Everything the Human or Agent you are signed in as may do — except what only a Human signed in to deevy's
-own pages may do, which the CLI explains rather than relaying as a refusal:
+Everything an Agent may do, and nothing else. What only a Human may do — issuing a key, connecting a tool,
+inviting a Member, ruling on a Gate — is done in deevy's own pages, and is no command here. A Gate is ruled
+by a Human, in deevy, in the tracker or in the Project's chat channel; `deevy gates open DEV-42` prints the
+link that puts it in front of one.
 
-- **`gates approve` and `gates reject`.** A Gate is ruled by a Human in deevy's own browser and by nothing
-  else, whatever the CLI is signed in as. `deevy gates open DEV-42` puts it in front of one.
-- **`oauth-clients list` and `oauth-clients revoke`.** A delegated credential cannot enumerate or revoke the
-  consents that delegated it.
-- **`email status`, `email configure`, `email clear` and `email test`.** The Workspace's email sender holds
-  a provider's credential, set from Settings › Email.
-- **`identities begin`, `identities peek` and `identities link`.** Linking an account on a tool goes through
-  that tool's sign-in, in the browser.
-
-The full list of commands, and who may run each, is at
-[docs.deevy.dev/reference/cli](https://docs.deevy.dev/reference/cli/).
+The full list of commands is at [docs.deevy.dev/reference/cli](https://docs.deevy.dev/reference/cli/).
 
 ## Reading the answers
 
 A list is a table, a single thing is its fields, and `--json` on any command gives you the exact answer for a
-script. `deevy events watch` follows the Event log as it happens and resumes where it left off.
+script.
 
 ## Version
 

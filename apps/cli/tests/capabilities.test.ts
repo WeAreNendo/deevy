@@ -12,8 +12,7 @@ import {
   operationsIn,
 } from "../src/capabilities.ts";
 import { addGeneratedCommands } from "../src/generate.ts";
-import { writeToken } from "../src/credentials.ts";
-import { apiToken, baseURL, humanMember, testDeevy } from "./helpers.ts";
+import { agentKey, baseURL, testDeevy } from "./helpers.ts";
 
 const scratch: string[] = [];
 const closers: (() => void)[] = [];
@@ -188,9 +187,8 @@ describe("a command this instance does not have", () => {
   it("is refused before the request, against a real instance missing it", async () => {
     const deevy = testDeevy();
     closers.push(deevy.close);
-    await humanMember(deevy.db);
+    const key = await agentKey(deevy);
     const dir = await tempDir();
-    await writeToken(baseURL, await apiToken(deevy, "u1"), dir);
 
     // The instance's document, less the one operation — an older deevy.
     const full = (await generateSpec("0.4.0")) as unknown as { paths: Record<string, unknown> };
@@ -213,26 +211,14 @@ describe("a command this instance does not have", () => {
       baseURL,
       cliVersion: "0.9.0",
       dir,
-      environment: {},
+      environment: { DEEVY_API_KEY: key },
       fetchImpl: pretending,
       out: () => {},
     }));
 
-    await expect(
-      root.parseAsync(
-        [
-          "projects",
-          "create",
-          "--slug",
-          "acme-deevy",
-          "--name",
-          "Dev",
-          "--tracker",
-          JSON.stringify({ socketId: "sock_000000000", scope: { scopeKey: "acme/deevy" } }),
-        ],
-        { from: "user" },
-      ),
-    ).rejects.toThrow(/has no `projects.create`/);
+    await expect(root.parseAsync(["projects", "list"], { from: "user" })).rejects.toThrow(
+      /has no `projects.list`/,
+    );
 
     // And one it does have reaches the instance, so the filter is narrowing
     // rather than simply refusing. `me get` needs nothing to exist first.

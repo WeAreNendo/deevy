@@ -10,7 +10,6 @@ import {
   type AuthEnv,
 } from "@deevy/core";
 import { devTrackerView, socketModules } from "@deevy/sockets";
-import { fetchClientMetadataResource } from "./cimd.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
 declare const __DEEVY_VERSION__: string | undefined;
@@ -18,15 +17,8 @@ const DEEVY_VERSION = typeof __DEEVY_VERSION__ === "string" ? __DEEVY_VERSION__ 
 import type { ServerEnv } from "./env.ts";
 
 /**
- * The identity configuration this entry hands Better Auth. Node dereferences a
- * Client ID Metadata Document through the pinning transport in
- * `apps/server/src/cimd.ts`, which resolves the name once and connects to the
- * address it checked; the Worker cannot, and passes the core's shape-checking
- * one (docs/plans/m3.md slice 8, docs/OPERATIONS.md). That is the one thing
- * that differs between the two runtimes, so `buildServer` hands back what it
- * built with this — assertable where it is decided rather than where it is
- * assembled, because a test of this function alone stays green through a
- * refactor that inlines the object below and loses the transport with it.
+ * The identity configuration this entry hands Better Auth, which `buildServer`
+ * hands back too, so a test can read what it was built with.
  */
 function authEnv(env: ServerEnv): AuthEnv {
   return {
@@ -38,7 +30,6 @@ function authEnv(env: ServerEnv): AuthEnv {
     adminEmail: env.adminEmail,
     workspaceName: env.workspaceName,
     ...(env.signInRelay.client ? { signInRelay: env.signInRelay.client } : {}),
-    fetchClientMetadataResource,
   };
 }
 
@@ -104,5 +95,5 @@ export function buildServer(env: ServerEnv) {
   // Under the path of BETTER_AUTH_URL, which is the root unless an operator
   // serves deevy under a path (docs/OPERATIONS.md).
   if (env.webDist) mountSpa(app, resolve(env.webDist), basePathOf(env.baseURL));
-  return { app, db, auth, close, authEnv: identity };
+  return { app, db, auth, close };
 }

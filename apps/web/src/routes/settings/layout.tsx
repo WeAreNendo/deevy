@@ -50,10 +50,7 @@ export const settingsNav: Array<{ group: string; pages: SettingsNavPage[] }> = [
   },
   {
     group: "You",
-    pages: [
-      { label: "Identities", to: "/settings/identities" },
-      { label: "MCP clients", to: "/settings/mcp-clients" },
-    ],
+    pages: [{ label: "Identities", to: "/settings/identities" }],
   },
 ];
 
@@ -110,7 +107,7 @@ export function SettingsLayout() {
           it spent 100px of a 390px screen on margins (Matt, 2026-09-07). */}
       <div className="flex min-w-0 flex-1 flex-col lg:p-6">
         {/* Below lg the nav beside is gone. Not the eleven as a strip that
-            scrolls sideways: MCP clients was four swipes from General, and the
+            scrolls sideways: the last page was four swipes from General, and the
             page you were on could be scrolled off its own navigation. One
             control instead — it names where you are without being opened, opens
             to the whole list in the four groups the wide nav uses, and costs one

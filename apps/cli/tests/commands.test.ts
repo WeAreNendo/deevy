@@ -22,17 +22,48 @@ async function documentedOperations(): Promise<string[]> {
   return ids.sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * What the CLI is: the Agent whose key it holds (ADR-0035). Written down rather
+ * than derived, so the list does not grow or shrink without somebody deciding it
+ * should — an operation gaining `agents: true` is a command, and this says so.
+ */
+const agentOperations = [
+  "gates.get",
+  "gates.list",
+  "gates.request",
+  "health.ping",
+  "inbox.list",
+  "inbox.markRead",
+  "issues.get",
+  "issues.list",
+  "links.add",
+  "links.list",
+  "links.remove",
+  "me.get",
+  "projects.get",
+  "projects.list",
+  "runs.finish",
+  "runs.get",
+  "runs.list",
+  "runs.postActivity",
+  "runs.start",
+];
+
 describe("the command list", () => {
+  it("is exactly the operations an Agent may call, and the public one", () => {
+    expect(commands.map((command) => command.operation)).toEqual(agentOperations);
+  });
+
   /**
    * The guard that keeps the CLI from rotting, and it costs nothing: the
    * OpenAPI snapshot is generated from the same router by a different walk, and
-   * CI already fails when it goes stale. Asserting the two agree catches an
-   * area module dropped from the router, a branch the walk stops reaching, and
-   * an operation renamed under a command somebody is already typing — none of
-   * which a count would notice.
+   * CI already fails when it goes stale. Every command being an operation deevy
+   * documents catches an operation renamed under a command somebody is already
+   * typing.
    */
-  it("is exactly the operations deevy documents, no more and no fewer", async () => {
-    expect(commands.map((command) => command.operation)).toEqual(await documentedOperations());
+  it("is operations deevy documents, every one", async () => {
+    const documented = new Set(await documentedOperations());
+    expect(commands.filter((command) => !documented.has(command.operation))).toEqual([]);
   });
 
   it("is in stable order, so a diff of it moves only when the surface does", () => {
@@ -41,11 +72,26 @@ describe("the command list", () => {
     );
   });
 
-  it("takes every operation, not the curated few MCP takes", () => {
-    // `issues.get` carries `mcp` and `agents.keys.issue` does not, so the pair
+  it("takes every operation an Agent may call, not the curated few MCP lists", () => {
+    // `issues.get` carries `mcp` and `projects.list` does not, so the pair
     // proves the filter the MCP projection applies is not applied here.
     expect(byOperation.has("issues.get")).toBe(true);
-    expect(byOperation.has("agents.keys.issue")).toBe(true);
+    expect(byOperation.has("projects.list")).toBe(true);
+  });
+
+  it("leaves out what only a Human may do", () => {
+    // Issuing a key, ruling on a Gate, connecting a tool, following the Event
+    // log: each wants a Human, and a command that could only be refused
+    // teaches nothing the reference page does not.
+    for (const operation of [
+      "agents.keys.issue",
+      "gates.approve",
+      "sockets.connect",
+      "events.subscribe",
+      "members.suspend",
+    ]) {
+      expect(byOperation.has(operation), operation).toBe(false);
+    }
   });
 
   it("carries both schemas for every command", () => {
@@ -61,7 +107,7 @@ describe("a command's name", () => {
     expect(commandWords("inbox.markRead")).toEqual(["inbox", "mark-read"]);
     expect(commandWords("issues.get")).toEqual(["issues", "get"]);
     expect(commandWords("agents.keys.issue")).toEqual(["agents", "keys", "issue"]);
-    expect(commandWords("oauthClients.revoke")).toEqual(["oauth-clients", "revoke"]);
+    expect(commandWords("runs.postActivity")).toEqual(["runs", "post-activity"]);
   });
 });
 
@@ -97,69 +143,17 @@ describe("a command's positional arguments", () => {
 
 describe("the shape of what the walk hands on", () => {
   /**
-   * Sixteen operations take `NoInput`, which is `z.object({}).optional()`. The
-   * walk unwraps it so every consumer sees an object, because a flag generator
-   * handed a sometimes-optional schema either crashes on those sixteen or
-   * quietly gives them no flags.
+   * An operation that takes nothing takes `NoInput`, which is
+   * `z.object({}).optional()` (`me.get`, `health.ping`). The walk unwraps it so
+   * every consumer sees an object, because a flag generator handed a
+   * sometimes-optional schema either crashes on those or quietly gives them no
+   * flags.
    */
   it("hands on an object for every command, NoInput unwrapped", () => {
-    const notObjects = commands
-      .filter((command) => !command.streaming)
-      .filter((command) => (command.inputSchema as { shape?: unknown })?.shape === undefined);
+    const notObjects = commands.filter(
+      (command) => (command.inputSchema as { shape?: unknown })?.shape === undefined,
+    );
     expect(notObjects.map((command) => command.operation)).toEqual([]);
-  });
-
-  it("says which operations stream, so nobody awaits one as a value", () => {
-    // Read off the registry rather than sniffed from the output schema, which
-    // for these is an oRPC event iterator and not a zod schema at all.
-    expect(commands.filter((command) => command.streaming).map((c) => c.operation)).toEqual([
-      "events.subscribe",
-    ]);
-  });
-
-  it("carries the authority each operation wants", () => {
-    expect(byOperation.get("health.ping")?.auth).toBe("public");
-    expect(byOperation.get("issues.list")?.auth).toBe("member");
-    // Something wants an admin, and the CLI cannot say so later: the OpenAPI
-    // document deevy serves carries no security information at all.
-    expect(commands.some((command) => command.auth === "admin")).toBe(true);
-  });
-});
-
-describe("what the CLI cannot do", () => {
-  /**
-   * The operations no credential a CLI can hold will ever satisfy: they want a
-   * cookie session, which means a Human in deevy's own browser. The list should
-   * not grow without somebody deciding it should, so it is written down here.
-   * Ruling on a Gate joins it again when a Gate is a request on a Run
-   * (docs/plans/sockets.md, slice 2).
-   */
-  it("knows which operations want a Human in a browser", () => {
-    const sessionOnly = commands
-      .filter((command) => command.sessionOnly)
-      .map((command) => command.operation);
-    expect(sessionOnly).toEqual([
-      // Ruling on a Gate is the decision ADR-0010 will not take from a
-      // delegated credential, so it is not a command either: a Human rules in
-      // deevy, from the link the CLI hands them.
-      "gates.approve",
-      "gates.reject",
-      // Linking an account gives it the power to rule as you, so it is the same
-      // decision, taken the same way (ADR-0025).
-      "identities.begin",
-      "identities.link",
-      "identities.peek",
-      "oauthClients.list",
-      "oauthClients.revoke",
-    ]);
-  });
-
-  it("marks the operations only an Agent may call", () => {
-    const agentsOnly = commands.filter((command) => command.agentsOnly);
-    expect(agentsOnly.length).toBeGreaterThan(0);
-    // agentsOnly is only sayable beside `agents`, and the registry makes that a
-    // compile error; this is the same claim at runtime, over the real router.
-    expect(agentsOnly.filter((command) => !command.agents)).toEqual([]);
   });
 });
 
@@ -194,6 +188,7 @@ function fakeRouter(names: string[]) {
         method: "GET",
         path: `/fake/${String(index)}`,
         auth: "member",
+        agents: true,
         input: z.object({}),
         output: z.object({}),
         handler: () => Promise.resolve({}),

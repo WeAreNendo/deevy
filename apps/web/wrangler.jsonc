@@ -21,6 +21,9 @@
     // worker-routes.test.ts asserts this list against the app's own routes.
     // A deployment under a path sets `true` instead: every request under it
     // is the Worker's to answer (docs/OPERATIONS.md, "Under a path").
+    // `/.well-known/*` is answered by the app with a 404: an MCP client
+    // looking for an authorization server is told there is none, not handed
+    // the SPA (ADR-0035).
     "run_worker_first": [
       "/api/*",
       "/rpc/*",

@@ -1,5 +1,9 @@
 # A Run is an Agent's, and the registry says which way an operation faces
 
+> Amended by [ADR-0035](./0035-only-agents-speak-mcp.md): every MCP tool faces an Agent, and the tools that
+> faced a Human left MCP with the Human's client. An operation still faces whoever its `auth`, `agents` and
+> `agentsOnly` say.
+
 Walking the Human MCP path with a real Claude Code (docs/plans/m2.md, "Walked with a real Claude Code")
 showed a Human's own client twenty tools, four of which it could never call: `runs_start`,
 `runs_post_activity`, `runs_finish` and `runs_request_approval` each refused a Human, one in its handler and
@@ -47,7 +51,7 @@ credential is theirs (ADR-0007, ADR-0010), not because a Run says so.
 
 - An Agent's client is offered twenty-two tools; a Human's, nineteen. `packages/core/mcp-tools.json` records
   `agents` and `agentsOnly` for each, so the facing of every tool is reviewed like the set itself.
-- A Human's Claude Code has a worked example of its own, [docs/as-yourself.md](../as-yourself.md), beside
+- A Human's Claude Code has a worked example of its own, `docs/as-yourself.md` (removed with ADR-0035), beside
   the Agent's in [docs/agent-loop.md](../agent-loop.md). The Agent's instructions did not change: its tools
   are granted by name (ADR-0014), so a wider set is not a wider runtime.
 - If cost or time accounting of Human-driven sessions is ever wanted, it is a new thing reported by the

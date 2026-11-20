@@ -1,16 +1,16 @@
 /**
- * Every operation, as a command you can type.
+ * Every operation an Agent may call, as a command you can type.
  *
  * `commandsFor` says what the operations are and `fieldsOf` says what their
  * inputs look like; this turns the pair into commander commands and dispatches
- * them through the typed client. No command is written by hand — the four that
- * are not operations live in main.ts, and there are four of them
- * (docs/plans/cli.md).
+ * them through the typed client. No command is written by hand — the two that
+ * are not operations live in main.ts.
  */
 import { Command, Option } from "commander";
 import { router } from "@deevy/core/router";
 import { commandsFor, type CommandDescriptor } from "./commands.ts";
 import { clientFor, explain, type DeevyClient } from "./client.ts";
+import { credentialFor, noKey } from "./credentials.ts";
 import { coerce, fieldsOf, flagNameFor, type Field } from "./flags.ts";
 
 /** Required is not visible in commander's help unless the description says it. */
@@ -18,7 +18,6 @@ function describe(field: Field): string {
   const said = field.description ?? "";
   return field.required ? `${said}${said ? " " : ""}(required)` : said;
 }
-import { credentialFor, type Credential } from "./credentials.ts";
 import { capabilitiesFor, missingFrom } from "./capabilities.ts";
 import { plain, render, type Ink } from "./render.ts";
 
@@ -30,34 +29,13 @@ export interface Surroundings {
   baseURL: string;
   /** This CLI's own version, for the message when the two disagree. */
   cliVersion?: string;
-  /** Where tokens are kept; a test points it somewhere disposable. */
+  /** Where the capabilities cache is kept; a test points it somewhere disposable. */
   dir?: string;
   environment?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   out?: (line: string) => void;
   /** Colour, when somebody is looking at a terminal rather than a pipe. */
   ink?: Ink;
-}
-
-/**
- * The refusal for the four operations that want a cookie session.
- *
- * They stay in the command list rather than being dropped, because a command
- * that is missing teaches nothing and a command that explains itself teaches
- * the rule. Two different rules sit behind the one flag, so the message says
- * which (ADR-0004, ADR-0010).
- */
-export function sessionOnlyRefusal(command: CommandDescriptor): string {
-  const said = command.words.join(" ");
-  if (command.operation.startsWith("gates.")) {
-    return `${said} is a Gate ruling, and a Gate is ruled by a Human in a browser — never by a CLI, an API key or an Agent, whatever it is signed in as (ADR-0004, ADR-0010).\nOpen the Issue in deevy and rule it there.`;
-  }
-  if (command.operation.startsWith("oauthClients.")) {
-    return `${said} needs a Human signed in to deevy itself. A delegated credential cannot list or revoke the consents that delegated it, so this one lives in deevy's own Settings.`;
-  }
-  // A third reason nobody has written down yet: say the rule rather than
-  // assert one of the two above and be confidently wrong.
-  return `${said} needs a Human signed in to deevy itself, in a browser. No CLI credential satisfies it.`;
 }
 
 /** The flag commander should carry for a field, or nothing for a positional. */
@@ -153,10 +131,6 @@ export function addGeneratedCommands(
   surroundings: (url?: string) => Surroundings,
 ): Command {
   for (const command of commandsFor(router)) {
-    // The Event stream is a command in its own slice: awaiting an async
-    // generator as if it were a value waits forever.
-    if (command.streaming) continue;
-
     const leaf = groupFor(root, command.words)
       .command(
         `${command.words.at(-1) ?? ""} ${command.parameters.map((p) => `<${p}>`).join(" ")}`.trim(),
@@ -177,10 +151,6 @@ export function addGeneratedCommands(
     }
 
     leaf.action(async (...args: unknown[]) => {
-      // Before anything else, and before an instance is even named: that this
-      // wants a Human in a browser is a fact about the operation, not about
-      // where it would have been sent.
-      if (command.sessionOnly) throw new Error(sessionOnlyRefusal(command));
       const options = args[command.parameters.length] as Record<string, unknown>;
       const positionals = args.slice(0, command.parameters.length) as string[];
       await run(
@@ -205,15 +175,8 @@ async function run(
     ((line: string) => {
       console.log(line);
     });
-  const credential = await credentialFor(
-    where.baseURL,
-    where.environment ?? process.env,
-    where.dir,
-  );
-  if (!credential) {
-    throw new Error(`Not signed in to ${where.baseURL}. Run \`deevy login\` first.`);
-  }
-  refuseEarly(command, credential);
+  const credential = credentialFor(where.baseURL, where.environment ?? process.env);
+  if (!credential) throw new Error(noKey(where.baseURL));
 
   // What this instance actually has. A CLI ships with deevy and knows the
   // operations of the tree it was built from, which is the wrong list the
@@ -254,33 +217,9 @@ async function run(
     command.operation,
     inputFor(command, positionals, options),
   ).catch((error: unknown) => {
-    throw new Error(explain(error, credential));
+    throw new Error(explain(error));
   });
   // `--json` is exact and is what a script reads; the shaped answer is for the
   // other reader, and is what you get by default.
   out(options.json === true ? JSON.stringify(answer, null, 2) : render(answer, where.ink ?? plain));
-}
-
-/**
- * What the CLI knows before it asks.
- *
- * The registry says which operations only an Agent may call, and which an Agent
- * may not — so a refusal that is certain is given here, with the reason, rather
- * than fetched from the server as a bare FORBIDDEN.
- */
-function refuseEarly(command: CommandDescriptor, credential: Credential): void {
-  const asAgent = credential.kind === "key";
-  // `public` short-circuits the server's own check before it looks at who is
-  // asking (registry.ts), so `health ping` is answered for anybody and the CLI
-  // must not invent a rule deevy does not have.
-  if (asAgent && command.auth !== "public" && !command.agents) {
-    throw new Error(
-      `${command.words.join(" ")} is not something an Agent may do, and DEEVY_API_KEY is set, so the CLI is an Agent.\nUnset it to act as the Human you signed in as.`,
-    );
-  }
-  if (!asAgent && command.agentsOnly) {
-    throw new Error(
-      `${command.words.join(" ")} is one side of a Run, so only an Agent may call it. Set DEEVY_API_KEY to that Agent's key.`,
-    );
-  }
 }

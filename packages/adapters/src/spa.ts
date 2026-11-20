@@ -20,7 +20,9 @@ export function withBaseHref(html: string, base: string): string {
 /**
  * What the app answers rather than the SPA, as paths under the base. The same
  * list as the Worker's `run_worker_first`, which `worker-routes.test.ts` holds
- * against the routes `createApp` mounts.
+ * against the routes `createApp` mounts. `/.well-known/` mounts nothing since
+ * deevy stopped being an OAuth server (ADR-0035), and stays here so that the
+ * app answers it with a 404 rather than the SPA with a page.
  */
 export const APP_PREFIXES = ["/api/", "/rpc/", "/hooks/", "/.well-known/", "/relay/"] as const;
 export const APP_PATHS = ["/healthz", "/mcp", "/dev/tracker"] as const;

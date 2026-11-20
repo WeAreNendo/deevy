@@ -87,9 +87,6 @@ export const identities = {
     method: "POST",
     path: "/identities/begin",
     auth: "member",
-    // A Human present, not a credential they delegated: linking an account is
-    // giving it the power to rule as you (ADR-0010).
-    sessionOnly: true,
     input: z.object({ socketId: z.string() }),
     output: z.object({
       /** Where to send the browser. It comes back to deevy on its own. */
@@ -129,9 +126,6 @@ export const identities = {
     method: "POST",
     path: "/identities/peek",
     auth: "member",
-    // A Human present, not a credential they delegated: linking an account is
-    // giving it the power to rule as you (ADR-0010).
-    sessionOnly: true,
     input: z.object({ code: z.string().trim().min(8).max(20) }),
     output: z.object({
       provider: z.string(),
@@ -162,7 +156,6 @@ export const identities = {
     method: "POST",
     path: "/identities/link",
     auth: "member",
-    sessionOnly: true,
     input: z.object({ code: z.string().trim().min(8).max(20) }),
     output: IdentitySchema,
     handler: async ({ input, context }) => {

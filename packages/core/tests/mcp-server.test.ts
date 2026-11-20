@@ -188,7 +188,11 @@ async function workspaceWithAgent() {
 }
 
 describe("POST /mcp without a credential", () => {
-  it("is 401 and points the client at the Protected Resource Metadata (RFC 9728)", async () => {
+  /**
+   * There is no authorization server to point a client at (ADR-0035): the
+   * challenge says what to bring, an Agent's key, and names no metadata.
+   */
+  it("is 401, and says a bearer is what it takes", async () => {
     const { db, auth } = testAuth();
     const app = createApp({ db, auth, baseURL: "https://deevy.example.com" });
 
@@ -199,45 +203,10 @@ describe("POST /mcp without a credential", () => {
     });
 
     expect(res.status).toBe(401);
-    expect(res.headers.get("www-authenticate")).toBe(
-      'Bearer resource_metadata="https://deevy.example.com/.well-known/oauth-protected-resource/mcp"',
-    );
+    expect(res.headers.get("www-authenticate")).toBe('Bearer realm="deevy"');
   });
 
-  it("serves the Protected Resource Metadata at the URL that header names", async () => {
-    // RFC 9728 inserts the well-known segment between the host and the
-    // resource's own path, so a client that derives the URL rather than
-    // reading the header looks at /.well-known/oauth-protected-resource/mcp.
-    // Better Auth's own document is the root form as well; the challenge is
-    // the contract, so the challenge is what this follows (docs/plans/m2.md).
-    const baseURL = "https://deevy.example.com";
-    const { db, close } = testDb();
-    closers.push(close);
-    const auth = createAuth({
-      db,
-      env: { baseURL, secret, providers: { github: { clientId: "id", clientSecret: "secret" } } },
-    });
-    const app = createApp({ db, auth, baseURL });
-
-    const challenged = await app.request("/mcp", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
-    });
-    const advertised = /resource_metadata="([^"]+)"/.exec(
-      challenged.headers.get("www-authenticate") ?? "",
-    )?.[1];
-    expect(advertised).toBe(`${baseURL}/.well-known/oauth-protected-resource/mcp`);
-
-    const metadata = await app.request(advertised as string);
-    expect(metadata.status).toBe(200);
-    const body = (await metadata.json()) as Record<string, unknown>;
-    expect(body.resource).toBe(`${baseURL}/mcp`);
-    expect(body.authorization_servers).toEqual([baseURL]);
-    expect(body.bearer_methods_supported).toEqual(["header"]);
-  });
-
-  it("falls back to the request's own origin when no base URL is configured", async () => {
+  it("is the same challenge with no auth configured at all", async () => {
     // The Workers entry builds the app per request with no auth at all
     // (apps/web/src/worker.ts): /mcp is still mounted, and answers the
     // challenge rather than 404 or a crash.
@@ -252,9 +221,7 @@ describe("POST /mcp without a credential", () => {
     });
 
     expect(res.status).toBe(401);
-    expect(res.headers.get("www-authenticate")).toBe(
-      'Bearer resource_metadata="http://deevy.test/.well-known/oauth-protected-resource/mcp"',
-    );
+    expect(res.headers.get("www-authenticate")).toBe('Bearer realm="deevy"');
   });
 });
 
@@ -614,78 +581,5 @@ describe("what an Agent is told when a tool call fails", () => {
       });
     }
     expect(reported).toEqual([bug, internal]);
-  });
-});
-
-/**
- * The same Workspace, plus a key for the admin Human. deevy's UI only issues
- * keys to Agents; this one stands in for the OAuth token a Human's own client
- * holds, which resolvePrincipal turns into the same Member (oauth.test.ts).
- */
-async function workspaceWithHumanKey() {
-  const ws = await workspaceWithAgent();
-  const issued = await ws.auth.api.createApiKey({
-    body: { userId: ws.admin.member.userId, name: "laptop" },
-  });
-  return { ...ws, humanKey: issued.key };
-}
-
-describe("a Human's own client", () => {
-  it("is offered what a Human may call, and nothing that is an Agent's alone", async () => {
-    const { app, humanKey, key } = await workspaceWithHumanKey();
-
-    const human = toolNames(await mcp(app, humanKey, "tools/list", {}));
-    const agent = toolNames(await mcp(app, key, "tools/list", {}));
-
-    // The writing side of a Run faces the Agent (ADR-0016)...
-    for (const name of ["runs_start", "runs_post_activity", "runs_finish"]) {
-      expect(human).not.toContain(name);
-      expect(agent).toContain(name);
-    }
-    // ...and so does an inbox, which only an Agent has (slice 8)...
-    expect(human).not.toContain("inbox_list");
-    expect(agent).toContain("inbox_list");
-    // ...and the rest faces both.
-    for (const name of ["issues_get", "issues_list", "projects_get", "runs_list", "runs_get"]) {
-      expect(human).toContain(name);
-      expect(agent).toContain(name);
-    }
-  });
-
-  /**
-   * An Agent's question is on the record, in the tracker, and so is the
-   * Human's reply (docs/plans/simplify.md, slice 5): there is nothing in deevy
-   * to answer, over MCP or HTTP.
-   */
-  it("has no question of a Run's to answer, over MCP or HTTP", async () => {
-    const { app, humanKey, agent, issue, sockets } = await workspaceWithHumanKey();
-    const asAgent = createRouterClient(router, { context: { ...agent, sockets } });
-    const run = await asAgent.runs.start({ issue: issue.url });
-
-    expect(toolNames(await mcp(app, humanKey, "tools/list", {}))).not.toContain("runs_answer");
-    const answer = await mcp(app, humanKey, "tools/call", {
-      name: "runs_answer",
-      arguments: { runId: run.id, body: "Use the basket's currency" },
-    });
-    expect(answer.result).toBeUndefined();
-    expect(answer.error?.message).toContain("runs_answer");
-    const answered = await app.request(`/api/runs/${run.id}/answer`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${humanKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ body: "Use the basket's currency" }),
-    });
-    expect(answered.status).toBe(404);
-  });
-
-  it("is refused a Run by the middleware when it names the tool anyway", async () => {
-    const { app, humanKey, issue } = await workspaceWithHumanKey();
-
-    const answer = await mcp(app, humanKey, "tools/call", {
-      name: "runs_start",
-      arguments: { issue: issue.externalKey },
-    });
-
-    expect(answer.result?.isError).toBe(true);
-    expect(answer.result?.content).toEqual([{ type: "text", text: "Only an Agent can do that" }]);
   });
 });
