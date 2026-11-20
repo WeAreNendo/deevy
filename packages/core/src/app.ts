@@ -1,6 +1,5 @@
 import { projectGrant, type Db } from "@deevy/db";
 import type { SocketModules } from "./sockets/port.ts";
-import { finishAccountLink } from "./account-links.ts";
 import { handleInbound, handleSetup } from "./sockets/hooks.ts";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
@@ -255,9 +254,6 @@ export function createApp({
       socketId: c.req.param("socketId"),
       ...(sockets ? { sockets } : {}),
       ...(socketSecret ? { socketSecret } : {}),
-      // Where a Human opens deevy, which a chat reply names when it tells
-      // somebody where to link their account (sockets/chat.ts).
-      ...((webURL ?? baseURL) ? { origin: webURL ?? baseURL } : {}),
       jobs,
     }),
   );
@@ -360,21 +356,6 @@ export function createApp({
     c.set("ctx", await contextFor(c.req.raw));
     await next();
   });
-  // Where a tool with an OAuth grant of its own — Linear — sends a Human's
-  // browser back after they consented to link their account there. A route
-  // rather than an operation, because what answers a browser mid-redirect is a
-  // redirect, and after the context so the session is the one that started it
-  // (account-links.ts, ADR-0025).
-  routes.get("/api/identities/:provider/callback", async (c) => {
-    const { location } = await finishAccountLink(c.get("ctx"), {
-      provider: c.req.param("provider"),
-      ...(c.req.query("code") ? { code: c.req.query("code") } : {}),
-      ...(c.req.query("state") ? { state: c.req.query("state") } : {}),
-      ...(c.req.query("error") ? { error: c.req.query("error") } : {}),
-    });
-    return c.redirect(location, 302);
-  });
-
   // An open tab's socket on a runtime that pushes (live.ts, ADR-0032). A route
   // rather than an operation, because what answers an upgrade is a 101; who
   // may open one is exactly who may read `events.subscribe`, asked of the same

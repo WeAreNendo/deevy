@@ -31,12 +31,6 @@ const stubbedEnv = {
   GITHUB_CLIENT_SECRET: "stub-secret",
   GOOGLE_CLIENT_ID: "stub-client",
   GOOGLE_CLIENT_SECRET: "stub-secret",
-  GITLAB_CLIENT_ID: "stub-client",
-  GITLAB_CLIENT_SECRET: "stub-secret",
-  // A self-hosted GitLab, because that is the half an issuer changes: every
-  // endpoint the sign-in touches is built from it, and the stub answers
-  // GitLab's paths on whatever host it is (docs/plans/sign-in.md slice 5).
-  GITLAB_ISSUER: "https://gitlab.example.test",
   DEEVY_OIDC_CLIENT_ID: "stub-client",
   DEEVY_OIDC_CLIENT_SECRET: "stub-secret",
   // An issuer with a path, the way Keycloak and Authentik publish realms:
@@ -46,12 +40,6 @@ const stubbedEnv = {
   DEEVY_OIDC_NAME: "Acme SSO",
   MICROSOFT_CLIENT_ID: "stub-client",
   MICROSOFT_CLIENT_SECRET: "stub-secret",
-  LINEAR_CLIENT_ID: "stub-client",
-  LINEAR_CLIENT_SECRET: "stub-secret",
-  SLACK_CLIENT_ID: "stub-client",
-  SLACK_CLIENT_SECRET: "stub-secret",
-  ATLASSIAN_CLIENT_ID: "stub-client",
-  ATLASSIAN_CLIENT_SECRET: "stub-secret",
 };
 
 function stubbedServer(overrides: { adminEmail?: string } = {}) {
@@ -129,7 +117,7 @@ describe("a provider's access token", () => {
     const { secretConfig } = await auth.$context;
     expect(await plainOAuthToken(row?.accessToken ?? "", secretConfig)).toBe(`stub_${email}`);
 
-    const ports = joinPorts(db, {}, row?.userId ?? "", async (stored) =>
+    const ports = joinPorts(db, row?.userId ?? "", async (stored) =>
       plainOAuthToken(stored, secretConfig),
     );
     expect(await ports.login?.()).toBe("ada");
@@ -173,10 +161,6 @@ describe("a stubbed instance with nothing configured", () => {
       "github",
       "google",
       "microsoft",
-      "gitlab",
-      "linear",
-      "slack",
-      "atlassian",
       "oidc",
     ]);
 
@@ -365,7 +349,7 @@ describe("a Google sign-in", () => {
  * verified-email claim, and Linear and Atlassian never say, so they come in by
  * invitation.
  */
-describe("a sign-in through a provider that may not vouch for the address", () => {
+describe("a Microsoft sign-in, which may not vouch for the address", () => {
   it("is admitted by a domain rule only where Microsoft said the address is verified", async () => {
     const { app, db, close } = stubbedServer({ adminEmail: "ada@example.com" });
     await signIn(app, "github", "ada@example.com");
@@ -381,15 +365,11 @@ describe("a sign-in through a provider that may not vouch for the address", () =
 
     await signIn(app, "microsoft", "grace@example.com");
     await signIn(app, "microsoft", "mallory+unverified@example.com");
-    await signIn(app, "linear", "omar@example.com");
-    await signIn(app, "atlassian", "joan@example.com");
-    await signIn(app, "slack", "ken@example.com");
 
     const members = await db.query.member.findMany({ with: { user: true } });
     expect(members.map((row) => row.user.email).sort()).toEqual([
       "ada@example.com",
       "grace@example.com",
-      "ken@example.com",
     ]);
     close();
   });
@@ -397,60 +377,11 @@ describe("a sign-in through a provider that may not vouch for the address", () =
   it("remembers which provider this browser used last", async () => {
     const { app, close } = stubbedServer();
 
-    const answered = await callbackFor(app, "slack", "ken@example.com");
+    const answered = await callbackFor(app, "microsoft", "ken@example.com");
 
     expect(answered.headers.getSetCookie().join("\n")).toMatch(
-      /better-auth\.last_used_login_method=slack/,
+      /better-auth\.last_used_login_method=microsoft/,
     );
-    close();
-  });
-});
-
-describe("a Slack sign-in", () => {
-  /**
-   * Slack's user ids are its team's, so the id token its token endpoint hands
-   * back is what says which team a sign-in was to — the proof a Slack Socket
-   * holds a sign-in's account against before it counts a click (ADR-0025).
-   */
-  it("keeps the id token that names the team", async () => {
-    const { app, db, close } = stubbedServer();
-
-    await signIn(app, "slack", "ken@example.com");
-
-    const kept = await db.query.account.findFirst({ where: { providerId: "slack" } });
-    const claims = JSON.parse(
-      Buffer.from(kept?.idToken?.split(".")[1] ?? "", "base64url").toString(),
-    ) as Record<string, string>;
-    expect(claims["https://slack.com/team_id"]).toBe("T0STUB");
-    expect(claims["https://slack.com/user_id"]).toBe(kept?.accountId);
-    close();
-  });
-});
-
-describe("a GitLab sign-in", () => {
-  it("proves the address, so a second provider links onto it", async () => {
-    const email = "grace@example.com";
-    const { app, db, workspaceId, close } = await seededByGoogle();
-    await db.insert(allowlistRule).values({
-      id: newId("allowlistRule"),
-      workspaceId,
-      kind: "email_domain",
-      value: "example.com",
-    });
-
-    expect(await signIn(app, "gitlab", email)).toContain("session_token");
-    const human = await db.query.user.findFirst({ where: { email } });
-    expect(human?.emailVerified).toBe(true);
-
-    const callback = await callbackFor(app, "google", email);
-    expect(callback.headers.get("location") ?? "").not.toContain("account_not_linked");
-    expect(cookiesOf(callback)).toContain("session_token");
-    expect(
-      (await db.query.account.findMany({ where: { userId: human?.id } }))
-        .map((row) => row.providerId)
-        .sort(),
-    ).toEqual(["gitlab", "google"]);
-    expect(await db.query.member.findMany({ where: { userId: human?.id } })).toHaveLength(1);
     close();
   });
 });
@@ -595,16 +526,6 @@ describe("the stub's providers", () => {
     expect(await verifies(id_token ?? "", "https://www.googleapis.com/oauth2/v3/certs")).toBe(true);
   });
 
-  it("answers GitLab wherever the operator's issuer is", async () => {
-    const issuer = "https://gitlab.example.test";
-    const { access_token } = await tokenFrom(`${issuer}/oauth/token`, "ada@example.com", "gitlab");
-    const profile = (await (
-      await fetch(`${issuer}/api/v4/user`, { headers: { authorization: `Bearer ${access_token}` } })
-    ).json()) as { email: string; username: string; state: string };
-    expect(profile).toMatchObject({ email: "ada@example.com", username: "ada", state: "active" });
-    expect(await (await fetch(`${issuer}/api/v4/groups?min_access_level=10`)).json()).toEqual([]);
-  });
-
   it("discovers a generic OIDC issuer and signs for it, path and all", async () => {
     const issuer = "https://idp.example.test/realms/deevy";
     const discovered = (await (
@@ -629,21 +550,6 @@ describe("the stub's providers", () => {
   });
 
   /**
-   * A self-hosted GitLab under a relative URL root builds every endpoint under
-   * that prefix. An exact path match let those requests through to the real
-   * network from a dev loop, silently (docs/plans/sign-in.md).
-   */
-  it("answers a GitLab that lives under a URL root", async () => {
-    const issuer = "https://example.test/gitlab";
-    const { access_token } = await tokenFrom(`${issuer}/oauth/token`, "ada@example.com", "gitlab");
-    expect(access_token).toBeTruthy();
-    const profile = (await (
-      await fetch(`${issuer}/api/v4/user`, { headers: { authorization: `Bearer ${access_token}` } })
-    ).json()) as { username: string };
-    expect(profile.username).toBe("ada");
-  });
-
-  /**
    * The stub reported every address verified, which is what let a linking rule
    * that turns on the claim look tested when nothing drove it. An address
    * marked `+unverified` is the one a provider says it has not proved.
@@ -663,26 +569,15 @@ describe("the stub's providers", () => {
       })
     ).json()) as Array<{ verified: boolean }>;
     expect(emails[0]?.verified).toBe(false);
-
-    // GitLab has no such claim at all: an unconfirmed address is a null stamp.
-    const issuer = "https://gitlab.example.test";
-    const { access_token } = await tokenFrom(`${issuer}/oauth/token`, unverified, "gitlab");
-    const profile = (await (
-      await fetch(`${issuer}/api/v4/user`, { headers: { authorization: `Bearer ${access_token}` } })
-    ).json()) as { confirmed_at: string | null; email_verified?: unknown };
-    expect(profile.confirmed_at).toBeNull();
-    expect(profile.email_verified).toBeUndefined();
   });
 });
 
 /**
- * Linking a second account from inside deevy (Settings › Identities, ADR-0025).
- *
- * A Human who signed in with Google rules from GitHub by linking the GitHub
- * account from a signed-in session, through Better Auth's own `link-social`.
- * Their GitHub address is usually not their work address, so the link takes an
- * account whose address differs — and only that link does: a sign-in on an
- * address somebody else holds still links nothing.
+ * An account on another address is nobody's to deevy (docs/plans/simplify.md,
+ * slice 10; ADR-0036). Two sign-ins are one Human only on one verified
+ * address, so neither a sign-in nor Better Auth's own `link-social`, which a
+ * signed-in session can still call, puts an account on a second address onto
+ * a Human.
  */
 /** Cookies as a browser keeps them: by name, the newest winning, the expired gone. */
 function jar(...headers: string[]): string {
@@ -698,18 +593,18 @@ function jar(...headers: string[]): string {
   return [...kept].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
-describe("linking the account a Human rules from", () => {
+describe("an account on another address", () => {
   const work = "ada@example.com";
   const personal = "ada.lovelace@example.org";
 
-  it("takes a GitHub account with another address onto the Human who asked", async () => {
+  it("is not linked onto a signed-in Human who asks for it", async () => {
     const { app, db, close } = stubbedServer({ adminEmail: work });
     const cookie = await signIn(app, "google", work);
 
     const started = await app.request("/api/auth/link-social", {
       method: "POST",
       headers: { "content-type": "application/json", cookie },
-      body: JSON.stringify({ provider: "github", callbackURL: "/settings/identities" }),
+      body: JSON.stringify({ provider: "github", callbackURL: "/" }),
     });
     const { url } = (await started.json()) as { url?: string };
     const state = new URL(url ?? "http://x").searchParams.get("state") ?? "";
@@ -720,16 +615,10 @@ describe("linking the account a Human rules from", () => {
       { headers: { cookie: jar(cookie, cookiesOf(started)) }, redirect: "manual" },
     );
 
-    expect(linked.headers.get("location") ?? "").not.toContain("error");
+    expect(linked.headers.get("location") ?? "").toContain("email_does_not_match");
     const [ada] = await db.query.user.findMany();
     const accounts = await db.query.account.findMany({ where: { userId: ada?.id } });
-    // The GitHub account is keyed by its own id — which the stub makes the
-    // address it was given — and that is what a comment on GitHub carries.
-    const pairs = accounts.map((row) => [row.providerId, row.accountId]);
-    expect(pairs.sort((a, b) => String(a[0]).localeCompare(String(b[0])))).toEqual([
-      ["github", personal],
-      ["google", work],
-    ]);
+    expect(accounts.map((row) => row.providerId)).toEqual(["google"]);
     expect(await db.query.user.findMany()).toHaveLength(1);
     close();
   });

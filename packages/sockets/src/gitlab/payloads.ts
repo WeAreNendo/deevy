@@ -1,9 +1,8 @@
-import {
-  parseRulingCommand,
-  type ExternalActor,
-  type ExternalComment,
-  type ExternalIssue,
-  type InboundEvent,
+import type {
+  ExternalActor,
+  ExternalComment,
+  ExternalIssue,
+  InboundEvent,
 } from "@deevy/core/sockets";
 
 /**
@@ -39,27 +38,17 @@ export function gitlabDate(value: unknown): Date {
 
 /**
  * The bot user GitLab makes for a project or group access token — the user a
- * Socket connected with one of those acts as, and the kind of account whose
- * words rule nothing (ADR-0025).
+ * Socket connected with one of those acts as, and a machine, not a Human.
  */
 const BOT_USERNAME = /^(project|group)_\d+_bot/;
 
-/**
- * Whoever did it on GitLab's side. GitLab redacts a user's address in a
- * webhook, so none is claimed from one.
- */
+/** Whoever did it on GitLab's side. */
 export function actorOf(user: unknown): ExternalActor | null {
   const found = record(user);
   const id = num(found.id);
   if (!id) return null;
   const login = text(found.username);
-  const email = text(found.email);
-  return {
-    login,
-    id,
-    isBot: found.bot === true || BOT_USERNAME.test(login),
-    ...(email.includes("@") ? { email } : {}),
-  };
+  return { login, id, isBot: found.bot === true || BOT_USERNAME.test(login) };
 }
 
 /** Labels as names: a webhook sends objects with a `title`. */
@@ -158,8 +147,8 @@ export function normalizeGitlab(eventName: string, payload: unknown): InboundEve
     // What GitLab writes itself — "added ~bug label" — is a record, not a
     // Human saying something.
     if (note.system === true) return [{ kind: "ignored", why: "a note GitLab wrote itself" }];
-    // deevy acts on what was said first: the Gate is the authority, and an
-    // edited comment changes nothing that was ruled on (ADR-0025).
+    // deevy acts on what was said when it was said: an edit is not a new
+    // comment.
     const action = text(note.action);
     if (action && action !== "create") {
       return [{ kind: "ignored", why: `a note delivery deevy does not act on: ${action}` }];
@@ -169,19 +158,6 @@ export function normalizeGitlab(eventName: string, payload: unknown): InboundEve
     const comment = commentOf(note, body.user, text(issue.url));
     if (!comment || !issueExternalId) {
       return [{ kind: "ignored", why: "a note delivery that is not on an issue" }];
-    }
-    const ruling = parseRulingCommand(comment.body);
-    if (ruling) {
-      return [
-        {
-          kind: "ruling",
-          scopeKey,
-          issueExternalId,
-          comment,
-          decision: ruling.decision,
-          note: ruling.note,
-        },
-      ];
     }
     return [{ kind: "comment", scopeKey, issueExternalId, comment }];
   }

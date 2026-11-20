@@ -58,7 +58,6 @@ const shots: Shot[] = [
   { name: "settings-sockets", path: "/settings/sockets" },
   { name: "settings-socket", path: { find: firstSocket } },
   { name: "settings-projects", path: "/settings/projects" },
-  { name: "settings-identities", path: "/settings/identities" },
   { name: "settings-workspace", path: "/settings/workspace" },
   { name: "settings-agents", path: "/settings/agents" },
   { name: "settings-events", path: "/settings/events" },

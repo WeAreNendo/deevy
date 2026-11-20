@@ -1,4 +1,4 @@
-import { account, member, user, workspace } from "@deevy/db";
+import { member, workspace } from "@deevy/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
 import { createAuth, relayedProviders } from "../src/auth.ts";
@@ -40,6 +40,8 @@ function workspaceAt(slug: string) {
       trustedOrigins: [host],
       providers: {
         github: { clientId: "platform-github", clientSecret: "platform-github-secret" },
+        google: { clientId: "platform-google", clientSecret: "platform-google-secret" },
+        microsoft: { clientId: "platform-microsoft", clientSecret: "platform-microsoft-secret" },
         oidc: {
           clientId: "own-idp",
           clientSecret: "own-idp-secret",
@@ -96,13 +98,17 @@ function cookiesOf(response: Response): string {
     .join("; ");
 }
 
-/** A Human starting a GitHub sign-in at a Workspace, as the SPA does. */
-async function startSignIn(app: ReturnType<typeof workspaceAt>["app"], baseURL: string) {
+/** A Human starting a sign-in at a Workspace, as the SPA does: GitHub's, unless it says. */
+async function startSignIn(
+  app: ReturnType<typeof workspaceAt>["app"],
+  baseURL: string,
+  provider = "github",
+) {
   const started = await app.request(`${baseURL}/api/auth/sign-in/social`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: host },
     body: JSON.stringify({
-      provider: "github",
+      provider,
       callbackURL: `${baseURL}/`,
       errorCallbackURL: `${baseURL}/`,
     }),
@@ -151,15 +157,15 @@ describe("the relayed state", () => {
       relayedProviders({
         github: { clientId: "a", clientSecret: "b" },
         google: { clientId: "a", clientSecret: "b" },
+        microsoft: { clientId: "a", clientSecret: "b" },
         oidc: { clientId: "a", clientSecret: "b", issuer: "https://idp.example.com" },
       }),
-    ).toEqual(["github", "google"]);
+    ).toEqual(["github", "google", "microsoft"]);
     expect(
       relayedProviders({
-        gitlab: { clientId: "a", clientSecret: "b", issuer: "https://gitlab.acme.test" },
+        oidc: { clientId: "a", clientSecret: "b", issuer: "https://idp.example.com" },
       }),
     ).toEqual([]);
-    expect(relayedProviders({ gitlab: { clientId: "a", clientSecret: "b" } })).toEqual(["gitlab"]);
   });
 });
 
@@ -246,6 +252,40 @@ describe("signing in to a Workspace through the relay", () => {
     expect(members.map((row) => row.role)).toEqual(["admin"]);
   });
 
+  /**
+   * The platform signs in with GitHub, Google and Microsoft, and the relay
+   * holds the one callback each of their Apps knows (docs/plans/simplify.md,
+   * slice 10). The other three platform Apps it held went with the providers.
+   */
+  it.each(["github", "google", "microsoft"])(
+    "sends a %s sign-in out through the relay's callback, and back to the Workspace",
+    async (provider) => {
+      const acme = workspaceAt("acme");
+      const { authorization } = await startSignIn(acme.app, acme.baseURL, provider);
+      expect(authorization.searchParams.get("redirect_uri")).toBe(
+        `${relayURL}/callback/${provider}`,
+      );
+      const state = authorization.searchParams.get("state") ?? "";
+      expect((await unwrapRelayState(state, relaySecret))?.to).toBe(`${acme.baseURL}/api/auth`);
+
+      // The provider calls the relay back, and the relay sends the browser on
+      // to the Workspace's own callback for that provider. What the Workspace
+      // does there is the sign-in GitHub's case above walks to the end.
+      const relayed = await relaySignInCallback(
+        new Request(
+          `${relayURL}/callback/${provider}?code=the-code&state=${encodeURIComponent(state)}`,
+        ),
+        `/callback/${provider}`,
+        relay,
+      );
+      expect(
+        (relayed.headers.get("location") ?? "").startsWith(
+          `${acme.baseURL}/api/auth/callback/${provider}?`,
+        ),
+      ).toBe(true);
+    },
+  );
+
   it("signs nobody in at a Workspace that did not start the sign-in", async () => {
     const acme = workspaceAt("acme");
     const beta = workspaceAt("beta");
@@ -280,58 +320,5 @@ describe("signing in to a Workspace through the relay", () => {
       const redirect = new URL(url).searchParams.get("redirect_uri") ?? "";
       expect(redirect.startsWith(`${acme.baseURL}/`)).toBe(true);
     }
-  });
-
-  it("links a signed-in Human's GitHub account through the relay too", async () => {
-    const acme = workspaceAt("acme");
-    await acme.db
-      .insert(user)
-      .values({ id: "usr_grace", name: "Grace", email: "grace@example.com" });
-    const context = await acme.auth.$context;
-    const session = await context.internalAdapter.createSession("usr_grace");
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode("acme-secret-that-is-at-least-32-characters"),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const signature = await crypto.subtle.sign(
-      "HMAC",
-      key,
-      new TextEncoder().encode(session.token),
-    );
-    const signed = `${session.token}.${btoa(String.fromCharCode(...new Uint8Array(signature)))}`;
-    const signedIn = `${context.authCookies.sessionToken.name}=${encodeURIComponent(signed)}`;
-
-    const started = await acme.app.request(`${acme.baseURL}/api/auth/link-social`, {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: host, cookie: signedIn },
-      body: JSON.stringify({
-        provider: "github",
-        callbackURL: `${acme.baseURL}/settings/identities`,
-        errorCallbackURL: `${acme.baseURL}/settings/identities`,
-      }),
-    });
-    expect(started.status).toBe(200);
-    const authorization = new URL(((await started.json()) as { url: string }).url);
-    expect(authorization.searchParams.get("redirect_uri")).toBe(`${relayURL}/callback/github`);
-
-    const relayed = await relaySignInCallback(
-      new Request(
-        `${relayURL}/callback/github?code=the-code&state=${encodeURIComponent(authorization.searchParams.get("state") ?? "")}`,
-      ),
-      "/callback/github",
-      relay,
-    );
-    const finished = await acme.app.request(relayed.headers.get("location") ?? "", {
-      headers: { cookie: `${signedIn}; ${cookiesOf(started)}` },
-      redirect: "manual",
-    });
-    expect(finished.headers.get("location")).toBe(`${acme.baseURL}/settings/identities`);
-    const linked = await acme.db.select().from(account);
-    expect(linked.map((row) => [row.providerId, row.accountId, row.userId])).toEqual([
-      ["github", "4242", "usr_grace"],
-    ]);
   });
 });

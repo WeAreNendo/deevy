@@ -9,8 +9,8 @@ Everything that changes in a Workspace appends one **Event**: what changed, whic
 An Event is never edited or removed, and each one has a number, its `seq`, that gives its place in the log.
 
 A change that came from one of your tools, such as a record edited on GitHub, names the account that made
-it there, and no Member. A Ruling is the exception: an `/approve` in your tracker or a click in Slack names
-the Human whose account it was.
+it there, and no Member. A Ruling always names a Member, because it is only ever made in deevy, by a Human
+signed in.
 
 ## One log, read everywhere
 
@@ -35,21 +35,20 @@ Filter it by **Kind**, **Subject** and **Project**, and click an Event to see ev
 An Event's kind is its subject and what happened to it, such as `issue.assigned`, `run.started` or
 `gate.approved`. The families are:
 
-| Family                        | What they record                                                                               |
-| ----------------------------- | ---------------------------------------------------------------------------------------------- |
-| `issue.*`                     | A record arriving, changing, being routed to an Agent, closing or reopening                    |
-| `comment.*`                   | A comment on a record                                                                          |
-| `delegation.*`                | A sub-issue nested too deep to hand to an Agent, and the Agent it was kept from                |
-| `run.*`                       | A Run starting, its Activity, waiting, being answered, finishing or failing                    |
-| `gate.*`                      | A Gate asked, approved, rejected or superseded, each approval, and a Ruling that ruled nothing |
-| `workspace.*`                 | The Workspace made, and its settings changed                                                   |
-| `member.*`                    | Members joining, changing role, suspended and reinstated                                       |
-| `allowlist.*`, `invitation.*` | Who may join: rules added and removed, invitations made, revoked and accepted                  |
-| `agent.*`                     | Agents created, their keys issued and revoked, their Sponsor and grants changed                |
-| `identity.*`                  | An account on a tool linked to a Human, or unlinked                                            |
-| `socket.*`                    | Tools connected, changed and removed                                                           |
-| `project.*`                   | Projects bound, changed, including their chat channel, and archived                            |
-| `webhook.*`                   | Webhooks subscribed and removed, and any delivery deevy gave up on                             |
+| Family                        | What they record                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `issue.*`                     | A record arriving, changing, being routed to an Agent, closing or reopening     |
+| `comment.*`                   | A comment on a record                                                           |
+| `delegation.*`                | A sub-issue nested too deep to hand to an Agent, and the Agent it was kept from |
+| `run.*`                       | A Run starting, its Activity, waiting, being answered, finishing or failing     |
+| `gate.*`                      | A Gate asked, approved, rejected or superseded, and each approval               |
+| `workspace.*`                 | The Workspace made, and its settings changed                                    |
+| `member.*`                    | Members joining, changing role, suspended and reinstated                        |
+| `allowlist.*`, `invitation.*` | Who may join: rules added and removed, invitations made, revoked and accepted   |
+| `agent.*`                     | Agents created, their keys issued and revoked, their Sponsor and grants changed |
+| `socket.*`                    | Tools connected, changed and removed                                            |
+| `project.*`                   | Projects bound, changed, including their chat channel, and archived             |
+| `webhook.*`                   | Webhooks subscribed and removed, and any delivery deevy gave up on              |
 
 Every Member can read most of the log, so deevy keeps credentials out of it: a webhook's secret and an
 invitation's link are never recorded.

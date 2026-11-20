@@ -11,7 +11,6 @@ import { NotFoundPage } from "@/routes/not-found";
 import { Badge } from "@/components/ui/badge";
 import { orpc } from "@/lib/orpc";
 import { isNotFound } from "@/routes/not-found";
-import { providerLabel } from "@/lib/providers";
 import { useMembersById } from "@/lib/members";
 import { webHref } from "@/lib/href";
 import { ago } from "@/lib/time";
@@ -138,18 +137,6 @@ export function GatePage({ requestId, focused = true }: { requestId: string; foc
                         >
                           {decision.decision === "approved" ? "Approved" : "Rejected"}
                         </Badge>
-                        {/* Where it was made, which is what ADR-0025 is about. */}
-                        <span className="text-xs text-muted-foreground">
-                          {decision.via === "web"
-                            ? "in deevy"
-                            : decision.via === "slack"
-                              ? "in Slack"
-                              : `via ${providerLabel(decision.socket?.provider, decision.socket?.name)}`}
-                          {/* The weak proof, said here, the one place a Ruling is
-                              shown with how it was proved: the tool only reported
-                              an address (ADR-0025). */}
-                          {decision.verifiedBy === "email" ? " (email)" : ""}
-                        </span>
                         <span className="text-xs text-muted-foreground">
                           {ago(decision.createdAt)}
                         </span>

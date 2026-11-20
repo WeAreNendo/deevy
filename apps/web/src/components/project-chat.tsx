@@ -24,9 +24,9 @@ const TYPED = "__typed";
 
 /**
  * The chat channel a Project's Gates are posted in (docs/plans/simplify.md,
- * slice 8): one message per Gate, with Approve and Reject on it, updated in
- * place when somebody rules. Whoever may rule sees it there without opening
- * deevy; Needs me is the same list, kept by deevy.
+ * slice 8): one message per Gate, with a link to rule on it in deevy (slice
+ * 10), updated in place when somebody rules. Needs me is the same list, kept
+ * by deevy.
  *
  * Saving posts a hello in the channel before anything is stored, so a channel
  * the app was never added to is refused here, in the tool's own words, rather
@@ -102,7 +102,7 @@ export function ProjectChat({ projectSlug }: { projectSlug: string }) {
     <SettingsSection
       aria-label="Chat"
       title="Chat"
-      description="Where this Project's Gates are posted, with Approve and Reject on each, so whoever may rule sees them without opening deevy."
+      description="Where this Project's Gates are posted, each with a link to rule on it in deevy, so whoever may rule sees them where they already are."
     >
       <p className="text-sm">
         {savedSocket && savedChannel ? (

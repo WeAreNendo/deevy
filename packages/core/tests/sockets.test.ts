@@ -196,28 +196,6 @@ describe("a connected tool", () => {
     expect(kinds.filter((kind) => kind === "socket.updated")).toHaveLength(2);
   });
 
-  it("takes an address as proof of who commented only where an admin says so", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { asAda } = await admin(db);
-    const connected = await asAda.sockets.connect({
-      provider: "stub",
-      name: "Example tracker",
-      config: { storeId: "kept" },
-    });
-    expect(connected.config).toEqual({ storeId: "kept" });
-
-    // For a tool with nothing better to offer (ADR-0025), and said in the log
-    // because it weakens what a Ruling from there is worth.
-    const allowed = await asAda.sockets.update({ socketId: connected.id, identityByEmail: true });
-
-    expect(allowed.config).toEqual({ storeId: "kept", identityByEmail: true });
-    const updated = (await db.query.event.findMany({})).filter(
-      (event) => event.kind === "socket.updated",
-    );
-    expect(updated.at(-1)?.payload).toMatchObject({ identityByEmail: true });
-  });
-
   it("mints a new webhook secret, and says it exactly once", async () => {
     const { db, close } = testDb();
     closers.push(close);
@@ -258,14 +236,14 @@ describe("a connected tool", () => {
     expect(row?.webhookSecretChangedAt).toBeInstanceOf(Date);
   });
 
-  it("mints nothing for a tool that makes its own secret or sends one to verify its webhook", async () => {
+  it("mints nothing for a tool that makes its own secret, sends one to verify its webhook, or delivers nothing", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const { sockets } = fakeSockets();
     const like = (
-      provider: "slack" | "notion" | "github",
-      from: "tool" | "handshake" | "either",
+      provider: "linear" | "slack" | "notion" | "github",
+      from: "tool" | "none" | "handshake" | "either",
     ): SocketModules[typeof provider] => {
       return (options) => {
         const module = sockets.stub?.(options);
@@ -278,7 +256,8 @@ describe("a connected tool", () => {
         ...ada,
         sockets: {
           ...sockets,
-          slack: like("slack", "tool"),
+          linear: like("linear", "tool"),
+          slack: like("slack", "none"),
           notion: like("notion", "handshake"),
           github: like("github", "either"),
         },
@@ -290,18 +269,31 @@ describe("a connected tool", () => {
     const { providers } = await asAda.sockets.providers({});
     expect(Object.fromEntries(providers.map((one) => [one.id, one.webhookSecretFrom]))).toEqual({
       github: "either",
+      linear: "tool",
       notion: "handshake",
-      slack: "tool",
+      slack: "none",
       stub: "either",
     });
 
-    const slack = await asAda.sockets.connect({ provider: "slack", name: "Acme Slack" });
-    await expect(asAda.sockets.rotate({ socketId: slack.id })).rejects.toMatchObject({
+    const linear = await asAda.sockets.connect({ provider: "linear", name: "Acme on Linear" });
+    await expect(asAda.sockets.rotate({ socketId: linear.id })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: expect.stringMatching(
-        /^Slack makes its own signing secret.*paste the new one on the Socket's page/,
+        /^Linear makes its own signing secret.*paste the new one on the Socket's page/,
       ) as unknown,
     });
+    // Slack sends deevy nothing (ADR-0036): there is no secret to mint, and
+    // none to type in either.
+    const slack = await asAda.sockets.connect({ provider: "slack", name: "Acme Slack" });
+    for (const refused of [
+      asAda.sockets.rotate({ socketId: slack.id }),
+      asAda.sockets.update({ socketId: slack.id, webhookSecret: "a-slack-signing-secret" }),
+    ]) {
+      await expect(refused).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: expect.stringMatching(/^Slack sends deevy nothing/) as unknown,
+      });
+    }
     const notion = await asAda.sockets.connect({ provider: "notion", name: "Acme's Notion" });
     await expect(asAda.sockets.rotate({ socketId: notion.id })).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -309,8 +301,8 @@ describe("a connected tool", () => {
         /^Notion signs with the token it sends.*Verifying the webhook/,
       ) as unknown,
     });
-    // Neither was touched.
-    for (const id of [slack.id, notion.id]) {
+    // None was touched.
+    for (const id of [linear.id, slack.id, notion.id]) {
       const row = await db.query.socket.findFirst({ where: { id } });
       expect(row?.webhookSecret).toBeNull();
     }

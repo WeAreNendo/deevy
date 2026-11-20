@@ -13,13 +13,13 @@ tool once, then bind as many Projects to what is in it as you like.
 A Socket is one tool, connected under one identity of deevy's own there, holding the credential deevy acts
 with:
 
-| Tool   | The Socket is              | What deevy uses it for                       |
-| ------ | -------------------------- | -------------------------------------------- |
-| GitHub | a GitHub App               | issues as records                            |
-| Linear | a Linear OAuth application | issues as records                            |
-| GitLab | a GitLab account           | issues as records                            |
-| Notion | a Notion connection        | a database's rows as records                 |
-| Slack  | a Slack app                | a Project's Gates in a channel, with buttons |
+| Tool   | The Socket is              | What deevy uses it for                    |
+| ------ | -------------------------- | ----------------------------------------- |
+| GitHub | a GitHub App               | issues as records                         |
+| Linear | a Linear OAuth application | issues as records                         |
+| GitLab | a GitLab account           | issues as records                         |
+| Notion | a Notion connection        | a database's rows as records              |
+| Slack  | a Slack app                | a Project's Gates, announced in a channel |
 
 A Socket listens and announces. It takes what the tool delivers, and it says on a record when a Gate is
 waiting and how it was ruled, written by deevy's identity in that tool and signed with the Agent and the Run
@@ -32,8 +32,8 @@ others. Each tool's page walks you through it: start at [Connecting your tools](
 
 ### How a tool tells deevy what happened
 
-Each Socket has an address of its own, shown on its page under **Where it delivers**, which the tool posts to
-when something changes. That is the only way deevy hears of it: deevy never asks a tool what changed, so a
+Each Socket that holds records has an address of its own, shown on its page under **Where it delivers**,
+which the tool posts to when something changes. A Slack Socket has none: deevy only posts there. That is the only way deevy hears of it: deevy never asks a tool what changed, so a
 delivery that never arrives is a change deevy never sees, until the tool sends it again.
 
 :::note[deevy Cloud]

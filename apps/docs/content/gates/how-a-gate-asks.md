@@ -10,23 +10,30 @@ or what it has done. The Run waits until the Humans who may rule have decided. T
 
 ## Where it reaches you
 
-A Gate you may approve shows up in several places at once. Answer it in whichever you are already in:
+A Gate you may approve is announced in up to three places at once, and each of them leads to the same page
+in deevy, which is where you rule:
 
 - **Needs me**, deevy's home page, under **Gates awaiting you**: a card per Gate with its Checkpoint, the
   first line of the Proposal, the record's key, the Agent, how long it has waited, and how many approvals it
   has, such as `0 of 1`.
-- **Your tracker**, as a comment on the record with the Proposal and how to rule from there. See
-  [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
-- **Slack**, in the channel the Project posts its Gates in, when an admin has bound one. Your clicks there
-  count once your Slack account is one of your Identities: you sign in to deevy with Slack, or you link it
-  the first time you click **Approve** or **Reject**, or when you type `/deevy link` in Slack. See
-  [Needs me and chat](/needs-me/).
+- **Your tracker**, as a comment from deevy on the record, with the Proposal, the links the Agent
+  attached, and `Rule on it in deevy:` with the Gate's address.
+- **Slack**, in the channel the Project posts its Gates in, when an admin has bound one: a message with the
+  Proposal, the count and **Rule on it in deevy**. See [Needs me and chat](/needs-me/).
 
 The Agent can also hand you the Gate's own link: `deevy gates open acme/deevy#42` prints it for the Gate
 waiting on that record.
 
 deevy doesn't email you or remind you. A Gate stays on your **Needs me**, and its message in the channel
-keeps its buttons, until it is decided.
+says it is waiting, until it is decided.
+
+### A reply on the record rules nothing
+
+You rule in deevy, signed in, and nowhere else. A comment on the record is a comment like any other, even
+one that starts `/approve` or `/reject`: it rules nothing, and deevy doesn't answer it. Nothing in Slack
+rules either. When somebody rules in deevy, deevy says so on the record, such as
+"**Approved** at the `plan` Checkpoint — 1 of 1", and changes the message in Slack, so whoever follows the
+work there sees where the Gate stands.
 
 ## What the Gate's page shows
 
@@ -39,8 +46,7 @@ and whether you may rule.
 - **Evidence**: the links the Agent attached, such as a pull request or a design.
 - **The ruling card**: **Waiting on a ruling**, the count (`1 of 2`), a **Note**, and **Approve** and
   **Reject**.
-- **Gate decisions**: every Ruling so far, who made it, what it was, and where: "in deevy", "in Slack",
-  "via GitHub".
+- **Gate decisions**: every Ruling so far, who made it, what it was, when, and its note.
 - **The Run that stopped here**: its status and the last few things it did.
 
 ## Approve or reject
@@ -105,4 +111,4 @@ afresh. Approvals on the old one do not carry over.
 ## Next
 
 - [Gates that need more than one Human](/gates/more-than-one-human/)
-- [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/)
+- [Needs me and chat](/needs-me/)

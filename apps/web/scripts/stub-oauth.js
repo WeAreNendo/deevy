@@ -2,10 +2,9 @@
  * Every sign-in provider deevy offers, as far as a deevy under test can tell
  * (docs/plans/sign-in.md slice 2).
  *
- * Better Auth hardcodes GitHub's, Google's, Microsoft's, Linear's, Slack's and
- * Atlassian's endpoints and builds GitLab's and a generic OIDC provider's from
- * a configured issuer, so the only seam that covers all eight is the global
- * `fetch` they are called through.
+ * Better Auth hardcodes GitHub's, Google's and Microsoft's endpoints and builds
+ * a generic OIDC provider's from a configured issuer, so the only seam that
+ * covers all four is the global `fetch` they are called through.
  * `apps/server/src/index.ts` imports this file when `DEEVY_DEV_STUB_OAUTH=1`;
  * `apps/web/scripts/smoke-workers.ts` and `tools/acceptance/src/boot.ts` prepend
  * its source to a built bundle instead. Either way deevy itself — its routing,
@@ -20,10 +19,10 @@
  * `ada@example.com|<nonce>` is the same sign-in, saying which authorization
  * request it belongs to.
  *
- * GitHub and Google are matched by host, because their endpoints are constants
- * in Better Auth. GitLab's and the OIDC provider's are wherever the operator's
- * issuer is, so those are matched by path — but never on a loopback host,
- * which is deevy itself and must answer for its own routes.
+ * GitHub, Google and Microsoft are matched by host, because their endpoints
+ * are constants in Better Auth. The OIDC provider's are wherever the
+ * operator's issuer is, so those are matched by path — but never on a
+ * loopback host, which is deevy itself and must answer for its own routes.
  *
  * Everything lives inside one function so the file declares nothing at module
  * scope: its source is prepended to a bundle whose own top-level names it
@@ -231,36 +230,8 @@
   }
 
   /**
-   * The GitLab profile of whoever the code named. `state` decides the sign-in.
-   *
-   * There is no `email_verified` here, because there is none in GitLab's own
-   * `/api/v4/user`: a confirmed address is `confirmed_at`, and a stub that
-   * invents the OpenID Connect claim beside it hides the mapping deevy has to
-   * do for a real GitLab (packages/core/src/auth.ts).
-   */
-  function gitlabProfile(email) {
-    const { login, name } = nameFor(email);
-    return {
-      id: email,
-      username: login,
-      name,
-      email,
-      // GitLab's /api/v4/user has no `email_verified`; a confirmed address is
-      // a `confirmed_at` stamp, and an unconfirmed one is null. Inventing the
-      // claim here made every GitLab sign-in look verified to Better Auth,
-      // which is not what production does (docs/plans/sign-in.md).
-      confirmed_at: isVerified(email) ? "2020-01-01T00:00:00.000Z" : null,
-      state: "active",
-      locked: false,
-      avatar_url: null,
-      web_url: `https://gitlab.example/${login}`,
-    };
-  }
-
-  /**
    * A stable id for whoever the code named, in the shape each provider hands
-   * out: an account id is the provider's own, never the address, and the
-   * identity resolver matches on it (packages/core/src/identities.ts).
+   * out: an account id is the provider's own, never the address.
    */
   function idFor(prefix, email) {
     return `${prefix}${nameFor(email)
@@ -292,20 +263,6 @@
     };
   }
 
-  /** Sign in with Slack's userInfo: OpenID claims, plus Slack's own user and team ids. */
-  function slackProfile(email) {
-    const { name } = nameFor(email);
-    return {
-      ok: true,
-      sub: idFor("U", email),
-      "https://slack.com/user_id": idFor("U", email),
-      "https://slack.com/team_id": "T0STUB",
-      email,
-      email_verified: isVerified(email),
-      name,
-    };
-  }
-
   const OIDC_DISCOVERY = "/.well-known/openid-configuration";
 
   /** The paths this stub answers on whatever host the operator's issuer is. */
@@ -330,7 +287,7 @@
       return Response.json({
         access_token: tokenFor(email),
         token_type: "bearer",
-        scope: "read:user,user:email,read:org",
+        scope: "read:user,user:email",
       });
     }
     if (host === "api.github.com") {
@@ -339,7 +296,6 @@
       if (path === "/user/emails") {
         return Response.json([{ email, primary: true, verified: isVerified(email) }]);
       }
-      if (path === "/user/orgs") return Response.json([]);
     }
 
     // Google: a token endpoint that hands back a signed id_token, and the
@@ -373,99 +329,9 @@
       if (path.endsWith("/discovery/v2.0/keys")) return jwksResponse();
     }
 
-    // Linear: an OAuth token, then the GraphQL viewer. Linear says nothing
-    // about whether the address is verified, and Better Auth marks it not.
-    if (host === "api.linear.app") {
-      if (path === "/oauth/token") {
-        const { email } = await tokenRequest(request);
-        return Response.json({
-          access_token: tokenFor(email),
-          token_type: "Bearer",
-          expires_in: 3600,
-          scope: "read",
-        });
-      }
-      if (path === "/graphql") {
-        const email = bearerEmail(request);
-        const { name } = nameFor(email);
-        return Response.json({
-          data: { viewer: { id: idFor("lin-", email), name, email, avatarUrl: null } },
-        });
-      }
-    }
-
-    // Sign in with Slack: OpenID Connect on Slack's own paths.
-    if (host === "slack.com") {
-      if (path === "/api/openid.connect.token") {
-        const token = await tokenRequest(request);
-        // Slack's id token carries its own user and team ids, and the team is
-        // what a Slack Socket reads back before a sign-in counts for a click.
-        const { sub, email, email_verified, name, ...slackIds } = slackProfile(token.email);
-        return Response.json({
-          ok: true,
-          access_token: tokenFor(token.email),
-          token_type: "Bearer",
-          expires_in: 3600,
-          id_token: await idToken({
-            iss: "https://slack.com",
-            aud: token.clientId,
-            sub,
-            email,
-            email_verified,
-            name,
-            "https://slack.com/user_id": slackIds["https://slack.com/user_id"],
-            "https://slack.com/team_id": slackIds["https://slack.com/team_id"],
-          }),
-        });
-      }
-      if (path === "/api/openid.connect.userInfo") {
-        return Response.json(slackProfile(bearerEmail(request)));
-      }
-    }
-
-    // Atlassian: an OAuth token, then `/me`, which says nothing about whether
-    // the address is verified.
-    if (host === "auth.atlassian.com" && path === "/oauth/token") {
-      const { email } = await tokenRequest(request);
-      return Response.json({
-        access_token: tokenFor(email),
-        token_type: "Bearer",
-        expires_in: 3600,
-        scope: "read:me",
-      });
-    }
-    if (host === "api.atlassian.com" && path === "/me") {
-      const email = bearerEmail(request);
-      const { name, login } = nameFor(email);
-      return Response.json({
-        account_type: "atlassian",
-        account_id: idFor("atl-", email),
-        email,
-        name,
-        nickname: login,
-        picture: null,
-        account_status: "active",
-      });
-    }
-
-    // GitLab and the generic OIDC provider live wherever the operator's issuer
-    // is, so they are matched by path. Never on loopback: that is deevy.
+    // The generic OIDC provider lives wherever the operator's issuer is, so it
+    // is matched by path. Never on loopback: that is deevy.
     if (!isLoopback(host)) {
-      // `endsWith`, not `===`: a self-hosted GitLab under a relative URL root
-      // (`https://example.com/gitlab`) builds every endpoint under that prefix,
-      // and an exact match sent the dev loop's request to the real network.
-      if (path.endsWith("/oauth/token")) {
-        const { email } = await tokenRequest(request);
-        return Response.json({
-          access_token: tokenFor(email),
-          token_type: "bearer",
-          expires_in: 3600,
-          scope: "read_user read_api",
-        });
-      }
-      if (path.endsWith("/api/v4/user")) return Response.json(gitlabProfile(bearerEmail(request)));
-      if (path.endsWith("/api/v4/groups")) return Response.json([]);
-
       if (path.endsWith(OIDC_DISCOVERY)) {
         const issuer = issuerOf(url, OIDC_DISCOVERY);
         return Response.json({

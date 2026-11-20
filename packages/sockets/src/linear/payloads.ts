@@ -1,9 +1,8 @@
-import {
-  parseRulingCommand,
-  type ExternalActor,
-  type ExternalComment,
-  type ExternalIssue,
-  type InboundEvent,
+import type {
+  ExternalActor,
+  ExternalComment,
+  ExternalIssue,
+  InboundEvent,
 } from "@deevy/core/sockets";
 
 /**
@@ -32,18 +31,16 @@ const CLOSED_TYPES = new Set(["completed", "canceled"]);
 /**
  * Whoever did it on Linear's side. A webhook's `actor` says what kind of thing
  * it was, and anything that is not a person — an OAuth app, deevy's own among
- * them, or an integration — is a machine, whose words rule nothing.
+ * them, or an integration — is a machine.
  */
 export function actorOf(actor: unknown): ExternalActor | null {
   const found = record(actor);
   const id = text(found.id);
   if (!id) return null;
-  const email = text(found.email);
   return {
     login: text(found.displayName) || text(found.name),
     id,
     isBot: text(found.type) !== "" && text(found.type) !== "user",
-    ...(email ? { email } : {}),
   };
 }
 
@@ -127,7 +124,6 @@ export function commentOf(comment: unknown, url = ""): ExternalComment | null {
   if (!externalId) return null;
   const user = record(found.user);
   const authorId = text(user.id) || text(found.userId);
-  const email = text(user.email);
   const bot = botActorOf(found.botActor);
   const isBot = bot !== null || !text(user.id);
   return {
@@ -138,7 +134,6 @@ export function commentOf(comment: unknown, url = ""): ExternalComment | null {
       login: text(user.displayName) || text(user.name) || text(bot?.name),
       id: authorId,
       isBot,
-      ...(email ? { email } : {}),
     },
     createdAt: new Date(text(found.createdAt) || Date.now()),
   };
@@ -168,8 +163,8 @@ export function normalizeLinear(eventName: string, payload: unknown): InboundEve
   }
 
   if (type === "Comment") {
-    // deevy acts on what was said first: the Gate is the authority, and an
-    // edited comment changes nothing that was ruled on (ADR-0025).
+    // deevy acts on what was said when it was said: an edit is not a new
+    // comment.
     if (action !== "create") {
       return [{ kind: "ignored", why: `a Comment delivery deevy does not act on: ${action}` }];
     }
@@ -182,21 +177,7 @@ export function normalizeLinear(eventName: string, payload: unknown): InboundEve
     // The webhook's own actor is the surer word on whether a machine wrote it.
     const author = actor?.isBot ? { ...comment.author, isBot: true } : comment.author;
     const scopeKey = teamOf(data.issue);
-    const said = { ...comment, author };
-    const ruling = parseRulingCommand(said.body);
-    if (ruling) {
-      return [
-        {
-          kind: "ruling",
-          scopeKey,
-          issueExternalId,
-          comment: said,
-          decision: ruling.decision,
-          note: ruling.note,
-        },
-      ];
-    }
-    return [{ kind: "comment", scopeKey, issueExternalId, comment: said }];
+    return [{ kind: "comment", scopeKey, issueExternalId, comment: { ...comment, author } }];
   }
 
   if (type === "OAuthApp") {

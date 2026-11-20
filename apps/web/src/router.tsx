@@ -23,7 +23,6 @@ import { EventLogPage } from "./routes/settings/events.tsx";
 import { SettingsLayout } from "./routes/settings/layout.tsx";
 import { WebhooksPage } from "./routes/settings/webhooks.tsx";
 import { WorkspacePage } from "./routes/settings/workspace.tsx";
-import { IdentitiesPage, parseIdentitiesSearch } from "./routes/settings/identities.tsx";
 import { MembersPage } from "./routes/settings/members.tsx";
 import { AgentsPage } from "./routes/settings/agents.tsx";
 import { AgentPage } from "./routes/settings/agent.tsx";
@@ -208,16 +207,6 @@ const allowlistRoute = createRoute({
     throw redirect({ to: "/settings/workspace" });
   },
 });
-const identitiesRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: "identities",
-  // Where a tool's consent page sends the browser back to, saying what
-  // happened (account-links.ts).
-  validateSearch: (search: Record<string, unknown>) => parseIdentitiesSearch(search),
-  component: function IdentitiesRoute() {
-    return <IdentitiesPage search={identitiesRoute.useSearch()} />;
-  },
-});
 const eventLogRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "events",
@@ -273,7 +262,6 @@ const routeTree = rootRoute.addChildren([
     agentRoute,
     webhooksRoute,
     allowlistRoute,
-    identitiesRoute,
     eventLogRoute,
   ]),
   inviteRoute,

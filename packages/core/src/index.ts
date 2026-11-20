@@ -1,10 +1,4 @@
 export { buildContext, createApp, type App, type AppOptions } from "./app.ts";
-export {
-  accountCallbackUrl,
-  beginAccountLink,
-  finishAccountLink,
-  type AccountCallback,
-} from "./account-links.ts";
 // Where the API and the MCP surface are mounted, for a client outside this package.
 export { API_PATH, MCP_PATH } from "./auth.ts";
 export { basePathOf, type BasePath } from "./base-path.ts";
@@ -119,7 +113,7 @@ export {
 } from "./issues.ts";
 export { requireSocket, requireTracker, scopeKeyOf, socketModuleFor } from "./sockets/registry.ts";
 // What a tracker saying something does inside deevy, so a seed can play a
-// delivery — a Ruling from the tracker included — without a network (seed.ts).
+// delivery without a network (seed.ts).
 export {
   applyInbound,
   type ApplyInboundOptions,

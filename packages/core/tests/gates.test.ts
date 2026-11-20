@@ -1,7 +1,6 @@
 import type { Db } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { recordRuling } from "../src/gates.ts";
 import { router } from "../src/operations/index.ts";
 import { sweepStaleRuns } from "../src/work.ts";
 import { agentContext, memberContext, seedProject, testDb } from "./helpers.ts";
@@ -539,50 +538,6 @@ describe("what the Gates list answers", () => {
   });
 });
 
-describe("a ruling that came from somewhere else", () => {
-  it("records where it came from and what it pointed at", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { ada, asPlanner, bob, run, seeded } = await workspace(db);
-    const asked = await asPlanner.gates.request({
-      runId: run.id,
-      checkpoint: "plan",
-      proposal: "The plan",
-    });
-
-    await recordRuling(
-      { db, workspace: ada.workspace, member: bob.member },
-      {
-        requestId: asked.id,
-        memberId: bob.member.id,
-        decision: "approved",
-        note: "Approved on the tracker",
-        via: "socket",
-        socketId: seeded.socketId,
-        externalRef: { commentId: "c1" },
-      },
-    );
-
-    const [decision] = await db.query.gateDecision.findMany({});
-    expect(decision).toMatchObject({
-      via: "socket",
-      socketId: seeded.socketId,
-      externalRef: { commentId: "c1" },
-      decision: "approved",
-    });
-
-    const ruled = await asPlanner.gates.get({ requestId: asked.id });
-    expect(ruled.status).toBe("approved");
-    // Which tool it came through, in the answer: a screen says "via GitHub"
-    // and a Human who reads it never has to ask where a decision was made,
-    // which is the whole of what `via` is for (ADR-0025).
-    expect(ruled.decisions[0]).toMatchObject({
-      via: "socket",
-      socket: { provider: "stub", name: "Example tracker" },
-    });
-  });
-});
-
 describe("who is asked", () => {
   it("is everybody who could rule, and nobody who could not", async () => {
     const { db, close } = testDb();
@@ -937,7 +892,7 @@ describe("an admin lowering Approvals", () => {
     expect(kinds.lastIndexOf("project.updated")).toBeLessThan(kinds.indexOf("gate.approved"));
     expect(events.find((event) => event.kind === "gate.approved")).toMatchObject({
       actorMemberId: ada.member.id,
-      payload: { approvals: 1, required: 1, loweredFrom: 2, via: "web", checkpoint: "ship" },
+      payload: { approvals: 1, required: 1, loweredFrom: 2, checkpoint: "ship" },
     });
     expect(events.find((event) => event.kind === "run.answered")).toMatchObject({
       actorMemberId: ada.member.id,

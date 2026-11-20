@@ -1,42 +1,31 @@
-# The Slack app deevy connects to (ADR-0025, docs/plans/sockets.md, slice 10).
+# The Slack app deevy posts a Project's Gates with (ADR-0036, docs/plans/simplify.md, slice 10).
 #
-# Settings › Sockets › Connect Slack shows this with your instance's own request
-# URL in place of the one below, ready to paste into https://api.slack.com/apps
-# → Create New App → From a manifest. Install it to your workspace, then
-# paste the Bot User OAuth Token and the Signing Secret back into deevy.
+# Settings › Sockets › Connect Slack shows this, ready to paste into
+# https://api.slack.com/apps → Create New App → From a manifest. Install it to
+# your workspace, then paste the Bot User OAuth Token back into deevy.
 #
 # What it may do, and why:
-#   chat:write     post a Gate with Approve and Reject, and change it when somebody rules
+#   chat:write     post a Gate with a link to rule on it in deevy, and change it when somebody rules
 #   channels:read  list the public channels deevy is in, for a Project's channel picker
 #   groups:read    and the private ones
-#   commands       `/deevy link`, which is how a Human links their Slack account
-# Nothing else: a click already says who clicked, so deevy never asks Slack
-# about people. Posting to a channel needs deevy in it (`/invite @deevy`).
+# Nothing else: deevy only posts, and Slack sends it nothing, so the app has no
+# request URL, no interactivity and no command. A Gate is ruled on in deevy.
+# Posting to a channel needs deevy in it (`/invite @deevy`).
 display_information:
   name: deevy
-  description: Approve and reject what your Agents ask, where you already are.
+  description: The Gates your Agents wait at, posted where your team already is.
   background_color: "#4f46e5"
 features:
   bot_user:
     display_name: deevy
     always_online: false
-  slash_commands:
-    - command: /deevy
-      url: https://deevy.example.com/hooks/SOCKET_ID
-      description: Link your Slack account to deevy
-      usage_hint: link
-      should_escape: false
 oauth_config:
   scopes:
     bot:
       - chat:write
       - channels:read
       - groups:read
-      - commands
 settings:
-  interactivity:
-    is_enabled: true
-    request_url: https://deevy.example.com/hooks/SOCKET_ID
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false

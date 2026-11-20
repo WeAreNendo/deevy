@@ -11,15 +11,12 @@ hears what happens in the tool, says it in deevy's format and posts it to the So
 secret deevy made for it. From there a record is a record: deevy keeps it, hands it to an Agent by its label
 or a mention, and opens a Run, as it does for GitHub.
 
-It differs from the tools deevy knows in two ways:
+It differs from the tools deevy knows in one way: **deevy writes nothing in the tool.** When an Agent asks
+at a Gate, and when the Gate gets an approval or is decided, deevy says so as an Event on your
+[webhooks](/webhooks/), naming the record as the tool knows it. Your adapter can say it in the tool, or
+leave it in deevy.
 
-- **deevy writes nothing in the tool.** When an Agent asks at a Gate, and when the Gate gets an approval or
-  is decided, deevy says so as an Event on your [webhooks](/webhooks/), naming the record as the tool knows
-  it. Your adapter can say it in the tool, or leave it in deevy.
-- **A Ruling through it never counts.** Whoever holds the secret writes everything a delivery says, its
-  author included, so deevy cannot know that the Human who replied `/approve` is who the delivery names.
-  deevy records the refusal and rules nothing. A Gate on one of its records is ruled on in deevy, or with a
-  button in [Slack](/tools/slack/).
+A Gate on one of its records is ruled on in deevy, as every Gate is: nothing a delivery says rules on it.
 
 ## Connect it
 
@@ -120,8 +117,8 @@ A comment whose author's `id` or `login` is `deevy` is deevy's own, coming back,
 adapter posts what deevy announces into the tool and the tool then tells the adapter about that comment,
 send it with that author or do not send it.
 
-A comment whose first line is `/approve` or `/reject` is a Ruling, which deevy refuses here, as above. An
-event of `kind` `ruling` is refused the same way.
+A comment is a comment whatever its first line says: one that starts `/approve` or `/reject` rules
+nothing. An event of any `kind` but `issue` and `comment` is skipped, with the reason.
 
 ## Sign it
 
@@ -228,6 +225,5 @@ A subscription hears every Gate in the Workspace, so let the **If** node pass on
 `issueSocketId` is your Socket's: a Gate on a GitHub issue is not one to comment on in Jira.
 
 Where a Gate is waiting, the Event's `subjectType` is `gate` and its `subjectId` is the Gate, whose page is
-`gates/<subjectId>` under your deevy's address. Link to it in what you post, since a reply in the tool counts
-for nothing. A `gate.ruling_refused` on a record with no Gate waiting is about the record instead, with
-`subjectType` `issue`.
+`gates/<subjectId>` under your deevy's address. Link to it in what you post, since that page is where a
+Human rules, and a reply in the tool counts for nothing.

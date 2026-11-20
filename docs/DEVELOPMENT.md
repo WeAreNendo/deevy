@@ -69,15 +69,15 @@ Put the client id and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_
 default scopes and sets no `hd`, so Google decides nothing about who may join: a Google Workspace is an email
 domain, and an `email_domain` allowlist rule is what admits it.
 
-**GitLab.** Create an application under User settings › Applications on gitlab.com or on your own instance,
-confidential, with:
+**Microsoft.** Register an application under Microsoft Entra ID › App registrations with:
 
-- Redirect URI: `http://localhost:3000/api/auth/callback/gitlab`
-- Scopes: `read_user` and `read_api`
+- Redirect URI (Web): `http://localhost:3000/api/auth/callback/microsoft`
+- A client secret, under Certificates & secrets
+- The optional ID token claims `verified_primary_email` and `verified_secondary_email`, under Token
+  configuration, without which an address it carries counts as unverified
 
-Put the id and secret in `.env` as `GITLAB_CLIENT_ID` and `GITLAB_CLIENT_SECRET`. A self-hosted instance is
-`GITLAB_ISSUER=https://gitlab.example.com`; unset, it is `https://gitlab.com`. Every GitLab endpoint deevy
-calls is built from the issuer, so one entry serves either.
+Put the client id and secret in `.env` as `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`.
+`MICROSOFT_TENANT_ID` is `common` unset; `organizations` or one tenant's id narrows whose accounts it takes.
 
 **OpenID Connect.** Anything that speaks OIDC — Okta, Entra, Keycloak, Authentik — is one entry, configured
 from the issuer and nothing else:
@@ -96,12 +96,14 @@ called, because that is deevy's own name for the entry.
 Either way, set `DEEVY_ADMIN_EMAIL` to the address that should become the Workspace admin: the first sign-in
 with it creates the Workspace.
 
-Anyone else who signs in joins as a Member when an allowlist rule matches them, and otherwise gets an account
-and no Membership. The admin manages the rules under Settings, Allowlist. A `github_org` rule is matched by
-listing the organizations the sign-in's token can see, which needs the `read:org` scope, and a `gitlab_group`
-rule by listing its groups, which needs `read_api`: deevy requests both, so a client created before the slice
-that added one asks for the extra scope the next time someone signs in. A group rule holds the full path —
-`acme/platform`, and a subgroup is not its parent.
+Anyone else who signs in joins as a Member when an allowlist rule matches them, or with an invitation, and
+otherwise gets an account and no Membership. The admin manages the rules under Settings › General. A rule is
+an email domain, and it matches only an address the provider verified; the GitHub-organization and
+GitLab-group rules went with slice 10 of [simplify.md](./plans/simplify.md), so no provider is asked for more
+than who the Human is and their address.
+
+GitLab, Linear, Slack and Atlassian are not sign-in providers since that slice (ADR-0036): a `.env` that
+still sets `GITLAB_*`, `LINEAR_*`, `SLACK_*` or `ATLASSIAN_*` offers the other providers and ignores those.
 
 ### Running without an OAuth App
 
@@ -109,14 +111,14 @@ Set `DEEVY_DEV_STUB_OAUTH=1` and the Node server imports `apps/web/scripts/stub-
 acceptance walk and the Workers smoke prepend to their bundles — so every provider deevy offers answers
 locally and the OAuth `code` is the email address. It stands in for the client pairs as well as the
 endpoints: half a pair is no provider, so an environment that sets none — a fresh copy of `.env.example` —
-would otherwise offer no button at all. A stubbed instance therefore offers all four, GitHub, Google, GitLab
-and one generic OpenID Connect entry, and a pair the environment did set is left as it is. The signed-out
+would otherwise offer no button at all. A stubbed instance therefore offers all four, GitHub, Google,
+Microsoft and one generic OpenID Connect entry, and a pair the environment did set is left as it is. The signed-out
 page then offers "Sign in as this email" beneath the provider buttons (it learns the flag from
 `health.ping`); any address signs in, and the one in `DEEVY_ADMIN_EMAIL` becomes the admin exactly as it
 would with a real OAuth App. `readEnv` refuses the flag under `NODE_ENV=production`, and the Worker never
 has it.
 
-The stub answers GitHub's and Google's endpoints by host, because Better Auth hardcodes them, and GitLab's
+The stub answers GitHub's, Google's and Microsoft's endpoints by host, because Better Auth hardcodes them,
 and a generic OIDC provider's by path, because those live wherever the operator's issuer is — never on a
 loopback host, which is deevy itself. It generates an RS256 key pair on first use, serves the JWKS at
 whichever certificate URL was asked for, and signs the `id_token` it hands back, so a provider that verifies
@@ -137,7 +139,7 @@ The seed (`apps/server/src/seed.ts`, a second `vp pack` entry beside the server)
 `grace@example.com` and `omar@example.com` in through the stub, connects a stub Socket, and creates the
 Agents `Planner` and `Builder` with the admin as Sponsor, printing their keys once. Then two Projects bound
 to that Socket, thirty-odd records projected from it, Runs in every status, Gates with Proposals — one open,
-one ruled in deevy, one ruled `via: socket` — Links and a webhook, all through the operations, so Needs me,
+one ruled in deevy — Links and a webhook, all through the operations, so Needs me,
 the Agents' inboxes and the Event log fill themselves; it ends by saying how many Gates are on the admin's
 Needs me. Point a coding agent at `/mcp` with the printed key and it will find Planner's pending Runs. No
 Project binds a chat channel, because nothing stands in for Slack in a running deevy:
@@ -170,7 +172,7 @@ reports it as `devSockets` the way it reports `devSignIn`.
 What the stub cannot show is whether a tool's real deliveries, API and setup pages say what deevy assumed they
 say, and each provider's section of OPERATIONS.md is walked once against the real thing for that
 (docs/plans/sockets.md, "The GitHub walk"). A walk needs deevy on a public HTTPS address the tool can reach,
-a sign-in the tool's account is known by, and an Agent with a real model:
+a sign-in to rule with in deevy, and an Agent with a real model:
 
 - **A named tunnel**, not a quick one: every webhook and callback is registered against the hostname, and a
   quick tunnel's dies with the laptop's sleep. `cloudflared tunnel create deevy-walk`, a proxied CNAME to

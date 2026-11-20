@@ -27,7 +27,6 @@ const mayDoAnything = vi.hoisted(() => () => ({
 const state = vi.hoisted(() => ({
   you: mayDoAnything(),
   shortfall: null as { wanted: number; couldApprove: number; why: string } | null,
-  verifiedBy: "sign_in" as "sign_in" | "oauth" | "link_code" | "email" | null,
 }));
 
 vi.mock("../src/lib/orpc.ts", async () => {
@@ -56,9 +55,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
               memberId: "m-bob",
               decision: "approved",
               note: "Reads right",
-              via: "socket",
-              socket: { id: "sock_1", provider: "github", name: "acme on GitHub" },
-              verifiedBy: state.verifiedBy,
               createdAt: new Date("2026-09-20T09:00:00Z"),
             },
           ],
@@ -152,24 +148,15 @@ describe("the Gate a Human opens", () => {
     expect(screen.getByRole("link", { name: /Pull request 7/ })).toBeTruthy();
   });
 
-  it("names the door a Ruling came through", async () => {
+  it("names who ruled and what they said, and no door it came through", async () => {
     state.you = mayDoAnything();
     await mountAt("/gates/gate_stub00000");
 
     const ruled = await screen.findByRole("list", { name: "Gate decisions" });
     expect(within(ruled).getByText(/Bob Bell/)).toBeTruthy();
-    expect(within(ruled).getByText(/via GitHub/)).toBeTruthy();
     expect(within(ruled).getByText(/Reads right/)).toBeTruthy();
-  });
-
-  it("says so when all deevy knew of the Human was their address", async () => {
-    state.you = mayDoAnything();
-    state.verifiedBy = "email";
-    await mountAt("/gates/gate_stub00000");
-
-    const ruled = await screen.findByRole("list", { name: "Gate decisions" });
-    expect(within(ruled).getByText(/via GitHub \(email\)/)).toBeTruthy();
-    state.verifiedBy = "sign_in";
+    // Every Ruling is made in deevy (ADR-0036), so there is no door to name.
+    expect(within(ruled).queryByText(/via /)).toBeNull();
   });
 
   it("rules by keyboard: ⇧A chooses, ⌘↵ commits, and the Note goes with it", async () => {

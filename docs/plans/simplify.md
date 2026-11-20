@@ -46,8 +46,8 @@ new tool costs a small module or none.
   `apps/web/dist/client`). Its database is the Durable Object's own SQLite (`@deevy/adapters/durable`), and
   its jobs are alarms (`createAlarmJobQueue`), so neither D1 nor the Queues adapter is in its path.
 - **Linear already links an Identity through its own consent** (`accountLink` in
-  `packages/sockets/src/linear/index.ts`, `packages/core/src/account-links.ts`). That is the one way every
-  tool will link.
+  `packages/sockets/src/linear/index.ts`, `packages/core/src/account-links.ts`). The plan first made that the
+  one way every tool would link; slice 10 takes no Ruling from a tool instead, and removes it.
 - **There are no real Workspaces.** deevy Cloud holds test Workspaces only, so the cut can start the
   migration history afresh.
 
@@ -64,39 +64,39 @@ new tool costs a small module or none.
 - **Notion's webhooks carry nothing.** They name what changed (`changed`, `commented` in the port), so a
   Notion module still reads the record back even when deevy only listens.
 - **Pasted-token Sockets can't run a consent flow.** GitLab is a group access token and Notion an internal
-  connection's token. Linking an Identity through the tool's consent needs an OAuth client there: an OAuth
-  application on the GitLab instance, and a public Notion connection.
-- **GitHub never retries a failed delivery.** With polling gone, a missed `agent:` label or `/approve`
-  comment is lost. That is the decision, and the risk is named below.
+  connection's token. Linking an Identity through the tool's consent needed an OAuth client there, which is
+  why slice 10 was rewritten to link nothing.
+- **GitHub never retries a failed delivery.** With polling gone, a missed `agent:` label is lost. That is the
+  decision, and the risk is named below.
 - **ADR-0031 promises in-place upgrades**, and CI's `previous` job runs the last release on this tree's
   schema. A fresh migration history breaks both once.
 
 ## Decisions taken with Matt, 2026-10-25
 
-| Question                                       | Decision                                                                                                                                                                                                  |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The reference runtime                          | **Removed.** `apps/agent`, its four images, its CI smokes and its docs go. deevy is the API, and agent-loop.md is the contract.                                                                           |
-| How an Agent learns there is work, or a Ruling | **The MCP inbox, plus an optional signed webhook to the Agent's URL**, as today. Whatever runs the Agent decides how to use them.                                                                         |
-| Git access                                     | **Not deevy's.** The operator gives the Agent whatever access it needs. `runs.checkout` and every `credential()` go.                                                                                      |
-| The pull request                               | **The Agent opens it**, with its own access, and attaches it to its Run with `links_add` or in the ship Gate's links. `pulls.open`, the forge capability and a Project's repository binding go.           |
-| Usage                                          | **Tokens and cost go; time stays.** Working and waiting time are derived from Events. Budgets leave PLAN.md.                                                                                              |
-| What deevy does with a tool                    | **Listens and announces.** It verifies and normalizes the tool's webhooks to route, wake and take Rulings, and posts only its own Gate comments. The Agent reads and writes the tool with its own access. |
-| A tool with no module                          | **The generic Socket**: deevy's own signed `{events}` format, public. Rulings through it don't count. Announcements go back out as Event webhooks.                                                        |
-| The four tracker modules                       | **All stay, trimmed** to the new port. One that hasn't had a real walk is labelled **preview** in Settings and on its docs page. Notion keeps its read-back.                                              |
-| Polling for what webhooks missed               | **Dropped.** deevy must be reachable; a missed delivery is lost.                                                                                                                                          |
-| What deevy says on a record                    | **Gate comments only**: one per Gate request and per Ruling or refusal. No label, no Run comments, no `mirror` setting.                                                                                   |
-| What deevy delivers to Humans                  | **The in-app inbox and a chat Socket a Project binds**, which posts each Gate with buttons. Channels, routing rules, preferences, Slack incoming webhooks, DMs, team addresses and all email go.          |
-| A question that isn't a Gate                   | **In the tracker.** The Agent comments; a reply that mentions it lands in its inbox and wakes it. Elicitations and `runs.answer` go; a Run waits only at a Gate.                                          |
-| A Human's inbox                                | **Needs me**: the open Gates they may rule on, derived, with no rows. Gate reminders go with it.                                                                                                          |
-| Deployment shapes                              | **The Docker image and the hosted Durable Object Worker.** The single-Workspace Worker on D1 goes.                                                                                                        |
-| The OAuth server for Humans' MCP clients       | **Dropped.** Only Agents speak MCP, with API keys. The CLI's browser login goes with it.                                                                                                                  |
-| How a tool account becomes a Human's           | **One way: the tool's own OAuth consent**, from Settings › Identities. Sign-in stops linking Identities, and so does a verified email.                                                                    |
-| Sign-in providers                              | **GitHub, Google, Microsoft and generic OIDC.** GitLab, Linear, Slack and Atlassian sign-ins go, and so does the GitLab-group allowlist rule.                                                             |
-| Sub-issue delegation                           | **The parent wake and one ceiling.** deevy routes sub-issues the Agent opened, wakes the parent when the last one closes, and refuses to open a Run past `maxDelegationDepth`. The other two counts go.   |
-| The CLI                                        | **Kept, as an Agent's tool.** It signs in with an Agent's key only, and stays on npm.                                                                                                                     |
-| Schedules on Agents                            | **Dropped.** Routing and the parent wake are the only triggers; retrying is the operator's call.                                                                                                          |
-| The Gate policy                                | **Whole**: N distinct approvals, requester exclusion, named approvers, and an approval that stands for its record (ADR-0020, ADR-0026).                                                                   |
-| Existing Workspaces                            | **None to keep.** The migration history starts afresh, deevy Cloud's test Workspaces are recreated, and ADR-0031 holds again from the release after.                                                      |
+| Question                                       | Decision                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The reference runtime                          | **Removed.** `apps/agent`, its four images, its CI smokes and its docs go. deevy is the API, and agent-loop.md is the contract.                                                                                                                                                                                         |
+| How an Agent learns there is work, or a Ruling | **The MCP inbox, plus an optional signed webhook to the Agent's URL**, as today. Whatever runs the Agent decides how to use them.                                                                                                                                                                                       |
+| Git access                                     | **Not deevy's.** The operator gives the Agent whatever access it needs. `runs.checkout` and every `credential()` go.                                                                                                                                                                                                    |
+| The pull request                               | **The Agent opens it**, with its own access, and attaches it to its Run with `links_add` or in the ship Gate's links. `pulls.open`, the forge capability and a Project's repository binding go.                                                                                                                         |
+| Usage                                          | **Tokens and cost go; time stays.** Working and waiting time are derived from Events. Budgets leave PLAN.md.                                                                                                                                                                                                            |
+| What deevy does with a tool                    | **Listens and announces.** It verifies and normalizes the tool's webhooks to route, wake and take Rulings, and posts only its own Gate comments. The Agent reads and writes the tool with its own access.                                                                                                               |
+| A tool with no module                          | **The generic Socket**: deevy's own signed `{events}` format, public. Rulings through it don't count. Announcements go back out as Event webhooks.                                                                                                                                                                      |
+| The four tracker modules                       | **All stay, trimmed** to the new port. One that hasn't had a real walk is labelled **preview** in Settings and on its docs page. Notion keeps its read-back.                                                                                                                                                            |
+| Polling for what webhooks missed               | **Dropped.** deevy must be reachable; a missed delivery is lost.                                                                                                                                                                                                                                                        |
+| What deevy says on a record                    | **Gate comments only**: one per Gate request and per Ruling or refusal. No label, no Run comments, no `mirror` setting.                                                                                                                                                                                                 |
+| What deevy delivers to Humans                  | **The in-app inbox and a chat Socket a Project binds**, which posts each Gate with a link to rule on it in deevy. Channels, routing rules, preferences, Slack incoming webhooks, DMs, team addresses and all email go.                                                                                                  |
+| A question that isn't a Gate                   | **In the tracker.** The Agent comments; a reply that mentions it lands in its inbox and wakes it. Elicitations and `runs.answer` go; a Run waits only at a Gate.                                                                                                                                                        |
+| A Human's inbox                                | **Needs me**: the open Gates they may rule on, derived, with no rows. Gate reminders go with it.                                                                                                                                                                                                                        |
+| Deployment shapes                              | **The Docker image and the hosted Durable Object Worker.** The single-Workspace Worker on D1 goes.                                                                                                                                                                                                                      |
+| The OAuth server for Humans' MCP clients       | **Dropped.** Only Agents speak MCP, with API keys. The CLI's browser login goes with it.                                                                                                                                                                                                                                |
+| Where a Human rules                            | **In deevy, and nowhere else** (Matt, 2026-11-20, replacing "an Identity is linked by the tool's consent"). A `/approve` on the record and a click in the chat channel rule nothing; the Gate's comment and its chat message link to it in deevy. Identities, every way of linking one, and the chat tool's buttons go. |
+| Sign-in providers                              | **GitHub, Google, Microsoft and generic OIDC.** GitLab, Linear, Slack and Atlassian sign-ins go, and so do the GitHub-organisation and GitLab-group allowlist rules: an address's domain and an invitation are how a Human joins.                                                                                       |
+| Sub-issue delegation                           | **The parent wake and one ceiling.** deevy routes sub-issues the Agent opened, wakes the parent when the last one closes, and refuses to open a Run past `maxDelegationDepth`. The other two counts go.                                                                                                                 |
+| The CLI                                        | **Kept, as an Agent's tool.** It signs in with an Agent's key only, and stays on npm.                                                                                                                                                                                                                                   |
+| Schedules on Agents                            | **Dropped.** Routing and the parent wake are the only triggers; retrying is the operator's call.                                                                                                                                                                                                                        |
+| The Gate policy                                | **Whole**: N distinct approvals, requester exclusion, named approvers, and an approval that stands for its record (ADR-0020, ADR-0026).                                                                                                                                                                                 |
+| Existing Workspaces                            | **None to keep.** The migration history starts afresh, deevy Cloud's test Workspaces are recreated, and ADR-0031 holds again from the release after.                                                                                                                                                                    |
 
 ## The model
 
@@ -108,8 +108,8 @@ channel, the Agents granted to it, a default Agent, how a record names an Agent 
 and its Checkpoints. An **Issue** is deevy's projection of a record, as the tool's webhooks last described it.
 An Agent working an Issue has a **Run**, posts **Activities** (thought, action, response, error), asks at
 Checkpoints for **Gates**, and attaches **Links**, its pull request among them. A Human rules on a Gate in
-deevy, with `/approve` or `/reject` on the record, or with a button in the Project's chat channel; a Ruling
-from a tool counts when the account is one of the Human's **Identities**. Every change is an **Event**.
+deevy, signed in; the record and the Project's chat channel are told of it and link to it, and nothing said
+there rules. Every change is an **Event**.
 
 ### The Socket port (`packages/core/src/sockets/port.ts`)
 
@@ -121,8 +121,9 @@ from a tool counts when the account is one of the Human's **Identities**. Every 
 - `handshake`, as today.
 
 `listIssues`, `listComments`, `createIssue`, `setLabels`, `ForgeSocket` and `DocsSocket` leave the port.
-`SocketModule` keeps `identity`, `setup`, `install` and `identityScope`, and `accountLink` becomes what makes
-Rulings from a tool count. `ChatSocket` loses `openDm`.
+`SocketModule` keeps `identity`, `setup` and `install`; `identityScope`, `accountLink` and `vouches` go in
+slice 10, and so does the `ruling` kind of `InboundEvent`. `ChatSocket` loses `openDm` (slice 8), then
+everything that takes a request from the tool (slice 10): it posts, updates and lists channels.
 
 `sockets.providers` gains `walked: boolean`, true for GitHub and false for Linear, GitLab, Notion and Slack
 until each is walked. Settings shows **Preview** beside a provider that isn't walked, and so does its page
@@ -134,7 +135,8 @@ A provider whose deliveries are deevy's own: `{ events: InboundEvent[] }`, signe
 raw body under a secret deevy mints when the Socket is connected, with a delivery id and an event name in
 headers, as the stub signs today. Its `normalize` accepts `issue` and `comment` events, each carrying the
 whole record, so it needs no read-back. It drops `ruling`: a Ruling through the generic Socket never
-counts, because whoever holds the secret is not the tool vouching (ADR-0025). Its `createComment` is a no-op
+counts, because whoever holds the secret is not the tool vouching (ADR-0025; from slice 10, no Ruling from
+any tool counts, and the kind is gone). Its `createComment` is a no-op
 that appends nothing, because what deevy would announce goes out as `gate.*` Events on the Workspace's
 webhook subscriptions, and the adapter posts it back. The format is a public page, `tools/generic`, with a
 script and an n8n example. The stub keeps its in-memory store for tests and shares the wire code with `generic`.
@@ -189,21 +191,22 @@ These Event kinds go: `run.checkout_issued`, `run.pull_request_opened`, `run.usa
 - **A Human's Needs me** is the Gates they may rule on. `routes/inbox.tsx`, the inbox badge and
   `remindAboutGates` go.
 - **The record** gets the Gate comments, rendered from the Event as now.
-- **The Project's chat channel**, when bound, gets each Gate as a message with Approve and Reject, updated
-  in place as Rulings land. Rulings from it count as today (`sockets/chat.ts`).
+- **The Project's chat channel**, when bound, gets each Gate as a message with a link to it in deevy,
+  updated in place as Rulings land. Nothing in it rules (slice 10).
 - Invitations are links an admin copies. Nothing deevy sends is email.
 
 ### Identity and sign-in
 
 - Sign-in is GitHub, Google, Microsoft or generic OIDC. Better Auth keeps `socialProviders` for the first
-  three and `genericOAuth` for OIDC, plus the `apiKey` plugin. `mcp()` and `jwt()` go.
-- An Identity is linked one way: the tool's OAuth consent, begun from Settings › Identities while signed in.
-  GitHub links through its App's user authorization (the manifest flow already holds the client id and
-  secret), GitLab through an OAuth application the operator registers on the instance, Slack through its
-  app's OpenID sign-in, Linear as today, and Notion through a public connection. A tool with no consent flow
-  configured links nobody, and Rulings made there are answered with how to rule in deevy.
-- `linkBySignIn`, `signInProvider`, `signInClaim` and the verified-email link leave `IdentityScope`.
-- The sign-in relay (ADR-0030) relays four providers, not seven.
+  three and `genericOAuth` for OIDC, plus the `apiKey` plugin. `mcp()` and `jwt()` go (slice 9). The sign-in
+  is who a Human is in deevy, and the only thing that is.
+- A Human joins by an address whose domain the allowlist names, or by an invitation. The GitHub-organisation
+  and GitLab-group rules go, and GitHub's sign-in asks for no `read:org`.
+- **A Ruling is made in deevy** (ADR-0036). A Human's accounts on the tools mean nothing to deevy, so there
+  are no Identities to link, by sign-in, address, code or consent. A tracker's deliveries carry comments,
+  and a comment that starts `/approve` is one of them. The Gate's comment on the record and its message in
+  the chat channel say how it stands and link to it.
+- The sign-in relay (ADR-0030) relays three providers, not seven: OIDC was never relayed.
 
 ### Two deployment shapes
 
@@ -380,22 +383,44 @@ key lists the fourteen tools; with `DEEVY_API_KEY` set, `deevy whoami` names the
 answers; `/.well-known/oauth-authorization-server` is 404; `secrets.test.ts` and the OpenAPI snapshot are
 green.
 
-### Slice 10: Identity by consent, four sign-ins (L)
+### Slice 10: Rulings in deevy, four sign-ins (L)
 
 **Depends on.** 9.
 
-**Work.** `accountLink` for GitHub (the App's user authorization, github.com and Enterprise Server), GitLab
-(an OAuth application the Socket's setup now asks for), Slack (the app's OpenID sign-in, which its setup now
-asks the client id and secret for) and Notion (a public connection's OAuth, offered beside the internal one);
-Linear as today. `linkBySignIn`, `signInProvider`, `signInClaim` and the verified-email link go from
-`identities.ts`. The GitLab, Linear, Slack and Atlassian sign-in providers go from `auth.ts`,
-`provider-env.ts`, the relay, the sign-in card and the dev stub; the GitLab-group allowlist rule goes.
-`self-hosting/sign-in-providers.md` and each tool's page say how to link. ADR-0036 is written.
+Rewritten with Matt on 2026-11-20. As first planned, this slice gave GitHub, GitLab, Slack and Notion an OAuth
+consent flow each, so that a Ruling made in the tool could count, and GitLab, Slack and Notion an OAuth client
+the operator registers for it: the one slice that added to every tool rather than cutting. A Ruling is made
+in deevy instead, and the tool's part is to say the Gate is there.
 
-**Acceptance test.** A Human who links their GitHub account through consent rules with `/approve` on the
-record; one who signed in with GitHub but never linked is answered on the record with how to link or rule in
-deevy; a GitLab Socket with no OAuth application links nobody and says so in its settings; a Linear sign-in
-attempt is a provider deevy doesn't offer; the relay test signs in through each of the four.
+**Work.**
+
+- **Rulings from a tracker go.** The `ruling` kind of `InboundEvent`, `parseRulingCommand`,
+  `sockets/rulings.ts` and `gate.ruling_refused` go; a comment starting `/approve` is a comment like any
+  other. The mirror's Gate comment says how to rule in deevy, with the Gate's link, where it said what to
+  type, and the mirror says nothing about a refused Ruling because there are none.
+- **Rulings from chat go.** `sockets/chat.ts` goes, and the chat port keeps `post`, `update` and
+  `listChannels`: `verifyInteraction`, `normalizeInteraction`, `answer`, `askForNote` and `respond` go with
+  `ChatInteraction` and `ChatReply`. A Gate's chat message has a link to it in deevy and no buttons, and is
+  still updated in place. A Slack Socket takes no request, so it is connected with its bot token alone; its
+  manifest drops interactivity and `/deevy`, and its signing secret goes.
+- **Identities go.** `identities.ts`, `account-links.ts`, `operations/identities.ts` with its six
+  operations and their route, link codes, Settings › Identities, `IdentityScope`, `AccountLink`,
+  `LinkedAccount`, `SocketModule.vouches`, a Socket's `identityByEmail` and `ExternalActor.email`. Linear's
+  account link goes. A Ruling's `via`, `socket` and `verifiedBy` leave the API, since every Ruling is made in
+  deevy. `member_identity`, `link_code` and the Ruling's `via`, `socket_id` and `external_ref` stay unused
+  until slice 12.
+- **Four sign-ins.** The GitLab, Linear, Slack and Atlassian providers go from `auth.ts`, `provider-env.ts`,
+  the relay, the sign-in card and the dev stub. The `github_org` and `gitlab_group` allowlist rules go with
+  their ports (`joinPorts`), and GitHub's sign-in asks for no `read:org`.
+- `self-hosting/sign-in-providers.md`, each tool's page, the Gate pages and the Slack page say it. ADR-0036
+  is written.
+
+**Acceptance test.** A comment `/approve` on the record of an open Gate, by any account, rules nothing and
+appends no Gate Event; the Gate's comment on the record links to the Gate in deevy; a Gate's chat message
+carries that link and no button; a Slack Socket connects with a bot token and no signing secret, and
+`/hooks/:socketId` refuses a request for it; `/api/identities` is 404; a Linear sign-in is a provider deevy
+doesn't offer; an allowlist rule of kind `github_org` is refused; the relay test signs in through each of the
+three it relays.
 
 ### Slice 11: Two deployment shapes (M)
 
@@ -429,8 +454,8 @@ the walk passes on all three deployments from an empty database.
 
 **Depends on.** Everything.
 
-**Work.** CONTEXT.md: **Socket** loses `forge` and `docs`, **Project** is as above, **Identity** is linked by
-the tool's consent only, **Notification** is a message to an Agent, **Activity** has four kinds, and
+**Work.** CONTEXT.md: **Socket** loses `forge` and `docs`, **Project** is as above, **Ruling** is made in
+deevy, **Notification** is a message to an Agent, **Activity** has four kinds, and **Identity**,
 **Channel**, **Sender** and **Usage** move to Retired. PLAN.md: "What deevy is" with the fourth promise true
 again, the domain paragraph, the agent loop, the surfaces and the fourteen tools, the architecture, and a
 "Simpler" milestone entry. CLAUDE.md's history, packages and commands. OPERATIONS.md and DEVELOPMENT.md. What
@@ -479,7 +504,7 @@ main
    │        ├─ 7 Preview and the generic Socket
    │        └─ 8 The inbox and a chat binding                needs 5 and 6
    │           └─ 9 Only Agents speak MCP
-   │              └─ 10 Identity by consent, four sign-ins
+   │              └─ 10 Rulings in deevy, four sign-ins
    └─ 11 Two deployment shapes
          12 The clean break                                  needs 2, 3, 4, 6, 8, 9, 10
          13 The record                                       needs everything
@@ -497,7 +522,7 @@ has shipped.
 | ----------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | 0034 deevy runs no agent and manages no access              | 1     | No runtime, no git credential, no pull request opened by deevy, no Usage reported to it. Restores ADR-0003's promise.                      |
 | 0035 Only Agents speak MCP                                  | 9     | No OAuth authorization server; `/mcp` takes an Agent's key; a Human's surface is the browser, the tracker and the chat channel.            |
-| 0036 An Identity is linked by the tool's own consent        | 10    | One way to link; sign-in and a verified address no longer vouch; four sign-in providers.                                                   |
+| 0036 A Ruling is made in deevy                              | 10    | No Ruling from a tool, so no Identity and nothing that vouches; the tool is told and links back; four sign-in providers.                   |
 | 0037 Two deployment shapes: the image and the hosted Worker | 11    | The single-Workspace Worker on D1 goes; which D1-era rules the core keeps and why.                                                         |
 | An amendment to ADR-0024: a Socket listens and announces    | 4, 7  | Written as a section on 0024 rather than a new ADR: the port's three required methods, Gate comments only, no polling, the generic Socket. |
 
@@ -510,24 +535,24 @@ has shipped.
 | [0018](../adr/0018-a-harness-is-a-cli-behind-the-session-seam.md) A harness is a CLI                                   | 0034 | No harnesses ship.                                                                           |
 | [0019](../adr/0019-the-session-is-its-own-user-and-git-goes-through-the-supervisor.md) Git goes through the supervisor | 0034 | deevy holds no git credential.                                                               |
 | [0023](../adr/0023-the-api-is-its-own-protected-resource.md) The API is its own protected resource                     | 0035 | deevy mints no access tokens.                                                                |
+| [0025](../adr/0025-the-forge-may-vouch-for-the-human-who-rules.md) The forge may vouch                                 | 0036 | No tool vouches for a Ruling, because none is taken from a tool.                             |
 | [0027](../adr/0027-a-sign-in-vouches-inside-the-workspace-it-was-to.md) A sign-in vouches                              | 0036 | Sign-in no longer vouches for a Ruling.                                                      |
 
 ### Amended
 
-| ADR                                                                                                                       | By          | What changes                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------ |
-| [0003](../adr/0003-deevy-triggers-agents-but-never-runs-them.md) deevy never runs agents                                  | 0034        | Nothing; a note says it is true again.                                                     |
-| [0006](../adr/0006-runtime-agnostic-core-node-first.md) Runtime-agnostic core                                             | 0037        | Two shapes, Node and the hosted Durable Object; no D1.                                     |
-| [0007](../adr/0007-better-auth-is-identity-and-oauth-server.md) Better Auth is identity and OAuth server                  | 0035        | Identity only; no OAuth server.                                                            |
-| [0010](../adr/0010-a-delegated-credential-cannot-decide-a-gate.md) A delegated credential cannot decide                   | 0035        | No delegated credential is minted any more; the rule stands for any that comes back.       |
-| [0012](../adr/0012-the-cron-port-stayed-node-s-and-a-stream-ends-itself.md) A stream ends itself                          | 0037        | The per-invocation cap that made the stream end itself was D1's and is gone.               |
-| [0016](../adr/0016-a-run-is-an-agents-and-the-registry-says-which-way-an-operation-faces.md) Which way an operation faces | 0035        | Every MCP tool faces an Agent; Human-facing tools leave MCP.                               |
-| [0022](../adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md) The last child wakes the parent                      | slice 6     | The Agent opens sub-issues in the tracker; one ceiling, depth.                             |
-| [0024](../adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) An Issue is a projection                          | slices 4, 7 | A Socket listens and announces; no forge or docs capability; the generic Socket.           |
-| [0025](../adr/0025-the-forge-may-vouch-for-the-human-who-rules.md) The forge may vouch                                    | 0036        | A tool vouches only for an Identity linked by its consent; the verified-email hole closes. |
-| [0028](../adr/0028-a-hosted-workspace-is-a-durable-object.md) A hosted Workspace is a Durable Object                      | 0037        | It is one of two shapes, not the third.                                                    |
-| [0030](../adr/0030-a-sign-in-may-be-relayed.md) A sign-in may be relayed                                                  | 0036        | Four providers relayed.                                                                    |
-| [0031](../adr/0031-every-release-upgrades-in-place.md) Every release upgrades in place                                    | slice 12    | One exception, the release that carries this plan, because no real Workspace existed.      |
+| ADR                                                                                                                       | By          | What changes                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------- |
+| [0003](../adr/0003-deevy-triggers-agents-but-never-runs-them.md) deevy never runs agents                                  | 0034        | Nothing; a note says it is true again.                                                |
+| [0006](../adr/0006-runtime-agnostic-core-node-first.md) Runtime-agnostic core                                             | 0037        | Two shapes, Node and the hosted Durable Object; no D1.                                |
+| [0007](../adr/0007-better-auth-is-identity-and-oauth-server.md) Better Auth is identity and OAuth server                  | 0035        | Identity only; no OAuth server.                                                       |
+| [0010](../adr/0010-a-delegated-credential-cannot-decide-a-gate.md) A delegated credential cannot decide                   | 0035        | No delegated credential is minted any more; the rule stands for any that comes back.  |
+| [0012](../adr/0012-the-cron-port-stayed-node-s-and-a-stream-ends-itself.md) A stream ends itself                          | 0037        | The per-invocation cap that made the stream end itself was D1's and is gone.          |
+| [0016](../adr/0016-a-run-is-an-agents-and-the-registry-says-which-way-an-operation-faces.md) Which way an operation faces | 0035        | Every MCP tool faces an Agent; Human-facing tools leave MCP.                          |
+| [0022](../adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md) The last child wakes the parent                      | slice 6     | The Agent opens sub-issues in the tracker; one ceiling, depth.                        |
+| [0024](../adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md) An Issue is a projection                          | slices 4, 7 | A Socket listens and announces; no forge or docs capability; the generic Socket.      |
+| [0028](../adr/0028-a-hosted-workspace-is-a-durable-object.md) A hosted Workspace is a Durable Object                      | 0037        | It is one of two shapes, not the third.                                               |
+| [0030](../adr/0030-a-sign-in-may-be-relayed.md) A sign-in may be relayed                                                  | 0036        | Three providers relayed: GitHub, Google and Microsoft.                                |
+| [0031](../adr/0031-every-release-upgrades-in-place.md) Every release upgrades in place                                    | slice 12    | One exception, the release that carries this plan, because no real Workspace existed. |
 
 ADR-0001, 0002, 0004, 0005, 0008, 0009, 0011, 0015, 0017, 0020, 0026, 0029, 0032 and 0033 stand unchanged.
 
@@ -537,21 +562,23 @@ A real walk of Linear, GitLab, Notion and Slack, which is what takes a module ou
 what a tool's webhooks missed, if losing one turns out to matter more than a module's cost: a per-module
 `listIssues` can come back as an optional capability. Per-Agent identities on a Socket. Jira and Asana, each
 a module or the generic Socket. Budgets, which need a reporter deevy can trust. Personal API keys for a
-Human's own MCP client. Email, as a chat Socket of its own if a team asks for it.
+Human's own MCP client. Email, as a chat Socket of its own if a team asks for it. Rulings from a tool, with
+one way to link an account, if ruling in deevy turns out to cost a team more than linking would.
 
 ## Risks
 
-- **A missed delivery is lost.** GitHub never retries one, so a label or `/approve` that deevy didn't hear
-  starts nothing and rules nothing. The tool's page says to check its webhook deliveries and redeliver from
-  the tool, and Settings › Sockets shows when a Socket last heard from its tool.
+- **A missed delivery is lost.** GitHub never retries one, so a label deevy didn't hear starts nothing. The
+  tool's page says to check its webhook deliveries and redeliver from the tool, and Settings › Sockets shows
+  when a Socket last heard from its tool.
 - **A self-hosted deevy must be reachable.** One behind a NAT needs a tunnel, and `self-hosting/docker.md`
   says so where polling used to cover it.
 - **An Agent with access to the tracker can do anything that access allows.** That was true of its git
   access before; now it is true of the tracker too, and it is the operator's to bound. The Gate is still the
   thing an Agent can't pass.
-- **Consent flows need OAuth clients the operator registers.** GitLab and Notion Sockets that were a pasted
-  token get a second setup step to link Identities, and until it is done their Rulings don't count. Each
-  tool's page says so, and so does its Socket's settings.
+- **A Human rules only in deevy.** One who works in GitHub or Slack all day follows a link to rule, where they
+  used to type `/approve` or click. A team that finds that costs more than linking accounts did can have it
+  back as its own slice (Deferred), with one way to link; the Gate's comment and its chat message say where
+  to rule so nobody types a command that does nothing in silence.
 - **The generic Socket is only as trusted as its secret.** Whoever holds it can open Runs for any Agent
   granted its Project. That is why it carries no Rulings, and its setup says so.
 - **deevy Cloud's test Workspaces are wiped.** Slice 12's companion PR recreates them; nobody else is on it.
@@ -845,3 +872,51 @@ comments named the audience check and `deevy events watch`. The Workers smoke st
 challenge and discovery under a path, and now asserts the 401 and the 404. Run here, its no-secret phase
 fails while `apps/web/.env` exists, because wrangler loads it; with `CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false`
 it passes, as it does in CI, which has no `.env`.
+
+**Slice 10, Rulings in deevy and four sign-ins.** 3,904 lines of source out and 545 in, 4,034 of tests out
+and 1,358 in, and 866 lines of the OpenAPI snapshot, which now has 74 operations. The MCP tool manifest did not change: no Agent ever
+called an Identity operation. The core lost `sockets/rulings.ts`, `sockets/chat.ts`, `identities.ts`,
+`account-links.ts` and `operations/identities.ts`, which were six operations, link codes and the account
+callback route. Every tracker lost its ruling branch, Slack lost its interaction blocks and its signing, and
+Linear lost its account link. `joinPorts` now has one port, the GitHub login a handle is made from. The
+acceptance tests are `packages/core/tests/rule-in-deevy.test.ts` and its twin in `packages/sockets`, and the
+walk now comments `/approve` from the admin's own sign-in account, sees the Gate still wait, and rules in
+deevy. It has 163 checks, one fewer on each deployment: the stranger told how to link and the requester
+refused from the tracker went, and the Gate's link on the record came.
+
+Three things followed that the plan did not name. A Slack link button still sends an interaction payload when
+clicked, so the Gate's message links with a mrkdwn context line instead. That lets the app drop
+interactivity entirely, and a Slack Socket became the first with nothing to deliver (`webhookSecretFrom:
+"none"`). Its page hides the delivery address, the secret and the deliveries, its standing on the list says
+"Posts here", and `/hooks/:socketId` answers it with 400. With four providers at most, the sign-in card's
+"More ways to sign in" could never open, so it went with its half-width button. An organisation rule saved by
+an older deevy would have failed `allowlist.list`'s output schema and taken Settings › General down with it,
+so the list reads only the kinds that exist. Slice 12 deletes the rows. Four-eyes was untouched: it excludes
+the Member the Run is for, through its trigger or its Sponsor, and never read an Identity.
+
+Better Auth's `allowDifferentEmails` returned to its default, since only Settings › Identities linked an
+account on another address. `link-social`, which a signed-in session can still call, now answers
+`email_does_not_match` for one, and the stub OAuth test says so. The relay test signs out through each of the
+three providers it relays. The seed makes no Ruling from the tracker, and the import's next steps tell an
+operator moving a Slack Socket that the app's Interactivity and `/deevy` can be turned off.
+
+The review found nothing left by which a tool could rule or link an account, and that the data an older
+deevy left behind crashes nothing: rows in `member_identity`, a Ruling's `via`, a Socket's
+`identityByEmail`, a Slack Socket's sealed secret, and Events of the kinds that went. It found one claim
+wrong: Better Auth never marks a Linear or Atlassian address verified and links nothing onto an unverified
+row, so a Member who signed in only that way cannot sign in another way at the same address. The changeset
+and ADR-0036 now say so, and that slice 12's empty database is where they are invited again. Five pending
+changesets from earlier slices still described the buttons, Identities, organisation rules and `vouches`,
+and they are published together. Three were corrected and two that described only what went were deleted.
+The changeset gained a paragraph for whoever builds a Socket module, and a line on Slack messages posted
+before the upgrade, which keep their buttons until their Gate is ruled on. `.dev.vars.example` still offered
+the four providers, and five tests did not test what their names said. The relay test now follows each
+provider back through the relay, the Socket list is checked for "Posts here", and the core's Slack fake is a
+`none` tool whose secret `sockets.rotate` and `sockets.update` both refuse. Old Events of the kinds that went
+show their raw names, as `channel.*` and `email.*` already did, until slice 12. A tracker comment written with
+no origin configured says to rule in deevy without a link; the Slack message waits for one.
+
+The docs' landing graph had a Human approve with `/approve` and a Slack button, and now has them hear of the
+Gate in three places and rule in deevy. Notion's connection now needs user information without email
+addresses, since deevy reads only an author's name. `gates/ruling-from-your-tools/` redirects to
+`gates/how-a-gate-asks/`, and Identity moves to CONTEXT.md's retired words.

@@ -25,11 +25,13 @@ export default defineConfig({
   // Pages that went away, sent where their readers should go now. The runtime's
   // page was linked from earlier release notes and the landing's old prompt;
   // the inbox, Channels and email went when deevy stopped telling Humans
-  // anything but a Gate (docs/plans/simplify.md, slice 8), and a Human's own
-  // MCP client when only Agents spoke MCP (slice 9).
+  // anything but a Gate (docs/plans/simplify.md, slice 8), a Human's own
+  // MCP client when only Agents spoke MCP (slice 9), and ruling from a tool
+  // when every Ruling came to be made in deevy (slice 10).
   redirects: {
     "/agents/reference-runtime/": "/agents/your-own-harness/",
     "/mcp-and-cli/your-own-mcp-client/": "/agents/your-own-harness/",
+    "/gates/ruling-from-your-tools/": "/gates/how-a-gate-asks/",
     "/notifications/inbox/": "/needs-me/",
     "/notifications/channels/": "/needs-me/",
     "/notifications/email/": "/needs-me/",

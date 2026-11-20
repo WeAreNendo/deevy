@@ -1,10 +1,8 @@
 import { openDatabase } from "@deevy/adapters/node";
 import { createApp, newId, router, runDueWork, sealSecret, upsertProjection } from "@deevy/core";
 import {
-  account as accountTable,
   agent as agentTable,
   member as memberTable,
-  memberIdentity,
   project as projectTable,
   projectGrant,
   socket as socketTable,
@@ -17,17 +15,17 @@ import {
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createSlackSocket, socketModules } from "../src/index.ts";
-import approve from "./fixtures/slack/block_actions.approve.json" with { type: "json" };
 
 /**
- * Slack, through the door deevy actually serves (ADR-0025).
+ * Slack, through the door deevy actually serves (ADR-0024, ADR-0036).
  *
- * The Slack module is proved against recorded requests in `slack.test.ts`, and
+ * The Slack module is proved against recorded answers in `slack.test.ts`, and
  * the core's half against a fake in `packages/core/tests/chat*.test.ts`. This
  * puts the real module behind the real route with a real database, and
  * replaces only Slack's Web API — so what is under test is the whole sentence:
- * an Agent asks, the Gate appears in a Slack room with two buttons, somebody
- * clicks one, and the message says what happened.
+ * an Agent asks, the Gate appears in a Slack room with a link to rule on it in
+ * deevy, somebody rules there, and the message says what happened. Slack is
+ * told and takes nothing back, so the address a tracker delivers to refuses it.
  */
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -36,7 +34,6 @@ afterEach(() => {
 
 const migrationsFolder = new URL("../../db/drizzle", import.meta.url).pathname;
 const sealing = "a-test-sealing-secret-of-at-least-32-chars";
-const signingSecret = "8f14e45fceea167a5a36dedd4bea2543";
 const TEAM = "T07ACME001";
 
 /** Slack's Web API, as far as deevy can tell: every call written down. */
@@ -49,9 +46,7 @@ function slackApi() {
       string,
       unknown
     >;
-    const method = url.startsWith("https://hooks.slack.com/")
-      ? "response_url"
-      : (url.split("/").pop() ?? "");
+    const method = url.split("/").pop() ?? "";
     calls.push({ method, body });
     if (method === "chat.postMessage") {
       posted += 1;
@@ -61,7 +56,6 @@ function slackApi() {
         ts: `17586252${String(posted)}.000100`,
       });
     }
-    if (method === "response_url") return new Response("ok");
     return Response.json({ ok: true });
   };
   return { calls, fetch };
@@ -111,29 +105,9 @@ async function human(db: Db, workspaceId: string, name: string, role: Member["ro
 }
 
 /**
- * A Human who signed in to deevy with Slack: Better Auth's account row, keyed
- * by Slack's user id, with the id token it kept, which names the team.
- */
-async function signedInWithSlack(db: Db, member: Member, user: string, team: string) {
-  const part = (value: unknown) =>
-    btoa(JSON.stringify(value)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
-  await db.insert(accountTable).values({
-    id: newId("account"),
-    accountId: user,
-    providerId: "slack",
-    userId: member.userId,
-    idToken: `${part({ alg: "RS256" })}.${part({
-      "https://slack.com/user_id": user,
-      "https://slack.com/team_id": team,
-    })}.not-a-signature`,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
-}
-
-/**
  * A Workspace with a Slack app connected and a Gate waiting: Ada the admin,
- * Grace who linked her Slack account, and the Planner asking at `plan`.
+ * and the Planner asking at `plan`. The Slack Socket holds its bot token and
+ * nothing else, since Slack sends deevy nothing to sign.
  */
 async function waitingInSlack(db: Db) {
   const workspaceId = newId("workspace");
@@ -142,7 +116,6 @@ async function waitingInSlack(db: Db) {
     where: { id: workspaceId },
   })) as Workspace;
   const ada = await human(db, workspaceId, "Ada", "admin");
-  const grace = await human(db, workspaceId, "Grace");
 
   const agentUserId = newId("user");
   await db
@@ -181,7 +154,6 @@ async function waitingInSlack(db: Db) {
     identity: { login: "deevy", id: "U07DEEVY01", mentionHandle: "@deevy" },
     config: { teamId: TEAM, team: "Acme" },
     credentials: await sealSecret(sealing, JSON.stringify({ botToken: "xoxb-not-a-real-token" })),
-    webhookSecret: await sealSecret(sealing, signingSecret),
     installedBy: ada.id,
   });
   const projectId = newId("project");
@@ -211,16 +183,6 @@ async function waitingInSlack(db: Db) {
       parentExternalId: null,
       updatedAt: new Date(),
     },
-  });
-  await db.insert(memberIdentity).values({
-    id: newId("memberIdentity"),
-    workspaceId,
-    memberId: grace.id,
-    provider: "slack",
-    instance: TEAM,
-    externalUserId: "U07GRACE01",
-    externalLogin: "grace",
-    verifiedBy: "link_code",
   });
 
   const api = slackApi();
@@ -254,184 +216,80 @@ async function waitingInSlack(db: Db) {
   const sweep = () =>
     runDueWork({ db, sockets, socketSecret: sealing, baseUrl: "https://deevy.test" });
 
-  return { db, app, api, gate, slackId, ada, grace, asAda, sweep, workspace, sockets };
-}
-
-/** A click as Slack sends it: the recorded request, pointed at this Gate and signed now. */
-async function clicked(
-  gateId: string,
-  user = "U07GRACE01",
-  at = Math.floor(Date.now() / 1000),
-  secret = signingSecret,
-  /** The clicker's own team: another one is a Slack Connect guest in this team's channel. */
-  team = TEAM,
-) {
-  const payload = {
-    ...approve,
-    user: { ...approve.user, id: user, team_id: team },
-    actions: [{ ...approve.actions[0], value: gateId }],
-  };
-  const body = new URLSearchParams({ payload: JSON.stringify(payload) }).toString();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const mac = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(`v0:${String(at)}:${body}`),
-  );
-  const hex = [...new Uint8Array(mac)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      "x-slack-request-timestamp": String(at),
-      "x-slack-signature": `v0=${hex}`,
-    },
-    body,
-  };
+  return { db, app, api, gate, slackId, asAda, sweep };
 }
 
 describe("a Gate in Slack", () => {
-  it("is posted with two buttons, ruled by a linked Human's click, and changed through the outbox", async () => {
+  it("is posted with a link to rule on it in deevy, and no button", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
-    const { app, api, gate, slackId, grace, sweep } = await waitingInSlack(db);
+    const { api, gate, sweep } = await waitingInSlack(db);
 
     await sweep();
-    const post = api.calls.find(
-      (call) => call.method === "chat.postMessage" && call.body.channel === "C07DEEVY01",
-    );
-    expect(JSON.stringify(post?.body.blocks)).toContain('"action_id":"deevy_approve"');
 
-    const answered = await app.request(`/hooks/${slackId}`, await clicked(gate.id));
-
-    // Slack wants its 200 now; the message changes later, from the Gate's Events.
-    expect(answered.status).toBe(200);
-    expect(api.calls.filter((call) => call.method === "chat.update")).toEqual([]);
-    const [decision] = await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } });
-    expect(decision).toMatchObject({ memberId: grace.id, via: "slack", socketId: slackId });
-
-    await sweep();
-    const updates = api.calls.filter((call) => call.method === "chat.update");
-    expect(updates.map((call) => call.body.channel)).toContain("C07DEEVY01");
-    const inRoom = updates.find((call) => call.body.channel === "C07DEEVY01");
-    expect(JSON.stringify(inRoom?.body.blocks)).not.toContain("deevy_approve");
-    expect(JSON.stringify(inRoom?.body.blocks)).toContain("Grace approved, in Slack");
+    const posts = api.calls.filter((call) => call.method === "chat.postMessage");
+    expect(posts.map((call) => call.body.channel)).toEqual(["C07DEEVY01"]);
+    const drawn = JSON.stringify(posts[0]?.body.blocks);
+    expect(drawn).toContain(`<https://deevy.test/gates/${gate.id}|Rule on it in deevy>`);
+    expect(drawn).not.toContain('"type":"actions"');
+    expect(drawn).not.toContain('"type":"button"');
   });
 
-  it("gives an unlinked user a code, said to them alone, which links them when redeemed signed in", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { app, api, gate, slackId, workspace, sockets } = await waitingInSlack(db);
-    const omar = await human(db, workspace.id, "Omar");
-
-    await app.request(`/hooks/${slackId}`, await clicked(gate.id, "U07OMAR001"));
-
-    const reply = api.calls.find((call) => call.method === "response_url");
-    expect(reply?.body).toMatchObject({ response_type: "ephemeral" });
-    const code = /[A-Z2-9]{4}-[A-Z2-9]{4}/.exec(String(reply?.body.text))?.[0] ?? "";
-    expect(code).not.toBe("");
-    expect(await db.query.gateDecision.findMany({})).toEqual([]);
-
-    const asOmar = createRouterClient(router, {
-      context: contextFor(db, omar, workspace, { sockets }),
-    });
-    await asOmar.identities.link({ code });
-    await app.request(`/hooks/${slackId}`, await clicked(gate.id, "U07OMAR001"));
-
-    expect(await db.query.gateDecision.findMany({})).toMatchObject([
-      { memberId: omar.id, via: "slack" },
-    ]);
-  });
-
-  /**
-   * Sign in with Slack keeps the user's id with an id token naming the team,
-   * so somebody who signed in to deevy that way rules from this team's
-   * buttons with no code — and a guest from another team, whose id means
-   * nothing here, is not taken for them.
-   */
-  it("counts a click by somebody who signed in to deevy with Slack, in this team, with no code", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { app, gate, slackId, workspace } = await waitingInSlack(db);
-    const omar = await human(db, workspace.id, "Omar");
-    await signedInWithSlack(db, omar, "U07OMAR001", TEAM);
-
-    await app.request(`/hooks/${slackId}`, await clicked(gate.id, "U07OMAR001"));
-
-    expect(await db.query.gateDecision.findMany({})).toMatchObject([
-      { memberId: omar.id, via: "slack" },
-    ]);
-    expect(await db.query.memberIdentity.findMany({ where: { memberId: omar.id } })).toMatchObject([
-      { provider: "slack", instance: TEAM, externalUserId: "U07OMAR001", verifiedBy: "sign_in" },
-    ]);
-  });
-
-  it("takes neither a sign-in to another team nor a guest from one for that Human", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { app, api, gate, slackId, workspace } = await waitingInSlack(db);
-    const omar = await human(db, workspace.id, "Omar");
-    const ken = await human(db, workspace.id, "Ken");
-    await signedInWithSlack(db, omar, "U07OMAR001", "T09OTHER01");
-    await signedInWithSlack(db, ken, "U07KEN0001", TEAM);
-
-    await app.request(`/hooks/${slackId}`, await clicked(gate.id, "U07OMAR001"));
-    await app.request(
-      `/hooks/${slackId}`,
-      await clicked(gate.id, "U07KEN0001", undefined, undefined, "T09OTHER01"),
-    );
-
-    expect(await db.query.gateDecision.findMany({})).toEqual([]);
-    expect(await db.query.memberIdentity.findMany({ where: { verifiedBy: "sign_in" } })).toEqual(
-      [],
-    );
-    // Each was told, to them alone, how to link the account they clicked with.
-    expect(api.calls.filter((call) => call.method === "response_url")).toHaveLength(2);
-  });
-
-  it("refuses a stale request and a forged one, and writes neither down as a Ruling", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { app, gate, slackId } = await waitingInSlack(db);
-
-    const stale = await app.request(
-      `/hooks/${slackId}`,
-      await clicked(gate.id, "U07GRACE01", Math.floor(Date.now() / 1000) - 600),
-    );
-    const forged = await app.request(
-      `/hooks/${slackId}`,
-      await clicked(gate.id, "U07GRACE01", Math.floor(Date.now() / 1000), "not-the-signing-secret"),
-    );
-
-    expect(stale.status).toBe(401);
-    expect(forged.status).toBe(401);
-    expect(await db.query.gateDecision.findMany({})).toEqual([]);
-  });
-
-  it("changes the same message when somebody rules in the browser instead", async () => {
+  it("is changed in place through the outbox when somebody rules on it in deevy", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
     const { api, gate, asAda, sweep } = await waitingInSlack(db);
     await sweep();
-    const posted = api.calls.find(
-      (call) => call.method === "chat.postMessage" && call.body.channel === "C07DEEVY01",
-    );
-    expect(posted).toBeDefined();
+    expect(api.calls.filter((call) => call.method === "chat.update")).toEqual([]);
 
     await asAda.gates.approve({ requestId: gate.id, note: "Go ahead" });
+    // Ruling posts nothing itself: the message changes from the Gate's Events.
+    expect(api.calls.filter((call) => call.method === "chat.update")).toEqual([]);
     await sweep();
 
-    const update = api.calls.find(
-      (call) => call.method === "chat.update" && call.body.channel === "C07DEEVY01",
-    );
+    const updates = api.calls.filter((call) => call.method === "chat.update");
+    expect(updates).toHaveLength(1);
     // The second message posted: the first was the binding's hello.
-    expect(update?.body.ts).toBe("175862522.000100");
-    expect(JSON.stringify(update?.body.blocks)).toContain("Ada approved, in deevy");
+    expect(updates[0]?.body).toMatchObject({ channel: "C07DEEVY01", ts: "175862522.000100" });
+    const drawn = JSON.stringify(updates[0]?.body.blocks);
+    expect(drawn).toContain("Ada approved");
+    expect(drawn).toContain(`<https://deevy.test/gates/${gate.id}|Open it in deevy>`);
+    expect(drawn).not.toContain("Rule on it in deevy");
+    expect(drawn).not.toContain('"type":"button"');
+    expect(api.calls.filter((call) => call.method === "chat.postMessage")).toHaveLength(1);
+  });
+
+  it("is not ruled on by a click sent to the Socket's address, which answers 400 and writes nothing", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { app, api, gate, slackId, sweep } = await waitingInSlack(db);
+    await sweep();
+    api.calls.length = 0;
+    const events = (await db.query.event.findMany({})).length;
+
+    // A click as an app made from the old manifest would still send one: an
+    // Approve on this Gate, as a form with the JSON under `payload`.
+    const payload = {
+      type: "block_actions",
+      user: { id: "U07GRACE01", username: "grace", team_id: TEAM },
+      container: { type: "message", channel_id: "C07DEEVY01", message_ts: "175862522.000100" },
+      actions: [{ action_id: "deevy_approve", type: "button", value: gate.id }],
+    };
+    const answered = await app.request(`/hooks/${slackId}`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ payload: JSON.stringify(payload) }).toString(),
+    });
+
+    expect(answered.status).toBe(400);
+    expect(await answered.json()).toEqual({ error: "This Socket does not take deliveries" });
+    expect(await db.query.inboundDelivery.findMany({})).toEqual([]);
+    expect(await db.query.gateDecision.findMany({})).toEqual([]);
+    expect(await db.query.gateRequest.findFirst({ where: { id: gate.id } })).toMatchObject({
+      status: "open",
+    });
+    expect(await db.query.event.findMany({})).toHaveLength(events);
+    await sweep();
+    expect(api.calls).toEqual([]);
   });
 });

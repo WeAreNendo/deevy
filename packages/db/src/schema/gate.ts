@@ -119,16 +119,17 @@ export const gateRequest = sqliteTable(
 
 export const gateDecisions = ["approved", "rejected"] as const;
 
-/** Which door a Ruling came through (ADR-0025). */
+/**
+ * Which door a Ruling came through, when there were three (ADR-0025). Every
+ * Ruling is made in deevy since docs/plans/simplify.md, slice 10 (ADR-0036), so
+ * `via` is always `web` and `socket_id` and `external_ref` are never written;
+ * the three go when the migration history starts afresh (slice 12).
+ */
 export const rulingVias = ["web", "socket", "slack"] as const;
 
 /**
- * One Human's decision on one request, with where they made it.
- *
- * `via` is the column ADR-0025 turns on: a Ruling made on the tracker or in
- * Slack is accepted only because the external system authenticated the Human,
- * and an audit that cannot say which door a decision came through cannot
- * answer for it. One row per Human per request, so nobody counts twice.
+ * One Human's decision on one request. One row per Human per request, so
+ * nobody counts twice.
  */
 export const gateDecision = sqliteTable(
   "gate_decision",
@@ -142,10 +143,11 @@ export const gateDecision = sqliteTable(
       .references(() => member.id, { onDelete: "cascade" }),
     decision: text("decision", { enum: gateDecisions }).notNull(),
     note: text("note"),
+    /** Unused since slice 10: always `web`. */
     via: text("via", { enum: rulingVias }).notNull().default("web"),
-    /** The Socket a Ruling from outside arrived through, for the audit. */
+    /** Unused since slice 10: the Socket a Ruling from outside arrived through. */
     socketId: text("socket_id").references(() => socket.id, { onDelete: "set null" }),
-    /** What it pointed at there: a comment id, a Slack channel and timestamp. */
+    /** Unused since slice 10: what a Ruling from outside pointed at there. */
     externalRef: text("external_ref", { mode: "json" }).$type<Record<string, unknown>>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
   },

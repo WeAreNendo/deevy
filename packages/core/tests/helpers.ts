@@ -14,7 +14,6 @@ import { upsertProjection } from "../src/issues.ts";
 import { sealSecret } from "../src/secrets.ts";
 import { applyInbound, type ApplyInboundResult } from "../src/sockets/apply.ts";
 import type {
-  ChatInteraction,
   ChatChannel,
   ChatMessage,
   ChatMessageRef,
@@ -271,37 +270,11 @@ export function fakeSockets(
 } {
   const rewired: string[] = [];
   const comments: Array<{ externalId: string; body: string }> = [];
-  const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
+  const module = (): SocketModule => ({
     provider: "stub",
     capabilities: new Set(["tracker"] as const),
     webhookSecretFrom: "either",
-    // Its accounts are GitHub's sign-in accounts where the Socket's
-    // configuration says so, which is how a test plays a Human who signed in
-    // to deevy with GitHub and rules from the tracker (ADR-0025) — or
-    // Linear's, whose accounts are one workspace's, so a sign-in vouches but
-    // is not offered as the way to link.
-    identityScope: {
-      instance: "stub:test",
-      ...(config.signInProvider === "github" ? { signInProvider: "github" as const } : {}),
-      ...(config.signInProvider === "linear"
-        ? { signInProvider: "linear" as const, linkBySignIn: false }
-        : {}),
-    },
     identity: () => Promise.resolve({ login: "deevy", id: "bot-1", mentionHandle: "@deevy" }),
-    // A tool whose accounts a Human links through its own consent, as Linear's
-    // are (ADR-0025). The code is the account: `<id>`, or `<id>@<instance>`
-    // for one that lives somewhere else.
-    accountLink: {
-      authorizeUrl: ({ redirectUri, state }) =>
-        `https://tracker.test/oauth/authorize?${new URLSearchParams({
-          redirect_uri: redirectUri,
-          state,
-        }).toString()}`,
-      account: ({ code }) => {
-        const [id = "", instance = "stub:test"] = code.split("@");
-        return Promise.resolve({ id, login: `user-${id}`, instance });
-      },
-    },
     // A tool whose own webhook deevy can point at its address, as a GitHub
     // App's can be: what it was told is kept for a test to read back.
     rewire: (url) => {
@@ -489,7 +462,6 @@ export async function seedProject(
       const found = await db.query.socket.findFirst({ where: { id: socketId } });
       if (!found) throw new Error("seedProject: the Socket is gone");
       return applyInbound({
-        vouches: true,
         db,
         workspace: { id: workspaceId },
         socket: found,
@@ -504,8 +476,6 @@ export interface FakeChat {
   sockets: SocketModules;
   posted: Array<{ channel: string; message: ChatMessage; ref: ChatMessageRef }>;
   updated: Array<{ ref: ChatMessageRef; message: ChatMessage }>;
-  notes: Array<{ triggerId: string; gateRequestId: string }>;
-  responses: Array<{ responseUrl: string; text: string }>;
   /** Channels that refuse every post and update from now on, the way one the app was removed from does. */
   refusing: Set<string>;
   /** What happens while a post is on its way, before the tool answers it. */
@@ -515,12 +485,12 @@ export interface FakeChat {
 /**
  * A chat tool that is not a tool.
  *
- * The core's half of Slack is what a click means and what deevy says back, and
- * none of that needs Slack's wire format: the Slack module is tested against
- * recorded requests in `packages/sockets`, and the whole sentence — the real
- * module behind the real route — is `packages/sockets/tests/slack-deevy.test.ts`.
- * So this signs the way the fake tracker does, carries its interaction
- * verbatim, and writes down every call. It lists the channels it is given,
+ * The core's half of Slack is what deevy posts and when, and none of that
+ * needs Slack's wire format: the Slack module is tested against recorded
+ * requests in `packages/sockets`, and the whole sentence — the real module
+ * behind the real core — is `packages/sockets/tests/slack-deevy.test.ts`. A
+ * chat tool is told and sends nothing back (ADR-0036), so this only writes
+ * down every post and update. It lists the channels it is given,
  * or none when it is given `null`, and refuses to post in `C0NOTIN` the way
  * Slack refuses a channel its app was never added to, and in any channel a
  * test adds to `refusing`. `whilePosting` runs before a post is answered, so a
@@ -531,17 +501,14 @@ export function fakeChat({
 }: { channels?: ChatChannel[] | null } = {}): FakeChat {
   const posted: FakeChat["posted"] = [];
   const updated: FakeChat["updated"] = [];
-  const notes: FakeChat["notes"] = [];
-  const responses: FakeChat["responses"] = [];
   const fake: Pick<FakeChat, "refusing" | "whilePosting"> = {
     refusing: new Set(),
     whilePosting: null,
   };
-  const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
+  const module = (): SocketModule => ({
     provider: "slack",
     capabilities: new Set(["chat"] as const),
-    webhookSecretFrom: "tool",
-    identityScope: { instance: typeof config.teamId === "string" ? config.teamId : "T0TEST" },
+    webhookSecretFrom: "none",
     identity: () =>
       Promise.resolve({
         login: "deevy",
@@ -550,19 +517,6 @@ export function fakeChat({
         learned: { teamId: "T0TEST", team: "Acme" },
       }),
     chat: {
-      verifyInteraction: ({ headers, rawBody, webhookSecret, now }) => {
-        const at = Number(headers.get("x-test-timestamp") ?? "0");
-        const fresh = Math.abs((now ?? new Date()).getTime() / 1000 - at) <= 300;
-        return Promise.resolve({
-          ok:
-            fresh &&
-            headers.get("x-test-signature") === `${webhookSecret}:${String(rawBody.length)}`,
-          deliveryId: null,
-          eventName: headers.get("x-test-event") ?? "",
-        });
-      },
-      normalizeInteraction: (_eventName, rawBody) => JSON.parse(rawBody) as ChatInteraction,
-      answer: (reply) => Response.json(reply),
       ...(channels ? { listChannels: () => Promise.resolve(channels) } : {}),
       post: async (channel, message) => {
         if (channel === "C0NOTIN" || fake.refusing.has(channel)) {
@@ -580,15 +534,7 @@ export function fakeChat({
         updated.push({ ref, message });
         return Promise.resolve();
       },
-      askForNote: (triggerId, input) => {
-        notes.push({ triggerId, gateRequestId: input.gateRequestId });
-        return Promise.resolve();
-      },
-      respond: (responseUrl, text) => {
-        responses.push({ responseUrl, text });
-        return Promise.resolve();
-      },
     },
   });
-  return Object.assign(fake, { sockets: { slack: module }, posted, updated, notes, responses });
+  return Object.assign(fake, { sockets: { slack: module }, posted, updated });
 }

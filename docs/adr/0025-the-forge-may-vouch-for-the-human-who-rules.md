@@ -1,5 +1,8 @@
 # The forge may vouch for the Human who rules
 
+> Superseded by [ADR-0036](./0036-a-ruling-is-made-in-deevy.md): a Gate is ruled on in deevy and nowhere
+> else, so no tool vouches for a Ruling and a Human's accounts on the tools are nobody's to deevy.
+
 Amends [ADR-0010](./0010-a-delegated-credential-cannot-decide-a-gate.md), which says a delegated
 credential cannot decide a Gate, and leaves [ADR-0004](./0004-agents-never-approve-gates.md), which says
 an Agent never does, untouched.

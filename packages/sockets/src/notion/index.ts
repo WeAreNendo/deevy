@@ -25,15 +25,13 @@ import { issueOf, normalizeNotion, pageIdOf, plainText, scopeOf } from "./payloa
  * the pages shared with the connection, which is Notion's own rule.
  *
  * Notion's webhooks name what changed and carry none of it, so a delivery is
- * read back here (`getIssue`, `getComment`); and Notion has no account a Human
- * can link, so an address it reports is the most it offers as proof of who
- * commented, taken only where an admin allowed it (ADR-0025).
+ * read back here (`getIssue`, `getComment`).
  *
  * Everything here is `fetch` and `crypto.subtle`, for the Worker.
  */
 
 export interface NotionConfig {
-  /** The workspace the connection is in, learned at connect: an Identity's instance. */
+  /** The workspace the connection is in, learned at connect. */
   workspaceId?: string;
   workspaceName?: string;
   /** Notion's API root. The tests set it; nobody else needs to. */
@@ -52,7 +50,6 @@ interface NotionUser {
   id?: string;
   name?: string;
   type?: string;
-  person?: { email?: string };
 }
 
 export function createNotionSocket({
@@ -130,7 +127,6 @@ export function createNotionSocket({
     const author = authorId
       ? await call<NotionUser>("GET", `/users/${authorId}`).catch(() => null)
       : null;
-    const email = author?.person?.email;
     return {
       externalId: found.id,
       url,
@@ -139,7 +135,6 @@ export function createNotionSocket({
         login: author?.name ?? "",
         id: authorId,
         isBot: author?.type === "bot",
-        ...(email ? { email } : {}),
       },
       createdAt: new Date(found.created_time ?? Date.now()),
     };
@@ -157,16 +152,12 @@ export function createNotionSocket({
     // Notion signs with the verification token it sends when its subscription
     // is made (`handshake`), which deevy keeps and an admin pastes back.
     webhookSecretFrom: "handshake",
-    // No account a Human can link, and nobody signs in with Notion: the
-    // workspace is where its accounts live, and an address is the proof
-    // (ADR-0025).
-    identityScope: { instance: settings.workspaceId ?? "notion" },
 
     /**
      * The connection's bot, which is who every comment deevy writes is by. A
      * personal access token answers with the Human who made it instead, and
      * is refused: deevy would write as them, and its echo guard would drop
-     * every comment of theirs — their `/approve` too — as its own.
+     * every comment of theirs as its own.
      */
     async identity(): Promise<SocketIdentity> {
       const me = await call<{

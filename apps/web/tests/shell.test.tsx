@@ -112,7 +112,7 @@ describe("the app shell", () => {
     const trigger = within(compact).getByRole("combobox", { name: "Settings page" });
     expect(selectedLabel(trigger)).toBe("Members");
 
-    // …and opens to every page the wide nav lists, in the same four groups.
+    // …and opens to every page the wide nav lists, in the same three groups.
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     const options = await screen.findAllByRole("option");
     expect(options.map((option) => option.textContent)).toEqual(
@@ -120,9 +120,9 @@ describe("the app shell", () => {
         .getAllByRole("link")
         .map((link) => link.textContent),
     );
-    // …in the four groups the wide nav uses, named, not merely four of something.
+    // …in the three groups the wide nav uses, named, not merely three of something.
     const listbox = screen.getByRole("listbox");
-    for (const group of ["Workspace", "Work", "Agents and delivery", "You"]) {
+    for (const group of ["Workspace", "Work", "Agents and delivery"]) {
       expect(within(listbox).getByText(group)).toBeTruthy();
     }
 

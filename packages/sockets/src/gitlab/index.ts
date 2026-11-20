@@ -1,7 +1,6 @@
 import type {
   Container,
   ExternalRef,
-  IdentityScope,
   InboundCheck,
   InboundEvent,
   InboundInput,
@@ -33,16 +32,6 @@ export interface GitlabConfig {
 export interface GitlabCredentials {
   /** A personal, project or group access token with the `api` scope. */
   token?: string;
-}
-
-export interface GitlabOptions {
-  /**
-   * The GitLab this deployment signs people in with (`GITLAB_ISSUER`, gitlab.com
-   * unless it names its own). A Socket on that same instance takes its
-   * accounts from sign-in, so a Human who signed in with GitLab rules from it
-   * with no linking step (ADR-0025).
-   */
-  signInIssuer?: string;
 }
 
 const DEFAULT_BASE = "https://gitlab.com";
@@ -101,23 +90,6 @@ export function gitlabSaid(detail: string): string | null {
   return null;
 }
 
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url;
-  }
-}
-
-/**
- * Where a GitLab Socket's accounts live: its host, and — when that is the
- * instance deevy signs people in with — the sign-in provider's accounts too.
- */
-export function gitlabIdentityScope(baseUrl: string, signInIssuer = DEFAULT_BASE): IdentityScope {
-  const instance = hostOf(baseUrl);
-  return instance === hostOf(signInIssuer) ? { instance, signInProvider: "gitlab" } : { instance };
-}
-
 /**
  * Whether a Standard Webhooks signature — GitLab's signing token — is over
  * these bytes, with the key deevy holds, and recent.
@@ -148,10 +120,12 @@ async function signedWith(
     .some((one) => one.startsWith("v1,") && sameText(one.slice("v1,".length), expected));
 }
 
-export function createGitlabSocket(
-  { config, credentials, fetch, now }: SocketModuleInput,
-  options: GitlabOptions = {},
-): SocketModule {
+export function createGitlabSocket({
+  config,
+  credentials,
+  fetch,
+  now,
+}: SocketModuleInput): SocketModule {
   const settings = config as GitlabConfig;
   const secrets = credentials as GitlabCredentials;
   const base = (settings.baseUrl ?? DEFAULT_BASE).replace(/\/+$/, "");
@@ -192,7 +166,6 @@ export function createGitlabSocket(
     // A webhook's secret token is typed into GitLab, so deevy may mint it; its
     // signing token is GitLab's, pasted back.
     webhookSecretFrom: "either",
-    identityScope: gitlabIdentityScope(base, options.signInIssuer),
 
     /**
      * The user the token belongs to, which is who every comment is by — and

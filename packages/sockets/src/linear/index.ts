@@ -4,7 +4,6 @@ import type {
   InboundCheck,
   InboundEvent,
   InboundInput,
-  LinkedAccount,
   Scope,
   SetupInput,
   SetupResult,
@@ -34,7 +33,7 @@ import { normalizeLinear } from "./payloads.ts";
  */
 
 export interface LinearConfig {
-  /** The workspace the app is in, learned at connect: an Identity's instance (ADR-0025). */
+  /** The workspace the app is in, learned at connect, which an install must be in too. */
   organizationId?: string;
   organizationName?: string;
   urlKey?: string;
@@ -122,13 +121,10 @@ export function createLinearSocket({
     return { id: secrets.clientId, secret: secrets.clientSecret };
   }
 
-  async function form<T>(path: string, fields: Record<string, string>, token?: string) {
+  async function form<T>(path: string, fields: Record<string, string>) {
     const response = await fetch(`${api}${path}`, {
       method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(fields).toString(),
     });
     if (!response.ok) {
@@ -253,14 +249,6 @@ export function createLinearSocket({
     // The webhook's signing secret is Linear's, shown on the application and
     // never typed in.
     webhookSecretFrom: "tool",
-    // A Linear user's id is its workspace's, and it is the id Sign in with
-    // Linear keeps, so a Human who signed in to deevy with this workspace's
-    // account rules here with no linking step. Anybody else links through
-    // Linear's own consent (`accountLink`), which is this workspace's; a
-    // sign-in is not offered for it, since it could be to another workspace.
-    identityScope: settings.organizationId
-      ? { instance: settings.organizationId, signInProvider: "linear", linkBySignIn: false }
-      : { instance: "linear" },
 
     /** The app's own user in this workspace, which is who every comment is by. */
     async identity(): Promise<SocketIdentity> {
@@ -319,35 +307,6 @@ export function createLinearSocket({
         actor: "app",
       });
       return `${AUTHORIZE_URL}?${search.toString()}`;
-    },
-
-    accountLink: {
-      authorizeUrl({ redirectUri, state }) {
-        const search = new URLSearchParams({
-          client_id: client().id,
-          redirect_uri: redirectUri,
-          response_type: "code",
-          // Who they are, and nothing they can do: the token is spent on one
-          // question and given back.
-          scope: "read",
-          state,
-          prompt: "consent",
-        });
-        return `${AUTHORIZE_URL}?${search.toString()}`;
-      },
-
-      async account({ code, redirectUri }): Promise<LinkedAccount> {
-        const token = await exchange(code, redirectUri);
-        const who = await whoIs(token);
-        // Given back as soon as it has answered: deevy keeps nothing that
-        // could act as the Human in Linear (ADR-0025).
-        await form("/oauth/revoke", { token }, token).catch(() => undefined);
-        return {
-          id: who.viewer.id,
-          login: who.viewer.displayName || who.viewer.name,
-          instance: who.organization.id,
-        };
-      },
     },
 
     tracker: {

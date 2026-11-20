@@ -11,7 +11,6 @@
  * says what it would not take, in the words the Socket's page shows.
  */
 import {
-  parseRulingCommand,
   signPayload,
   verifySignature,
   type InboundCheck,
@@ -90,10 +89,7 @@ const When = z.iso.datetime({ offset: true }).transform((value) => new Date(valu
 const Link = z.url({ protocol: /^https?$/ });
 const Id = z.string().min(1);
 const Account = z.object({ login: z.string(), id: Id });
-const Actor = Account.extend({
-  isBot: z.boolean().default(false),
-  email: z.email().optional(),
-});
+const Actor = Account.extend({ isBot: z.boolean().default(false) });
 
 const Issue = z
   .object({
@@ -135,14 +131,6 @@ const events = {
     issueExternalId: Id,
     comment: Comment,
   }),
-  ruling: z.object({
-    kind: z.literal("ruling"),
-    scopeKey: z.string().default(""),
-    issueExternalId: Id,
-    comment: Comment,
-    decision: z.enum(["approved", "rejected"]),
-    note: z.string().nullable().default(null),
-  }),
 };
 
 type Taken = keyof typeof events;
@@ -161,9 +149,8 @@ function wrong(error: z.ZodError): string {
 
 /**
  * The events a delivery carries, each in deevy's terms, or the reason one
- * could not be. A comment whose first line is `/approve` or `/reject` is a
- * Ruling, read as every tracker reads one (`parseRulingCommand`), so the
- * Socket can answer it rather than take it for chatter.
+ * could not be. A comment is a comment, whatever its first line says: a
+ * Ruling is made in deevy (ADR-0036).
  */
 export function readEvents(payload: unknown): InboundEvent[] {
   const list = (payload as { events?: unknown } | null)?.events;
@@ -188,7 +175,7 @@ export function readEvents(payload: unknown): InboundEvent[] {
         kind: "ignored",
         why:
           typeof kind === "string"
-            ? `${at} is \`${kind}\`, and deevy takes only issue, comment and ruling events`
+            ? `${at} is \`${kind}\`, and deevy takes only issue and comment events`
             : `${at} has no kind`,
       };
     }
@@ -199,9 +186,6 @@ export function readEvents(payload: unknown): InboundEvent[] {
         why: `${at} (${kind}) is not what deevy takes: ${wrong(parsed.error)}`,
       };
     }
-    const read = parsed.data;
-    if (read.kind !== "comment") return read;
-    const ruling = parseRulingCommand(read.comment.body);
-    return ruling ? { ...read, kind: "ruling", ...ruling } : read;
+    return parsed.data;
   });
 }

@@ -36,8 +36,8 @@ The Human the work is for is whoever started the Run, where that was a Human. Wh
 started it, it is the Agent's Sponsor: the Human accountable for what the Agent is about to do.
 
 At a Checkpoint with **Not the Human the work is for** ticked, that Human cannot be one of the approvals, but
-they are not shut out: they can still reject, on the Gate's page, on the record or in Slack. Agreeing to the
-work takes somebody else; stopping it does not.
+they are not shut out: they can still reject it, on the Gate's page. Agreeing to the work takes somebody
+else; stopping it does not.
 
 ## How the count works
 
@@ -98,4 +98,4 @@ but never counts an approval they were refused before: it was never recorded.
 ## Next
 
 - [How a Gate asks](/gates/how-a-gate-asks/)
-- [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/)
+- [Needs me and chat](/needs-me/)

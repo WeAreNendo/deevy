@@ -150,42 +150,71 @@ describe("what a generic delivery means", () => {
     });
   });
 
-  it("is a comment with its author, and a first line of /approve is a Ruling to refuse", () => {
+  it("is a comment with its author, whatever its first line says", () => {
     const { tracker: generic } = tracker();
-    const comment = (body: string) => ({
+    const comment = (body: string, author: Record<string, unknown> = {}) => ({
       externalId: `c-${body.length}`,
       url: "https://tracker.example/browse/OPS-12#comment-1",
       body,
-      author: { login: "grace", id: "u-77" },
+      author: { login: "grace", id: "u-77", ...author },
       createdAt: "2026-11-01T09:59:30.000Z",
     });
 
     const events = generic.normalize("events", {
       events: [
         { kind: "comment", issueExternalId: "10042", comment: comment("@planner have a look") },
-        { kind: "comment", issueExternalId: "10042", comment: comment("/approve ship it") },
+        {
+          kind: "comment",
+          issueExternalId: "10042",
+          comment: comment("/approve ship it", { email: "grace@example.com" }),
+        },
+      ],
+    });
+
+    const said = (body: string) => ({
+      kind: "comment",
+      scopeKey: "",
+      issueExternalId: "10042",
+      comment: expect.objectContaining({
+        body,
+        author: { login: "grace", id: "u-77", isBot: false },
+        createdAt: new Date("2026-11-01T09:59:30.000Z"),
+      }),
+    });
+    // A `/approve` is something said on the record, word for word: a Ruling
+    // is made in deevy (ADR-0036). And an address an adapter still sends is
+    // dropped, since nothing a tool says is who a Member is.
+    expect(events).toEqual([said("@planner have a look"), said("/approve ship it")]);
+  });
+
+  it("takes no ruling event, and says which kinds it does take", () => {
+    const { tracker: generic } = tracker();
+
+    // An adapter written when the format had one still sends it, and is told
+    // so rather than dropped in silence.
+    const events = generic.normalize("events", {
+      events: [
+        {
+          kind: "ruling",
+          issueExternalId: "10042",
+          comment: {
+            externalId: "c-1",
+            url: "https://tracker.example/browse/OPS-12#comment-1",
+            body: "Looks right to me",
+            author: { login: "grace", id: "u-77" },
+            createdAt: "2026-11-01T09:59:30.000Z",
+          },
+          decision: "approved",
+          note: "Looks right to me",
+        },
       ],
     });
 
     expect(events).toEqual([
       {
-        kind: "comment",
-        scopeKey: "",
-        issueExternalId: "10042",
-        comment: expect.objectContaining({
-          body: "@planner have a look",
-          author: { login: "grace", id: "u-77", isBot: false },
-          createdAt: new Date("2026-11-01T09:59:30.000Z"),
-        }),
+        kind: "ignored",
+        why: "Event 1 is `ruling`, and deevy takes only issue and comment events",
       },
-      // Read as every tracker reads it (`parseRulingCommand`), so the core can
-      // answer that it ruled nothing rather than take it for chatter.
-      expect.objectContaining({
-        kind: "ruling",
-        issueExternalId: "10042",
-        decision: "approved",
-        note: "ship it",
-      }),
     ]);
   });
 
@@ -208,7 +237,7 @@ describe("what a generic delivery means", () => {
       }),
       {
         kind: "ignored",
-        why: expect.stringMatching(/^Event 3 is `installation`.*issue, comment and ruling/),
+        why: expect.stringMatching(/^Event 3 is `installation`.*issue and comment events$/),
       },
     ]);
   });
@@ -225,15 +254,12 @@ describe("what a generic delivery means", () => {
 });
 
 describe("the generic Socket", () => {
-  it("is a tracker deevy mints the secret for, that vouches for nobody, and says nothing back", async () => {
+  it("is a tracker deevy mints the secret for, and says nothing back", async () => {
     const { module, tracker: generic } = tracker();
 
     expect(module.provider).toBe("generic");
     expect([...module.capabilities]).toEqual(["tracker"]);
     expect(module.webhookSecretFrom).toBe("deevy");
-    // Whoever holds the secret writes the delivery, which is not the tool
-    // saying whose account ruled (ADR-0025).
-    expect(module.vouches).toBe(false);
     expect(module.walked).toBe(true);
     // Nothing to list and nothing to read back: an admin types the container,
     // and every event carries what it is about whole.

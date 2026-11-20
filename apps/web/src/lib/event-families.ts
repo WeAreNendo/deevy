@@ -28,16 +28,7 @@ export const kindFamilies: KindFamily[] = [
   { label: "Runs and Gates", prefixes: ["run", "gate"] },
   {
     label: "Workspace",
-    prefixes: [
-      "workspace",
-      "member",
-      "invitation",
-      "allowlist",
-      "identity",
-      "agent",
-      "socket",
-      "project",
-    ],
+    prefixes: ["workspace", "member", "invitation", "allowlist", "agent", "socket", "project"],
   },
   { label: "Webhooks", prefixes: ["webhook"] },
 ];

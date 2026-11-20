@@ -1,22 +1,18 @@
 ---
 title: Sign-in providers
-description: Register the OAuth apps your team signs in to deevy with, from GitHub and Google to your own OpenID Connect identity provider, and decide who may join.
+description: Register the OAuth apps your team signs in to deevy with, GitHub, Google, Microsoft or your own OpenID Connect identity provider, and decide who may join.
 sidebar:
   order: 5
 ---
 
 deevy keeps no passwords. Your team signs in with a provider you register an OAuth app with, and deevy
-offers each provider whose client ID and secret you've set: any of them, all of them, or as few as one.
+offers each provider whose client ID and secret you've set: any of the four, all of them, or as few as one.
 
 | Provider               | Variables                                                                                             | Callback ends in |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- | ---------------- |
 | GitHub                 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                                                            | `github`         |
 | Google                 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                                                            | `google`         |
 | Microsoft Entra ID     | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, optionally `MICROSOFT_TENANT_ID`                    | `microsoft`      |
-| GitLab                 | `GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET`, optionally `GITLAB_ISSUER`                                | `gitlab`         |
-| Linear                 | `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`                                                            | `linear`         |
-| Slack                  | `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`                                                              | `slack`          |
-| Atlassian              | `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`                                                      | `atlassian`      |
 | Your identity provider | `DEEVY_OIDC_ISSUER`, `DEEVY_OIDC_CLIENT_ID`, `DEEVY_OIDC_CLIENT_SECRET`, optionally `DEEVY_OIDC_NAME` | `oidc`           |
 
 ## The callback URL
@@ -37,18 +33,19 @@ the sign-in, or deevy signs you in on an address nobody visits.
 
 ## How the sign-in page offers them
 
-The sign-in page shows a **Continue with …** button for each provider you configured, in this order:
-GitHub, Google, Microsoft, GitLab, Linear, Slack, Atlassian, then your own identity provider. A provider
-deevy couldn't set up gets no button, so every button on the page is one that can start a sign-in; see
+The sign-in page shows a **Continue with …** button for each provider you configured, all of them at once,
+in this order: GitHub, Google, Microsoft, then your own identity provider. A provider deevy couldn't set up
+gets no button, so every button on the page is one that can start a sign-in; see
 [Your own identity provider](#your-own-identity-provider) for the one way that happens.
 
 - To change the order, set `DEEVY_SIGN_IN_ORDER` to the providers to put first, comma-separated, such as
-  `oidc,github`. The rest follow in the usual order.
-- With four providers or fewer, every button shows. With more, the first three show and the rest wait
-  behind **More ways to sign in**, your identity provider last among them. Name `oidc` in
-  `DEEVY_SIGN_IN_ORDER` if your team should see it without looking.
+  `oidc,github`. The rest follow in the usual order. A name deevy doesn't offer is ignored.
 - Each browser remembers which provider it signed in with last, offers that one first and marks it
   **Last used**.
+
+GitLab, Linear, Slack and Atlassian are not sign-in providers. If your deevy still has their client IDs and
+secrets set from an earlier release, it reads nothing from them: delete them, and the apps you registered
+for them.
 
 ## GitHub
 
@@ -58,9 +55,7 @@ deevy couldn't set up gets no button, so every button on the page is one that ca
    `${BETTER_AUTH_URL}/api/auth/callback/github`.
 3. Generate a client secret, and set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
 
-deevy asks GitHub for `read:org` as well as the profile, so that a GitHub organization rule can see who
-belongs to it. An organization that restricts OAuth App access has to approve your App before such a rule
-can see its members; until then the rule admits nobody, and an invitation still works.
+deevy asks GitHub for who the person is and the addresses they verified there, and nothing more.
 
 An OAuth App holds one callback URL, so a deevy reachable at two addresses needs an App for each, or one
 address to sign in on.
@@ -77,7 +72,7 @@ This OAuth App is only for signing in. A GitHub Socket is a GitHub App of its ow
 
 deevy doesn't limit Google sign-in to one Google Workspace domain. Anyone with a Google account can sign
 in, and stays outside your Workspace until a rule or an invitation lets them in. To let your company's
-domain in, add an **Email domain** rule; see [Who may join](#who-may-join).
+domain in, add it under **Who may join**; see [Who may join](#who-may-join).
 
 ## Microsoft
 
@@ -92,53 +87,8 @@ domain in, add an **Email domain** rule; see [Who may join](#who-may-join).
    `verified_primary_email` and `verified_secondary_email`.
 
 Step 5 matters: Microsoft's email claim is whatever the directory says, so deevy counts a Microsoft
-address as verified only when one of those claims vouches for it. Without them, Microsoft sign-in still
+address as verified only when one of those claims says so. Without them, Microsoft sign-in still
 works, but only by invitation; see [Which addresses count](#which-addresses-count).
-
-## GitLab
-
-1. Create an application under **User settings › Applications** on gitlab.com or on your own GitLab.
-   Mark it **Confidential**, and give it the scopes `read_user` and `read_api`.
-2. Set its **Redirect URI** to `${BETTER_AUTH_URL}/api/auth/callback/gitlab`.
-3. Set `GITLAB_CLIENT_ID` and `GITLAB_CLIENT_SECRET`.
-4. For a self-managed GitLab, set `GITLAB_ISSUER` to its address, such as `https://gitlab.example.com`.
-   It defaults to `https://gitlab.com`.
-
-`read_api` is the only GitLab scope that lists the groups someone belongs to, which a GitLab group rule
-needs. deevy only asks for those groups when such a rule exists and no email domain matched, but the scope
-is on the application, so every GitLab sign-in grants it. If you'd rather it were never granted, leave
-GitLab sign-in unconfigured.
-
-## Linear
-
-1. Create an OAuth application under Linear › Settings › API › OAuth applications. deevy asks for `read`,
-   the narrowest scope Linear has.
-2. Add `${BETTER_AUTH_URL}/api/auth/callback/linear` as its callback URL.
-3. Set `LINEAR_CLIENT_ID` and `LINEAR_CLIENT_SECRET`.
-
-Linear never says whether an address is verified, so a Linear sign-in joins by invitation only. This
-application is separate from the one a [Linear Socket](/tools/linear/) uses: that one acts as deevy, this
-one as the Human signing in.
-
-## Slack
-
-This is Sign in with Slack, which is OpenID Connect.
-
-1. Create a Slack app. Under **OAuth & Permissions**, add `${BETTER_AUTH_URL}/api/auth/callback/slack` as a
-   redirect URL, and the user scopes `openid`, `email` and `profile`.
-2. Set `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET`.
-
-Slack says when an address is verified, so an email domain rule admits a Slack sign-in. This app is
-separate from the one a [Slack Socket](/tools/slack/) uses.
-
-## Atlassian
-
-1. Create an app in the [Atlassian developer console](https://developer.atlassian.com/console/myapps/),
-   with the User identity API's `read:me` permission and nothing else.
-2. Set its callback URL to `${BETTER_AUTH_URL}/api/auth/callback/atlassian`.
-3. Set `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET`.
-
-Atlassian never says whether an address is verified, so an Atlassian sign-in joins by invitation only.
 
 ## Your own identity provider
 
@@ -167,18 +117,15 @@ only its own. Point `DEEVY_OIDC_ISSUER` at something reachable, or leave it unse
 ## Which addresses count
 
 A sign-in's email address only counts for something when the provider says it verified it. A verified
-address can be `DEEVY_ADMIN_EMAIL`, can match an **Email domain** rule, and lets a Human sign in with a
+address can be `DEEVY_ADMIN_EMAIL`, can match a domain under **Who may join**, and lets a Human sign in with a
 second provider later. An unverified one still signs in, but only by invitation, because the invitation's
 link is the proof.
 
 | Provider               | Verified when                                                        |
 | ---------------------- | -------------------------------------------------------------------- |
 | GitHub, Google         | The provider says so, as it does for an address you confirmed there  |
-| GitLab                 | The account's address has been confirmed                             |
-| Slack                  | Slack says so                                                        |
 | Microsoft              | One of the optional claims in [Microsoft](#microsoft) step 5 says so |
 | Your identity provider | Its ID token carries `email_verified`                                |
-| Linear, Atlassian      | Never: they join by invitation only                                  |
 
 Without this, anybody could put your address on an account at a provider that doesn't check, and be let
 in as you.
@@ -198,18 +145,12 @@ provider on its own, or configure it to send the claim, so nobody is stuck on on
 Signing in proves who somebody is; joining the Workspace is up to its admins. Both ways in are under
 **Settings › General**.
 
-**A rule** lets in everyone who matches it, now and later. Under **Who may join**, choose **Add rule**,
-then what to match on:
+**A rule** lets in everyone whose verified address is at an email domain, now and later. Under **Who may
+join**, choose **Add rule**, enter the **Domain**, such as `example.com`, and choose **Add rule**.
 
-- **Email domain**, such as `example.com`: anyone whose verified address is at that domain.
-- **GitHub organization**, by its login, such as `acme`: anyone who signs in with GitHub and belongs to it.
-- **GitLab group**, by its path, such as `acme/platform`: anyone who signs in with GitLab and belongs to it.
-
-deevy asks GitHub or GitLab itself who belongs, through the account somebody signed in with, so
-**GitHub organization** is offered only when GitHub is one of your sign-in providers, and **GitLab group**
-only when GitLab is. If you take a provider away later, its rules stay listed, each with a line saying it
-lets nobody in until people can sign in here with that provider again. Remove them, or bring the provider
-back.
+A domain is the only rule there is. A GitHub organization or GitLab group rule saved by an earlier release
+is no longer listed and lets nobody in; a Member it let in before stays a Member. To let in somebody whose
+address is at no domain of yours, invite them.
 
 Until there is a rule, the admin is the only one who can get in, apart from those they invite.
 
@@ -241,5 +182,4 @@ Any deevy can be the relay; its relay lives at `${BETTER_AUTH_URL}/relay`.
 
 The relay can sign its own team in through itself, too: give it `DEEVY_SIGN_IN_RELAY_URL` as well.
 
-Your own identity provider and a self-managed GitLab are never relayed. Their callbacks stay each deevy's
-own, as above.
+Your own identity provider is never relayed. Its callback stays each deevy's own, as above.

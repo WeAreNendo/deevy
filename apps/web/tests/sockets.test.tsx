@@ -128,7 +128,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
           hasWebhookSecret: false,
           inboundUrl: "https://deevy.test/hooks/sock_pending0000",
           setupUrl: "https://deevy.test/hooks/sock_pending0000/setup",
-          accountCallbackUrl: `https://deevy.test/api/identities/${input.provider}/callback`,
           webhookSecret: null,
           state: "1790000000000.abc",
         };
@@ -426,7 +425,12 @@ describe("the tools this Workspace is connected to", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
-  it("connects Slack in one trip: the manifest with the real address, then the token", async () => {
+  /**
+   * Slack is told about a Gate and sends deevy nothing (ADR-0036), so its app
+   * needs no address of deevy's and its Socket no secret: the manifest is the
+   * committed one, and the bot token is all deevy is handed.
+   */
+  it("connects Slack with the committed manifest and the bot token alone", async () => {
     state.sockets = [];
     calls.begin.mockClear();
     calls.connect.mockClear();
@@ -434,26 +438,17 @@ describe("the tools this Workspace is connected to", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Connect Slack" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme Slack" } });
-    fireEvent.click(screen.getByRole("button", { name: "Show the app manifest" }));
 
-    // The committed manifest (docs/slack-manifest.yaml), with this Socket's own
-    // address where Slack will send clicks and the slash command.
     const manifest = await screen.findByLabelText("App manifest");
     const text = manifest.textContent ?? "";
-    expect(text.match(/https:\/\/deevy\.test\/hooks\/sock_pending0000/g)).toHaveLength(2);
-    expect(text).not.toContain("SOCKET_ID");
-    // Only the scopes a method deevy calls needs: a click names who clicked,
-    // so nothing asks Slack about people (users:read).
-    expect(text).toMatch(
-      /bot:\n\s+- chat:write\n\s+- channels:read\n\s+- groups:read\n\s+- commands\n/,
-    );
-    expect(text).toContain("command: /deevy");
+    // Posting and listing channels, and nothing that would bring a request back.
+    expect(text).toMatch(/bot:\n\s+- chat:write\n\s+- channels:read\n\s+- groups:read\n/);
+    expect(text).not.toContain("/hooks/");
+    expect(text).not.toMatch(/interactivity|slash_commands|commands/);
+    expect(screen.queryByLabelText("Signing Secret")).toBeNull();
 
     fireEvent.change(secret("Bot User OAuth Token"), {
       target: { value: "xoxb-pasted-from-slack" },
-    });
-    fireEvent.change(secret("Signing Secret"), {
-      target: { value: "8f14e45fceea167a5a36dedd4bea2543" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
@@ -461,10 +456,10 @@ describe("the tools this Workspace is connected to", () => {
     expect(calls.connect.mock.calls[0]?.[0]).toEqual({
       provider: "slack",
       name: "Acme Slack",
-      socketId: "sock_pending0000",
       credentials: { botToken: "xoxb-pasted-from-slack" },
-      webhookSecret: "8f14e45fceea167a5a36dedd4bea2543",
     });
+    // Nothing to begin first: there is no address of deevy's to put in the app.
+    expect(calls.begin).not.toHaveBeenCalled();
   });
 });
 
@@ -632,7 +627,7 @@ describe("connecting Notion", () => {
 });
 
 describe("connecting Linear", () => {
-  it("names the addresses Linear's app needs, then takes the app's own client", async () => {
+  it("names the two addresses Linear's app needs, then takes the app's own client", async () => {
     state.sockets = [];
     calls.begin.mockClear();
     calls.connect.mockClear();
@@ -644,12 +639,12 @@ describe("connecting Linear", () => {
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme on Linear" } });
     fireEvent.click(screen.getByRole("button", { name: "Show the addresses" }));
 
-    // Where Linear sends deliveries, and the two places it sends a browser back
-    // to: a Human linking their account, and an admin installing the app.
+    // Where Linear sends deliveries, and the one place it sends a browser back
+    // to: an admin installing the app. Nobody links an account on Linear to
+    // deevy any more (ADR-0036), so there is no second callback.
     expect(await screen.findByText("https://deevy.test/hooks/sock_pending0000")).toBeTruthy();
-    const callbacks = screen.getByLabelText("Callback URLs");
-    expect(callbacks.textContent).toContain("https://deevy.test/api/identities/linear/callback");
-    expect(callbacks.textContent).toContain("https://deevy.test/hooks/sock_pending0000/setup");
+    expect(screen.getByText("https://deevy.test/hooks/sock_pending0000/setup")).toBeTruthy();
+    expect(screen.queryByText(/\/api\/identities\//)).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Client ID"), { target: { value: "lin_client_id" } });
     fireEvent.change(secret("Client secret"), {
@@ -805,20 +800,10 @@ describe("one Socket's own page", () => {
     expect(
       await within(verifying).findByText("secret_notion-verification-token-for-tests"),
     ).toBeTruthy();
-    // Notion has no account to link, so an admin may let a verified address
-    // vouch for who commented (ADR-0025). The weaker proof is marked on the
-    // Gate's page alone, and the sentence says so rather than "wherever it is
-    // shown", which Slack, the feed and the tracker's comment never were.
-    const commented = screen.getByRole("region", { name: "Who commented" });
-    expect(
-      within(commented).getByText(/the Gate's page marks every ruling made this way “\(email\)”/),
-    ).toBeTruthy();
-    fireEvent.click(screen.getByRole("switch", { name: "Take a verified address as proof" }));
-    await waitFor(() => expect(calls.update).toHaveBeenCalledTimes(1));
-    expect(calls.update.mock.calls[0]?.[0]).toEqual({
-      socketId: stubSocket.id,
-      identityByEmail: true,
-    });
+    // Nothing about who commented is the admin's to decide any more: a comment
+    // rules nothing, whoever wrote it (ADR-0036).
+    expect(screen.queryByRole("region", { name: "Who commented" })).toBeNull();
+    expect(screen.queryByRole("switch", { name: "Take a verified address as proof" })).toBeNull();
   });
 
   it("says Notion's webhook is verified once it is, and waits for the token before", async () => {
@@ -920,10 +905,38 @@ describe("one Socket's own page", () => {
     expect(screen.getByText(/only time/i)).toBeTruthy();
   });
 
-  it.each([
-    ["Slack", "slack", /Basic Information/],
-    ["Linear", "linear", /OAuth application/],
-  ] as const)(
+  /**
+   * Slack is told and sends nothing back (ADR-0036): its page has no address it
+   * delivers to, no secret it signs with and no deliveries to list.
+   */
+  it("shows a Slack Socket no delivery, secret or address, and says it posts", async () => {
+    state.sockets = [
+      {
+        ...stubSocket,
+        provider: "slack",
+        capabilities: ["chat"],
+        name: "Acme Slack",
+        hasWebhookSecret: false,
+        config: { teamId: "T07ACME001" },
+      },
+    ];
+
+    // In the list, a Socket that never delivers is not one that has not
+    // spoken yet: posting is all it does.
+    await mountAt("/settings/sockets");
+    const list = await screen.findByRole("list", { name: "Sockets" });
+    expect(await within(list).findByText(/· Posts here$/)).toBeTruthy();
+    expect(within(list).queryByText(/Has not spoken yet/)).toBeNull();
+    cleanup();
+
+    await mountAt(`/settings/sockets/${stubSocket.id}`);
+    await screen.findByRole("region", { name: "How it is doing" });
+    for (const region of ["Where it delivers", "What it signs with", "Deliveries"]) {
+      expect(screen.queryByRole("region", { name: region }), region).toBeNull();
+    }
+  });
+
+  it.each([["Linear", "linear", /OAuth application/]] as const)(
     "takes the new secret %s made, since deevy cannot mint one it would take",
     async (tool, provider, where) => {
       calls.update.mockClear();

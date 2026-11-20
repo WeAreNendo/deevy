@@ -124,13 +124,13 @@ function socketStep(socket: ImportReport["sockets"][number], url: string): strin
     case "github":
       return `${socket.name} (GitHub): Point GitHub at this address on the Socket's page; in the App's settings, Setup URL ${hook}/setup`;
     case "linear":
-      return `${socket.name} (Linear): the application's webhook ${hook}; its callback URLs ${url}/api/identities/linear/callback and ${hook}/setup`;
+      return `${socket.name} (Linear): the application's webhook ${hook}; its callback URL ${hook}/setup`;
     case "gitlab":
       return `${socket.name} (GitLab): every bound project's or group's webhook ${hook}, same secret token`;
     case "notion":
       return `${socket.name} (Notion): a new webhook subscription to ${hook}, verified with the token the Socket's page shows; then delete the old one`;
     case "slack":
-      return `${socket.name} (Slack): the app's Interactivity request URL and its /deevy command's URL ${hook}`;
+      return `${socket.name} (Slack): Slack sends deevy nothing now, so the app's Interactivity and its /deevy command can be turned off`;
     case "generic":
       return `${socket.name} (another tool): the address your adapter posts to, ${hook}, same secret`;
     default:
