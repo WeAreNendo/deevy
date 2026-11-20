@@ -44,7 +44,8 @@ export function buildServer(env: ServerEnv) {
   // Auth would fall back to the default it publishes and refuse it only once a
   // sign-in reached its context, with `/healthz` answering all the while.
   // Here rather than in `readEnv`, because the import reads that too, and
-  // converting a dump for D1 needs no secret (MISSING_AUTH_SECRET).
+  // loading a dump checks its secrets against the ones it is given rather
+  // than needing them (MISSING_AUTH_SECRET).
   if (!env.secret?.trim()) throw new Error(MISSING_AUTH_SECRET);
   if (env.databasePath !== ":memory:")
     mkdirSync(dirname(resolve(env.databasePath)), { recursive: true });

@@ -92,8 +92,8 @@ export interface Claimed {
 /**
  * Takes the deliveries it can, and hands back only those it really took.
  *
- * This is what makes two senders safe without a transaction, which D1 does not
- * have (ADR-0006): the UPDATE re-checks the lock it read, and only the ids it
+ * This is what makes two senders safe without a transaction, which a Durable
+ * Object does not have (ADR-0037): the UPDATE re-checks the lock it read, and only the ids it
  * returns are sent, so two passes claim disjoint sets and no destination hears
  * the same Event twice.
  *

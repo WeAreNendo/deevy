@@ -1,13 +1,10 @@
 /**
  * Taking a hosted Workspace home (docs/OPERATIONS.md, "Taking a hosted
  * Workspace home"): the dump the hosted console hands over, loaded into the
- * database this image starts on, or turned into SQL for a D1 database of the
- * team's own.
+ * database this image starts on.
  *
  *   docker run --rm -i -v deevy-data:/data ghcr.io/wearenendo/deevy \
  *     dist/import.mjs - < workspace.sql
- *   docker run --rm -i ghcr.io/wearenendo/deevy dist/import.mjs --for-d1 - \
- *     < workspace.sql > workspace.d1.sql
  *
  * It reads the environment as the server does: `DEEVY_DATABASE_PATH` is where
  * the database goes, and `BETTER_AUTH_URL` and `DEEVY_SECRET`, when they are
@@ -19,18 +16,15 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { readEnv } from "./env.ts";
-import { dumpForD1, ImportRefused, importDump, type ImportReport } from "./import-dump.ts";
+import { ImportRefused, importDump, type ImportReport } from "./import-dump.ts";
 
 const USAGE = `Usage:
-  node dist/import.mjs <dump.sql>            load a hosted Workspace's dump into DEEVY_DATABASE_PATH
-  node dist/import.mjs --for-d1 <dump.sql>   write it as SQL for a new D1 database, to stdout
+  node dist/import.mjs <dump.sql>   load a hosted Workspace's dump into DEEVY_DATABASE_PATH
 
 <dump.sql> is the file the hosted export handed over, or - to read it from stdin.`;
 
-const args = process.argv.slice(2);
-const forD1 = args.includes("--for-d1");
-const files = args.filter((arg) => arg !== "--for-d1");
-if (args.includes("--help") || args.includes("-h")) {
+const files = process.argv.slice(2);
+if (files.includes("--help") || files.includes("-h")) {
   console.log(USAGE);
   process.exit(0);
 }
@@ -49,28 +43,18 @@ const common = {
 };
 
 try {
-  if (forD1) {
-    const { sql, report } = await dumpForD1(common);
-    process.stdout.write(sql);
-    // stdout is the SQL, so everything said to the person goes to stderr.
-    console.error(summary(report, "d1"));
-    console.error(nextSteps(report, env.baseURL, "d1"));
-  } else {
-    const path = resolve(env.databasePath);
-    const report = await importDump({ ...common, path });
-    console.log(`Imported the Workspace "${report.workspace.name}" into ${path}.\n`);
-    console.log(summary(report, "image"));
-    console.log(nextSteps(report, env.baseURL, "image"));
-  }
+  const path = resolve(env.databasePath);
+  const report = await importDump({ ...common, path });
+  console.log(`Imported the Workspace "${report.workspace.name}" into ${path}.\n`);
+  console.log(summary(report));
+  console.log(nextSteps(report, env.baseURL));
 } catch (error) {
   if (!(error instanceof ImportRefused)) throw error;
   console.error(`Nothing was imported. ${error.message}`);
   process.exit(1);
 }
 
-type Target = "image" | "d1";
-
-function summary(report: ImportReport, target: Target): string {
+function summary(report: ImportReport): string {
   const rows: Array<[string, string]> = [
     ["Workspace", `${report.workspace.name} (${report.workspace.slug})`],
     [
@@ -86,7 +70,7 @@ function summary(report: ImportReport, target: Target): string {
     ],
     ["Projects", String(report.projects)],
     ["Events", `${String(report.events)}; the next is #${String(report.nextSeq)}`],
-    ["Schema", schemaLine(report, target)],
+    ["Schema", schemaLine(report)],
     ["DEEVY_SECRET", sealedLine(report)],
   ];
   const width = Math.max(...rows.map(([label]) => label.length));
@@ -95,13 +79,10 @@ function summary(report: ImportReport, target: Target): string {
   return `${lines.join("\n")}\n`;
 }
 
-function schemaLine(report: ImportReport, target: Target): string {
+function schemaLine(report: ImportReport): string {
   if (report.migrations.length === 0) return "this release's, nothing to apply";
   const names = report.migrations.join(", ");
-  const count = plural(report.migrations.length, "migration");
-  return target === "image"
-    ? `brought forward by ${count} this release added: ${names}`
-    : `${count} newer than the dump, for wrangler d1 migrations apply: ${names}`;
+  return `brought forward by ${plural(report.migrations.length, "migration")} this release added: ${names}`;
 }
 
 function plural(n: number, noun: string): string {
@@ -138,16 +119,13 @@ function socketStep(socket: ImportReport["sockets"][number], url: string): strin
   }
 }
 
-function nextSteps(report: ImportReport, baseURL: string | undefined, target: Target): string {
+function nextSteps(report: ImportReport, baseURL: string | undefined): string {
   const url = baseURL?.replace(/\/+$/, "") ?? "<BETTER_AUTH_URL>";
   const sockets = report.sockets.filter(
     ({ status }) => status !== "removed" && status !== "pending",
   );
   const steps = [
-    target === "d1"
-      ? `Apply it to a new, empty D1 database, in place of the first \`wrangler d1 migrations apply\`: wrangler d1 execute deevy --remote --file workspace.d1.sql${report.migrations.length > 0 ? ", then wrangler d1 migrations apply deevy --remote for what is newer than the dump" : ""}.`
-      : null,
-    `Set BETTER_AUTH_SECRET and DEEVY_SECRET to the two values the export handed over${target === "d1" ? ", with wrangler secret put" : ""}. The Sockets' credentials and invitation links open only under them.`,
+    `Set BETTER_AUTH_SECRET and DEEVY_SECRET to the two values the export handed over. The Sockets' credentials and invitation links open only under them.`,
     `Set BETTER_AUTH_URL to this deevy's own URL${baseURL ? ` (${url})` : ""}, and register an OAuth App for each sign-in provider with ${url}/api/auth/callback/<provider>: the hosted ones were the platform's. Everybody signs in again and lands on their own account. DEEVY_ADMIN_EMAIL can stay unset: the Workspace's admins came with it.`,
     `Point every Agent's DEEVY_URL and MCP client at ${url} instead of the hosted address. Their API keys still work.`,
     sockets.length > 0

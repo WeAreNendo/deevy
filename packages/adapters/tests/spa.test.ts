@@ -1,13 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vite-plus/test";
-import {
-  APP_PATHS,
-  APP_PREFIXES,
-  isAppPath,
-  serveSpaUnder,
-  underBase,
-  withBaseHref,
-} from "../src/spa.ts";
+import { isAppPath, serveSpaUnder, underBase, withBaseHref } from "../src/spa.ts";
 
 describe("the SPA under a path", () => {
   it("rewrites the index's base element, and leaves the root's alone", () => {
@@ -59,23 +51,5 @@ describe("the SPA under a path", () => {
     expect(asked).toEqual(["/assets/x.js", "/gates/gate_1"]);
 
     expect(await serveSpaUnder(new Request("https://x/other"), "/acme", assets)).toBeNull();
-  });
-
-  /**
-   * The Worker at the root of a host routes the same paths to the app with
-   * `run_worker_first`, which packages/core/tests/worker-routes.test.ts holds
-   * against `createApp`; under a path it asks `isAppPath`. One list, written
-   * twice, so this says they are the same.
-   */
-  it("names the same paths as the Worker's run_worker_first", async () => {
-    const config = await readFile(
-      new URL("../../../apps/web/wrangler.jsonc", import.meta.url),
-      "utf8",
-    );
-    // JSONC: the list may break over lines and end in a comma.
-    const list = /"run_worker_first":\s*(\[[^\]]*\])/.exec(config)?.[1] ?? "[]";
-    const rules = JSON.parse(list.replace(/,(\s*\])/, "$1")) as string[];
-    const ours = [...APP_PREFIXES.map((prefix) => `${prefix}*`), ...APP_PATHS];
-    expect([...rules].sort()).toEqual([...ours].sort());
   });
 });

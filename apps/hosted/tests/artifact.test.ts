@@ -6,6 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   bundledConfig,
   manifest,
+  notTheSpa,
   parseJsonc,
   placeholders,
   settings,
@@ -95,6 +96,33 @@ describe("the wrangler.json a release carries", () => {
     expect(local.kv_namespaces).toEqual([{ binding: "DIRECTORY" }]);
     expect(local).not.toHaveProperty("routes");
     expect(local).not.toHaveProperty("services");
+  });
+});
+
+describe("the SPA an archive carries", () => {
+  it("is the SPA's own files, and refuses what another build left beside them", () => {
+    const spa = ["_headers", "assets/index-abc.js", "favicon.svg", "index.html"];
+    expect(notTheSpa(spa)).toEqual([]);
+    expect(
+      notTheSpa([
+        ...spa,
+        "client/index.html",
+        "deevy/index.js",
+        "deevy/wrangler.json",
+        "deevy/.vite/manifest.json",
+        "wrangler-dry-run/index.js",
+        ".dev.vars",
+        "assets\\wrangler.jsonc",
+      ]),
+    ).toEqual([
+      "client/index.html",
+      "deevy/index.js",
+      "deevy/wrangler.json",
+      "deevy/.vite/manifest.json",
+      "wrangler-dry-run/index.js",
+      ".dev.vars",
+      "assets/wrangler.jsonc",
+    ]);
   });
 });
 

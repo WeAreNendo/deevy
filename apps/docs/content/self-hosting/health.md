@@ -16,13 +16,10 @@ curl https://deevy.example.com/healthz
 
 It needs no session, and under a path it answers at the root of the host as well as under the path.
 
-**On the Docker image**, it answers once the server is listening and its migrations have run, and only
-when deevy can write its database: that is checked before the server starts listening. So it makes a good
-readiness probe, and a volume deevy can't write shows up as a container that exited rather than a
-healthy one that can't save anything.
-
-**On a Worker**, it answers as soon as the Worker is deployed, whether or not the migrations have been
-applied. After a deploy, `wrangler d1 migrations list deevy --remote` says whether any are still owed.
+It answers once the server is listening and its migrations have run, and only when deevy can write its
+database: that is checked before the server starts listening. So it makes a good readiness probe, and a
+volume deevy can't write shows up as a container that exited rather than a healthy one that can't save
+anything.
 
 ## The image's own health check
 
@@ -50,8 +47,7 @@ It follows `DEEVY_PORT`, so moving the port keeps it working.
 
 ## Logs
 
-**On the Docker image**, deevy logs to standard output and standard error, so `docker logs deevy` has it
-all. What to look for:
+deevy logs to standard output and standard error, so `docker logs deevy` has it all. What to look for:
 
 - `deevy listening on …` once it has started.
 - Why it refused to start, when it does: a `/data` it can't write, with the command that fixes it; a
@@ -59,10 +55,6 @@ all. What to look for:
 - A warning when its database carries migrations from a newer release, after
   [going back one release](/self-hosting/upgrading/#going-back-one-release).
 - A line when your own identity provider couldn't be reached at startup.
-
-**On a Worker**, deevy's configuration turns on Cloudflare's Workers Logs, so its logs are on the Worker's
-page in Cloudflare's dashboard, and `wrangler tail` follows them live from `apps/web`. `wrangler tail`
-doesn't reliably show the Cron Trigger's runs, so a quiet tail doesn't mean the schedule has stopped.
 
 ## Inside deevy
 

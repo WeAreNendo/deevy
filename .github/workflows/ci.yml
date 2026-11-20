@@ -3,10 +3,9 @@ name: CI
 # Not for a change that is only prose. Markdown builds nothing and no suite
 # reads it, so a pull request (or a push to main) that touches nothing else runs
 # none of the jobs below: about a dozen runner-minutes saved each time. The
-# exceptions are the Markdown something does read: docs/OPERATIONS.md and
-# docs/m3-acceptance.md, which tests in apps/server and tools/release check
-# against the code, and Markdown under a package's src/, which a build may
-# ship. prose.yml checks a Markdown
+# exceptions are the Markdown something does read: docs/OPERATIONS.md, which
+# tests in apps/server and tools/release check against the code, and Markdown
+# under a package's src/, which a build may ship. prose.yml checks a Markdown
 # change instead, formatting and the docs site's build and tests, in one job.
 # Order matters in `paths`: a later pattern wins, so the exceptions come after
 # the exclusions; the list is written once and named.
@@ -23,7 +22,6 @@ on:
       - "!**/*.mdx"
       - "!apps/docs/content/**"
       - docs/OPERATIONS.md
-      - docs/m3-acceptance.md
       - "apps/*/src/**/*.md"
       - "packages/*/src/**/*.md"
   pull_request:
@@ -66,14 +64,9 @@ jobs:
       - name: Build (Node server and SPA)
         run: vp run -F '!@deevy/docs' build
 
-      - name: Build (Cloudflare Worker)
-        run: vp run web#build:workers
-
-      - name: Validate the Worker bundle
-        run: vp run web#check:workers
-
       # The many-Workspaces Worker (ADR-0028), bundled and validated by wrangler
-      # against the SPA the step above built.
+      # against the SPA the step above built. It is also what catches a `node:`
+      # import in the core, which has to run in a Durable Object (ADR-0037).
       - name: Build and validate the hosted Worker
         run: vp run hosted#build:hosted
 
@@ -183,7 +176,7 @@ jobs:
           key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   runtime:
-    name: Workers and D1 migrations
+    name: The hosted Worker, and the walk on both shapes
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -203,38 +196,18 @@ jobs:
       - name: Build (Node server and SPA)
         run: vp run -F '!@deevy/docs' build
 
-      - name: Build (Cloudflare Worker)
-        run: vp run web#build:workers
-
-      # The deployed shape, on workerd: bindings and asset routing included,
-      # which no test of createApp can see. `--local` needs no account.
-      - name: The Worker serves deevy
-        run: vp run web#test:workers
-
       # Two hosted Workspaces in one Worker on workerd: provisioned through
       # Platform, signed in through the relay, isolated, swept by their alarms,
       # dumped, suspended and destroyed (docs/plans/hosted.md slice 9).
       - name: The hosted Worker serves its Workspaces
         run: vp run hosted#test:hosted
 
-      # drizzle generates and wrangler applies (ADR-0008), so the projection is
-      # only proven by wrangler applying it: an empty local D1, no account.
-      - name: Migrations build the schema on D1
-        run: vp run db#check:d1
-
-      # A hosted Workspace's dump, converted by `import.mjs --for-d1`, applied
-      # to an empty local D1: wrangler then has nothing to apply, or exactly
-      # what the dump's release did not have (docs/OPERATIONS.md, "Taking a
-      # hosted Workspace home").
-      - name: A hosted Workspace's dump goes into D1
-        run: vp run server#check:d1-import
-
       # deevy's own walk, on every deployment, with nothing outside this
       # machine: a label in a stubbed tracker becomes a Run, a Proposal, a
       # ruling, a branch, a pull request and a finish, with a scripted Agent
-      # that holds only its key (docs/acceptance.md). The image, the Worker,
-      # the image under a path, and a hosted Workspace, whose Worker the hosted
-      # smoke above has just built.
+      # that holds only its key (docs/acceptance.md). The image, the image
+      # under a path, and a hosted Workspace, whose Worker the hosted smoke
+      # above has just built.
       - name: An Agent works a record end to end, on every deployment
         run: vp run acceptance#walk
 

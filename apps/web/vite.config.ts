@@ -1,14 +1,11 @@
-import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { defineConfig, lazyPlugins } from "vite-plus";
 
-// DEEVY_TARGET=workers adds the Cloudflare plugin so `vp build` emits the Worker
-// next to the SPA (ADR-0006). The default build is the plain SPA served by
-// apps/server; in dev it proxies the API to the Node server.
-const workers = process.env.DEEVY_TARGET === "workers";
+// The SPA, built into dist: apps/server serves it in the image, and the
+// hosted Worker serves it as every Workspace's assets (ADR-0037). In dev it
+// proxies the API to the Node server.
 
 /**
  * Where the SPA's dev proxy sends `/api`, `/rpc`, `/mcp` and the rest: the Node
@@ -26,13 +23,7 @@ const workers = process.env.DEEVY_TARGET === "workers";
 const apiOrigin =
   process.env.DEEVY_API_ORIGIN ?? `http://localhost:${process.env.DEEVY_PORT ?? "3000"}`;
 
-const { version } = createRequire(import.meta.url)("./package.json") as { version: string };
-
 export default defineConfig({
-  // What this instance calls itself, in the API document a client discovers it
-  // through — the same thing apps/server does, so the Workers deployment names
-  // a version rather than serving 0.0.0 (apps/cli/src/capabilities.ts).
-  define: { __DEEVY_VERSION__: JSON.stringify(version) },
   // Relative, so the built index names its assets against the page's
   // `<base href>`, which the server writes: `/` at the root of a host, `/acme/`
   // for a deevy that lives under a path (src/lib/base.ts, docs/plans/hosted.md).
@@ -65,7 +56,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
   },
-  plugins: lazyPlugins(() => [react(), tailwindcss(), ...(workers ? [cloudflare()] : [])]),
+  plugins: lazyPlugins(() => [react(), tailwindcss()]),
   build: {
     // A font is a file of its own, never a `data:` URL inside the stylesheet:
     // a page's policy takes fonts from deevy's origin and nowhere else

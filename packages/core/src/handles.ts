@@ -4,7 +4,7 @@ import { like } from "drizzle-orm";
 /**
  * A handle names one Member, so a mention like `@planner` resolves to exactly
  * one of them. Read in one statement rather than probing a suffix at a time,
- * since D1 charges per round trip (docs/plans/m1.md).
+ * since every round trip counts against the statement budget (budget.test.ts).
  */
 export async function allocateHandle(db: Db, from: string): Promise<string> {
   const base = slugify(from.split("@")[0] ?? from);

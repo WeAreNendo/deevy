@@ -20,11 +20,10 @@ export interface LiveOptions {
   /**
    * How long the stream may run before ending itself. Absent, it runs until
    * the request is aborted, which is what `apps/server` wants: a Node process
-   * holds a connection for as long as the browser does. A Worker sets it,
-   * because each poll is one D1 query and D1 caps the queries one invocation
-   * may run, so a stream's life is that cap divided by its poll interval —
-   * and a stream that ends itself ends cleanly, with a cursor, rather than
-   * being cut off by the platform mid-message.
+   * holds a connection for as long as the browser does. A hosted Workspace
+   * sets it, so that a tab on the stream rather than its socket lets go of the
+   * object in time, and a stream that ends itself ends cleanly, with a cursor,
+   * rather than being cut off by the platform mid-message.
    */
   maxDurationMs?: number;
 }
@@ -158,7 +157,7 @@ export async function* subscribeToEvents(
   while (!options.signal?.aborted) {
     // The deadline is checked before the query rather than after it, so the
     // queries a stream runs are its duration divided by its poll interval and
-    // never one more: on D1 that division is the whole budget.
+    // never one more.
     if (deadline !== undefined && Date.now() >= deadline) {
       yield { type: "heartbeat", cursor };
       return;

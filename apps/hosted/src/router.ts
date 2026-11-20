@@ -1,4 +1,4 @@
-import { isAppPath, serveSpaUnder, underBase } from "@deevy/adapters/workers";
+import { isAppPath, serveSpaUnder, underBase } from "@deevy/adapters/spa";
 import { relaySignInCallback } from "@deevy/core";
 import { isSlug, lookup, RESERVED_SLUGS, type DirectoryEntry } from "./directory.ts";
 import type { HostedBindings, HostedEnv } from "./env.ts";

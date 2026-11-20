@@ -108,15 +108,16 @@ still sets `GITLAB_*`, `LINEAR_*`, `SLACK_*` or `ATLASSIAN_*` offers the other p
 ### Running without an OAuth App
 
 Set `DEEVY_DEV_STUB_OAUTH=1` and the Node server imports `apps/web/scripts/stub-oauth.js` — the same stub the
-acceptance walk and the Workers smoke prepend to their bundles — so every provider deevy offers answers
+acceptance walk and the hosted Worker's smoke prepend to their bundles — so every provider deevy offers answers
 locally and the OAuth `code` is the email address. It stands in for the client pairs as well as the
 endpoints: half a pair is no provider, so an environment that sets none — a fresh copy of `.env.example` —
 would otherwise offer no button at all. A stubbed instance therefore offers all four, GitHub, Google,
 Microsoft and one generic OpenID Connect entry, and a pair the environment did set is left as it is. The signed-out
 page then offers "Sign in as this email" beneath the provider buttons (it learns the flag from
 `health.ping`); any address signs in, and the one in `DEEVY_ADMIN_EMAIL` becomes the admin exactly as it
-would with a real OAuth App. `readEnv` refuses the flag under `NODE_ENV=production`, and the Worker never
-has it.
+would with a real OAuth App. `readEnv` refuses the flag under `NODE_ENV=production`, and the hosted Worker
+never reads it: its smoke and the walk prepend the stub to a local copy of its bundle, never to the one a
+release carries.
 
 The stub answers GitHub's, Google's and Microsoft's endpoints by host, because Better Auth hardcodes them,
 and a generic OIDC provider's by path, because those live wherever the operator's issuer is — never on a
@@ -202,22 +203,21 @@ the walk's.
 
 ## Everyday commands
 
-| Command                          | What it does                                                                                                  |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `vp check`                       | Format, lint, and typecheck the whole tree (`--fix` to apply formatting).                                     |
-| `vp run -r test`                 | Tests in every package (Vitest through Vite+).                                                                |
-| `vp run core#test:durable`       | The core's suites again on the Durable Object driver a hosted Workspace runs (ADR-0028); CI runs both.        |
-| `vp run -r build`                | `apps/server/dist/index.mjs` (bundled Node server), `apps/web/dist` (SPA) and `apps/docs/dist` (docs site).   |
-| `vp run docs#serve`              | The docs site on http://localhost:4321, written from `docs/` first ([The docs site](#the-docs-site)).         |
-| `vp run web#build:workers`       | The Cloudflare Worker build (`DEEVY_TARGET=workers`); `vp run web#check:workers` then dry-runs what it wrote. |
-| `vp run web#test:workers`        | Boots the built Worker on `wrangler dev --local` against a migrated local D1 and drives it over HTTP.         |
-| `vp run db#generate`             | Generate a migration from `packages/db/src/schema` with drizzle-kit. Then run `vp run db#check:migrations`.   |
-| `vp run server#test:previous`    | Builds the previous release's server from its tag and runs it on the schema this tree migrates (ADR-0031).    |
-| `vp run db#generate:auth`        | Regenerate `packages/db/src/schema/auth.ts` from Better Auth's config. Needs the bootstrap step below.        |
-| `vp run core#snapshot:openapi`   | Regenerate `packages/core/openapi.json`; CI fails when it is stale.                                           |
-| `vp run core#snapshot:mcp-tools` | Regenerate `packages/core/mcp-tools.json`; CI fails when it is stale.                                         |
-| `changeset add`                  | Declare what a change means for somebody upgrading; `--empty` when it means nothing.                          |
-| `vp run version`                 | Consume the changesets into `CHANGELOG.md` and move the version. CI runs this; you almost never do.           |
+| Command                          | What it does                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `vp check`                       | Format, lint, and typecheck the whole tree (`--fix` to apply formatting).                                   |
+| `vp run -r test`                 | Tests in every package (Vitest through Vite+).                                                              |
+| `vp run core#test:durable`       | The core's suites again on the Durable Object driver a hosted Workspace runs (ADR-0028); CI runs both.      |
+| `vp run -r build`                | `apps/server/dist/index.mjs` (bundled Node server), `apps/web/dist` (SPA) and `apps/docs/dist` (docs site). |
+| `vp run docs#serve`              | The docs site on http://localhost:4321, written from `docs/` first ([The docs site](#the-docs-site)).       |
+| `vp run hosted#build:hosted`     | The many-Workspaces Worker, after `vp run web#build`; `vp run hosted#test:hosted` runs it on workerd.       |
+| `vp run db#generate`             | A migration from `packages/db/src/schema`, then its Durable Object rendering. Then `db#check:migrations`.   |
+| `vp run server#test:previous`    | Builds the previous release's server from its tag and runs it on the schema this tree migrates (ADR-0031).  |
+| `vp run db#generate:auth`        | Regenerate `packages/db/src/schema/auth.ts` from Better Auth's config. Needs the bootstrap step below.      |
+| `vp run core#snapshot:openapi`   | Regenerate `packages/core/openapi.json`; CI fails when it is stale.                                         |
+| `vp run core#snapshot:mcp-tools` | Regenerate `packages/core/mcp-tools.json`; CI fails when it is stale.                                       |
+| `changeset add`                  | Declare what a change means for somebody upgrading; `--empty` when it means nothing.                        |
+| `vp run version`                 | Consume the changesets into `CHANGELOG.md` and move the version. CI runs this; you almost never do.         |
 
 The HTTP surface is documented at http://localhost:3000/api/docs while the server runs; the raw document is at
 `/api/spec.json`.
@@ -384,42 +384,42 @@ migration an annotation names is one that release carried. `DEEVY_PREVIOUS_TAG=v
 ## Layout
 
 ```
-apps/web            React SPA; also the Cloudflare Worker entry (src/worker.ts) when DEEVY_TARGET=workers
+apps/web            React SPA, which the image and the hosted Worker both serve
 apps/server         Node entry (Hono on @hono/node-server), bundled by vp pack; the seed; Dockerfile
+apps/hosted         the many-Workspaces Worker: the router, a Durable Object per Workspace, Platform
 apps/cli            the command line, generated from the operation registry
 apps/docs           docs.deevy.dev, written from docs/, CONTEXT.md and the OpenAPI snapshot
 packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory, the Socket port
 packages/sockets    one module per tool deevy speaks (github, linear, gitlab, notion, slack) and the stub
 packages/db         Drizzle schema, relations, migrations
-packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron) and workers/ (D1, Queues)
+packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron), durable/ (a Durable Object's
+                    database, migrator, alarm and dump), spa.ts (the SPA under a path), testing/
 tools/release       the changelog fold and the commit-message rules
 tools/acceptance    the acceptance walk, a scripted Agent against every deployment (docs/acceptance.md)
 ```
 
-Rules that keep the two deployment targets honest (ADR-0006): `packages/core`, `packages/db` and
+Rules that keep the two deployment shapes honest (ADR-0006, ADR-0037): `packages/core`, `packages/db` and
 `packages/sockets` never import Node modules; anything runtime-specific lives in `packages/adapters`. The core
 imports the Socket port's types and never a provider: the two entries build the registry and hand it to
-`createApp`. The Worker build in CI is what catches a
-leak.
+`createApp`. The hosted Worker's build, which CI runs on every commit, is what catches a leak.
 
 ## Background work
 
 Every piece of background work is a bounded function in `packages/core/src/work.ts` — one indexed SELECT with
 a LIMIT, one batched UPDATE, never a query per row — and `runDueWork` there is all of them in order, the
 whole of one trigger: stale Runs, webhook deliveries, what the tools are owed (a Gate's comments on its
-record, its message in the Project's chat channel), and forgetting old inbound deliveries. Both deployments
+record, its message in the Project's chat channel), and forgetting old inbound deliveries. Both shapes
 call it and neither owns it. Node satisfies the `Cron` port in `packages/core/src/jobs.ts` with
 `createTimerCron()` from `@deevy/adapters/node`, and
 `apps/server/src/runner.ts` starts that schedule beside `serve()`, drains while a pass says there is more, and
-stops it on SIGINT and SIGTERM. Cloudflare owns its own schedule, so `apps/web/src/worker.ts` has a
-`scheduled` handler instead of a `Cron`, and it asks for one tighter pass per trigger — which is why there is
-no Workers cron adapter at all (ADR-0012). Neither lives inside `createApp`, which builds no timer and owns
-no schedule.
+stops it on SIGINT and SIGTERM. A hosted Workspace's object calls it from its alarm
+(`apps/hosted/src/workspace.ts`), which sets the next one when it is done. Neither lives inside `createApp`,
+which builds no timer and owns no schedule.
 
-| Variable                       | Default | What it does                                                                       |
-| ------------------------------ | ------- | ---------------------------------------------------------------------------------- |
-| `DEEVY_RUN_STALE_MINUTES`      | 30      | Silence after which a Run goes `stale`. A later Activity revives it.               |
-| `DEEVY_SWEEP_INTERVAL_SECONDS` | 60      | How often the runner looks for silent Runs. Node only; Workers has a Cron Trigger. |
+| Variable                       | Default | What it does                                                         |
+| ------------------------------ | ------- | -------------------------------------------------------------------- |
+| `DEEVY_RUN_STALE_MINUTES`      | 30      | Silence after which a Run goes `stale`. A later Activity revives it. |
+| `DEEVY_SWEEP_INTERVAL_SECONDS` | 60      | How often the runner looks for silent Runs. The image's alone.       |
 
 ## The MCP endpoint
 
@@ -441,7 +441,7 @@ review, and an oRPC bump that reshapes a schema shows up as a diff.
 ([acceptance.md](./acceptance.md)). It needs the builds the deployments are made of:
 
 ```bash
-vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#build:hosted
+vp run -F '!@deevy/docs' build && vp run hosted#build:hosted
 vp run acceptance#walk
 ```
 

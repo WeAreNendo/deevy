@@ -3,7 +3,7 @@
  * durable driver, under a path of a shared host, with the two secrets the
  * platform derives for it — written through the doors a person and an Agent
  * use, for the trip home (docs/OPERATIONS.md, "Taking a hosted Workspace home")
- * to start from. Shared by tests/import.test.ts and scripts/check-d1-import.ts.
+ * to start from, for tests/import.test.ts.
  *
  * Humans sign in through the OAuth stub (apps/web/scripts/stub-oauth.js), which
  * replaces `fetch` for the whole process, so the caller installs it: a test

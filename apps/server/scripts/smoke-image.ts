@@ -2,9 +2,8 @@
  * Runs the deevy image and asks it the questions an operator's first hour asks
  * (docs/OPERATIONS.md, "The image").
  *
- * It is a script rather than a vitest file for the reason
- * apps/web/scripts/smoke-workers.ts and packages/db/scripts/check-d1-apply.ts
- * are: its input is a Docker daemon, which is neither jsdom nor the Node test
+ * It is a script rather than a vitest file, as apps/hosted/scripts/smoke-hosted.ts
+ * is: its input is a Docker daemon, which is neither jsdom nor the Node test
  * environment, and what it tests is the shipped shape — the user the process
  * runs as, what the volume ends up owned by, whether the image can say it is
  * well — which no unit test of anything inside the bundle can see.
