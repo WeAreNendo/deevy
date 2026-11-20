@@ -19,7 +19,7 @@ RUN mkdir -p /src/.empty
 # because the tag moves whenever the base is rebuilt and a release that cannot
 # say which bytes it shipped is not one. `docker buildx imagetools inspect` on
 # the tag prints the digest to move it to.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:6abfcb367ebc291572c774c1592a986be2ab26a2486f73093401327495a5962a AS runtime
 # Root, on purpose, for as long as the entrypoint takes to give /data to 65532,
 # and no longer: it drops before it loads the server
 # (apps/server/src/entrypoint.ts), so a volume, a host directory and a restore
