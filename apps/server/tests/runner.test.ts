@@ -30,8 +30,6 @@ function emptyDatabase() {
 }
 
 interface SeedOptions {
-  /** A schedule set before deevy dropped them (docs/plans/simplify.md, slice 6). */
-  scheduleMinutes?: number;
   /** Whether the record is routed to that Agent. */
   assigned?: boolean;
 }
@@ -44,9 +42,7 @@ async function seedWorkspace(db: Db, options: SeedOptions = {}) {
   await db.insert(userTable).values({ id: userId, name: "Planner", email: "planner@example.com" });
   const agentMemberId = newId("member");
   await db.insert(memberTable).values({ id: agentMemberId, workspaceId, userId, kind: "agent" });
-  await db
-    .insert(agentTable)
-    .values({ memberId: agentMemberId, scheduleMinutes: options.scheduleMinutes ?? null });
+  await db.insert(agentTable).values({ memberId: agentMemberId });
   // An Issue is a projection of a record in a tracker Socket (ADR-0024), so a
   // Project is a binding and every row below hangs off the Socket.
   const socketId = newId("socket");
@@ -204,7 +200,7 @@ describe("the runner", () => {
 
   it("keeps one Cron, and starts no Run of its own on it", async () => {
     const db = emptyDatabase();
-    await seedWorkspace(db, { scheduleMinutes: 60, assigned: true });
+    await seedWorkspace(db, { assigned: true });
     const { cron, registered, tick } = manualCron();
 
     const runner = startRunner({ db, cron });

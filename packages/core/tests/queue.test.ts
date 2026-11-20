@@ -1,6 +1,5 @@
-import { project as projectTable, type Socket } from "@deevy/db";
+import type { Socket } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
-import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { Job, JobQueue } from "../src/jobs.ts";
 import { router } from "../src/operations/index.ts";
@@ -146,10 +145,6 @@ describe("a delivery owed to a tracker, on a deployment with a queue", () => {
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
     const seeded = await seedProject(db, ada.workspace.id);
     const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
-    await db
-      .update(projectTable)
-      .set({ mirror: "gates" })
-      .where(eq(projectTable.id, seeded.project.id));
     const planner = await agentContext(db, {
       name: "Planner",
       handle: "planner",

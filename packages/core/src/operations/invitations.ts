@@ -49,7 +49,7 @@ async function hashInvitationToken(token: string): Promise<string> {
  * destructured so the one column that must never leave the server is named
  * here, and a column added later has to be named here too.
  */
-function shown(row: Invitation): Omit<Invitation, "tokenHash" | "sealedToken"> {
+function shown(row: Invitation): Omit<Invitation, "tokenHash"> {
   return {
     id: row.id,
     workspaceId: row.workspaceId,

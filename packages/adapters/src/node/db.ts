@@ -1,7 +1,7 @@
 import { accessSync, constants, existsSync, readdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { relations, type Db } from "@deevy/db";
+import { relations, unrelatedHistory, type Db } from "@deevy/db";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import { migrate } from "drizzle-orm/node-sqlite/migrator";
 
@@ -54,6 +54,15 @@ export function openDatabase({
     if (mode?.journal_mode !== "wal")
       throw notWritable(path, `SQLite kept the journal in ${String(mode?.journal_mode)} mode`);
   }
+  const unrelated = unrelatedHistory(applied(client), known(migrationsFolder));
+  if (unrelated !== null) {
+    client.close();
+    throw new Error(
+      `the database at ${path} ${unrelated}. Nothing from before it is upgraded in place: ` +
+        "keep this file as a backup and start on an empty one " +
+        "(https://docs.deevy.dev/self-hosting/upgrading/#from-011-or-earlier).",
+    );
+  }
   client.exec("PRAGMA foreign_keys = OFF");
   const db = drizzle({ client, relations, ...(logger ? { logger } : {}) });
   const failure = migrate(db, { migrationsFolder });
@@ -79,15 +88,27 @@ export function openDatabase({
  * anyway, because only one release back is promised.
  */
 function migrationsFromANewerRelease(client: DatabaseSync, migrationsFolder: string): string[] {
-  const known = new Set(
-    readdirSync(migrationsFolder, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name),
-  );
-  const applied = client
+  const folders = new Set(known(migrationsFolder));
+  return applied(client).filter((name) => !folders.has(name));
+}
+
+/** The migration folders this build carries. */
+function known(migrationsFolder: string): string[] {
+  return readdirSync(migrationsFolder, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+}
+
+/** What the database's journal says it has applied, in order; nothing for a new one. */
+function applied(client: DatabaseSync): string[] {
+  const journal = client
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'")
+    .get();
+  if (journal === undefined) return [];
+  const rows = client
     .prepare("SELECT name FROM __drizzle_migrations WHERE name IS NOT NULL ORDER BY id")
     .all() as Array<{ name: string }>;
-  return applied.map(({ name }) => name).filter((name) => !known.has(name));
+  return rows.map(({ name }) => name);
 }
 
 /**

@@ -3,6 +3,7 @@ import type { relations } from "./relations.ts";
 
 export * from "./schema/index.ts";
 export { relations } from "./relations.ts";
+export { unrelatedHistory } from "./history.ts";
 
 /**
  * The database handle the core works with. Both `drizzle-orm/node-sqlite` and

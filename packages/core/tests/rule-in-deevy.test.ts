@@ -1,13 +1,8 @@
-import { account, allowlistRule, user } from "@deevy/db";
+import { account } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
-import {
-  joinWorkspace,
-  relayedProviders,
-  signInProviders,
-  type AuthProviders,
-} from "../src/auth.ts";
+import { relayedProviders, signInProviders, type AuthProviders } from "../src/auth.ts";
 import { newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
 import type { InboundEvent, SocketModules } from "../src/sockets/port.ts";
@@ -286,28 +281,5 @@ describe("signing in", () => {
         asAda.allowlist.add({ kind: kind as "email_domain", value: "acme" }),
       ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     }
-  });
-
-  it("lists no organisation rule saved before, and lets nobody in by one", async () => {
-    const { db, ada, asAda } = await waiting();
-    // A rule an older deevy saved, as the row it left — even one whose value
-    // reads like the domain of the address signing in.
-    await db.insert(allowlistRule).values({
-      id: newId("allowlistRule"),
-      workspaceId: ada.workspace.id,
-      kind: "github_org" as "email_domain",
-      value: "acme.example",
-      createdBy: ada.member.id,
-    });
-    await db.insert(user).values({ id: "usr_grace", name: "Grace", email: "grace@acme.example" });
-
-    expect((await asAda.allowlist.list({})).rules).toEqual([]);
-    await joinWorkspace(db, {
-      userId: "usr_grace",
-      email: "grace@acme.example",
-      name: "Grace",
-      emailVerified: true,
-    });
-    expect(await db.query.member.findMany({ where: { userId: "usr_grace" } })).toEqual([]);
   });
 });

@@ -47,4 +47,6 @@ SQLite two versions of the truth. The helper container writes the copy as root, 
 65532 when it starts. If you run deevy with `--user`, it can't, so give the file to that user in the same
 command, adding `&& chown 65532:65532 /data/deevy.sqlite` for `--user 65532:65532`.
 
-A backup from an older release restores under a newer image, which brings it forward when it starts.
+A backup from an older release restores under a newer image, which brings it forward when it starts. A
+backup from before 0.12 does not: 0.12 started on an empty database
+([Upgrading](/self-hosting/upgrading/#from-011-or-earlier)), so restore it under the release that wrote it.

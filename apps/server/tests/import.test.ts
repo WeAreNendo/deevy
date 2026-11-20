@@ -8,7 +8,7 @@
  * put back afterwards, as tests/stub-oauth.test.ts does.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { mkdtemp } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -155,18 +155,53 @@ describe("a hosted Workspace's dump, imported into the image", () => {
   });
 
   it("brings a dump from an older release forward with the image's own migrator", async () => {
-    const older = Object.fromEntries(Object.entries(everyMigration).slice(0, -1));
-    const latest = known.at(-1)!;
+    // A release on from this one: its migrations and one more, which the
+    // Workspace dumped here has not applied.
+    const later = join(await mkdtemp(join(tmpdir(), "deevy-later-")), "drizzle");
+    await cp(migrationsFolder, later, { recursive: true });
+    await mkdir(join(later, "29991231000000_later"));
+    await writeFile(
+      join(later, "29991231000000_later", "migration.sql"),
+      "ALTER TABLE `workspace` ADD `motto` text;",
+    );
     const path = await aVolume();
-    const report = await importDump({ dump: workspaceAt(older), path, migrationsFolder });
-    expect(report.migrations).toEqual([latest]);
+    const report = await importDump({
+      dump: workspaceAt(everyMigration),
+      path,
+      migrationsFolder: later,
+    });
+    expect(report.migrations).toEqual(["29991231000000_later"]);
 
     const db = new DatabaseSync(path);
     const names = db.prepare(`SELECT name FROM "__drizzle_migrations"`).all() as Array<{
       name: string;
     }>;
     db.close();
-    expect(names.map(({ name }) => name)).toEqual(known);
+    expect(names.map(({ name }) => name)).toEqual([...known, "29991231000000_later"]);
+  });
+
+  /**
+   * deevy's migration history started afresh in 0.12 (ADR-0031's one
+   * exception), so a Workspace dumped by a release before it shares no
+   * migration with this one, and is not one a newer deevy wrote either.
+   */
+  it("refuses a dump from before deevy's migration history started afresh", async () => {
+    const path = await aVolume();
+    // The tables every Workspace's dump holds, as a release before it made them.
+    const before = workspaceAt({
+      "20261102093420_marvelous_mojo": [
+        "CREATE TABLE `workspace` (`id` text PRIMARY KEY NOT NULL, `name` text NOT NULL, `slug` text NOT NULL);",
+        ...["member", "user", "socket", "project"].map(
+          (table) => `CREATE TABLE \`${table}\` (\`id\` text PRIMARY KEY NOT NULL);`,
+        ),
+        "CREATE TABLE `event` (`seq` integer PRIMARY KEY AUTOINCREMENT);",
+      ].join("\n--> statement-breakpoint\n"),
+    });
+
+    await expect(importDump({ dump: before, path, migrationsFolder })).rejects.toThrow(
+      /This dump was written by a deevy from before 0\.12.*20261102093420_marvelous_mojo/s,
+    );
+    expect(existsSync(path)).toBe(false);
   });
 
   it("refuses a dump from a newer release, which this image would not know the schema of", async () => {

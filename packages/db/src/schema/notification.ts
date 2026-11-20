@@ -14,9 +14,7 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
  *
  * A Human is sent nothing: what needs them is the Gates they may rule on,
  * derived for Needs me and posted in a Project's chat channel, and the
- * tracker tells them the rest. Rows of the kinds a Human was once sent
- * (`gate_awaiting`, `run_finished`, and before those `run_awaiting_input` and
- * `delegation`) no longer read; slice 12's empty database clears them.
+ * tracker tells them the rest.
  */
 export const notificationKinds = ["assignment", "mention", "run_answered"] as const;
 

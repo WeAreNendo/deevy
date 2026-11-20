@@ -477,8 +477,8 @@ A Member who signed in only with GitLab or Slack keeps their Member: they sign i
 the same verified address, and Better Auth links that sign-in back onto the same user. Linear and Atlassian
 never said an address was verified, so the user row one of them made is unverified, and Better Auth refuses
 to link onto it (`account_not_linked`, below): another provider at that address is refused, so such a
-Member cannot get back to their row until slice 12's release starts from an empty database, and is invited
-again then. The Linear application, the GitLab user and the
+Member could not get back to their row until 0.12 started from an empty database, where they are invited
+again. The Linear application, the GitLab user and the
 Slack app a Socket uses are not sign-ins, and connecting them is unchanged.
 
 **Microsoft** is Microsoft Entra ID: register an application under Entra ID › App registrations, add a web
@@ -1282,9 +1282,7 @@ with the same link, changed in place as Rulings land. Nothing said in a tool rul
 That was not always so. Until slice 10 of [simplify.md](./plans/simplify.md), a `/approve` comment or a Slack
 button could rule when deevy could place its author through a linked Identity
 ([ADR-0025](./adr/0025-the-forge-may-vouch-for-the-human-who-rules.md), superseded). A team that ruled that
-way now follows the link. The `member_identity` and `link_code` tables, and the `via`, `socket_id` and
-`external_ref` of a Ruling's row, stay in the schema unread until slice 12 drops them; a Ruling in the API is
-`{ id, memberId, decision, note, createdAt }`.
+way now follows the link. A Ruling in the API, and its row, is `{ id, memberId, decision, note, createdAt }`.
 
 What a Ruling is has not changed: the Checkpoint's policy, four eyes and Approvals, an approval standing for
 its record, the Run resuming, and Needs me as the list of what waits on a Human
@@ -1393,7 +1391,8 @@ docker run -d --name deevy ... ghcr.io/wearenendo/deevy:<version>   # same -v de
 ```
 
 From 0.11 on, every release upgrades in place, and the release before it still runs on the schema it leaves
-([ADR-0031](./adr/0031-every-release-upgrades-in-place.md)). A release's migrations only add — a table, a
+([ADR-0031](./adr/0031-every-release-upgrades-in-place.md)) — every release but 0.12, which started the
+migration history afresh ([below](#coming-from-011-or-before-start-again)). A release's migrations only add — a table, a
 column that is nullable or has a default, an index — and whatever it stops using stays in the schema until a
 later release removes it. That is what lets a gradual deployment of the many-Workspaces Worker run two
 versions side by side, and what lets you go back one release without restoring anything:
@@ -1415,6 +1414,31 @@ one did ([below](#coming-from-08-or-before-start-again)).
 A browser picks the new version up on its next page load: the image serves `index.html` to be revalidated
 every time and the content-hashed files it names to be kept for good, so nobody runs the old app against the
 new server for longer than a tab stays open.
+
+### Coming from 0.11 or before: start again
+
+0.12, the release that made deevy simpler ([simplify.md](./plans/simplify.md)), is the one exception
+ADR-0031 makes. It runs no agent, takes no Ruling from a tool, sends no email and is no OAuth server, and
+the tables and columns those kept went with a migration history that starts afresh at
+`20261120154129_init`. There were no Workspaces outside deevy Cloud's own to upgrade. So it runs on an
+**empty** database, there is no upgrade path from 0.11 or anything before it, and 0.11 does not run on what
+0.12 writes:
+
+- **Docker**: start 0.12 on a new volume. Started on a volume an older release wrote, it stops before
+  touching anything and says the database is from before 0.12; that volume is your backup, and starting
+  0.11 on it again is how you go back. On the new one, sign in as `DEEVY_ADMIN_EMAIL`, which makes the
+  Workspace, then connect your tools, bind your Projects, create your Agents and their keys, and let your
+  Humans in by the allowlist or an invitation. Records arrive from the tools as each next changes.
+- **A hosted Workspace**: deevy Cloud destroys its Workspaces and provisions them again for 0.12
+  (WeAreNendo/deevy-cloud). Deploy 0.12 whole rather than gradually: 0.11 cannot open a Workspace 0.12
+  provisioned, nor 0.12 one 0.11 migrated. A Workspace an older release migrated answers 503 with no
+  retry, and `Platform.status` for it carries the migration error, which says the database is from before
+  0.12 and to destroy and provision the Workspace again.
+- **A dump from a hosted Workspace before 0.12** does not import into 0.12: the import refuses it and says
+  why. Take it home with an image of the release it came from.
+
+`vp run server#test:previous` runs nothing until 0.12 is tagged, since the release before it shares no
+migration with it, and runs again for every release after.
 
 ### Coming from 0.8 or before: start again
 

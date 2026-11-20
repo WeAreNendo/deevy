@@ -19,13 +19,6 @@ export const workspace = sqliteTable("workspace", {
    * and an admin raises it.
    */
   maxDelegationDepth: integer("max_delegation_depth").default(3).notNull(),
-  /**
-   * Unused since deevy stopped opening sub-issues for an Agent, which was the
-   * only thing they bounded (docs/plans/simplify.md, slices 4 and 6): read by
-   * nothing. Dropped when the migration history starts afresh (slice 12).
-   */
-  maxChildrenPerIssue: integer("max_children_per_issue").default(20).notNull(),
-  maxOpenDescendants: integer("max_open_descendants").default(50).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
 });
 

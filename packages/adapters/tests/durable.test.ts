@@ -146,6 +146,31 @@ describe("migrateDurable", () => {
     storage.close();
   });
 
+  /**
+   * A hosted Workspace an older release migrated, waking on one from after
+   * the migration history started afresh (ADR-0031's one exception): every
+   * table would be built again over the ones there. deevy Cloud deletes and
+   * recreates its Workspaces for that release; one it missed is refused,
+   * saying why, rather than failing on the first CREATE TABLE.
+   */
+  it("refuses a database from before the migration history started afresh, and applies nothing", () => {
+    const storage = createNodeDurableStorage();
+    const db = createDurableDb(storage);
+    const before = { "20261102093420_marvelous_mojo": "CREATE TABLE `workspace` (`a` integer);" };
+    expect(migrateDurable(db, before).error).toBeNull();
+
+    expect(migrateDurable(db, migrations)).toEqual({
+      applied: [],
+      error: {
+        migration: null,
+        message: expect.stringMatching(/from before 0\.12.*20261102093420_marvelous_mojo/s),
+        unrelated: true,
+      },
+    });
+    expect(journal(storage)).toEqual(["20261102093420_marvelous_mojo"]);
+    storage.close();
+  });
+
   it("names no migration when what failed was the journal itself", () => {
     const storage = createNodeDurableStorage();
     const refusing: DurableStorage = {

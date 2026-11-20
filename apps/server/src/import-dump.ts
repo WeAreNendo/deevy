@@ -22,6 +22,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { openDatabase } from "@deevy/adapters/node";
 import { openSecret } from "@deevy/core";
+import { unrelatedHistory } from "@deevy/db";
 
 /** Why an import did not happen, said to the person running it. Nothing was written. */
 export class ImportRefused extends Error {
@@ -206,6 +207,10 @@ function journal(db: DatabaseSync): string[] {
  * applied a migration this release does not have.
  */
 function journalAgainst(db: DatabaseSync, known: string[]): string[] {
+  const unrelated = unrelatedHistory(journal(db), known);
+  if (unrelated !== null) {
+    throw new ImportRefused(`This dump ${unrelated}, so this release cannot import it.`);
+  }
   const applied = new Set(journal(db));
   const unknown = [...applied].filter((name) => !known.includes(name));
   if (unknown.length > 0) {

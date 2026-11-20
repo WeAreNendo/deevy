@@ -20,8 +20,14 @@
  *    forward after the rollback.
  * 6. Every contraction names an expansion the previous release carried.
  *
+ * One previous release is not run: 0.11, from before deevy's migration history
+ * started afresh (`cleanBreak` in packages/db/scripts/expand-only.ts, ADR-0031's
+ * one exception). Until the release that carries the break is tagged, the
+ * newest tag behind HEAD is one with none of this history, so this says so and
+ * stops; from the tag after the break on, it runs again.
+ *
  *     vp run server#test:previous
- *     DEEVY_PREVIOUS_TAG=v0.9.0 vp run server#test:previous
+ *     DEEVY_PREVIOUS_TAG=v0.12.0 vp run server#test:previous
  *
  * The Docker image of the previous release would do for step 2, and was the
  * other way to do it: but it needs a daemon, a pull and a volume this script
@@ -30,13 +36,13 @@
  */
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
-import { checkExpandOnly } from "../../../packages/db/scripts/expand-only.ts";
+import { beforeTheBreak, checkExpandOnly } from "../../../packages/db/scripts/expand-only.ts";
 
 const run = promisify(execFile);
 const root = new URL("../../../", import.meta.url).pathname;
@@ -267,23 +273,35 @@ function appliedMigrations(database: string): string[] {
   }
 }
 
-async function smoke(): Promise<void> {
+/** Runs the smoke, and says whether it ran: false when the previous release is excused. */
+async function smoke(): Promise<boolean> {
   const tag = await previousRelease();
   console.log(`the previous release is ${tag}`);
-  const previous = await buildRelease(tag);
   const carried = new Set(
     (await git("ls-tree", "--name-only", `${tag}:packages/db/drizzle`)).split("\n").filter(Boolean),
   );
+  const excused = beforeTheBreak(
+    { release: tag, migrations: carried },
+    (await readdir(join(root, "packages/db/drizzle"), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort(),
+  );
+  if (excused !== null) {
+    console.log(`  ..  not run: ${excused}`);
+    return false;
+  }
+  const previous = await buildRelease(tag);
 
   const data = await mkdtemp(join(tmpdir(), "deevy-previous-"));
   const database = join(data, "deevy.sqlite");
   try {
     console.log("\nthis tree, on a new database:");
     const first = await start("this tree", thisTree, database);
-    if (!first) return;
+    if (!first) return true;
     try {
       const cookie = await signIn(first.origin, adminEmail);
-      if (!check("signs the first Human in, which makes the Workspace", cookie !== "")) return;
+      if (!check("signs the first Human in, which makes the Workspace", cookie !== "")) return true;
       const created = await rpc(first.origin, "agents/create", { name: "Made here" }, cookie);
       check("creates an Agent", created.status === 200, created.body);
     } finally {
@@ -299,10 +317,10 @@ async function smoke(): Promise<void> {
 
     console.log(`\n${tag}, on this tree's schema:`);
     const older = await start(tag, previous, database);
-    if (!older) return;
+    if (!older) return true;
     try {
       const cookie = await signIn(older.origin, adminEmail);
-      if (!check(`${tag} signs the same Human in`, cookie !== "", older.output())) return;
+      if (!check(`${tag} signs the same Human in`, cookie !== "", older.output())) return true;
       const reads = await Promise.all(
         [
           ["workspace/get", {}],
@@ -336,7 +354,7 @@ async function smoke(): Promise<void> {
 
     console.log(`\nthis tree again, after the rollback:`);
     const again = await start("this tree", thisTree, database);
-    if (!again) return;
+    if (!again) return true;
     try {
       const cookie = await signIn(again.origin, adminEmail);
       const names = await agentNames(again.origin, cookie);
@@ -361,11 +379,13 @@ async function smoke(): Promise<void> {
     contractions.length === 0,
     contractions.join("\n"),
   );
+  return true;
 }
 
 if (import.meta.main) {
+  let ran = true;
   try {
-    await smoke();
+    ran = await smoke();
   } catch (error) {
     failures.push(error instanceof Error ? error.message : String(error));
   }
@@ -375,5 +395,9 @@ if (import.meta.main) {
     );
     process.exit(1);
   }
-  console.log("\nthe previous release runs on this schema");
+  console.log(
+    ran
+      ? "\nthe previous release runs on this schema"
+      : "\nthe previous release is from before the clean break, and is not run",
+  );
 }

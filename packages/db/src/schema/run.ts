@@ -7,11 +7,8 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
 /**
  * What made deevy ask an Agent to work, or that the Agent started it by hand.
- * `schedule` was another until docs/plans/simplify.md slice 6: routing and the
- * parent wake are what deevy starts a Run for now. A Run started on a schedule
- * before it no longer reads, since the API's schema is this list; slice 12's
- * empty database is what clears them, and nothing is kept for one before that
- * (that plan's convention 9).
+ * Routing and the parent wake are what deevy starts a Run for; there is no
+ * schedule (docs/plans/simplify.md, slice 6).
  */
 export const runTriggers = [
   "assignment",
@@ -103,11 +100,8 @@ export const run = sqliteTable(
 /**
  * What an Agent narrates, and only that. A question for a Human is a comment
  * on the record, in the tracker, and so is the Human's reply; a Gate, its
- * Proposal and its Ruling are the Gate's own rows. `elicitation` and `prompt`
- * were those two before docs/plans/simplify.md slice 5, and nothing writes
- * either now. A row of either kind written before it no longer reads, since the
- * API's schema is this list; slice 12's empty database is what clears them,
- * and nothing is kept for one before that (that plan's convention 9).
+ * Proposal and its Ruling are the Gate's own rows (docs/plans/simplify.md,
+ * slice 5).
  */
 export const activityKinds = ["thought", "action", "response", "error"] as const;
 
@@ -125,40 +119,4 @@ export const activity = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
   },
   (table) => [index("activity_runId_idx").on(table.runId, table.createdAt)],
-);
-
-/** The price table a harness says it priced a model at (Claude Code's `costBasis`). */
-export const usageCostBases = ["list", "managed", "unknown"] as const;
-
-/**
- * What one session of a Run's Agent spent on one model, as the client that ran
- * it reported (docs/plans/run-usage.md). Unused since deevy stopped taking
- * those reports (docs/plans/simplify.md, slice 3): read and written by
- * nothing. Dropped when the migration history starts afresh (slice 12),
- * because a dropped table is what ADR-0031's guard refuses.
- */
-export const runUsage = sqliteTable(
-  "run_usage",
-  {
-    id: text("id").primaryKey(),
-    runId: text("run_id")
-      .notNull()
-      .references(() => run.id, { onDelete: "cascade" }),
-    report: text("report").notNull(),
-    /** `claude-code`, `opencode`, `cursor`, `copilot`, or a client's own word. */
-    harness: text("harness").notNull(),
-    /** Null where the harness did not say which model. */
-    model: text("model"),
-    inputTokens: integer("input_tokens").notNull(),
-    outputTokens: integer("output_tokens").notNull(),
-    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
-    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
-    costMicroUsd: integer("cost_micro_usd"),
-    costBasis: text("cost_basis", { enum: usageCostBases }),
-    reportedAt: integer("reported_at", { mode: "timestamp_ms" }).default(now).notNull(),
-  },
-  (table) => [
-    index("run_usage_runId_idx").on(table.runId),
-    uniqueIndex("run_usage_report_model_uidx").on(table.runId, table.report, table.model),
-  ],
 );
