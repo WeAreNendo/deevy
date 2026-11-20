@@ -313,20 +313,16 @@ const socketColumnsNeverAnswered = [
 ];
 
 /**
- * What no answer anywhere may carry, by name: every sealed column (a Socket's,
- * and an invitation's `sealedToken`, unused since slice 8), what is
- * stored to check a secret against (`tokenHash`), and a webhook
- * subscription's `secret`, which goes in and never comes out.
+ * What no answer anywhere may carry, by name: every sealed column (a
+ * Socket's), what is stored to check a secret against (`tokenHash`), and a
+ * webhook subscription's `secret`, which goes in and never comes out.
  */
 const neverAnswered = new Set([
   "credentials",
   "previousWebhookSecret",
   "webhookSecretChangedAt",
-  "sealedToken",
   "tokenHash",
   "secret",
-  "clientSecret",
-  "privateKey",
 ]);
 
 /**

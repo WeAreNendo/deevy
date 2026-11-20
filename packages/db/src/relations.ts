@@ -1,7 +1,7 @@
 import { defineRelations, defineRelationsPart } from "drizzle-orm";
 import { account, apikey, authRelations, session, user, verification } from "./schema/auth.ts";
 import { agent, projectGrant } from "./schema/agent.ts";
-import { activity, run, runUsage } from "./schema/run.ts";
+import { activity, run } from "./schema/run.ts";
 import { delivery } from "./schema/delivery.ts";
 import { webhookSubscription } from "./schema/webhook.ts";
 import { allowlistRule } from "./schema/allowlist.ts";
@@ -47,7 +47,6 @@ export const tables = {
   projectGrant,
   run,
   activity,
-  runUsage,
   delivery,
   webhookSubscription,
 };

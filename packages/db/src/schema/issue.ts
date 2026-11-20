@@ -66,13 +66,6 @@ export const issue = sqliteTable(
      * which is how a tree survives a provider without sub-issues.
      */
     parentId: text("parent_id"),
-    /**
-     * Unused since deevy stopped opening records (docs/plans/simplify.md,
-     * slice 4): read by nothing and written as null. Dropped when the
-     * migration history starts afresh (slice 12), because removing a column
-     * with a foreign key is a table rebuild D1 and a Durable Object refuse.
-     */
-    createdBy: text("created_by").references(() => member.id, { onDelete: "set null" }),
     /** The provider's clock. The upsert refuses to go backwards on it. */
     externalUpdatedAt: integer("external_updated_at", { mode: "timestamp_ms" }).notNull(),
     lastSyncedAt: integer("last_synced_at", { mode: "timestamp_ms" }).default(now).notNull(),

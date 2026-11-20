@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { allowlistRule as allowlistRuleTable, allowlistRuleKinds } from "@deevy/db";
+import { allowlistRule as allowlistRuleTable } from "@deevy/db";
 import { AllowlistRuleSchema } from "../schemas.ts";
 import { ORPCError } from "@orpc/server";
 import { appendEvent } from "../events.ts";
@@ -18,11 +18,8 @@ export const allowlist = {
     input: NoInput,
     output: z.object({ rules: z.array(AllowlistRuleSchema) }),
     handler: async ({ context }) => {
-      // An organisation or group rule saved before slice 10 admits nobody now
-      // (docs/plans/simplify.md), so it is not a rule there is to list; slice
-      // 12 deletes the rows with the columns it cuts.
       const rules = await context.db.query.allowlistRule.findMany({
-        where: { workspaceId: context.workspace.id, kind: { in: [...allowlistRuleKinds] } },
+        where: { workspaceId: context.workspace.id },
         orderBy: { createdAt: "asc" },
       });
       return { rules };

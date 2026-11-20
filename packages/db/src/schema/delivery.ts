@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { event } from "./event.ts";
-import { member, workspace } from "./workspace.ts";
+import { workspace } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
@@ -9,13 +9,9 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
  * Where an outbound attempt is headed: a subscriber's URL (`webhook`), the
  * tool a Project's records come from — deevy saying a Gate on the record,
  * which is what `socket` is (ADR-0024) — or a chat tool (`chat`), where a
- * Gate is posted in the Project's channel with its buttons and changed as
- * Rulings land (ADR-0025). A `chat` row names the Project it is posted for,
- * or the chat Socket holding messages a Ruling changes.
- *
- * Before docs/plans/simplify.md, slice 8, a Slack incoming webhook, a Human's
- * direct messages and four kinds of email were destinations too. Rows owed to
- * them are found by no sweep; slice 12's empty database clears them.
+ * Gate is posted in the Project's channel with a link to it in deevy and
+ * changed as Rulings land (ADR-0036). A `chat` row names the Project it is
+ * posted for, or the chat Socket holding messages a Ruling changes.
  */
 export const deliveryTargets = ["webhook", "socket", "chat"] as const;
 
@@ -45,14 +41,6 @@ export const delivery = sqliteTable(
     eventSeq: integer("event_seq")
       .notNull()
       .references(() => event.seq, { onDelete: "cascade" }),
-    /**
-     * Unused since docs/plans/simplify.md, slice 8: the Human a direct message
-     * or an email was for. Nothing deevy sends now goes to one person; dropped
-     * when the migration history starts afresh (slice 12).
-     */
-    recipientMemberId: text("recipient_member_id").references(() => member.id, {
-      onDelete: "cascade",
-    }),
     attempts: integer("attempts").default(0).notNull(),
     nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }).default(now).notNull(),
     /** Held briefly by whoever is sending it, since a Durable Object has no interactive transactions. */

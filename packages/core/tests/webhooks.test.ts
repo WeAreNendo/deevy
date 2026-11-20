@@ -163,8 +163,6 @@ describe("what an Event owes a subscriber", () => {
       eventSeq: created?.seq,
       attempts: 0,
       deliveredAt: null,
-      // A room has recipients; a URL has none.
-      recipientMemberId: null,
     });
     // The body is rendered from the Event when it is sent (ADR-0003), so there
     // is nothing here that could disagree with the log.

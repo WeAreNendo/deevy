@@ -51,7 +51,8 @@ deevy logs to standard output and standard error, so `docker logs deevy` has it 
 
 - `deevy listening on …` once it has started.
 - Why it refused to start, when it does: a `/data` it can't write, with the command that fixes it; a
-  development stand-in under production.
+  development stand-in under production; a database from before 0.12, which it doesn't upgrade
+  ([Upgrading](/self-hosting/upgrading/#from-011-or-earlier)).
 - A warning when its database carries migrations from a newer release, after
   [going back one release](/self-hosting/upgrading/#going-back-one-release).
 - A line when your own identity provider couldn't be reached at startup.

@@ -1,4 +1,4 @@
-import { project as projectTable, socket as socketTable, type Db, type Socket } from "@deevy/db";
+import { socket as socketTable, type Db, type Socket } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -174,34 +174,6 @@ describe("everything a Project says back", () => {
     const sent = await send();
 
     expect(sent).toMatchObject({ delivered: 2, failed: 0 });
-    expect(fake.comments.map((one) => one.body.split("\n")[0])).toEqual([
-      "**Waiting on a ruling at the `ship` Checkpoint.**",
-      "**Approved** at the `ship` Checkpoint — 1 of 1.",
-    ]);
-  });
-
-  // What a Project's old `mirror` setting held stays in its column until the
-  // clean break (schema/project.ts), and must change nothing: a Project once
-  // set to say nothing now announces its Gates, and one set to say its Runs as
-  // well no longer does.
-  it.each(["off", "runs"] as const)("is the same on a Project once set to %s", async (level) => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { asPlanner, asBob, run, seeded, fake, send } = await mirroring(db);
-    await db
-      .update(projectTable)
-      .set({ mirror: level })
-      .where(eq(projectTable.id, seeded.project.id));
-
-    const asked = await asPlanner.gates.request({
-      runId: run.id,
-      checkpoint: "ship",
-      proposal: "Ship it",
-    });
-    await asBob.gates.approve({ requestId: asked.id });
-    await asPlanner.runs.finish({ runId: run.id, status: "completed", summary: "Shipped" });
-    await send();
-
     expect(fake.comments.map((one) => one.body.split("\n")[0])).toEqual([
       "**Waiting on a ruling at the `ship` Checkpoint.**",
       "**Approved** at the `ship` Checkpoint — 1 of 1.",
