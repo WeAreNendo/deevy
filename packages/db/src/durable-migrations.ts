@@ -33,4 +33,6 @@ export const migrations: Record<string, string> = {
     "CREATE TABLE `email_sender` (\n\t`workspace_id` text PRIMARY KEY NOT NULL,\n\t`sender` text NOT NULL,\n\t`from` text NOT NULL,\n\t`config` text NOT NULL,\n\t`credentials` text NOT NULL,\n\t`updated_by` text,\n\t`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,\n\tCONSTRAINT `fk_email_sender_workspace_id_workspace_id_fk` FOREIGN KEY (`workspace_id`) REFERENCES `workspace`(`id`) ON DELETE CASCADE,\n\tCONSTRAINT `fk_email_sender_updated_by_member_id_fk` FOREIGN KEY (`updated_by`) REFERENCES `member`(`id`) ON DELETE SET NULL\n);\n",
   "20261009073317_loose_vulcan":
     "ALTER TABLE `invitation` ADD `sealed_token` text;",
+  "20261102093420_marvelous_mojo":
+    "ALTER TABLE `project` ADD `chat_socket_id` text REFERENCES socket(id) ON DELETE SET NULL;--> statement-breakpoint\nALTER TABLE `project` ADD `chat_channel` text;",
 };

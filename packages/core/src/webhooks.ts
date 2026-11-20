@@ -16,9 +16,11 @@ import {
   type Event,
 } from "@deevy/db";
 import { and, eq, isNull } from "drizzle-orm";
-import type { FetchLike } from "./slack.ts";
 import { newId } from "./ids.ts";
 import { signPayload } from "./signature.ts";
+
+/** The way out, narrowed to what deevy calls it with, so a test can pass its own. */
+export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
 /**
  * The deliveries one Event owes the URLs that asked for it, written in the

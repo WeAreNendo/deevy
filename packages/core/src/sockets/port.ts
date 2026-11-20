@@ -261,6 +261,14 @@ export interface ChatGateMessage {
   rulings: string[];
 }
 
+/** A channel deevy could post a Project's Gates in, as the picker offers it. */
+export interface ChatChannel {
+  /** The tool's own id for it, which a Project binds: `C0123ABCD` in Slack. */
+  id: string;
+  /** What a Human calls it, without the `#`. */
+  name: string;
+}
+
 /** One message deevy sends to a chat tool: words and a link, or a Gate. */
 export type ChatMessage =
   | { kind: "text"; text: string; link: { url: string; label: string } | null }
@@ -279,8 +287,12 @@ export interface ChatSocket {
   answer(reply: ChatReply): Response;
   post(channel: string, message: ChatMessage): Promise<ChatMessageRef>;
   update(ref: ChatMessageRef, message: ChatMessage): Promise<void>;
-  /** The direct conversation with one user, opened if it was not. */
-  openDm(user: string): Promise<string>;
+  /**
+   * The channels deevy could post in, which a Project's chat binding is picked
+   * from. Absent, an admin types the channel's id instead (`sockets.channels`
+   * answers null), as a tracker without `listContainers` has its key typed.
+   */
+  listChannels?(): Promise<ChatChannel[]>;
   /** A dialog asking why, for a rejection clicked from a button. */
   askForNote(
     triggerId: string,

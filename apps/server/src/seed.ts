@@ -530,16 +530,6 @@ await applyInbound({
 
 // ----------------------------------------------------------------- delivery
 
-const slack = await admin.api.channels.create({
-  name: "#deevy",
-  webhookUrl: "https://hooks.slack.com/services/T0000000/B0000000/seeded-and-never-posted",
-});
-await admin.api.routing.set({
-  rules: [
-    { notificationKind: "run_finished", projectId: dev.id, channelId: slack.id },
-    { notificationKind: "gate_awaiting", projectId: null, channelId: slack.id },
-  ],
-});
 await admin.api.webhooks.create({
   url: "https://runtime.example/deevy",
   secret: "seed-secret-that-nobody-verifies-0000",
@@ -548,11 +538,11 @@ await admin.api.webhooks.create({
 
 // ------------------------------------------------------------------ summary
 
-const inbox = await admin.api.inbox.unreadCount({});
+const needs = await admin.api.gates.list({ mine: true });
 console.log("");
 console.log(`Projects    ${dev.name} and ${ops.name}, both bound to ${socket.name}`);
 console.log(`Records     ${String(opened)} projected from the tracker`);
-console.log(`Inbox       ${String(inbox.unread)} unread for the admin`);
+console.log(`Needs me    ${String(needs.gates.length)} Gates the admin may rule on`);
 console.log("");
 console.log(
   "Sign in with DEEVY_DEV_STUB_OAUTH=1 as any of the three Humans. The Agents' keys, shown once:",

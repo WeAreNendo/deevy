@@ -2,9 +2,7 @@ import type { AssetFetcher } from "@deevy/adapters/workers";
 import { MISSING_AUTH_SECRET, providersFromEnv, signInRelayFromEnv } from "@deevy/core";
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
-import type { EmailSetup } from "@deevy/core/email";
-import { readEmailEnv } from "@deevy/email";
-import type { CloudflareEmailBinding, createDb, QueueProducer } from "@deevy/adapters/workers";
+import type { createDb, QueueProducer } from "@deevy/adapters/workers";
 
 /**
  * How often a stream on Workers looks for new Events. Slower than Node's
@@ -54,12 +52,6 @@ export interface WorkerBindings {
    */
   JOBS?: QueueProducer;
   /**
-   * Cloudflare Email Service's `send_email` binding (docs/plans/email-channel.md),
-   * when the deployment declared one: `DEEVY_EMAIL_SENDER=cloudflare` sends
-   * through it. Beta, and reaching any recipient needs Workers Paid.
-   */
-  EMAIL?: CloudflareEmailBinding;
-  /**
    * One Durable Object per live Document (ADR-0021). Optional for the same
    * reason `JOBS` is: Durable Objects are a paid feature, and a deployment
    * without them still serves every Document the way it did before — read,
@@ -87,20 +79,6 @@ export interface WorkerBindings {
    * Agent cannot tell them apart (docs/acceptance.md).
    */
   DEEVY_DEV_STUB_SOCKETS?: string;
-  /** Email (docs/plans/email-channel.md): the sender, its From, and its key. */
-  DEEVY_EMAIL_SENDER?: string;
-  DEEVY_EMAIL_FROM?: string;
-  RESEND_API_KEY?: string;
-  POSTMARK_SERVER_TOKEN?: string;
-  POSTMARK_MESSAGE_STREAM?: string;
-  SENDGRID_API_KEY?: string;
-  MAILGUN_API_KEY?: string;
-  MAILGUN_DOMAIN?: string;
-  MAILGUN_REGION?: string;
-  AWS_SES_REGION?: string;
-  AWS_SES_ACCESS_KEY_ID?: string;
-  AWS_SES_SECRET_ACCESS_KEY?: string;
-  DEEVY_DEV_STUB_EMAIL?: string;
   DEEVY_DEV_STUB_CONTAINERS?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
@@ -126,7 +104,6 @@ export interface WorkerBindings {
   DEEVY_ADMIN_EMAIL?: string;
   DEEVY_WORKSPACE_NAME?: string;
   DEEVY_RUN_STALE_MINUTES?: string;
-  DEEVY_GATE_REMINDER_HOURS?: string;
   DEEVY_STREAM_SECONDS?: string;
 }
 
@@ -166,14 +143,6 @@ export interface WorkerEnv {
   workspaceName?: string;
   /** Silence after which a Run is presumed stale (docs/plans/m2.md). */
   runStaleMinutes: number;
-  /** Hours a Gate may sit undecided before its approvers are asked again. */
-  gateReminderHours: number;
-  /** The email sender these bindings configure, or none (docs/plans/email-channel.md). */
-  email: EmailSetup | null;
-  /** Why the bindings' sender could not be read, when they set one up halfway. */
-  emailProblem: string | null;
-  /** Whether the email stand-in may run here, as the Socket stub may. */
-  devStubEmail: boolean;
   /**
    * What this runtime allows an Event stream. Workers-only: on Node the stream
    * lives as long as the request, and `apps/server` passes nothing
@@ -188,22 +157,12 @@ function positive(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/** The email half of the bindings: a sender, or the problem with the one they name. */
-function emailFrom(env: WorkerBindings): { email: EmailSetup | null; emailProblem: string | null } {
-  const read = readEmailEnv(env as unknown as Record<string, string | undefined>, {
-    devStub: env.DEEVY_DEV_STUB_EMAIL === "1",
-  });
-  if (read.problem) console.error(`deevy sends no email: ${read.problem}`);
-  return { email: read.setup, emailProblem: read.problem };
-}
-
 /**
  * Why this Worker serves nothing, or null when it may: no `BETTER_AUTH_SECRET`.
  * workerd without `nodejs_compat` shows Better Auth no `NODE_ENV`, so it never
  * refuses the default it falls back to and would sign everybody in on a
  * published value (`MISSING_AUTH_SECRET`). Asked before the isolate is built,
- * so nothing is ever signed with it; unlike a half-configured sender, there is
- * nothing here that may stay up without it.
+ * so nothing is ever signed with it, and nothing here may stay up without it.
  */
 export function authSecretProblem(env: WorkerBindings): string | null {
   return env.BETTER_AUTH_SECRET?.trim() ? null : MISSING_AUTH_SECRET;
@@ -222,11 +181,6 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
     socketSecret: env.DEEVY_SECRET,
     githubApi: env.DEEVY_GITHUB_API,
     devStubSockets: env.DEEVY_DEV_STUB_SOCKETS === "1",
-    // One reader for both runtimes, so a variable means the same on either;
-    // here a half-configured sender is kept as a problem rather than thrown,
-    // or every request — the page that would say so included — fails.
-    ...emailFrom(env),
-    devStubEmail: env.DEEVY_DEV_STUB_EMAIL === "1",
     devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
     webOrigin: env.DEEVY_WEB_ORIGIN,
     providers: providersFromEnv(env),
@@ -234,7 +188,6 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
     adminEmail: env.DEEVY_ADMIN_EMAIL,
     workspaceName: env.DEEVY_WORKSPACE_NAME,
     runStaleMinutes: positive(env.DEEVY_RUN_STALE_MINUTES, 30),
-    gateReminderHours: positive(env.DEEVY_GATE_REMINDER_HOURS, 4),
     live: {
       pollMs: STREAM_POLL_MS,
       maxDurationMs: positive(env.DEEVY_STREAM_SECONDS, defaultStreamSeconds) * 1000,

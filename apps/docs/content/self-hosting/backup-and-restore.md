@@ -9,9 +9,8 @@ A deevy backup is two things: the database, and the two secrets it was written w
 
 - **The database** holds the whole Workspace: its Members, Agents, Sockets, Projects, Runs, Gates and its
   Event log.
-- **`DEEVY_SECRET`** opens what deevy sealed in it: the credentials of the tools you connected, and an
-  email key saved in Settings. A database restored without it works, but every tool has to be connected
-  again.
+- **`DEEVY_SECRET`** opens what deevy sealed in it: the credentials of the tools you connected. A database
+  restored without it works, but every tool has to be connected again.
 - **`BETTER_AUTH_SECRET`** opens sign-ins. A database restored with a different one works, but everybody
   signs in again, and MCP clients and the CLI get no new tokens until you delete its OAuth signing keys
   (`DELETE FROM jwks;`).

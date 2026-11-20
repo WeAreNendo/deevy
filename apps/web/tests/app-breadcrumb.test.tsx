@@ -32,10 +32,6 @@ describe("crumbsFor", () => {
     ]);
   });
 
-  it("names the Inbox, which is a place of deevy's own", () => {
-    expect(crumbsFor("/inbox", name).map((c) => c.label)).toEqual(["Inbox"]);
-  });
-
   it("walks the three places deevy still keeps: Runs, Work and a Gate", () => {
     expect(crumbsFor("/runs", name).map((c) => c.label)).toEqual(["Runs"]);
     // One Run is under the feed it came from, named by its id: a Run has no

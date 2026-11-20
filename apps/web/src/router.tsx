@@ -6,12 +6,6 @@ import {
   redirect,
 } from "@tanstack/react-router";
 
-declare module "@tanstack/react-router" {
-  interface StaticDataRouteOption {
-    /** The page owns its padding and height — the Inbox's two panes — so the shell adds none. */
-    bleed?: boolean;
-  }
-}
 import { dropInvitation } from "./lib/invitation.ts";
 import { GatePage } from "./routes/gates/gate.tsx";
 import { RunsPage, parseRunsSearch } from "./routes/runs/list.tsx";
@@ -22,16 +16,12 @@ import { parseWorkSearch } from "./components/work-filters.tsx";
 import { HomePage } from "./routes/home.tsx";
 import { ConsentPage } from "./routes/consent.tsx";
 import { TokensPage } from "./routes/dev/tokens.tsx";
-import { InboxPage, parseInboxSearch } from "./routes/inbox.tsx";
 import { NotFoundPage } from "./routes/not-found.tsx";
 import { ProjectsSettingsPage } from "./routes/settings/projects.tsx";
-import { ChannelsPage } from "./routes/settings/channels.tsx";
-import { EmailPage } from "./routes/settings/email.tsx";
 import { SocketsPage } from "./routes/settings/sockets.tsx";
 import { SocketPage } from "./routes/settings/socket.tsx";
 import { EventLogPage } from "./routes/settings/events.tsx";
 import { SettingsLayout } from "./routes/settings/layout.tsx";
-import { NotificationsPage } from "./routes/settings/notifications.tsx";
 import { WebhooksPage } from "./routes/settings/webhooks.tsx";
 import { WorkspacePage } from "./routes/settings/workspace.tsx";
 import { McpClientsPage } from "./routes/settings/mcp-clients.tsx";
@@ -129,24 +119,6 @@ const workItemRoute = createRoute({
     return <WorkItemPage issueId={workItemRoute.useParams().issueId} />;
   },
 });
-const inboxRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/inbox",
-  staticData: { bleed: true },
-  validateSearch: (search: Record<string, unknown>) => parseInboxSearch(search),
-  component: function InboxRoute() {
-    const search = inboxRoute.useSearch();
-    const navigate = inboxRoute.useNavigate();
-    return (
-      <InboxPage
-        search={search}
-        onSearch={(patch) =>
-          void navigate({ search: (previous) => parseInboxSearch({ ...previous, ...patch }) })
-        }
-      />
-    );
-  },
-});
 // The Settings area: one layout route with its own navigation, and the pages
 // as its children so `/settings/<page>` keeps every URL it had.
 const settingsRoute = createRoute({
@@ -224,25 +196,10 @@ const agentsRoute = createRoute({
   path: "agents",
   component: AgentsPage,
 });
-const channelsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: "channels",
-  component: ChannelsPage,
-});
-const emailRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: "email",
-  component: EmailPage,
-});
 const webhooksRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "webhooks",
   component: WebhooksPage,
-});
-const notificationsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: "notifications",
-  component: NotificationsPage,
 });
 // The Allowlist is a section of Workspace › General since 2026-09-07; the path
 // it had for a year stays, as a redirect, so a bookmark still lands on it.
@@ -315,7 +272,6 @@ const routeTree = rootRoute.addChildren([
   runRoute,
   workRoute,
   workItemRoute,
-  inboxRoute,
   projectRoute,
   settingsRoute.addChildren([
     settingsIndexRoute,
@@ -328,10 +284,7 @@ const routeTree = rootRoute.addChildren([
     membersRoute,
     agentsRoute,
     agentRoute,
-    channelsRoute,
-    emailRoute,
     webhooksRoute,
-    notificationsRoute,
     allowlistRoute,
     identitiesRoute,
     mcpClientsRoute,

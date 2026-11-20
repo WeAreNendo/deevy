@@ -19,8 +19,6 @@ const stub = vi.hoisted(() => ({
   accepted: [] as string[],
   /** What `invitations.accept` refuses with, when it refuses. */
   refusal: null as string | null,
-  /** Why `invitations.create` did not email the link, when it did not. */
-  emailNotSent: null as string | null,
   session: null as { user: { email: string; emailVerified?: boolean } } | null,
   member: null as { id: string; role: string } | null,
   /** What this deployment signs in with, as `health.ping` reports it: GitHub unless a test says. */
@@ -85,9 +83,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
           revokedAt: null,
           url: "https://deevy.example.com/invite/s3cret-token",
           path: "/invite/s3cret-token",
-          emailStatus: stub.emailNotSent ? null : "queued",
-          emailError: null,
-          emailNotSent: stub.emailNotSent,
         };
       },
       revoke: async (input: { invitationId: string }) => {
@@ -122,7 +117,6 @@ afterEach(() => {
   stub.revoked = [];
   stub.accepted = [];
   stub.refusal = null;
-  stub.emailNotSent = null;
   stub.session = null;
   stub.member = null;
   stub.providers = [github];
@@ -198,7 +192,11 @@ describe("the Invited row of Workspace › General", () => {
     expect(await screen.findByText("grace@example.com")).toBeTruthy();
   });
 
-  it("says the link is on its way by email, and still shows it once", async () => {
+  it("copies the link, which is the only way it reaches them", async () => {
+    // deevy sends no email (docs/plans/simplify.md, slice 8): the admin sends
+    // the link however they like, so the one sight of it offers to copy it.
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     mount(<InvitationsRow />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Invite someone" }));
@@ -206,13 +204,16 @@ describe("the Invited row of Workspace › General", () => {
       target: { value: "grace@example.com" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create invitation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy the link" }));
 
-    expect(await screen.findByText(/Emailing the link to grace@example\.com/)).toBeTruthy();
-    expect(screen.getByText(/only time the link is shown/)).toBeTruthy();
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/invite/s3cret-token`);
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+    expect(screen.queryByText(/emailed|emailing/i)).toBeNull();
   });
 
-  it("says why the link was not emailed, so the admin sends it", async () => {
-    stub.emailNotSent = "No email sender is configured.";
+  it("says so when the browser will not copy, rather than that it did", async () => {
+    // A deevy served over plain http has no clipboard to write to.
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     mount(<InvitationsRow />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Invite someone" }));
@@ -220,37 +221,10 @@ describe("the Invited row of Workspace › General", () => {
       target: { value: "grace@example.com" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create invitation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy the link" }));
 
-    expect(await screen.findByText(/Not emailed: No email sender is configured\./)).toBeTruthy();
-  });
-
-  it("says on a row whether its email went", async () => {
-    stub.invitations = [
-      {
-        id: "inv-1",
-        email: "grace@example.com",
-        role: "member",
-        expiresAt: week(),
-        acceptedAt: null,
-        revokedAt: null,
-        emailStatus: "failed",
-        emailError: "Invalid To address",
-      },
-      {
-        id: "inv-2",
-        email: "ken@example.com",
-        role: "member",
-        expiresAt: week(),
-        acceptedAt: null,
-        revokedAt: null,
-        emailStatus: "sent",
-        emailError: null,
-      },
-    ];
-    mount(<InvitationsRow />);
-
-    expect(await screen.findByText(/Email failed: Invalid To address/)).toBeTruthy();
-    expect(screen.getByText("Emailed")).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/would not copy it/);
+    expect(screen.queryByRole("button", { name: "Copied" })).toBeNull();
   });
 
   it("revokes an invitation from its row", async () => {

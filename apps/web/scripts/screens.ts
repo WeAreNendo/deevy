@@ -50,7 +50,6 @@ const firstSocket = `fetch("/api/sockets").then((r) => r.json()).then((j) => "/s
 const shots: Shot[] = [
   { name: "sign-in", path: "/" }, // taken before signing in
   { name: "needs-me", path: "/" },
-  { name: "inbox", path: "/inbox" },
   { name: "runs", path: "/runs" },
   { name: "run", path: { find: firstRun } },
   { name: "gate", path: { find: openGate } },
@@ -65,10 +64,10 @@ const shots: Shot[] = [
   { name: "settings-events", path: "/settings/events" },
   { name: "needs-me-dark", path: "/", theme: "dark" },
   { name: "gate-dark", path: { find: openGate }, theme: "dark" },
-  { name: "inbox-dark", path: "/inbox", theme: "dark" },
+  { name: "runs-dark", path: "/runs", theme: "dark" },
   { name: "needs-me-phone", path: "/", phone: true },
   { name: "gate-phone", path: { find: openGate }, phone: true },
-  { name: "inbox-phone", path: "/inbox", phone: true },
+  { name: "runs-phone", path: "/runs", phone: true },
 ];
 
 /** The little of the DevTools protocol this needs: send a command, await its result, watch one event. */
@@ -260,7 +259,7 @@ try {
   const who = await evaluate<string>(page, "document.body.innerText.slice(0, 200)");
   if (/Continue with /.test(who)) throw new Error(`sign-in as ${email} did not take`);
 
-  // DEEVY_SCREENS_ONLY=gate,inbox-phone takes those shots alone (the sign-in one always).
+  // DEEVY_SCREENS_ONLY=gate,runs-phone takes those shots alone (the sign-in one always).
   const only = process.env.DEEVY_SCREENS_ONLY?.split(",").map((name) => name.trim());
   for (const shot of signedIn.filter((candidate) => !only || only.includes(candidate.name))) {
     // A blank page between shots ends the previous document, and with it the

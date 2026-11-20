@@ -92,7 +92,7 @@ describe("the Run lifecycle", () => {
     expect(events.events.filter((event) => event.kind === "run.awaiting_input")).toHaveLength(1);
   });
 
-  it("finishes with a summary, and tells the Human behind it once", async () => {
+  it("finishes with a summary, and tells nobody in deevy", async () => {
     const { asAdmin, asAgent, issue } = await workspaceWithAgent();
     const run = await asAgent.runs.start({ issue: issue.url });
     await asAgent.runs.postActivity({ runId: run.id, kind: "thought", body: "Working" });
@@ -105,8 +105,9 @@ describe("the Run lifecycle", () => {
 
     expect(finished).toMatchObject({ status: "completed", summary: "Opened a pull request" });
     expect(finished.finishedAt).toBeInstanceOf(Date);
-    const { notifications } = await asAdmin.inbox.list({});
-    expect(notifications.filter((row) => row.kind === "run_finished")).toHaveLength(1);
+    // The tracker is where a Human hears how the work ended (slice 8): a
+    // Human has no inbox, and is told only at a Gate.
+    await expect(asAdmin.inbox.list({})).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("refuses an Agent posting into another Agent's Run", async () => {

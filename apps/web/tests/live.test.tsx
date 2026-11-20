@@ -38,12 +38,10 @@ vi.mock("../src/lib/orpc.ts", async () => {
     sockets: { list: async () => ({ sockets: [] }) },
     // Namespaces the hook only ever names a key of; nothing here is called.
     links: {},
-    inbox: {},
+    gates: {},
     // stillChanging tells a Run's detail from its list by key, so both need a shape.
     runs: { get: async () => ({}), list: async () => ({ runs: [] }) },
     agents: {},
-    channels: {},
-    routing: {},
     webhooks: {},
     workspace: {},
     me: {},
@@ -376,17 +374,15 @@ describe("useLiveEvents", () => {
     // And what an Issue Event touches beside the Issue: what is shown with it.
     const all = JSON.stringify(invalidated);
     expect(all).toContain("links");
-    expect(all).toContain("inbox");
     expect(all).not.toContain("members");
   });
 });
 
 describe("keysFor", () => {
   it("re-reads what a Workspace Event and a Member Event show besides themselves", () => {
-    // routing.updated is a Workspace Event, and me.get carries the Workspace's name.
+    // me.get carries the Workspace's name.
     const workspace = JSON.stringify(keysFor({ subjectType: "workspace", projectId: null }));
     expect(workspace).toContain('"workspace"');
-    expect(workspace).toContain('"routing"');
     expect(workspace).toContain('"me"');
     // A role change or a suspension reaches the caller through me.get.
     const member = JSON.stringify(keysFor({ subjectType: "member", projectId: null }));

@@ -1,5 +1,4 @@
 import {
-  createCloudflareSender,
   createDb,
   createQueueJobQueue,
   isAppPath,
@@ -19,8 +18,6 @@ import {
   type AuthEnv,
   type DueWorkLimits,
 } from "@deevy/core";
-import type { EmailSenders } from "@deevy/core/email";
-import { emailSenders } from "@deevy/email";
 import { devTrackerView, socketModules } from "@deevy/sockets";
 import type { WorkerBindings, WorkerEnv } from "./env.ts";
 import { authSecretProblem, readWorkerEnv, workerAuthEnv } from "./env.ts";
@@ -58,12 +55,6 @@ interface Isolate {
    */
   authEnv: AuthEnv;
   /**
-   * The email senders this Worker can run: the HTTP ones, and Cloudflare
-   * Email Service when an `EMAIL` binding exists (docs/plans/email-channel.md).
-   * Built once, for the requests and the Cron Trigger alike.
-   */
-  emailSenders: EmailSenders;
-  /**
    * Better Auth starts initialising inside its constructor, and that touches
    * the database. workerd abandons any I/O still in flight when the request
    * that started it returns, so a `$context` left pending by the request that
@@ -90,17 +81,6 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
   const origin = [env.webOrigin, env.baseURL].filter((o): o is string => Boolean(o));
   const authEnv = workerAuthEnv(env);
   const auth = createAuth({ db, env: authEnv });
-  const senders: EmailSenders = {
-    ...emailSenders({ devStub: env.devStubEmail }),
-    ...(bindings.EMAIL
-      ? {
-          cloudflare: (
-            (binding) => () =>
-              createCloudflareSender(binding)
-          )(bindings.EMAIL),
-        }
-      : {}),
-  };
   const isolate: Isolate = {
     app: createApp({
       version: DEEVY_VERSION,
@@ -143,11 +123,6 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
       // What their credentials are sealed with. A Worker without it can serve
       // a Socket that holds none and refuses to connect one that does.
       ...(env.socketSecret ? { socketSecret: env.socketSecret } : {}),
-      // How email leaves, for what an operation sends now (docs/plans/email-channel.md).
-      emailSenders: senders,
-      email: env.email,
-      // A sender the bindings set up halfway: said under Settings › Email.
-      ...(env.emailProblem ? { emailProblem: env.emailProblem } : {}),
       // Only when the account has Queues. Absent, `createApp` discards jobs
       // and every delivery waits for the next Cron pass, which is the whole
       // difference an optional binding makes (docs/plans/m3.md slice 9).
@@ -158,7 +133,6 @@ export function isolateFor(bindings: WorkerBindings): Isolate {
     db,
     env,
     authEnv,
-    emailSenders: senders,
     ready: auth.$context.then(
       () => undefined,
       () => undefined,
@@ -256,7 +230,6 @@ export default {
           limits: {
             ...cronLimits,
             silenceMs: isolate.env.runStaleMinutes * 60_000,
-            gateSilenceMs: isolate.env.gateReminderHours * 3_600_000,
           },
           // As in the request path: a link a Human clicks is built on the
           // SPA's origin when it has one (docs/plans/sign-in.md).
@@ -280,11 +253,6 @@ export default {
               : {}),
           }),
           ...(isolate.env.socketSecret ? { socketSecret: isolate.env.socketSecret } : {}),
-          // How email leaves: the senders a Worker can run, and the one the
-          // bindings chose (docs/plans/email-channel.md).
-          emailSenders: isolate.emailSenders,
-          email: isolate.env.email,
-          ...(isolate.env.secret ? { secret: isolate.env.secret } : {}),
         }),
       ),
     );

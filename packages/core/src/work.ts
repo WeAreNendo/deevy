@@ -1,9 +1,8 @@
 import {
-  channel as channelTable,
+  delivery as deliveryTable,
   event as eventTable,
   issue as issueTable,
   socketMirror as socketMirrorTable,
-  notification as notificationTable,
   project as projectTable,
   run as runTable,
   webhookSubscription as webhookSubscriptionTable,
@@ -14,31 +13,15 @@ import {
 } from "@deevy/db";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import type { EventKind } from "./events.ts";
-import {
-  deriveNotifications,
-  gateRequestIdOf,
-  isHumanNotificationKind,
-  issueOf,
-  notificationKindOf,
-} from "./notifications.ts";
+import { gateRequestIdOf, issueOf } from "./notifications.ts";
 import { appendEvent } from "./events.ts";
 import { mirrorFor } from "./sockets/mirror.ts";
 import { chatGateMessage } from "./sockets/chat-out.ts";
 import { forgetOldDeliveries } from "./sockets/hooks.ts";
-import type { ChatMessage, SocketModules } from "./sockets/port.ts";
+import type { ChatMessage, ChatMessageRef, SocketModule, SocketModules } from "./sockets/port.ts";
 import { socketModuleFor } from "./sockets/registry.ts";
-import {
-  workItemUrl,
-  postSlackMessage,
-  slackMessage,
-  type FetchLike,
-  type SlackPayload,
-} from "./slack.ts";
-import { deriveWebhookDeliveriesForMany, postWebhook } from "./webhooks.ts";
+import { deriveWebhookDeliveriesForMany, postWebhook, type FetchLike } from "./webhooks.ts";
 import { newId } from "./ids.ts";
-import { deliverDueEmails } from "./email/deliver.ts";
-import type { EmailSenders, EmailSetup } from "./email/port.ts";
-import type { WorkspaceLimits } from "./limits.ts";
 import {
   claimDeliveries,
   dueDeliveries,
@@ -49,7 +32,6 @@ import {
   type Backoff,
   type Claimed,
   type DueDeliveriesQueryOptions,
-  type Targets,
 } from "./outbox.ts";
 
 /**
@@ -215,28 +197,29 @@ export async function sweepStaleRuns({
 }
 
 /**
- * What is owed to somewhere outside deevy, in two arms over one table.
+ * What is owed to somewhere outside deevy, in three arms over one table.
  *
- * A Slack Channel and a subscribed URL are the same problem: a message owed to
- * a destination that may be down, retried until it lands or is given up on. So
- * they share the `delivery` table (schema/delivery.ts), the claim that makes
- * two senders safe without a transaction, the backoff, and the recording of
- * what came back. What differs is what the message says, how patient each is,
- * and — for a webhook — the signature, and the Event that records giving up.
+ * A chat tool, a tracker and a subscribed URL are the same problem: a message
+ * owed to a destination that may be down, retried until it lands or is given
+ * up on. So they share the `delivery` table (schema/delivery.ts), the claim
+ * that makes two senders safe without a transaction, the backoff, and the
+ * recording of what came back. What differs is what the message says, how
+ * patient each is, and — for a webhook — the signature, and the Event that
+ * records giving up.
  */
 
 /** Deliveries one pass may send. Slack answers in tens of milliseconds; twenty fits a tick. */
 export const defaultDeliveryLimit = 20;
 
 /**
- * Attempts before a Slack message is given up on. Six, with the backoff below,
+ * Attempts before a chat message is given up on. Six, with the backoff below,
  * spans about a quarter of an hour: long enough to ride out a blip, and a
- * missed Notification still has the inbox behind it.
+ * Gate missed in Slack is still on Needs me.
  */
 export const maxDeliveryAttempts = 6;
 
 /**
- * A webhook is given up on later than a Slack message, at eight attempts and
+ * A webhook is given up on later than a chat message, at eight attempts and
  * about twenty minutes. That does not outlast a runtime that is down for an
  * afternoon, and it is not meant to: ADR-0003 pairs retries with polling, and
  * an Agent that comes back later finds its work with runs.list rather than
@@ -245,8 +228,8 @@ export const maxDeliveryAttempts = 6;
  */
 export const maxWebhookAttempts = 8;
 
-/** Slack: 30s, 1m, 2m, 4m, 8m, and then it is given up on. */
-const slackBackoff: Backoff = { firstMs: 30_000, ceilingMs: 60 * 60_000, jitter: false };
+/** A chat tool: 30s, 1m, 2m, 4m, 8m, and then it is given up on. */
+const chatBackoff: Backoff = { firstMs: 30_000, ceilingMs: 60 * 60_000, jitter: false };
 
 /** A webhook: 10s doubling to a six-hour ceiling (docs/plans/m2.md). */
 const webhookBackoff: Backoff = { firstMs: 10_000, ceilingMs: 6 * 60 * 60_000, jitter: true };
@@ -254,35 +237,12 @@ const webhookBackoff: Backoff = { firstMs: 10_000, ceilingMs: 6 * 60 * 60_000, j
 /** Exhausted deliveries whose Events go in one statement; each row binds six columns. */
 const exhaustedRowsPerInsert = 16;
 
-/** The Slack arm's due scan. Exported so a test can EXPLAIN it: the plan is the guarantee. */
-export function dueDeliveriesQuery(
-  db: Db,
-  { maxAttempts = maxDeliveryAttempts, ...options }: DueDeliveriesQueryOptions,
-) {
-  return dueDeliveries(db, "slack", { ...options, maxAttempts });
-}
-
-/** The webhook arm's, which differs only in the destination and in how patient it is. */
+/** The webhook arm's due scan. Exported so a test can EXPLAIN it: the plan is the guarantee. */
 export function dueWebhookDeliveriesQuery(
   db: Db,
   { maxAttempts = maxWebhookAttempts, ...options }: DueDeliveriesQueryOptions,
 ) {
   return dueDeliveries(db, "webhook", { ...options, maxAttempts });
-}
-
-export interface DeliverDueChannelMessagesOptions {
-  db: Db;
-  workspaceId: string;
-  /** The public origin of this instance, so every message links back to the Issue. */
-  baseUrl: string;
-  /** The clock, so a test does not have to wait out the backoff. */
-  now?: Date;
-  /** Most deliveries to send in one pass. */
-  limit?: number;
-  /** Attempts before a delivery is given up on. */
-  maxAttempts?: number;
-  /** The way out to Slack. A test passes its own and never reaches the network. */
-  fetch?: FetchLike;
 }
 
 export interface DeliveryResult {
@@ -296,132 +256,6 @@ export interface DeliveryResult {
   gaveUp: number;
   /** The limit was reached, so call again rather than raising the limit. */
   more: boolean;
-}
-
-/**
- * Sends what the Event log says is owed to a Slack Channel.
- *
- * Bounded exactly like the sweeps above: one indexed SELECT with a LIMIT, one
- * UPDATE that claims what it found, three batched lookups for the rows the
- * messages are rendered from, and one UPDATE per distinct outcome. Never a
- * query per row, so a pass costs the limit rather than the Workspace (M3's
- * Cron Trigger).
- */
-export async function deliverDueChannelMessages({
-  db,
-  workspaceId,
-  baseUrl,
-  now = new Date(),
-  limit = defaultDeliveryLimit,
-  maxAttempts = maxDeliveryAttempts,
-  fetch: fetchImpl = fetch,
-}: DeliverDueChannelMessagesOptions): Promise<DeliveryResult> {
-  const due = await dueDeliveriesQuery(db, { workspaceId, now, limit, maxAttempts });
-  const result: DeliveryResult = {
-    scanned: 0,
-    delivered: 0,
-    failed: 0,
-    gaveUp: 0,
-    more: due.length >= limit,
-  };
-  if (due.length === 0) return result;
-
-  const claimed = await claimDeliveries(
-    db,
-    "slack",
-    due.map((row) => row.id),
-    now,
-  );
-  result.scanned = claimed.length;
-  if (claimed.length === 0) return result;
-
-  // The three lookups the messages are rendered from, batched: the Events
-  // themselves, the Channels they are headed for, and the Issues they name.
-  // The payload was never stored, so this is where it is built (ADR-0003).
-  const eventBySeq = await eventsOf(db, claimed);
-  const channels = await db
-    .select({ id: channelTable.id, config: channelTable.config })
-    .from(channelTable)
-    .where(
-      inArray(
-        channelTable.id,
-        claimed.map((row) => row.targetId),
-      ),
-    );
-
-  const webhookOf = new Map(channels.map((row) => [row.id, row.config?.webhookUrl] as const));
-  const issueIds = [
-    ...new Set([...eventBySeq.values()].map((event) => issueOf(event)).filter((id) => id !== null)),
-  ];
-  const issues = issueIds.length
-    ? await db
-        // One table: the key is the tracker's and rides on the projection, so
-        // the Project join this used to need is one statement fewer.
-        .select({ id: issueTable.id, key: issueTable.externalKey, title: issueTable.title })
-        .from(issueTable)
-        .where(inArray(issueTable.id, issueIds))
-    : [];
-  const issueById = new Map(
-    issues.map((row) => [row.id, { id: row.id, key: row.key, title: row.title }]),
-  );
-
-  // A delivery whose Channel or Event is gone can never be sent, so it is
-  // retired rather than retried: the Channel was deleted after the Event.
-  const undeliverable: string[] = [];
-  const sending: Array<{ id: string; webhookUrl: string; payload: SlackPayload }> = [];
-  for (const row of claimed) {
-    const event = eventBySeq.get(row.eventSeq);
-    const webhookUrl = webhookOf.get(row.targetId);
-    const kind = event ? notificationKindOf(event) : null;
-    // An Agent's kind among these would be a message Slack has no words for,
-    // and a routing rule cannot name one, so it joins the deleted Channel as
-    // something to retire rather than retry (notifications.ts).
-    if (
-      !event ||
-      !kind ||
-      !isHumanNotificationKind(kind) ||
-      typeof webhookUrl !== "string" ||
-      webhookUrl.length === 0
-    ) {
-      undeliverable.push(row.id);
-      continue;
-    }
-    const issueId = issueOf(event);
-    sending.push({
-      id: row.id,
-      webhookUrl,
-      payload: slackMessage({
-        kind,
-        issue: (issueId && issueById.get(issueId)) || null,
-        baseUrl,
-      }),
-    });
-  }
-
-  const attempted: Attempted[] = await Promise.all(
-    sending.map(async ({ id, webhookUrl, payload }) => {
-      const posted = await postSlackMessage(webhookUrl, payload, fetchImpl);
-      return {
-        id,
-        delivered: posted.delivered,
-        status: posted.status,
-        error: posted.error ?? null,
-      };
-    }),
-  );
-
-  const recorded = await recordOutcomes(db, attempted, {
-    now,
-    backoff: slackBackoff,
-    maxAttempts,
-    attemptsBefore: new Map(claimed.map((row) => [row.id, row.attempts])),
-  });
-  result.delivered = recorded.delivered;
-  result.failed = recorded.failed;
-  result.gaveUp = recorded.exhausted.length + undeliverable.length;
-
-  await retireDeliveries(db, undeliverable, "the Channel this was owed to is gone", maxAttempts);
-  return result;
 }
 
 export interface DeliverDueChatMessagesOptions {
@@ -439,17 +273,17 @@ export interface DeliverDueChatMessagesOptions {
 }
 
 /**
- * Sends what a chat tool is owed (ADR-0025): a Notification posted to a room in
- * a Slack app or to one Human's direct messages, and the update a Gate's
- * messages are owed when somebody rules on it.
+ * Sends what a chat tool is owed (ADR-0025): a Gate posted in the channel its
+ * Project binds (docs/plans/simplify.md, slice 8), and the update a Gate's
+ * messages are owed when somebody rules.
  *
- * The fourth arm beside Slack's webhooks, the webhooks and the trackers, with
- * their claim, their backoff and their retirement. A delivery names one of
- * three things, each looked up in one batched read: a `slack_app` Channel (post
- * to the room), an Identity (post to that Human's direct messages), or a chat
- * Socket (update every message of the Gate it holds). A Gate is rendered from
- * its own rows at send time, so a message posted after somebody already ruled
- * says so rather than offering a button that would be refused.
+ * The third arm beside the webhooks and the trackers, with their claim, their
+ * backoff and their retirement. A delivery names one of two things, each
+ * looked up in one batched read: a Project (post its Gate where it binds a
+ * channel now), or a chat Socket (update every message of the Gate it holds).
+ * A Gate is rendered from its own rows at send time, so a message posted after
+ * somebody already ruled says so rather than offering a button that would be
+ * refused.
  */
 export async function deliverDueChatMessages({
   db,
@@ -465,18 +299,12 @@ export async function deliverDueChatMessages({
   const result: DeliveryResult = { scanned: 0, delivered: 0, failed: 0, gaveUp: 0, more: false };
   if (!sockets) return result;
 
-  const targets: Targets = ["chat", "chat_dm"];
-  const due = await dueDeliveries(db, targets, {
-    workspaceId,
-    now,
-    limit,
-    maxAttempts,
-  });
+  const due = await dueDeliveries(db, "chat", { workspaceId, now, limit, maxAttempts });
   result.more = due.length >= limit;
   if (due.length === 0) return result;
   const claimed = await claimDeliveries(
     db,
-    targets,
+    "chat",
     due.map((row) => row.id),
     now,
   );
@@ -485,99 +313,78 @@ export async function deliverDueChatMessages({
 
   const eventBySeq = await eventsOf(db, claimed);
   const targetIds = [...new Set(claimed.map((row) => row.targetId))];
-  const channels = await db.query.channel.findMany({
-    where: { id: { in: targetIds }, workspaceId, kind: "slack_app" },
+  // A post names its Project and goes where the Project binds a channel now,
+  // so an admin who moved the binding since the Gate was asked is obeyed.
+  const projects = await db.query.project.findMany({
+    where: { id: { in: targetIds }, workspaceId },
+    columns: { id: true, chatSocketId: true, chatChannel: true },
   });
-  const channelById = new Map(channels.map((row) => [row.id, row]));
-  const identities = await db.query.memberIdentity.findMany({
-    where: { id: { in: targetIds }, workspaceId, revokedAt: { isNull: true } },
-  });
-  const identityById = new Map(identities.map((row) => [row.id, row]));
-  // Every chat tool in the Workspace: there are one or two, and a direct
-  // message is found by the team its Identity lives in rather than by id.
+  const projectById = new Map(projects.map((row) => [row.id, row]));
+  // Every chat tool in the Workspace: there are one or two.
   const chatSockets = (
     await db.query.socket.findMany({ where: { workspaceId, status: "active" } })
   ).filter((row) => row.capabilities.includes("chat"));
   const socketById = new Map(chatSockets.map((row) => [row.id, row]));
 
-  const events = [...eventBySeq.values()];
   // A Gate is the subject of its own Events, and the Run's wait for one names
-  // it in its payload: that wait is what a Human is notified by (notifications.ts).
+  // it in its payload: that wait is what posts it (sockets/chat-out.ts).
   const gateOf = (event: Event): string | null =>
     event.subjectType === "gate" ? event.subjectId : gateRequestIdOf(event);
-  const gateIds = [...new Set(events.map(gateOf).filter(isText))];
-  const gates = gateIds.length
-    ? await db.query.gateRequest.findMany({
-        where: { id: { in: gateIds } },
-        with: {
-          issue: { columns: { externalKey: true, url: true } },
-          run: { with: { agent: { with: { user: { columns: { name: true } } } } } },
-          checkpointPolicy: { columns: { approvalsRequired: true } },
-          decisions: {
-            with: {
-              socket: { columns: { provider: true } },
-              member: { with: { user: { columns: { name: true } } } },
-            },
+  const readGates = (ids: string[]) =>
+    db.query.gateRequest.findMany({
+      where: { id: { in: ids } },
+      with: {
+        issue: { columns: { externalKey: true, url: true } },
+        run: { with: { agent: { with: { user: { columns: { name: true } } } } } },
+        checkpointPolicy: { columns: { approvalsRequired: true } },
+        decisions: {
+          with: {
+            socket: { columns: { provider: true } },
+            member: { with: { user: { columns: { name: true } } } },
           },
-          mirrors: { where: { kind: "message" } },
         },
-      })
-    : [];
-  const gateById = new Map(gates.map((row) => [row.id, row]));
-  const issueIds = [...new Set(events.map((event) => issueOf(event)).filter(isText))];
-  const issues = issueIds.length
-    ? await db.query.issue.findMany({
-        where: { id: { in: issueIds } },
-        columns: { id: true, externalKey: true, title: true },
-      })
-    : [];
-  const issueById = new Map(issues.map((row) => [row.id, row]));
-  const origin = baseUrl.replace(/\/+$/, "");
-
-  /** What one Event says in a chat tool: a Gate with its buttons, or a line and a link. */
-  const messageFor = (event: Event): ChatMessage | null => {
-    const gateId = gateOf(event);
-    const gate = gateId ? gateById.get(gateId) : undefined;
-    if (gate) return { kind: "gate", gate: chatGateMessage(gate, origin) };
-    const kind = notificationKindOf(event);
-    if (!kind || !isHumanNotificationKind(kind)) return null;
-    const issueId = issueOf(event);
-    const issue = issueId ? issueById.get(issueId) : undefined;
-    const said = slackMessage({
-      kind,
-      issue: issue ? { id: issue.id, key: issue.externalKey, title: issue.title } : null,
-      baseUrl: origin,
+        mirrors: { where: { kind: "message" } },
+      },
     });
-    return {
-      kind: "text",
-      text: said.text,
-      link: issue
-        ? { url: workItemUrl(origin, issue.id), label: `${issue.externalKey} ${issue.title}` }
-        : null,
-    };
-  };
+  const gateIds = [...new Set([...eventBySeq.values()].map(gateOf).filter(isText))];
+  const gates = gateIds.length ? await readGates(gateIds) : [];
+  const gateById = new Map(gates.map((row) => [row.id, row]));
+  const origin = baseUrl.replace(/\/+$/, "");
 
   const undeliverable: string[] = [];
   const attempted: Attempted[] = [];
+  // Which tool each attempt was for, so one that runs out is said on it.
+  const socketOfRow = new Map<string, Socket>();
+  // What each post said, to be checked against the Gate once it is answered.
+  const posts: Array<{
+    row: Claimed;
+    gateId: string;
+    socket: Socket;
+    chat: NonNullable<SocketModule["chat"]>;
+    ref: ChatMessageRef;
+    said: string;
+  }> = [];
   for (const row of claimed) {
     const event = eventBySeq.get(row.eventSeq);
-    const channel = channelById.get(row.targetId);
-    const identity = identityById.get(row.targetId);
-    const updating = socketById.get(row.targetId);
-    const socket = channel
-      ? socketById.get(configText(channel.config, "socketId"))
-      : identity
-        ? chatSockets.find(
-            (one) => one.provider === identity.provider && one.config.teamId === identity.instance,
-          )
-        : updating;
-    const message = event ? messageFor(event) : null;
-    // A room whose app was removed, a Human who unlinked, a Socket that was
-    // rested: none of these become sendable by waiting, so they are retired.
-    if (!event || !socket || !message) {
+    const project = projectById.get(row.targetId);
+    const channel = project?.chatChannel ?? null;
+    const socket = project
+      ? project.chatSocketId
+        ? socketById.get(project.chatSocketId)
+        : undefined
+      : socketById.get(row.targetId);
+    const gateId = event ? gateOf(event) : null;
+    const gate = gateId ? gateById.get(gateId) : undefined;
+    // A Project that binds no channel now, a Socket that was rested, a Gate
+    // that is gone: none of these become sendable by waiting, so they are
+    // retired.
+    if (!event || !socket || !gate || (project && !channel)) {
       undeliverable.push(row.id);
       continue;
     }
+    const message: ChatMessage = { kind: "gate", gate: chatGateMessage(gate, origin) };
+    const held = gate.mirrors.filter((one) => one.socketId === socket.id);
+    socketOfRow.set(row.id, socket);
     try {
       const module = await socketModuleFor(
         {
@@ -591,27 +398,26 @@ export async function deliverDueChatMessages({
       const chat = module.chat;
       if (!chat) throw new Error(`The ${socket.name} Socket is not a chat tool`);
 
-      if (updating && !channel && !identity) {
-        const gate = message.kind === "gate" ? gateById.get(message.gate.gateRequestId) : undefined;
-        for (const mirror of gate?.mirrors.filter((one) => one.socketId === socket.id) ?? []) {
-          const channelId = configText(mirror.externalRef, "channel");
-          const ts = configText(mirror.externalRef, "ts");
-          if (channelId && ts) await chat.update({ channel: channelId, ts }, message);
-        }
-      } else {
-        const conversation = channel
-          ? configText(channel.config, "conversation")
-          : await chat.openDm(identity?.externalUserId ?? "");
-        const ref = await chat.post(conversation, message);
-        // Where it landed, so a Ruling from any door can change it later.
-        if (message.kind === "gate") {
+      if (project && channel) {
+        // One Gate is one message in a tool: a Gate that already holds one
+        // there keeps it, rather than gaining a second set of buttons.
+        if (held.length === 0) {
+          const ref = await chat.post(channel, message);
+          // Where it landed, so a Ruling from any door can change it later.
           await db.insert(socketMirrorTable).values({
             id: newId("socketMirror"),
-            gateRequestId: message.gate.gateRequestId,
+            gateRequestId: gate.id,
             socketId: socket.id,
             kind: "message",
             externalRef: { channel: ref.channel, ts: ref.ts },
           });
+          posts.push({ row, gateId: gate.id, socket, chat, ref, said: JSON.stringify(message) });
+        }
+      } else {
+        for (const mirror of held) {
+          const channelId = configText(mirror.externalRef, "channel");
+          const ts = configText(mirror.externalRef, "ts");
+          if (channelId && ts) await chat.update({ channel: channelId, ts }, message);
         }
       }
       attempted.push({ id: row.id, delivered: true, status: 200, error: null });
@@ -625,9 +431,40 @@ export async function deliverDueChatMessages({
     }
   }
 
+  // A Ruling made while a post was on its way found no message to update,
+  // because where it landed was not known yet, so the message would offer
+  // buttons for a Gate already decided. One read of the Gates just posted
+  // says which changed meanwhile.
+  if (posts.length > 0) {
+    const since = await readGates([...new Set(posts.map((one) => one.gateId))]);
+    const sinceById = new Map(since.map((row) => [row.id, row]));
+    for (const post of posts) {
+      const gate = sinceById.get(post.gateId);
+      if (!gate) continue;
+      const message: ChatMessage = { kind: "gate", gate: chatGateMessage(gate, origin) };
+      if (JSON.stringify(message) === post.said) continue;
+      try {
+        await post.chat.update(post.ref, message);
+      } catch {
+        // The outbox owes it instead, and retries it: its update arm finds
+        // the message just recorded.
+        await db
+          .insert(deliveryTable)
+          .values({
+            id: newId("delivery"),
+            workspaceId,
+            target: "chat",
+            targetId: post.socket.id,
+            eventSeq: post.row.eventSeq,
+          })
+          .onConflictDoNothing();
+      }
+    }
+  }
+
   const recorded = await recordOutcomes(db, attempted, {
     now,
-    backoff: slackBackoff,
+    backoff: chatBackoff,
     maxAttempts,
     attemptsBefore: new Map(claimed.map((row) => [row.id, row.attempts])),
   });
@@ -637,9 +474,25 @@ export async function deliverDueChatMessages({
   await retireDeliveries(
     db,
     undeliverable,
-    "the room, the account or the tool is gone",
+    "the channel, the tool or the Gate is gone",
     maxAttempts,
   );
+
+  // A Gate nobody was shown in the channel is said on the tool, the way a
+  // tracker comment deevy gave up on is.
+  for (const id of recorded.exhausted) {
+    const socket = socketOfRow.get(id);
+    if (!socket) continue;
+    await appendEvent(
+      { db, workspace: { id: workspaceId }, member: null },
+      {
+        kind: "socket.mirror_exhausted",
+        subjectType: "socket",
+        subjectId: socket.id,
+        payload: { name: socket.name, deliveryId: id },
+      },
+    );
+  }
   return result;
 }
 
@@ -660,10 +513,11 @@ export interface DeliverDueSocketMirrorsOptions {
 /**
  * Says back in the tracker what happened in deevy (ADR-0024).
  *
- * The third arm beside Slack and the webhooks, with their claim, their backoff
- * and their retirement: what is different is only where it lands. A Socket an
- * operator has rested retires what it was owed rather than queueing comments
- * against the day they resume it — that is not what resting a tool means.
+ * One of three arms, beside the chat tools and the webhooks, with their claim,
+ * their backoff and their retirement: what is different is only where it
+ * lands. A Socket an operator has rested retires what it was owed rather than
+ * queueing comments against the day they resume it — that is not what resting
+ * a tool means.
  */
 export async function deliverDueSocketMirrors({
   db,
@@ -698,7 +552,7 @@ export async function deliverDueSocketMirrors({
   result.scanned = claimed.length;
   if (claimed.length === 0) return result;
 
-  // The lookups the comments are rendered from, batched the way Slack's are:
+  // The lookups the comments are rendered from, batched the way a chat tool's are:
   // the Events, the Sockets they are headed for, the records they are about,
   // the Gates they ask about, and who was working.
   const eventBySeq = await eventsOf(db, claimed);
@@ -826,7 +680,7 @@ export async function deliverDueSocketMirrors({
 
   const recorded = await recordOutcomes(db, attempted, {
     now,
-    backoff: slackBackoff,
+    backoff: chatBackoff,
     maxAttempts,
     attemptsBefore: new Map(claimed.map((row) => [row.id, row.attempts])),
   });
@@ -887,7 +741,7 @@ export interface DeliverDueWebhooksOptions {
 /**
  * Sends what the Event log says is owed to a subscribed URL (ADR-0003).
  *
- * The same shape as the Slack arm and, deliberately, the same claim, backoff
+ * The same shape as the chat arm and, deliberately, the same claim, backoff
  * and outcome recording: one indexed SELECT with a LIMIT, one claiming UPDATE,
  * two batched lookups, one UPDATE per outcome, and one insert for whatever ran
  * out of attempts. Never a query per row.
@@ -1090,118 +944,6 @@ async function sendClaimedWebhooks({
   return result;
 }
 
-/** Four hours of nobody deciding, by default, before the approvers are asked again. */
-const defaultGateSilenceMs = 4 * 60 * 60 * 1000;
-
-export interface RemindAboutGatesOptions {
-  db: Db;
-  workspaceId: string;
-  now?: Date;
-  silenceMs?: number;
-  limit?: number;
-}
-
-/**
- * Runs waiting on a Gate that nobody has decided, ordered by how long they have
- * been waiting. Read straight off (status, lastActivityAt), which is the same
- * index the stale sweep uses, so there is no sort.
- */
-export function waitingOnGatesQuery(
-  db: Db,
-  options: { workspaceId: string; cutoff: Date; limit: number },
-) {
-  return db
-    .select({ id: runTable.id, lastActivityAt: runTable.lastActivityAt })
-    .from(runTable)
-    .innerJoin(issueTable, eq(runTable.issueId, issueTable.id))
-    .innerJoin(projectTable, eq(issueTable.projectId, projectTable.id))
-    .where(
-      and(
-        eq(runTable.status, "awaiting_input"),
-        lt(runTable.lastActivityAt, options.cutoff),
-        eq(projectTable.workspaceId, options.workspaceId),
-      ),
-    )
-    .limit(options.limit);
-}
-
-/**
- * Asks a Gate's approvers again while it is undecided, the ones who have not
- * ruled on it yet. A Gate is the one thing a Run waits at; a question the
- * Agent asked on the record is the tracker's to remind anybody of.
- *
- * A Run waiting on a Human is not stale, so the stale sweep leaves it alone
- * for ever (docs/plans/m2.md). Left there it occupies the Agent's one open Run
- * on that Issue and nobody is reminded, so this re-derives the Notification the
- * Gate already produced once. It moves no Run and appends no Event: nothing has
- * happened in the Workspace, someone simply has not looked yet.
- *
- * Which is why asking again is that Notification coming back unread rather
- * than a second copy of it. One inbox row per Member per kind per Event is the
- * schema's invariant (docs/plans/m3.md), and a second copy was never what a
- * reminder meant: the ask is the same ask, and the Human has still not made it.
- *
- * Bounded like every other sweep: one indexed scan with a limit, then the
- * Events those Runs already wrote, then the derivation and one update for each
- * of them.
- */
-export async function remindAboutGates({
-  db,
-  workspaceId,
-  now = new Date(),
-  silenceMs = defaultGateSilenceMs,
-  limit = defaultSweepLimit,
-}: RemindAboutGatesOptions): Promise<SweepResult> {
-  const cutoff = new Date(now.getTime() - silenceMs);
-  const waiting = await waitingOnGatesQuery(db, { workspaceId, cutoff, limit });
-
-  const result = { scanned: waiting.length, changed: 0, more: waiting.length >= limit };
-  if (waiting.length === 0) return result;
-
-  // The Event that put each Run into the Gate is the one to re-derive from: it
-  // carries the State, so the same approvers are asked as the first time.
-  const asked = await db.query.event.findMany({
-    where: {
-      kind: "run.awaiting_input",
-      subjectId: { in: waiting.map((row) => row.id) },
-    },
-    orderBy: { seq: "asc" },
-  });
-
-  const latest = new Map<string, (typeof asked)[number]>();
-  for (const event of asked) latest.set(event.subjectId, event);
-
-  for (const event of latest.values()) {
-    // Touching the Run is what stops this asking twice in the same round, and
-    // it is honest: someone was told just now.
-    await db.update(runTable).set({ lastActivityAt: now }).where(eq(runTable.id, event.subjectId));
-    // The derivation still runs, because an approver added since the Gate was
-    // reached has no row yet and is owed one; for everyone else the unique
-    // index makes it a no-op and the unread flag is what asks them again. A
-    // Slack room owed a message for that Event keeps the one it was owed, for
-    // the same reason (docs/plans/m3.md, slice 2).
-    const { inbox } = await deriveNotifications(db, event);
-    // Only whoever the derivation asks now is asked again, not every row the
-    // Event ever had: on a Gate that wants two approvals the Human who gave
-    // the first has nothing left to do, and nor has somebody suspended, or no
-    // longer named on the Checkpoint, since the ask (notifications.ts).
-    const stillAsked = inbox.map((recipient) => recipient.memberId);
-    if (stillAsked.length > 0) {
-      await db
-        .update(notificationTable)
-        .set({ readAt: null })
-        .where(
-          and(
-            eq(notificationTable.eventId, event.seq),
-            inArray(notificationTable.recipientMemberId, stillAsked),
-          ),
-        );
-    }
-    result.changed += 1;
-  }
-  return result;
-}
-
 /** Passes one call may take before it leaves the rest for the next one. */
 export const defaultMaxPasses = 5;
 
@@ -1214,8 +956,6 @@ export const defaultMaxPasses = 5;
 export interface DueWorkLimits {
   /** Silence after which a Run is presumed stale. */
   silenceMs?: number;
-  /** Silence after which an undecided Gate asks its approvers again. */
-  gateSilenceMs?: number;
   /** Runs one sweep pass may move. */
   sweepLimit?: number;
   /** Messages one delivery pass may send. */
@@ -1230,11 +970,11 @@ export interface RunDueWorkOptions {
   now?: Date;
   limits?: DueWorkLimits;
   /**
-   * The origin a Slack message's link back to the Issue is built on: where a
+   * The origin a Gate's message and comment link into deevy on: where a
    * Human's browser finds this deevy, which is the SPA's own origin when this
    * deployment gives it one and this instance's otherwise (`linkOrigin` in
    * operations/shared.ts is the same decision inside a request). Without one
-   * those deliveries wait in their rows.
+   * a chat tool's deliveries wait in their rows.
    */
   baseUrl?: string;
   /** Aborted when the caller is shutting down. Checked between passes. */
@@ -1248,48 +988,29 @@ export interface RunDueWorkOptions {
   socketSecret?: string;
   /** Injected, so a test reaches a fake tracker or webhook receiver rather than the network. */
   fetch?: typeof fetch;
-  /** The email senders this runtime can run (docs/plans/email-channel.md). */
-  emailSenders?: EmailSenders;
-  /** The sender in force, from the environment; absent, an email owed is retired. */
-  email?: EmailSetup | null;
-  /** The instance secret, which signs each email's one-click unsubscribe. */
-  secret?: string;
-  /**
-   * What this Workspace may do in a day (limits.ts), which the sweep reads
-   * for its emails: past `emailsPerDay` what is owed waits for the window.
-   * Not `limits`, which is what a trigger may cost; this is what a Workspace
-   * may do, and it comes from the Workspace's configuration rather than the
-   * runtime. Absent, nothing is limited, as `createApp`'s `limits`.
-   */
-  workspaceLimits?: WorkspaceLimits;
 }
 
 /** What one trigger's worth of background work actually did. */
 export interface DueWorkResult {
   /** Runs moved to `stale`. */
   staleRuns: number;
-  /** Messages a Slack Channel accepted. */
-  channelMessages: number;
   /** Webhook deliveries a subscribed URL accepted. */
   webhooks: number;
-  /** Gates whose approvers were asked again. */
-  gateReminders: number;
   /** Deliveries old enough that no provider could still replay them. */
   forgottenDeliveries: number;
   /** Comments deevy left in a tracker, saying back what happened here. */
   mirrored: number;
   /** Messages a chat tool was sent or had changed: a Gate in Slack, and its update. */
   chatMessages: number;
-  /** Emails a sender accepted. */
-  emails: number;
   /** The signal was aborted, so the passes after that point did not run. */
   aborted: boolean;
 }
 
 /**
- * One trigger's worth of deevy's background work: the stale sweep, the
- * delivery loops and the Gate reminder, in that order. None of it starts a
- * Run: routing and the parent wake do (docs/plans/simplify.md, slice 6).
+ * One trigger's worth of deevy's background work: the stale sweep and the
+ * delivery loops, in that order. None of it starts a Run: routing and the
+ * parent wake do (docs/plans/simplify.md, slice 6). Nor does it remind
+ * anybody of a Gate: Needs me lists it for as long as it is open (slice 8).
  *
  * It lives here rather than beside a scheduler because the two runtimes own
  * their schedules differently and neither owns this. Node's `startRunner`
@@ -1308,14 +1029,9 @@ export async function runDueWork({
   sockets,
   socketSecret,
   fetch,
-  emailSenders,
-  email,
-  secret,
-  workspaceLimits,
 }: RunDueWorkOptions): Promise<DueWorkResult> {
   const {
     silenceMs = defaultSilenceMs,
-    gateSilenceMs = defaultGateSilenceMs,
     sweepLimit,
     deliveryLimit,
     maxPasses = defaultMaxPasses,
@@ -1325,13 +1041,10 @@ export async function runDueWork({
 
   const result: DueWorkResult = {
     staleRuns: 0,
-    channelMessages: 0,
     webhooks: 0,
-    gateReminders: 0,
     forgottenDeliveries: 0,
     mirrored: 0,
     chatMessages: 0,
-    emails: 0,
     aborted: false,
   };
 
@@ -1365,17 +1078,6 @@ export async function runDueWork({
       result.staleRuns += of.changed;
     },
   );
-  // And so does what is owed to a Channel. Without an origin a Slack message
-  // could not link back to the Issue, so the deliveries wait rather than go
-  // out useless: they are durable rows, and the next trigger with one sends them.
-  if (baseUrl) {
-    await drain(
-      () => deliverDueChannelMessages({ db, workspaceId, baseUrl, now, ...deliveryBound }),
-      (of) => {
-        result.channelMessages += of.delivered;
-      },
-    );
-  }
   // And what is owed to a subscribed URL, which needs no origin: the body is
   // the Event itself and carries no link (ADR-0003).
   await drain(
@@ -1383,15 +1085,6 @@ export async function runDueWork({
       deliverDueWebhooks({ db, workspaceId, now, ...deliveryBound, ...(fetch ? { fetch } : {}) }),
     (of) => {
       result.webhooks += of.delivered;
-    },
-  );
-  // A Run waiting on a Gate is not silent, so the stale sweep never touches
-  // it; without this a Gate nobody decides holds the Agent's one open Run on
-  // that Issue for ever and nobody is asked again (docs/plans/m2.md).
-  await drain(
-    () => remindAboutGates({ db, workspaceId, now, silenceMs: gateSilenceMs, ...sweepBound }),
-    (of) => {
-      result.gateReminders += of.changed;
     },
   );
   // And what the trackers are owed: deevy saying back where the work lives, so
@@ -1415,9 +1108,9 @@ export async function runDueWork({
       },
     );
   }
-  // And what a chat tool is owed: a Gate in a Slack room or a Human's direct
-  // messages, and the update its message is owed when somebody rules. A Gate
-  // message links into deevy, so without an origin it waits (ADR-0025).
+  // And what a chat tool is owed: a Gate in the channel its Project binds,
+  // and the update its message is owed when somebody rules. A Gate message
+  // links into deevy, so without an origin it waits (ADR-0025).
   if (sockets && baseUrl) {
     await drain(
       () =>
@@ -1433,31 +1126,6 @@ export async function runDueWork({
         }),
       (of) => {
         result.chatMessages += of.delivered;
-      },
-    );
-  }
-  // And what is owed by email. Without an origin an email could not link back
-  // into deevy, so it waits, as a Slack message does.
-  if (baseUrl) {
-    await drain(
-      () =>
-        deliverDueEmails({
-          db,
-          workspaceId,
-          baseUrl,
-          now,
-          ...(emailSenders ? { emailSenders } : {}),
-          ...(email ? { email } : {}),
-          ...(secret ? { secret } : {}),
-          ...(socketSecret ? { socketSecret } : {}),
-          ...(fetch ? { fetch } : {}),
-          ...(workspaceLimits?.emailsPerDay === undefined
-            ? {}
-            : { perDay: workspaceLimits.emailsPerDay }),
-          ...deliveryBound,
-        }),
-      (of) => {
-        result.emails += of.delivered;
       },
     );
   }

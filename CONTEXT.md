@@ -51,7 +51,7 @@ _Avoid_: integration, connector, plugin, provider (for the row; the provider is 
 
 **Project**:
 A scope of work bound to a tracker Socket's container: where its Issues live, which Agents may work it, its
-default Agent and routing rule, and its Checkpoints.
+default Agent and routing rule, its Checkpoints, and the chat channel its Gates are posted in, if any.
 _Avoid_: board, space, repo, team, binding
 
 ### Work
@@ -116,19 +116,11 @@ _Avoid_: approval (as the noun for the record), vote, verdict
 ### Attention
 
 **Notification**:
-A message to a Human derived from Events: a mention, a Gate awaiting them, an assignment, a Run that finished.
-_Avoid_: alert, ping, message
-
-**Channel**:
-Where Notifications are delivered: the in-app inbox, a Slack channel through its webhook, a Slack app's
-channel or a direct message, or a team email address somebody there confirmed. A Human's own email is not a
-Channel, as their Slack direct messages are not: it is a column of their preferences.
-_Avoid_: destination, provider, integration
-
-**Sender**:
-The service this instance sends email through: Resend, Postmark, SendGrid, Mailgun, Amazon SES, an SMTP
-server or Cloudflare Email Service. One per instance, from the environment or from Settings › Email.
-_Avoid_: provider (sign-in's and a Socket's word), mailer, integration, ESP
+A message to an Agent derived from Events, in its inbox: the record it was assigned, a comment that mentions
+it, a Ruling on the Gate it stopped at. A Human is sent none: what waits on a Human is the Gates they may
+rule on, listed on Needs me and posted, one message each, in the chat channel the Project binds; the tracker
+tells them the rest.
+_Avoid_: alert, ping, message; Channel and Sender (deevy delivers to no Channel and sends no email)
 
 ### Record
 

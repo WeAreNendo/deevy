@@ -42,7 +42,6 @@ export function crumbsFor(pathname: string, names: CrumbNames): Crumb[] {
   // Home is what needs you; `/projects` only redirects now, so it never asks
   // for a crumb, and a record's page is `/work/<id>` (ADR-0024).
   if (parts.length === 0) return [{ label: "Home" }];
-  if (head === "inbox") return [{ label: "Inbox" }];
   // A Gate is the link an Agent hands a Human: they did not come from a list,
   // so a trail above it would name a page they have never seen.
   if (head === "gates") return [{ label: "Gate" }];

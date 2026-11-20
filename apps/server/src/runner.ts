@@ -1,4 +1,3 @@
-import type { EmailSenders, EmailSetup } from "@deevy/core/email";
 import { runDueWork, type Cron, type DueWorkLimits, type SocketModules } from "@deevy/core";
 import type { Db } from "@deevy/db";
 
@@ -22,8 +21,6 @@ export interface RunnerOptions {
   cron: Cron;
   /** Silence after which a Run is presumed stale. `DEEVY_RUN_STALE_MINUTES`. */
   staleMinutes?: number;
-  /** Hours a Gate may sit undecided before its approvers are asked again. */
-  gateReminderHours?: number;
   /** How often the sweep runs. `DEEVY_SWEEP_INTERVAL_SECONDS`, and Node's alone. */
   sweepIntervalSeconds?: number;
   /** Runs one sweep pass may move. */
@@ -35,7 +32,7 @@ export interface RunnerOptions {
    * Issue it is about. `BETTER_AUTH_URL`.
    */
   baseUrl?: string;
-  /** Messages to a Channel one delivery pass may send. */
+  /** Messages one delivery pass may send. */
   deliveryLimit?: number;
   /**
    * The tools this build can speak, so the pass can say on a record what a
@@ -44,11 +41,6 @@ export interface RunnerOptions {
   sockets?: SocketModules;
   /** What a Socket's credentials are sealed with. */
   socketSecret?: string;
-  /** The email senders this runtime can run, and the one in force. */
-  emailSenders?: EmailSenders;
-  email?: EmailSetup | null;
-  /** The instance secret (`BETTER_AUTH_SECRET`), which signs an email's unsubscribe link. */
-  secret?: string;
 }
 
 export interface Runner {
@@ -60,7 +52,6 @@ export function startRunner({
   db,
   cron,
   staleMinutes = 30,
-  gateReminderHours = 4,
   sweepIntervalSeconds = 60,
   sweepLimit,
   maxPassesPerTick = 5,
@@ -68,13 +59,9 @@ export function startRunner({
   deliveryLimit,
   sockets,
   socketSecret,
-  emailSenders,
-  email,
-  secret,
 }: RunnerOptions): Runner {
   const limits: DueWorkLimits = {
     silenceMs: staleMinutes * 60_000,
-    gateSilenceMs: gateReminderHours * 3_600_000,
     maxPasses: maxPassesPerTick,
     ...(sweepLimit === undefined ? {} : { sweepLimit }),
     ...(deliveryLimit === undefined ? {} : { deliveryLimit }),
@@ -92,9 +79,6 @@ export function startRunner({
       ...(baseUrl ? { baseUrl } : {}),
       ...(sockets ? { sockets } : {}),
       ...(socketSecret ? { socketSecret } : {}),
-      ...(emailSenders ? { emailSenders } : {}),
-      ...(email ? { email } : {}),
-      ...(secret ? { secret } : {}),
     });
     await inFlight;
   });

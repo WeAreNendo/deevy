@@ -462,17 +462,15 @@ describe("the depth ceiling", () => {
 
 describe("the sub-issues finishing", () => {
   it("puts nothing in anybody's inbox, since the Run the parent wakes is the news", async () => {
-    const { db, admin, asAdmin, child } = await workspaceWithTwoAgents();
+    const { db, admin, child } = await workspaceWithTwoAgents();
     const one = await child("One");
 
     await close(admin, one);
 
-    // The Run the parent wakes is the news; the Sponsor hears when it finishes.
+    // The Run the parent wakes is the news.
     const told = await db.query.notification.findMany({
       where: { recipientMemberId: admin.member.id },
     });
     expect(told).toEqual([]);
-    const offered = (await asAdmin.preferences.get({})).preferences.map((row) => row.kind);
-    expect(offered).not.toContain("delegation");
   });
 });

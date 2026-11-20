@@ -1,20 +1,25 @@
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { humanNotificationKinds } from "./notification.ts";
 import { project } from "./project.ts";
 import { member, workspace } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
-/**
- * Where Notifications are delivered (CONTEXT.md). The inbox always exists.
- * `slack` is an incoming webhook: it posts a link and takes no click. `slack_app`
- * is a room in a Slack Socket's workspace, where a Gate is posted with its two
- * buttons and updated when somebody rules (ADR-0025). `email` is a team
- * address, sent nothing until somebody at it confirmed by the link deevy
- * mailed there (docs/plans/email-channel.md).
+/*
+ * Every table in this file is unused since docs/plans/simplify.md, slice 8:
+ * a Human's attention is the Gates they may rule on, in deevy and in the one
+ * chat channel a Project binds (`project.chat_socket_id`), so there are no
+ * Channels, no routing rules, no preferences and no email sender. Nothing
+ * reads or writes them, and they are dropped when the migration history
+ * starts afresh (slice 12), because a dropped table is what ADR-0031's guard
+ * refuses. The enums below are what the columns held, for the record.
  */
-export const channelKinds = ["inbox", "slack", "slack_app", "email"] as const;
+
+/** The kinds a Human was once sent, which a rule and a preference named. */
+const retiredKinds = ["mention", "assignment", "gate_awaiting", "run_finished"] as const;
+
+/** An incoming webhook, a room in a Slack app, a team address, and the inbox. */
+const channelKinds = ["inbox", "slack", "slack_app", "email"] as const;
 
 export const channel = sqliteTable(
   "channel",
@@ -44,7 +49,7 @@ export const routingRule = sqliteTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
-    notificationKind: text("notification_kind", { enum: humanNotificationKinds }),
+    notificationKind: text("notification_kind", { enum: retiredKinds }),
     projectId: text("project_id").references(() => project.id, { onDelete: "cascade" }),
     channelId: text("channel_id")
       .notNull()
@@ -61,7 +66,7 @@ export const notificationPreference = sqliteTable(
     memberId: text("member_id")
       .notNull()
       .references(() => member.id, { onDelete: "cascade" }),
-    kind: text("kind", { enum: humanNotificationKinds }).notNull(),
+    kind: text("kind", { enum: retiredKinds }).notNull(),
     inbox: integer("inbox", { mode: "boolean" }).default(true).notNull(),
     slack: integer("slack", { mode: "boolean" }).default(true).notNull(),
     /**
@@ -100,5 +105,3 @@ export const emailSender = sqliteTable("email_sender", {
   updatedBy: text("updated_by").references(() => member.id, { onDelete: "set null" }),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).default(now).notNull(),
 });
-
-export type EmailSenderRow = typeof emailSender.$inferSelect;

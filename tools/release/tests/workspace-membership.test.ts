@@ -63,6 +63,10 @@ describe("every package in the workspace", () => {
     const group = fixed[0] ?? [];
     const missing = (await released()).filter((m) => !group.includes(m.name)).map((m) => m.name);
     expect(missing).toEqual([]);
+    // And nothing that is no longer there: a package removed from the workspace
+    // and left in the group fails `changeset version` on the release job.
+    const names = (await released()).map((m) => m.name);
+    expect(group.filter((name) => !names.includes(name))).toEqual([]);
   });
 
   it("actually carries it, rather than only being promised it", async () => {
@@ -87,10 +91,14 @@ describe("every package in the workspace", () => {
       ["the fold script", arrayLiteral(script, "packageDirs")],
       ["its fixture", arrayLiteral(fixture, "packages")],
     ] as const) {
-      expect({ name, missing: dirs.filter((dir) => !list.includes(dir)) }).toEqual({
+      // Both ways: the fold reads every listed directory's package.json, so a
+      // removed package left in the list throws on the release job, which no
+      // pull request runs (packages/email, docs/plans/simplify.md slice 8).
+      expect({
         name,
-        missing: [],
-      });
+        missing: dirs.filter((dir) => !list.includes(dir)),
+        gone: list.filter((dir) => !dirs.includes(dir)),
+      }).toEqual({ name, missing: [], gone: [] });
     }
   });
 
@@ -98,9 +106,10 @@ describe("every package in the workspace", () => {
     const ci = await read(".github/workflows/ci.yml");
     const sharded = new Set([...ci.matchAll(/-F ([a-z-]+)/g)].map((match) => match[1]));
     // The filter is the package name without the scope.
-    const missing = (await members())
-      .map((m) => m.name.replace(/^@deevy\//, ""))
-      .filter((short) => !sharded.has(short));
+    const shorts = (await members()).map((m) => m.name.replace(/^@deevy\//, ""));
+    const missing = shorts.filter((short) => !sharded.has(short));
     expect(missing).toEqual([]);
+    // A filter naming a package that is gone runs nothing, quietly.
+    expect([...sharded].filter((short) => short && !shorts.includes(short))).toEqual([]);
   });
 });

@@ -58,7 +58,7 @@ work takes somebody else; stopping it does not.
 
 A Gate asks the Humans who could approve it: the ones named under **Who may rule**, or every active Human
 where nobody is named, leaving out the Human the work is for where the Checkpoint excludes them. Each of them
-gets it on **Needs me**, in the Inbox, and wherever else they hear about Gates. The Human the work is for is
+finds it on **Needs me**, and in the Project's chat channel when it has one. The Human the work is for is
 not asked, since the Gate is not waiting on them, but can still open it and reject it.
 
 ## Before you turn these on

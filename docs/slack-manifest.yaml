@@ -6,9 +6,10 @@
 # paste the Bot User OAuth Token and the Signing Secret back into deevy.
 #
 # What it may do, and why:
-#   chat:write   post a Gate with Approve and Reject, and change it when somebody rules
-#   im:write     open a direct message with a Human who linked their account
-#   commands     `/deevy link`, which is how a Human links their Slack account
+#   chat:write     post a Gate with Approve and Reject, and change it when somebody rules
+#   channels:read  list the public channels deevy is in, for a Project's channel picker
+#   groups:read    and the private ones
+#   commands       `/deevy link`, which is how a Human links their Slack account
 # Nothing else: a click already says who clicked, so deevy never asks Slack
 # about people. Posting to a channel needs deevy in it (`/invite @deevy`).
 display_information:
@@ -29,7 +30,8 @@ oauth_config:
   scopes:
     bot:
       - chat:write
-      - im:write
+      - channels:read
+      - groups:read
       - commands
 settings:
   interactivity:

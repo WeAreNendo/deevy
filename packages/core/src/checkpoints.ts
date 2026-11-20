@@ -78,6 +78,21 @@ export function policyOf(row: Checkpoint, approverMemberIds: string[]): Checkpoi
  * with an Agent asking from a Checkpoint rather than a Human moving an Issue,
  * a definition that named the last actor would exclude nobody at all.
  */
+/**
+ * The same answer as `requesterFor`, from Members already read: a list of
+ * Gates reads every Member its Runs name in one statement rather than one or
+ * two a Run.
+ */
+export function requesterAmong(
+  run: Pick<Run, "triggeredByMemberId" | "agentMemberId">,
+  members: ReadonlyMap<string, { id: string; kind: string; sponsorId: string | null }>,
+): string | null {
+  const triggered = run.triggeredByMemberId ? members.get(run.triggeredByMemberId) : undefined;
+  if (triggered?.kind === "human") return triggered.id;
+  if (triggered?.sponsorId) return triggered.sponsorId;
+  return members.get(run.agentMemberId)?.sponsorId ?? null;
+}
+
 export async function requesterFor(
   db: Db,
   run: Pick<Run, "triggeredByMemberId" | "agentMemberId">,

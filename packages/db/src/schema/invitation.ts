@@ -6,9 +6,10 @@ const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
 /**
  * An invitation admits one person, where an allowlist rule admits a category
- * (docs/plans/sign-in.md). It is a link, emailed when a sender is configured,
- * and the row holds the SHA-256 hash of the token that was handed out, the way an Agent's API key is issued once and
- * never shown again (packages/core/src/keys.ts).
+ * (docs/plans/sign-in.md). It is a link an admin copies and sends however they
+ * like, and the row holds the SHA-256 hash of the token that was handed out,
+ * the way an Agent's API key is issued once and never shown again
+ * (packages/core/src/keys.ts).
  *
  * Spent and revoked rows are kept: the Workspace's history is the Event log,
  * and "who is invited right now" should be a question one index answers rather
@@ -39,10 +40,10 @@ export const invitation = sqliteTable(
     }),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
     /**
-     * The token itself, sealed under `DEEVY_SECRET`, while an email that
-     * carries it is still owed (docs/plans/email-channel.md, slice 6). Cleared
-     * the moment the email lands or the invitation stops being acceptable, so
-     * the link exists in a recoverable form only as long as it has to.
+     * Unused since deevy stopped emailing invitations (docs/plans/simplify.md,
+     * slice 8): it held the token, sealed, while the email that carried it was
+     * owed. An admin copies the link now, and nothing writes or reads this;
+     * it goes when the migration history starts afresh (slice 12).
      */
     sealedToken: text("sealed_token"),
   },

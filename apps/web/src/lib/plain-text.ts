@@ -2,7 +2,7 @@
  * Markdown as one line of words (docs/plans/sockets.md).
  *
  * A Proposal, a comment and an Agent's Activity are markdown, and most places
- * render them. A few quote one instead — an Inbox row, a line of a Run's feed —
+ * render them. A few quote one instead — a line of a Run's feed, a card on Needs me —
  * and there the marks are noise: `## What I will do` is a heading on the Gate
  * page and two hashes in a quote. This keeps the words and drops the marks,
  * without pretending to parse markdown: a quote is a hint, and the Gate page is

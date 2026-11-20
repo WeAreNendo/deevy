@@ -28,7 +28,7 @@ exact message, if there was one), roughly when, and the version at the foot of a
 We work from what you tell us and show us, and from three things that hold nothing from inside it:
 
 - **Its status**: which version it runs, whether its last upgrade finished, and its counts (Humans,
-  Agents, Sockets, today's invitations and emails, and this month's Runs). Never its content.
+  Agents, Sockets, today's invitations, and this month's Runs). Never its content.
 - **Logs**, which name the Workspace and the address a request was for, and carry nothing from its
   database.
 - **A count of requests**, per Workspace: what kind each was, how it ended and how long it took, and
@@ -49,8 +49,8 @@ neither.
   it, the console shows **Needs attention** on it, and every other Workspace carries on. We tell you
   plainly what is happening.
 - **A Workspace we suspend.** We may suspend a Workspace for abuse, at its team's request, or when what
-  it does is hurting other Workspaces, such as the email they share. Nothing in it is touched. The
-  console then says **This Workspace is suspended: nobody can use it until it is resumed. Write to
-  support@deevy.dev if you didn't expect this.**
+  it does is hurting other Workspaces. Nothing in it is touched. The console then says **This Workspace is
+  suspended: nobody can use it until it is resumed. Write to support@deevy.dev if you didn't expect
+  this.**
 - **An incident.** If something goes wrong that affects your Workspace, we tell you plainly, as soon as
   we have something true to say.
