@@ -82,7 +82,6 @@ describe("the read surface", () => {
     // A record the tracker announced on that Socket, so `issues.list` and
     // `issues.get` below have an Issue to answer with.
     await applyInbound({
-      vouches: true,
       db,
       workspace: ada.workspace,
       socket: sealed as Socket,

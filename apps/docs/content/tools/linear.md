@@ -23,12 +23,11 @@ You need to be an admin in deevy, and able to create an OAuth application in Lin
 
 1. In deevy, go to **Settings › Sockets** and choose **Connect Linear**.
 2. Give it a **Name**, such as `Acme on Linear`, and choose **Show the addresses**. deevy starts the
-   Socket so it can show you the three addresses Linear needs, with their real values.
+   Socket so it can show you the two addresses Linear needs, with their real values.
 3. In Linear, open **Settings › API › New OAuth application**. Call the application `deevy`: that is the
    name every comment deevy writes appears under.
-4. Under **Callback URLs**, paste both addresses deevy shows under **Callback URLs**, one per line. The
-   first is where people come back after linking their Linear account, the second where an admin comes
-   back after installing deevy as an agent.
+4. Under **Callback URLs**, paste the **Callback URL** deevy shows: it is where an admin comes back after
+   installing deevy as an agent.
 5. Turn on **Client credentials**. This is how deevy works as the application: it mints its own token from
    the client ID and secret whenever it needs one.
 6. Turn on webhooks, paste the **Webhook URL** deevy shows, and choose **Issues** and **Comments**. Leave
@@ -78,22 +77,16 @@ state. So is a deleted issue.
 ## What deevy writes in Linear
 
 deevy writes about Gates and nothing else, as the application: a comment when an Agent asks at a Gate, with
-the Proposal and how to rule; one for each approval and for the decision; and a reply to a `/approve` or
-`/reject` that ruled nothing. See [Connecting your tools](/tools/overview/#what-deevy-writes-back).
+the Proposal and a link to rule on it in deevy, and one for each approval and for the decision. See
+[Connecting your tools](/tools/overview/#what-deevy-writes-back). A reply on the issue, even one that starts
+`/approve` or `/reject`, is only a comment: a Gate is ruled on in deevy. See
+[How a Gate asks](/gates/how-a-gate-asks/).
 
 deevy sets no label and opens nothing. Everything else in Linear is the Agent's, with its own access there,
 such as a Linear API key or Linear's MCP server: it reads an issue's comments, comments, labels and opens
 sub-issues. A sub-issue it opens is Linear's own, and deevy links it to its parent the way Linear does.
 
 Linear signs each delivery with the moment it sent it, and deevy refuses one more than a minute old.
-
-## Rule from Linear
-
-A Human can approve or reject a Gate by commenting `/approve` or `/reject <why>` on the issue. If you sign
-in to deevy with Linear, with an account in the Socket's Linear workspace, your comments already count as
-you. Otherwise link it once: under **Settings › Identities**, choose **Link Linear** and consent on Linear's
-own page. An account in a different Linear workspace is refused. See
-[Ruling from your tools](/gates/ruling-from-your-tools/).
 
 ## Rotate the client secret
 
@@ -117,7 +110,7 @@ OAuth application is yours, in your Linear workspace, and nobody else's Workspac
 
 :::note[Self-hosted]
 The addresses are built from your deevy's `BETTER_AUTH_URL`, and Linear has to reach the webhook over
-HTTPS. If your deevy's address changes, paste the new webhook URL and callback URLs into the application in
+HTTPS. If your deevy's address changes, paste the new webhook URL and callback URL into the application in
 Linear again. Until then deevy hears nothing from Linear, and what Linear sent in between is not replayed.
 :::
 

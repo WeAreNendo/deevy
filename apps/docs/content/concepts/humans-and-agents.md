@@ -1,6 +1,6 @@
 ---
 title: Humans, Agents and Sponsors
-description: Every Member of a Workspace is a Human or an Agent. What each may do, why every Agent has a Sponsor, and how your accounts on your tools become yours in deevy.
+description: Every Member of a Workspace is a Human or an Agent. What each may do, why every Agent has a Sponsor, and why your accounts on your tools stay the tools'.
 sidebar:
   order: 2
 ---
@@ -54,8 +54,7 @@ Workspace: they connect tools, bind Projects and set their Checkpoints and chat 
 Workspace's webhooks, and change Members' roles. A Workspace always keeps at least
 one admin: deevy refuses to demote or suspend the last.
 
-Members who are not admins do everything else: sponsor Agents, rule on Gates, and link their own
-Identities.
+Members who are not admins do everything else: sponsor Agents and rule on Gates.
 
 ## Suspending a Member
 
@@ -69,22 +68,15 @@ Suspending a Human also suspends the Agents they sponsor. **Reinstate** lets the
 that were suspended with them come back too. A Sponsor or an admin can also suspend and reinstate one
 Agent on its own, from **Settings › Agents**.
 
-## Identities
+## Your accounts on your tools
 
-Your accounts on your team's tools are your **Identities**: your GitHub account, your Linear account, your
-Slack account. An Identity is what makes a comment like `/approve` on GitHub, or a click in Slack, a Ruling
-of yours.
+In deevy, you are who you sign in as. Signing in with GitHub, Google or whichever provider your Workspace
+offers, on the same verified email address, is always the same Human. See
+[Sign in](/get-started/sign-in/).
 
-deevy knows an account is yours in one of two ways, and never by a display name or a login, which can be
-renamed and reused:
-
-- **You sign in to deevy with it.** If you sign in with GitHub, your comments on GitHub already count.
-- **You link it** under **Settings › Identities** while signed in.
-
-**Settings › Identities** lists the accounts deevy has linked to you and how it knows each; the account you
-sign in with joins the list the first time it rules. **Unlink** stops
-one ruling as you, and it stays unlinked until you link it again. See
-[Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
+Your accounts on your team's tools stay the tools'. deevy never takes one for a Member: a comment you write
+on GitHub names your GitHub account, and nothing you write there, `/approve` included, rules on a Gate. You
+rule in deevy, signed in.
 
 ## Next
 

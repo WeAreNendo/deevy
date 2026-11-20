@@ -5,8 +5,7 @@ import { newId } from "../ids.ts";
 import type { JobQueue } from "../jobs.ts";
 import { openSecret, requireSealingSecret, sealSecret, verifyState } from "../secrets.ts";
 import { applyInbound } from "./apply.ts";
-import { applyChat, type ChatOutcome } from "./chat.ts";
-import type { InboundCheck, SocketModule, SocketModules } from "./port.ts";
+import type { InboundCheck, SocketModules } from "./port.ts";
 import { socketModuleFor } from "./registry.ts";
 
 /**
@@ -34,8 +33,6 @@ export interface InboundOptions {
   /** The secret this deployment seals credentials with (secrets.ts). */
   socketSecret?: string;
   jobs?: JobQueue;
-  /** Where a Human opens deevy, for the one link a chat reply carries. */
-  origin?: string;
   now?: () => Date;
   fetch?: typeof fetch;
 }
@@ -81,22 +78,19 @@ export async function handleInbound(request: Request, options: InboundOptions): 
   }
 
   const module = await socketModuleFor(options, socket);
+  // A chat tool is told and sends nothing back (ADR-0036), so only a tracker
+  // has deliveries to take.
+  const tracker = module.tracker;
+  if (!tracker) return json({ error: "This Socket does not take deliveries" }, 400);
   // A tool that establishes its signing secret by sending it, unsigned — which
   // is why this comes before the signature check it will make possible.
-  const offered = module.tracker?.handshake?.(rawBody) ?? null;
+  const offered = tracker.handshake?.(rawBody) ?? null;
   if (offered !== null) return acceptHandshake(options, socket, offered, now);
 
   const secrets = await webhookSecretsOf(socket, options.socketSecret, now());
   if (secrets.length === 0) {
     return json({ error: "This Socket has no webhook secret to check a delivery against" }, 401);
   }
-
-  if (module.chat) {
-    return handleChatRequest(options, socket, module, rawBody, request.headers, secrets, now);
-  }
-
-  const tracker = module.tracker;
-  if (!tracker) return json({ error: "This Socket does not take deliveries" }, 400);
 
   const checked = await firstSigned(secrets, (webhookSecret) =>
     tracker.verifyInbound({ headers: request.headers, rawBody, webhookSecret, now: now() }),
@@ -178,8 +172,6 @@ async function applyDelivery(
       // For a tool whose deliveries only name what changed (Notion's).
       tracker,
       ...(options.jobs ? { jobs: options.jobs } : {}),
-      ...(module.identityScope ? { identityScope: module.identityScope } : {}),
-      vouches: module.vouches !== false,
       now: options.now,
     });
     return {
@@ -290,82 +282,6 @@ async function firstSigned(
     if (checked.ok) return checked;
   }
   return checked;
-}
-
-/**
- * A request from a chat tool: a click, a dialog, a command. Written down like a
- * delivery, so a settings page can say what the tool has said lately; answered
- * the way the tool reads an answer, which is the module's to say.
- */
-async function handleChatRequest(
-  options: InboundOptions,
-  socket: Socket,
-  module: SocketModule,
-  rawBody: string,
-  headers: Headers,
-  secrets: string[],
-  now: () => Date,
-): Promise<Response> {
-  const chat = module.chat;
-  if (!chat) return json({ error: "This Socket is not a chat tool" }, 400);
-  const checked = await firstSigned(secrets, (webhookSecret) =>
-    chat.verifyInteraction({ headers, rawBody, webhookSecret, now: now() }),
-  );
-  if (!checked.ok) return json({ error: "That request is not signed by this Socket" }, 401);
-
-  const { db } = options;
-  const [claimed] = await db
-    .insert(inboundDelivery)
-    .values({
-      id: newId("inboundDelivery"),
-      socketId: socket.id,
-      // A chat tool signs a timestamp rather than naming its requests: the
-      // window is the replay guard, and a Ruling counts once per Human anyway.
-      deliveryId: `deevy-${newId("inboundDelivery")}`,
-      eventName: checked.eventName,
-    })
-    .returning();
-
-  let outcome: ChatOutcome;
-  try {
-    outcome = await applyChat({
-      source: {
-        db,
-        workspace: { id: socket.workspaceId },
-        member: null,
-        ...(options.jobs ? { jobs: options.jobs } : {}),
-      },
-      socket,
-      chat,
-      scope: module.identityScope ?? { instance: socket.provider },
-      eventName: checked.eventName,
-      interaction: chat.normalizeInteraction(checked.eventName, rawBody),
-      origin: (options.origin ?? "").replace(/\/+$/, ""),
-      now: now(),
-    });
-  } catch (error) {
-    outcome = {
-      reply: { kind: "none" },
-      status: "skipped",
-      why: String(error instanceof Error ? error.message : error),
-    };
-    if (claimed) {
-      await db
-        .update(inboundDelivery)
-        .set({ status: "failed", error: outcome.why?.slice(0, 2000) ?? null })
-        .where(eq(inboundDelivery.id, claimed.id));
-    }
-    return chat.answer(outcome.reply);
-  }
-
-  if (claimed) {
-    await db
-      .update(inboundDelivery)
-      .set({ status: outcome.status, error: outcome.why?.slice(0, 2000) ?? null })
-      .where(eq(inboundDelivery.id, claimed.id));
-  }
-  await db.update(socketTable).set({ lastInboundAt: now() }).where(eq(socketTable.id, socket.id));
-  return chat.answer(outcome.reply);
 }
 
 function json(body: unknown, status: number): Response {

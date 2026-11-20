@@ -15,17 +15,18 @@ or a Linear team, and that is where deevy takes records from and hands them to A
 
 ## Which tools
 
-| Tool                              | What deevy uses it for                             | What you set up there                                    |
-| --------------------------------- | -------------------------------------------------- | -------------------------------------------------------- |
-| [GitHub](/tools/github/)          | A repository's issues as records                   | A GitHub App, which deevy writes for you                 |
-| [Linear](/tools/linear/)          | Issues in a team as records                        | An OAuth application of your own                         |
-| [GitLab](/tools/gitlab/)          | A project's issues as records                      | An access token for the account deevy acts as, a webhook |
-| [Notion](/tools/notion/)          | A database's rows as records                       | An internal connection, and a webhook subscription       |
-| [Slack](/tools/slack/)            | A Project's Gates in a channel, ruled with buttons | An app made from deevy's manifest                        |
-| [Any other tool](/tools/generic/) | Whatever records your adapter sends                | An adapter of yours that posts deevy's format, signed    |
+| Tool                              | What deevy uses it for                    | What you set up there                                    |
+| --------------------------------- | ----------------------------------------- | -------------------------------------------------------- |
+| [GitHub](/tools/github/)          | A repository's issues as records          | A GitHub App, which deevy writes for you                 |
+| [Linear](/tools/linear/)          | Issues in a team as records               | An OAuth application of your own                         |
+| [GitLab](/tools/gitlab/)          | A project's issues as records             | An access token for the account deevy acts as, a webhook |
+| [Notion](/tools/notion/)          | A database's rows as records              | An internal connection, and a webhook subscription       |
+| [Slack](/tools/slack/)            | A Project's Gates, announced in a channel | An app made from deevy's manifest                        |
+| [Any other tool](/tools/generic/) | Whatever records your adapter sends       | An adapter of yours that posts deevy's format, signed    |
 
 GitHub, Linear, GitLab, Notion and any other tool hold records, so a Project can be bound to them. Slack
-holds none: it is where deevy asks a Human to rule, in the channel a Project posts its Gates in.
+holds none: it is where deevy tells a Project's channel that a Gate is waiting, with a link to rule on it in
+deevy.
 
 **Preview** beside a tool, in Settings and in this section, means deevy is built and tested against that
 tool's recorded deliveries, and has not yet been tried against the tool itself. It works the same; it is
@@ -91,8 +92,9 @@ A closed record is handed to nobody.
 
 From each container a Project is bound to, deevy takes the records the tool delivers: their title, body,
 state, labels and the tool's own assignees, as the tool last said them. It reads each comment the tool
-delivers for a mention of an Agent or a Ruling. The conversation on a record stays the tool's: an Agent that
-wants it reads it there.
+delivers for a mention of an Agent. A comment never rules on a Gate, whatever it says, `/approve` included:
+a Ruling is made in deevy. The conversation on a record stays the tool's: an Agent that wants it reads it
+there.
 
 deevy never authors a record of its own, never moves one between states and never closes one. That happens
 in the tool, and deevy follows.
@@ -102,11 +104,10 @@ in the tool, and deevy follows.
 deevy writes on a record about its Gates and nothing else, for every Project bound to a tool deevy knows,
 with no setting to change it:
 
-- a comment when an Agent asks at a Gate, with its Proposal, its links and how to rule: reply `/approve` or
-  `/reject <why>`, or open it in deevy;
+- a comment when an Agent asks at a Gate, with its Proposal, its links, and `Rule on it in deevy:` with
+  the Gate's address;
 - a comment for each approval, such as "Approved: 1 of 2, still waiting", and one for the decision,
-  approved or rejected;
-- a reply when a comment in the tool ruled nothing, saying why.
+  approved or rejected.
 
 Nothing is written about a Run starting, working or finishing, and deevy sets no label. In
 [any other tool](/tools/generic/) deevy writes nothing at all: what it would say goes out as Events on your
@@ -132,8 +133,8 @@ deevy asks each tool for what it needs and nothing more.
 | GitHub | Issues: read and write. Metadata: read. Only on the repositories you install the App on.                                             |
 | Linear | Read and write, as the application itself. Installing it as an agent adds being assigned and being mentioned.                        |
 | GitLab | Whatever the account behind the token may do, with the `api` scope. Give it **Reporter** on the projects it works, and nothing more. |
-| Notion | Read content; read and insert comments; user information with email addresses. Only on the pages and databases you share with it.    |
-| Slack  | `chat:write`, `channels:read`, `groups:read` and `commands`. Nothing about people.                                                   |
+| Notion | Read content; read and insert comments; user information without email addresses. Only on the pages and databases you share with it. |
+| Slack  | `chat:write`, `channels:read` and `groups:read`. Nothing about people.                                                               |
 
 ## A Socket's page
 
@@ -147,12 +148,15 @@ Choose a Socket under **Settings › Sockets** to see how it is doing:
   changes it. Where the tool makes the secret, or you change it there, paste the new one into **New
   secret from** the tool and choose **Use the new secret**. For GitHub and GitLab, **Mint a webhook
   secret** makes one instead and shows it once, for you to paste into the tool. Either way deevy keeps
-  accepting the old one for a day, so you can change the two in either order. Slack and Linear make their
-  own, so deevy mints none for them, and a Notion Socket has no such section: Notion signs with the token
-  under **Verifying the webhook**. Any other tool has only **Mint a webhook secret**, since deevy is the
-  only one that makes its secret.
+  accepting the old one for a day, so you can change the two in either order. Linear makes its own, so
+  deevy mints none for it, and a Notion Socket has no such section: Notion signs with the token under
+  **Verifying the webhook**. Any other tool has only **Mint a webhook secret**, since deevy is the only one
+  that makes its secret.
 - **What it has said lately** lists each delivery and what deevy made of it.
 - **Disconnect** is at the bottom.
+
+A Slack Socket's page has none of **Where it delivers**, **What it signs with** and **What it has said
+lately**: deevy only posts in Slack, and Slack sends deevy nothing.
 
 GitHub, Linear and Notion Sockets have a section of their own as well, described on their pages.
 
@@ -160,9 +164,9 @@ GitHub, Linear and Notion Sockets have a section of their own as well, described
 
 A tool tells deevy what happened by posting to the Socket's address, and that is the only way deevy hears
 of it: deevy never asks a tool what changed. While a tool cannot reach deevy, nothing it does arrives: no
-new or changed record, no comment, no `/approve`, no click on a button in Slack. Once it can, deevy hears
-what the tool delivers from then on, and what it missed stays missed. Where the tool can send a delivery
-again, such as **Redeliver** on a GitHub App's recent deliveries, that is how you replay one.
+new or changed record, and no comment. Once it can, deevy hears what the tool delivers from then on, and
+what it missed stays missed. Where the tool can send a delivery again, such as **Redeliver** on a GitHub
+App's recent deliveries, that is how you replay one. Slack needs no way in: deevy only posts there.
 
 :::note[deevy Cloud]
 Your Workspace's tools deliver to `https://app.deevy.dev/<address>/hooks/…`, which every tool can reach.
@@ -188,5 +192,5 @@ too if you no longer want it to exist.
 
 ## Next
 
-- [How a Gate asks](/gates/how-a-gate-asks/), and [ruling from your tools](/gates/ruling-from-your-tools/).
+- [How a Gate asks](/gates/how-a-gate-asks/): where a Human hears of a Gate, and rules on it.
 - [Add an Agent](/agents/overview/) to work what your Projects hold.

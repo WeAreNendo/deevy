@@ -83,12 +83,12 @@ describe("a Gate", () => {
     expect(sent.delivered).toBe(1);
     const [comment] = fake.comments;
     expect(comment?.externalId).toBe("42");
-    // Everything a Human needs to rule without opening deevy, and the way in
-    // when they would rather.
+    // Everything a Human needs to decide, and the one way to rule: in deevy
+    // (ADR-0036), since a reply on the record is only a comment.
     expect(comment?.body).toContain("ship");
     expect(comment?.body).toContain("Cap the coupon at the basket total");
     expect(comment?.body).toContain("Pull request 7");
-    expect(comment?.body).toContain("/approve");
+    expect(comment?.body).not.toContain("/approve");
     expect(comment?.body).toContain(`https://deevy.test/gates/${asked.id}`);
     // The tracker shows the App as the author, so the line says who spoke.
     expect(comment?.body).toContain("— Planner");
@@ -106,8 +106,7 @@ describe("a Gate", () => {
         "",
         "- [Pull request 7](https://github.test/acme/deevy/pull/7)",
         "",
-        "Reply `/approve` or `/reject <why>` to rule from here.",
-        `Or open it in deevy: https://deevy.test/gates/${asked.id}`,
+        `Rule on it in deevy: https://deevy.test/gates/${asked.id}`,
         "",
         `— Planner · ${run.id} · via deevy`,
       ].join("\n"),
@@ -246,7 +245,6 @@ describe("the loop deevy must not close", () => {
     // The tracker tells deevy what deevy just said. Every provider does this,
     // and acting on it is a loop between deevy and somebody else's API.
     const result = await applyInbound({
-      vouches: true,
       db,
       workspace: ada.workspace,
       socket,

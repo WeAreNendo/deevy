@@ -62,38 +62,16 @@ export function gateBlocks(gate: ChatGateMessage): Block[] {
   if (gate.rulings.length > 0) {
     blocks.push(context(gate.rulings.map(escape).join(" · ")));
   }
-  // The buttons only while there is something to decide: a decided Gate that
-  // still offered them would take a click and refuse it.
-  blocks.push({
-    type: "actions",
-    block_id: "gate",
-    elements: [
-      ...(gate.status === "open"
-        ? [
-            {
-              type: "button",
-              action_id: "deevy_approve",
-              text: { type: "plain_text", text: "Approve" },
-              style: "primary",
-              value: gate.gateRequestId,
-            },
-            {
-              type: "button",
-              action_id: "deevy_reject",
-              text: { type: "plain_text", text: "Reject" },
-              style: "danger",
-              value: gate.gateRequestId,
-            },
-          ]
-        : []),
-      {
-        type: "button",
-        action_id: "deevy_open",
-        text: { type: "plain_text", text: "Open in deevy" },
-        url: gate.url,
-      },
-    ],
-  });
+  // Where to rule, which is in deevy and nowhere else (ADR-0036): a link
+  // rather than a button, because a button sends Slack's click to an app that
+  // takes nothing from Slack.
+  blocks.push(
+    context(
+      gate.status === "open"
+        ? `<${gate.url}|Rule on it in deevy>`
+        : `<${gate.url}|Open it in deevy>`,
+    ),
+  );
   return blocks;
 }
 
@@ -110,31 +88,4 @@ export function render(message: ChatMessage): { text: string; blocks: Block[] } 
     ? `${escape(message.text)} <${message.link.url}|${escape(message.link.label)}>`
     : escape(message.text);
   return { text: message.text, blocks: [section(line)] };
-}
-
-/** The dialog a rejection asks its reason in, carrying which Gate and which message. */
-export function noteView(input: {
-  gateRequestId: string;
-  checkpoint: string;
-  message: { channel: string; ts: string } | null;
-}): Block {
-  return {
-    type: "modal",
-    callback_id: "deevy_reject",
-    private_metadata: JSON.stringify({
-      gateRequestId: input.gateRequestId,
-      ...(input.message ? { channel: input.message.channel, ts: input.message.ts } : {}),
-    }),
-    title: { type: "plain_text", text: "Reject" },
-    submit: { type: "plain_text", text: "Reject" },
-    close: { type: "plain_text", text: "Cancel" },
-    blocks: [
-      {
-        type: "input",
-        block_id: "note",
-        label: { type: "plain_text", text: `Why not, at ${input.checkpoint.slice(0, 60)}?` },
-        element: { type: "plain_text_input", action_id: "note", multiline: true },
-      },
-    ],
-  };
 }

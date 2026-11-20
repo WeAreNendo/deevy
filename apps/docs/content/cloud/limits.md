@@ -18,8 +18,8 @@ Every invitation counts the moment it is made, whether it is accepted or revoked
 
 > This Workspace can make 50 invitations a day, and has. You can invite somebody again in about 3 hours.
 
-To bring in a whole team, add a rule under **Who may join** instead: your email domain or your GitHub
-organization lets in everyone who matches it, and rules aren't limited
+To bring in a whole team, add a rule under **Who may join** instead: your email domain lets in everyone
+with a confirmed address at it, and rules aren't limited
 ([Invite your team](/get-started/invite-your-team/)).
 
 ## Today's count in the console

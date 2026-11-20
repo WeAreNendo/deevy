@@ -81,29 +81,28 @@ order; a model may not. Pointing a real coding agent at a deployment this script
    lands in its inbox as a `mention`, opens no second Run, and leaves its Run working. Then it says what it
    intends to do and stops at the `plan` Gate, and its Run is `awaiting_input`.
 6. **deevy says so where the team reads.** The Proposal becomes a comment in the tracker, signed with the
-   Agent and the Run id, read through `/dev/tracker`. deevy sets no label.
+   Agent and the Run id, read through `/dev/tracker`, with a link to the Gate in deevy and nothing to type
+   there. deevy sets no label.
 7. **A Run nobody has ruled on stays at its Gate**, whatever the sweeps do meanwhile.
-8. **The Human rules from the tracker**, where they read the Proposal. First an account nobody linked
-   comments `/approve`: it rules nothing, the Gate stays open, and deevy answers on the record with where to
-   link it. Then the admin comments `/approve` with a note from the GitHub account they signed in to deevy
-   with — no linking step — and the Gate records the Ruling `via: socket`. A `run_answered` lands in the
-   Agent's inbox, the Run is `active` again, and `gates_get` carries the decision and the note. The Agent
-   pushes its own branch, attaches its pull request, and stops at the `ship` Gate.
-9. **Four eyes, from both doors.** The Human the Run is for is refused at that Checkpoint in deevy, and from
-   the tracker, in the same words. Somebody else rules in deevy and the Gate records it `via: web`; the
+8. **A Ruling is made in deevy** (ADR-0036). The admin comments `/approve` with a note on the record, from
+   the GitHub account they signed in to deevy with: it is a comment like any other, it rules nothing, the
+   Gate stays open, and deevy answers nothing. Then the admin rules in deevy, and the decision says nothing of
+   a tool. A `run_answered` lands in the Agent's inbox, the Run is `active` again, and `gates_get` carries
+   the decision and the note. The Agent pushes its own branch, attaches its pull request, and stops at the
+   `ship` Gate.
+9. **Four eyes.** The Human the Run is for is refused at that Checkpoint. Somebody else rules in deevy; the
    Agent hears it in its inbox, its Run is `active` again, and it finishes.
 10. **The evidence.** There is exactly one pull request on the record, the one the Agent attached,
     attributed to the Run that produced it, and the ruling is said back in the tracker too. And deevy said
-    nothing else there: two Gates, their two Rulings and the two Rulings it refused are the whole of the
-    record's comments from deevy. What reached the remote is the Agent's own push, so the walk checks nothing
+    nothing else there: two Gates and their two Rulings are the whole of the record's comments from deevy. What reached the remote is the Agent's own push, so the walk checks nothing
     of deevy's there.
 11. **The record.** The Event log reads
     `run.started run.activity run.activity comment.created gate.requested run.awaiting_input
-gate.ruling_refused identity.linked gate.approved run.answered issue.link_added gate.requested
-run.awaiting_input gate.ruling_refused gate.approved run.answered run.completed`, with the Agent as actor
+comment.created gate.approved run.answered issue.link_added gate.requested run.awaiting_input
+gate.approved run.answered run.completed`, with the Agent as actor
     throughout and the Human exactly one hop away at the Events that are theirs — the label that routed the
-    work, the two rulings, and each ruling reaching the Run — and the tracker's own at the reply, the two
-    refusals and the account it came to know.
+    work, the two rulings, and each ruling reaching the Run — and the tracker's own at the reply and at the
+    comment that ruled nothing.
 12. **The work split up.** A sub-issue of the record, labelled `agent:planner` the way the Agent would open
     one in the tracker with its own access, opens a Run for the Planner by assignment, and its closing, the
     last part, opens one `children_done` Run on the parent. With **Levels deep** set to 1, a sub-issue of
@@ -116,18 +115,11 @@ run.awaiting_input gate.ruling_refused gate.approved run.answered run.completed`
     delivery signed with any other secret is 401; one signed with the minted secret, in deevy's own format,
     opens a Run as the stub's do. The Agent asks at a Gate there, and `gate.requested` names the record as
     the tool knows it — `issueExternalId`, `issueKey`, `issueUrl`, and `issueSocketId` for the Socket it
-    is in — which is what an adapter needs to say it in the tool, since deevy writes nothing there. And the admin's own `/approve` through it rules nothing:
-    one `gate.ruling_refused`, reason `unvouched`, and the Gate still waits (ADR-0024's 2026-11-01 section).
+    is in — which is what an adapter needs to say it in the tool, since deevy writes nothing there. And a
+    comment through it that starts `/approve` rules nothing either: the Gate's only Event is
+    `gate.requested`, and it still waits.
     The stub signs with the same wire, so steps 2 to 12 exercise it too.
 14. **The same walk on the other deployments**, and each Event log is compared with Node's.
-
-## Whose account is whose
-
-The stub's accounts are GitHub's sign-in accounts because the walk connects it with
-`config: { signInProvider: "github" }`, which is how github.com's Socket behaves and a GitHub Enterprise
-Server's does not. The sign-in stub gives a Human their address as their GitHub account id, so the admin's
-`/approve` carries `ada@example.com` as its author id, and that is what Better Auth's `account` row holds.
-A login is never matched, which is why the stranger in step 7 is named by an id nobody signed in with.
 
 ## Running it against something else
 

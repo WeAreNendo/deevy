@@ -1,20 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ChatGateMessage } from "@deevy/core/sockets";
 import { createSlackSocket } from "../src/slack/index.ts";
-import approve from "./fixtures/slack/block_actions.approve.json" with { type: "json" };
-import reject from "./fixtures/slack/block_actions.reject.json" with { type: "json" };
-import submission from "./fixtures/slack/view_submission.reject.json" with { type: "json" };
 
 /**
- * A Slack app as a Socket (ADR-0024, ADR-0025).
+ * A Slack app as a Socket (ADR-0024, ADR-0036).
  *
- * Against recorded requests and an injected fetch, never the network: what
- * Slack sends is a form with a JSON payload in it, signed over a timestamp and
- * the body, and what deevy sends back is the Web API's own shape.
+ * Against recorded answers and an injected fetch, never the network. deevy
+ * only calls Slack's Web API, with the bot token, and Slack sends deevy
+ * nothing, so every case here is a call deevy makes and what Slack answers it.
  */
-const secret = "8f14e45fceea167a5a36dedd4bea2543";
 const now = new Date("2026-09-23T11:02:00Z");
-const seconds = Math.floor(now.getTime() / 1000);
 
 type Call = { url: string; body: unknown; authorization: string | null };
 
@@ -50,165 +45,6 @@ function slack(answers: Record<string, unknown> = {}) {
   return { module, chat: module.chat, calls };
 }
 
-/** A body as Slack sends it: a form, with the JSON under `payload`. */
-function form(payload: unknown): string {
-  return new URLSearchParams({ payload: JSON.stringify(payload) }).toString();
-}
-
-/** Slack's own signature: `v0=` HMAC-SHA256 over `v0:<timestamp>:<body>`. */
-async function signed(body: string, at = seconds, over = secret) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(over),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const mac = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(`v0:${String(at)}:${body}`),
-  );
-  const hex = [...new Uint8Array(mac)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return new Headers({
-    "x-slack-request-timestamp": String(at),
-    "x-slack-signature": `v0=${hex}`,
-    "content-type": "application/x-www-form-urlencoded",
-  });
-}
-
-describe("a request Slack signed", () => {
-  it("checks out, and says what kind of request it is", async () => {
-    const rawBody = form(approve);
-    const checked = await slack().chat.verifyInteraction({
-      headers: await signed(rawBody),
-      rawBody,
-      webhookSecret: secret,
-      now,
-    });
-    expect(checked).toEqual({ ok: true, deliveryId: null, eventName: "block_actions" });
-  });
-
-  it("is refused signed with anything else, or a byte different", async () => {
-    const rawBody = form(approve);
-    const { chat } = slack();
-    const other = await chat.verifyInteraction({
-      headers: await signed(rawBody, seconds, "a-different-signing-secret"),
-      rawBody,
-      webhookSecret: secret,
-      now,
-    });
-    const tampered = await chat.verifyInteraction({
-      headers: await signed(rawBody),
-      rawBody: rawBody.replace("deevy_approve", "deevy_reject"),
-      webhookSecret: secret,
-      now,
-    });
-    expect(other.ok).toBe(false);
-    expect(tampered.ok).toBe(false);
-  });
-
-  it("is refused when it is older than five minutes, however well it is signed", async () => {
-    // Slack signs the timestamp so that a captured request cannot be replayed
-    // later; the window is what makes that true (ADR-0025).
-    const rawBody = form(approve);
-    const stale = await slack().chat.verifyInteraction({
-      headers: await signed(rawBody, seconds - 301),
-      rawBody,
-      webhookSecret: secret,
-      now,
-    });
-    expect(stale.ok).toBe(false);
-  });
-
-  it("calls a slash command what it is", async () => {
-    const rawBody = new URLSearchParams({
-      team_id: "T07ACME001",
-      user_id: "U07GRACE01",
-      user_name: "grace",
-      command: "/deevy",
-      text: "link",
-      response_url: "https://hooks.slack.com/commands/T07ACME001/1/abc",
-    }).toString();
-    const checked = await slack().chat.verifyInteraction({
-      headers: await signed(rawBody),
-      rawBody,
-      webhookSecret: secret,
-      now,
-    });
-    expect(checked).toMatchObject({ ok: true, eventName: "slash_command" });
-  });
-});
-
-describe("what a Slack request means", () => {
-  it("reads Approve as a Ruling by the user who clicked, on the message they clicked", () => {
-    expect(slack().chat.normalizeInteraction("block_actions", form(approve))).toEqual({
-      kind: "ruling",
-      actor: { team: "T07ACME001", user: "U07GRACE01", login: "grace" },
-      gateRequestId: "gate_k3xr8v2m9qpw",
-      decision: "approved",
-      note: null,
-      wantsNote: false,
-      message: { channel: "C07DEEVY01", ts: "1758625200.000100" },
-      responseUrl: "https://hooks.slack.com/actions/T07ACME001/7654321098765/Zq1Xw2Ve3Ur4Ts5",
-      triggerId: "9876543210123.7654321098765.0f1e2d3c4b5a69788796a5b4c3d2e1f0",
-    });
-  });
-
-  it("reads Reject as a Ruling that wants its reason first", () => {
-    expect(slack().chat.normalizeInteraction("block_actions", form(reject))).toMatchObject({
-      kind: "ruling",
-      decision: "rejected",
-      wantsNote: true,
-      note: null,
-    });
-  });
-
-  it("reads the reason, when it comes, as the rejection itself", () => {
-    expect(slack().chat.normalizeInteraction("view_submission", form(submission))).toEqual({
-      kind: "ruling",
-      actor: { team: "T07ACME001", user: "U07GRACE01", login: "grace" },
-      gateRequestId: "gate_k3xr8v2m9qpw",
-      decision: "rejected",
-      note: "Not until the migration is split in two",
-      wantsNote: false,
-      message: { channel: "C07DEEVY01", ts: "1758625200.000100" },
-      responseUrl: null,
-      triggerId: null,
-    });
-  });
-
-  it("reads `/deevy link` as a user asking to be linked, and anything else as nothing", () => {
-    const { chat } = slack();
-    const command = (text: string) =>
-      new URLSearchParams({
-        team_id: "T07ACME001",
-        user_id: "U07GRACE01",
-        user_name: "grace",
-        command: "/deevy",
-        text,
-        response_url: "https://hooks.slack.com/commands/T07ACME001/1/abc",
-      }).toString();
-
-    expect(chat.normalizeInteraction("slash_command", command("link"))).toEqual({
-      kind: "link",
-      actor: { team: "T07ACME001", user: "U07GRACE01", login: "grace" },
-      responseUrl: "https://hooks.slack.com/commands/T07ACME001/1/abc",
-    });
-    expect(chat.normalizeInteraction("slash_command", command("dance"))).toMatchObject({
-      kind: "ignored",
-    });
-    // A button deevy did not draw is somebody else's.
-    const foreign = {
-      ...approve,
-      actions: [{ ...approve.actions[0], action_id: "somebody_elses_button" }],
-    };
-    expect(chat.normalizeInteraction("block_actions", form(foreign))).toMatchObject({
-      kind: "ignored",
-    });
-  });
-});
-
 const openGate: ChatGateMessage = {
   gateRequestId: "gate_k3xr8v2m9qpw",
   issueKey: "acme/deevy#42",
@@ -221,7 +57,7 @@ const openGate: ChatGateMessage = {
   approvals: 1,
   required: 2,
   url: "https://deevy.example.com/gates/gate_k3xr8v2m9qpw",
-  rulings: ["Bob approved, in deevy"],
+  rulings: ["Bob approved"],
 };
 
 describe("what deevy asks of Slack", () => {
@@ -248,27 +84,6 @@ describe("what deevy asks of Slack", () => {
       url: "https://slack.com/api/auth.test",
       authorization: "Bearer xoxb-not-a-real-token",
     });
-    // Its accounts are its team's. A Sign in with Slack keeps the same user
-    // id, and its id token names the team, which has to be this one before
-    // that sign-in counts here; linking is still the code Slack delivers.
-    expect(module.identityScope).toEqual({
-      instance: "T07ACME001",
-      signInProvider: "slack",
-      signInClaim: { name: "https://slack.com/team_id", value: "T07ACME001" },
-      linkBySignIn: false,
-    });
-  });
-
-  it("vouches for no sign-in before it knows its team", () => {
-    // A Socket saved before connect learned its team has nothing to hold a
-    // sign-in's team against, so only a code links there.
-    const module = createSlackSocket({
-      config: {},
-      credentials: { botToken: "xoxb-not-a-real-token" },
-      fetch: () => Promise.resolve(Response.json({ ok: true })),
-      now: () => now,
-    });
-    expect(module.identityScope).toEqual({ instance: "slack" });
   });
 
   it("refuses a user's token, which would post as them", async () => {
@@ -289,7 +104,7 @@ describe("what deevy asks of Slack", () => {
     );
   });
 
-  it("posts an open Gate with its two buttons, and a decided one with none", async () => {
+  it("posts an open Gate with a link to rule on it in deevy, and no button", async () => {
     const { chat, calls } = slack({
       "chat.postMessage": { ok: true, channel: "C07DEEVY01", ts: "1758625200.000100" },
     });
@@ -297,25 +112,47 @@ describe("what deevy asks of Slack", () => {
     const ref = await chat.post("C07DEEVY01", { kind: "gate", gate: openGate });
 
     expect(ref).toEqual({ channel: "C07DEEVY01", ts: "1758625200.000100" });
+    expect(calls[0]?.url).toBe("https://slack.com/api/chat.postMessage");
     const sent = calls[0]?.body as { channel: string; text: string; blocks: unknown[] };
     expect(sent.channel).toBe("C07DEEVY01");
-    expect(sent.text).toContain("acme/deevy#42");
+    expect(sent.text).toBe("Waiting on a ruling at the plan Checkpoint: acme/deevy#42");
     const drawn = JSON.stringify(sent.blocks);
-    expect(drawn).toContain('"action_id":"deevy_approve"');
-    expect(drawn).toContain('"action_id":"deevy_reject"');
-    expect(drawn).toContain('"value":"gate_k3xr8v2m9qpw"');
+    expect(drawn).toContain(
+      "<https://deevy.example.com/gates/gate_k3xr8v2m9qpw|Rule on it in deevy>",
+    );
     expect(drawn).toContain("1 of 2");
     expect(drawn).toContain("*basket total*");
+    expect(drawn).toContain("Bob approved");
+    // A button would send Slack's click to an app that takes nothing from Slack.
+    expect(drawn).not.toContain('"type":"actions"');
+    expect(drawn).not.toContain('"type":"button"');
+  });
+
+  it("changes a decided Gate's message in place, to a link that opens it in deevy", async () => {
+    const { chat, calls } = slack();
+    const ref = { channel: "C07DEEVY01", ts: "1758625200.000100" };
 
     await chat.update(ref, {
       kind: "gate",
-      gate: { ...openGate, status: "approved", approvals: 2, rulings: ["Bob", "Grace, in Slack"] },
+      gate: {
+        ...openGate,
+        status: "approved",
+        approvals: 2,
+        rulings: ["Bob approved", "Grace approved"],
+      },
     });
-    const updated = calls[1]?.body as { ts: string; blocks: unknown[] };
-    expect(calls[1]?.url).toBe("https://slack.com/api/chat.update");
-    expect(updated.ts).toBe("1758625200.000100");
-    expect(JSON.stringify(updated.blocks)).not.toContain("deevy_approve");
-    expect(JSON.stringify(updated.blocks)).toContain("Approved");
+
+    expect(calls[0]?.url).toBe("https://slack.com/api/chat.update");
+    const updated = calls[0]?.body as { channel: string; ts: string; blocks: unknown[] };
+    expect(updated).toMatchObject({ channel: "C07DEEVY01", ts: "1758625200.000100" });
+    const drawn = JSON.stringify(updated.blocks);
+    expect(drawn).toContain("Approved · 2 of 2");
+    expect(drawn).toContain("Bob approved · Grace approved");
+    expect(drawn).toContain("<https://deevy.example.com/gates/gate_k3xr8v2m9qpw|Open it in deevy>");
+    // Nothing is left to rule on, so nothing asks for it.
+    expect(drawn).not.toContain("Rule on it in deevy");
+    expect(drawn).not.toContain('"type":"actions"');
+    expect(drawn).not.toContain('"type":"button"');
   });
 
   it("lists the channels it is in, public and private, a page at a time", async () => {
@@ -361,31 +198,6 @@ describe("what deevy asks of Slack", () => {
     expect(chat).not.toHaveProperty("openDm");
   });
 
-  it("asks for a reason, and answers one person alone", async () => {
-    const { chat, calls } = slack();
-
-    await chat.askForNote("9876543210123.trigger", {
-      gateRequestId: "gate_k3xr8v2m9qpw",
-      checkpoint: "plan",
-      message: { channel: "C07DEEVY01", ts: "1758625200.000100" },
-    });
-    await chat.respond("https://hooks.slack.com/actions/T07ACME001/1/abc", "Linked.");
-
-    const modal = calls[0]?.body as { trigger_id: string; view: { private_metadata: string } };
-    expect(modal.trigger_id).toBe("9876543210123.trigger");
-    expect(JSON.parse(modal.view.private_metadata)).toEqual({
-      gateRequestId: "gate_k3xr8v2m9qpw",
-      channel: "C07DEEVY01",
-      ts: "1758625200.000100",
-    });
-    // A response URL is its own credential: no token goes with it.
-    expect(calls[1]).toMatchObject({
-      url: "https://hooks.slack.com/actions/T07ACME001/1/abc",
-      body: { response_type: "ephemeral", text: "Linked." },
-      authorization: null,
-    });
-  });
-
   it("says what Slack said when it refuses, in words and then its code", async () => {
     const { module, chat } = slack({
       // What slack.com answers a made-up token, byte for byte.
@@ -395,11 +207,14 @@ describe("what deevy asks of Slack", () => {
         ok: false,
         error: "missing_scope",
         needed: "groups:read",
-        provided: "chat:write,channels:read,commands",
+        provided: "chat:write,channels:read",
       },
-      "chat.update": { ok: false, error: "fatal_error" },
-      "views.open": new Response("upstream timed out", { status: 502 }),
+      "chat.update": [
+        { ok: false, error: "fatal_error" },
+        new Response("upstream timed out", { status: 502 }),
+      ],
     });
+    const ref = { channel: "C07GATES", ts: "1.2" };
 
     await expect(module.identity()).rejects.toThrow(
       "Slack does not know this token (invalid_auth, auth.test)",
@@ -410,25 +225,12 @@ describe("what deevy asks of Slack", () => {
     await expect(chat.listChannels?.()).rejects.toThrow(
       "The app is missing the groups:read scope: add it under OAuth & Permissions and reinstall it (missing_scope, users.conversations)",
     );
-    await expect(
-      chat.update({ channel: "C07GATES", ts: "1.2" }, { kind: "gate", gate: openGate }),
-    ).rejects.toThrow("Slack answered fatal_error (chat.update)");
-    await expect(
-      chat.askForNote("1.2.3", { gateRequestId: "gate_1", checkpoint: "plan", message: null }),
-    ).rejects.toThrow("Slack answered HTTP 502 (views.open)");
-  });
-
-  it("answers each kind of reply the way Slack reads it", async () => {
-    const { chat } = slack();
-
-    expect(await chat.answer({ kind: "none" }).text()).toBe("");
-    expect(await chat.answer({ kind: "private", text: "Your code is ABCD-EFGH" }).json()).toEqual({
-      response_type: "ephemeral",
-      text: "Your code is ABCD-EFGH",
-    });
-    expect(await chat.answer({ kind: "dialog_error", text: "Say why" }).json()).toEqual({
-      response_action: "errors",
-      errors: { note: "Say why" },
-    });
+    await expect(chat.update(ref, { kind: "gate", gate: openGate })).rejects.toThrow(
+      "Slack answered fatal_error (chat.update)",
+    );
+    // A body that is not Slack's own has no code to say, so the status is said.
+    await expect(chat.update(ref, { kind: "gate", gate: openGate })).rejects.toThrow(
+      "Slack answered HTTP 502 (chat.update)",
+    );
   });
 });

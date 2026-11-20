@@ -9,7 +9,6 @@ import {
   socketStatuses,
   type Socket,
 } from "@deevy/db";
-import { accountCallbackUrl } from "../account-links.ts";
 import { InboundDeliverySchema, SocketSchema } from "../schemas.ts";
 import { openSecret, requireSealingSecret, sealSecret, signState } from "../secrets.ts";
 import {
@@ -118,18 +117,26 @@ function mintRefusal(from: WebhookSecretFrom, tool: string): string | null {
   if (from === "handshake") {
     return `${tool} signs with the token it sends to verify its webhook, and a secret deevy minted would replace it and break the webhook. Follow Verifying the webhook on the Socket's page instead.`;
   }
+  if (from === "none") return noDeliveries(tool);
   return null;
+}
+
+/** Why a tool that delivers nothing has no secret to mint or type in (ADR-0036). */
+function noDeliveries(tool: string): string {
+  return `${tool} sends deevy nothing, so there is no secret to sign it with: deevy only posts there.`;
 }
 
 /**
  * Why deevy will not take a secret typed in for this tool, or null where it
  * will: the generic Socket's is deevy's alone, minted at connect and by
- * `sockets.rotate`, so its strength never depends on what somebody chose.
+ * `sockets.rotate`, so its strength never depends on what somebody chose, and
+ * a chat tool sends nothing to sign.
  */
-function typedRefusal(from: WebhookSecretFrom): string | null {
-  return from === "deevy"
-    ? "deevy makes this Socket's secret and takes none typed in. Mint a new one on the Socket's page, under What it signs with (sockets.rotate), and give it to whatever signs the deliveries."
-    : null;
+function typedRefusal(from: WebhookSecretFrom, tool: string): string | null {
+  if (from === "deevy") {
+    return "deevy makes this Socket's secret and takes none typed in. Mint a new one on the Socket's page, under What it signs with (sockets.rotate), and give it to whatever signs the deliveries.";
+  }
+  return from === "none" ? noDeliveries(tool) : null;
 }
 
 /**
@@ -219,9 +226,11 @@ export const sockets = {
           capabilities: z.array(z.enum(socketCapabilities)),
           /**
            * Who makes what its deliveries are signed with: `either` (deevy may
-           * mint one, or take the tool's), `tool` (only the tool's), or
-           * `handshake` (the tool sends it to verify its webhook). It is what
-           * decides whether `sockets.rotate` will mint one.
+           * mint one, or take the tool's), `tool` (only the tool's),
+           * `handshake` (the tool sends it to verify its webhook), `deevy`
+           * (only deevy mints it), or `none` (the tool delivers nothing, as
+           * Slack does). It is what decides whether `sockets.rotate` will mint
+           * one.
            */
           webhookSecretFrom: z.enum(webhookSecretOrigins),
           /**
@@ -299,12 +308,6 @@ export const sockets = {
       /** Where the provider sends the operator back to, code in hand. */
       setupUrl: z.string(),
       /**
-       * Where the tool sends a Human back to after they link their own account
-       * on it, for a tool that links accounts through its own consent page
-       * (account-links.ts). Its OAuth app has to list this beside `setupUrl`.
-       */
-      accountCallbackUrl: z.string(),
-      /**
        * What the provider must echo back on that redirect. Signed with this
        * instance's own secret and good for an hour, so what lands can be shown
        * to have started here (secrets.ts).
@@ -353,7 +356,6 @@ export const sockets = {
         ...socketOut(row),
         inboundUrl: inboundUrl(context, row.id),
         setupUrl: `${inboundUrl(context, row.id)}/setup`,
-        accountCallbackUrl: accountCallbackUrl(context, row.provider),
         webhookSecret: null,
         state: await signState(requireInstanceSecret(context), row.id),
       };
@@ -514,7 +516,9 @@ export const sockets = {
         { ...context, socketSecret: context.socketSecret },
         { provider: input.provider, config, credentials: sealed.credentials ?? null },
       );
-      const typed = input.webhookSecret ? typedRefusal(module.webhookSecretFrom) : null;
+      const typed = input.webhookSecret
+        ? typedRefusal(module.webhookSecretFrom, providerLabels[input.provider] ?? input.provider)
+        : null;
       if (typed) throw new ORPCError("BAD_REQUEST", { message: typed });
       // What proving the credential taught deevy that is not a secret — a
       // Slack team's id — goes in the configuration, not the identity.
@@ -577,17 +581,9 @@ export const sockets = {
       /** `paused` keeps everything and stops acting on what the tool says. */
       status: z.enum(socketStatuses).exclude(["removed"]).optional(),
       /**
-       * Take the address a tool reports as proof of which Member commented,
-       * matched against one a Member verified. For a tool with nothing better
-       * to offer — Notion — and off by default, because everywhere else an
-       * account id is the proof and an address is a weaker one (ADR-0025).
-       */
-      identityByEmail: z.boolean().optional(),
-      /**
        * The secret the tool signs with, where the tool is where it is
-       * rotated — Slack's signing secret. The one it replaces is still taken
-       * for a day, so a rotation done in two places in either order drops
-       * nothing (ADR-0025).
+       * rotated — a Linear webhook's. The one it replaces is still taken for a
+       * day, so a rotation done in two places in either order drops nothing.
        */
       webhookSecret: z.string().trim().min(8).max(500).optional(),
     }),
@@ -601,17 +597,16 @@ export const sockets = {
       const typed =
         input.webhookSecret === undefined
           ? null
-          : typedRefusal(bareModuleOf(context, found.provider)?.webhookSecretFrom ?? "either");
+          : typedRefusal(
+              bareModuleOf(context, found.provider)?.webhookSecretFrom ?? "either",
+              providerLabels[found.provider] ?? found.provider,
+            );
       if (typed) throw new ORPCError("BAD_REQUEST", { message: typed });
 
       const changes = {
         ...(input.name === undefined ? {} : { name: input.name }),
         ...(input.status === undefined ? {} : { status: input.status }),
       };
-      const config =
-        input.identityByEmail === undefined
-          ? null
-          : { ...found.config, identityByEmail: input.identityByEmail };
       const secrets =
         input.webhookSecret === undefined
           ? {}
@@ -622,7 +617,7 @@ export const sockets = {
             };
       const [row] = await context.db
         .update(socketTable)
-        .set({ ...changes, ...(config ? { config } : {}), ...secrets, updatedAt: new Date() })
+        .set({ ...changes, ...secrets, updatedAt: new Date() })
         .where(eq(socketTable.id, found.id))
         .returning();
       if (!row) throw new Error("sockets.update: the update returned no row");
@@ -634,9 +629,6 @@ export const sockets = {
         payload: {
           name: row.name,
           ...changes,
-          ...(input.identityByEmail === undefined
-            ? {}
-            : { identityByEmail: input.identityByEmail }),
           // That it changed, and never what to.
           ...(input.webhookSecret === undefined ? {} : { webhookSecretReplaced: true }),
         },

@@ -70,18 +70,15 @@ export interface ExternalComment {
   createdAt: Date;
 }
 
-/** Who did something on the provider's side. Never matched on by `login` (ADR-0025). */
+/** Who did something on the provider's side, as the tool names them. */
 export interface ExternalActor {
   login: string;
   id: string;
-  /** Whether this is a machine — including deevy's own Socket, whose comments rule nothing. */
-  isBot: boolean;
   /**
-   * The address the tool reports for them, where it reports one. Matched only
-   * on a Socket whose admin allowed it, and only against an address a Member
-   * has verified: for a tool with nothing better to offer (ADR-0025).
+   * Whether this is a machine, deevy's own Socket among them: what deevy said
+   * on a record coming back is not a comment anybody made.
    */
-  email?: string;
+  isBot: boolean;
 }
 
 /** Names one record inside a scope. */
@@ -97,14 +94,6 @@ export interface ExternalRef {
 export type InboundEvent =
   | { kind: "issue"; scopeKey: string; issue: ExternalIssue; actor: ExternalActor | null }
   | { kind: "comment"; scopeKey: string; issueExternalId: string; comment: ExternalComment }
-  | {
-      kind: "ruling";
-      scopeKey: string;
-      issueExternalId: string;
-      comment: ExternalComment;
-      decision: "approved" | "rejected";
-      note: string | null;
-    }
   /**
    * Where the tool's app is installed, added to what the Socket keeps, or with
    * `removed` taken off it: deleted, or suspended, where it works nothing
@@ -186,16 +175,6 @@ export interface TrackerSocket {
   listContainers?(): Promise<Container[]>;
 }
 
-/** Who clicked or typed in a chat tool: one user, in one team. */
-export interface ChatActor {
-  /** The team the user belongs to, which is the Identity's instance (ADR-0025). */
-  team: string;
-  /** The tool's own id for the user. The only thing ever matched on. */
-  user: string;
-  /** What the tool calls them, for a screen and a reply. Never matched on. */
-  login: string;
-}
-
 /** Where a message lives in a chat tool, which is what a later update names. */
 export interface ChatMessageRef {
   channel: string;
@@ -203,44 +182,9 @@ export interface ChatMessageRef {
 }
 
 /**
- * What one request from a chat tool means, in deevy's terms. `normalizeInteraction`
- * is pure, like a tracker's `normalize`: the parsed request in, this out.
- */
-export type ChatInteraction =
-  | {
-      kind: "ruling";
-      actor: ChatActor;
-      gateRequestId: string;
-      decision: "approved" | "rejected";
-      note: string | null;
-      /**
-       * A rejection asked for from a button, before its author has said why:
-       * deevy asks for the note first (`askForNote`), and the answer arrives
-       * as a second interaction carrying it.
-       */
-      wantsNote: boolean;
-      /** The message the click was on, so a reply and an update can find it. */
-      message: ChatMessageRef | null;
-      /** Where to answer the clicker alone, for about half an hour. */
-      responseUrl: string | null;
-      /** What opening a dialog in answer needs, for about three seconds. */
-      triggerId: string | null;
-    }
-  | { kind: "link"; actor: ChatActor; responseUrl: string | null }
-  | { kind: "ignored"; why: string };
-
-/** What deevy answers a chat tool's request with, which the tool renders its own way. */
-export type ChatReply =
-  | { kind: "none" }
-  /** Said to the one person who asked, and nobody else. */
-  | { kind: "private"; text: string }
-  /** A dialog's answer that keeps it open and says what is wrong. */
-  | { kind: "dialog_error"; text: string };
-
-/**
  * A Gate as a chat message shows one: what the Agent proposed, the arithmetic,
- * and — while it is open — the two buttons. The provider renders it; deevy
- * decides what it says (ADR-0025).
+ * and where to rule on it in deevy. The provider renders it; deevy decides what
+ * it says, and nothing in it rules (ADR-0036).
  */
 export interface ChatGateMessage {
   gateRequestId: string;
@@ -255,7 +199,7 @@ export interface ChatGateMessage {
   status: "open" | "approved" | "rejected" | "superseded";
   approvals: number;
   required: number;
-  /** Where a Human opens it in deevy. */
+  /** Where a Human rules on it, in deevy. */
   url: string;
   /** Who ruled, and how, once somebody has: a line per Ruling. */
   rulings: string[];
@@ -274,17 +218,12 @@ export type ChatMessage =
   | { kind: "text"; text: string; link: { url: string; label: string } | null }
   | { kind: "gate"; gate: ChatGateMessage };
 
+/**
+ * A chat tool, which deevy tells and asks nothing of (ADR-0036): a Gate's
+ * message is posted where a Project binds, and updated in place as it is ruled
+ * on. A chat tool sends deevy nothing, so it has no inbound half.
+ */
 export interface ChatSocket {
-  /**
-   * Whether this request is really from the tool. A chat tool signs a
-   * timestamp with the body, and a request older than a few minutes is a
-   * replay whatever its signature says. Never throws.
-   */
-  verifyInteraction(input: InboundInput): Promise<InboundCheck>;
-  /** Pure. The request, as the tool sent it, in deevy's terms. */
-  normalizeInteraction(eventName: string, rawBody: string): ChatInteraction;
-  /** The HTTP answer the tool expects for this reply. */
-  answer(reply: ChatReply): Response;
   post(channel: string, message: ChatMessage): Promise<ChatMessageRef>;
   update(ref: ChatMessageRef, message: ChatMessage): Promise<void>;
   /**
@@ -293,19 +232,12 @@ export interface ChatSocket {
    * answers null), as a tracker without `listContainers` has its key typed.
    */
   listChannels?(): Promise<ChatChannel[]>;
-  /** A dialog asking why, for a rejection clicked from a button. */
-  askForNote(
-    triggerId: string,
-    input: { gateRequestId: string; checkpoint: string; message: ChatMessageRef | null },
-  ): Promise<void>;
-  /** Says something to the one person who clicked, where only they see it. */
-  respond(responseUrl: string, text: string): Promise<void>;
 }
 
 /**
  * Who a Socket is on the tool's side. Recorded at connect, and read by the
  * inbound loop guard: a comment by this login is deevy's own announcement
- * coming back, and it rules nothing (ADR-0025).
+ * coming back.
  */
 export interface SocketIdentity {
   login: string;
@@ -357,59 +289,6 @@ export interface SetupInput {
   redirectUri?: string;
 }
 
-/** An account on a tool, as the tool itself said whose it is (ADR-0025). */
-export interface LinkedAccount {
-  /** The tool's own id for the account: the only thing ever matched on. */
-  id: string;
-  /** What the tool calls them, for a screen. Never matched on. */
-  login: string;
-  /** Where the account lives, which must be where the Socket's accounts do. */
-  instance: string;
-}
-
-/**
- * How a Human proves an account on this tool is theirs, where the tool has an
- * OAuth grant of its own and is not a provider deevy signs people in with:
- * Linear. The Human consents on the tool's own page, the tool sends them back
- * with a code, and what the code answers is the proof — deevy keeps no token
- * (ADR-0025).
- */
-export interface AccountLink {
-  /** Where to send the Human's browser to consent, as themselves. */
-  authorizeUrl(input: { redirectUri: string; state: string }): string;
-  /** Spends the code once and answers whose account consented. */
-  account(input: { code: string; redirectUri: string }): Promise<LinkedAccount>;
-}
-
-/**
- * Where this tool's accounts live, which is what an Identity is keyed by
- * (ADR-0025).
- *
- * `instance` tells two of one kind apart — github.com and a GitHub Enterprise
- * Server, a Linear organisation, a Slack team — because an account id means
- * nothing without the place that issued it. `signInProvider` says the accounts
- * here are the same accounts deevy signs people in with, so a Human who signed
- * in to deevy with one rules from here with no linking step.
- */
-export interface IdentityScope {
-  instance: string;
-  signInProvider?: "github" | "gitlab" | "linear" | "slack";
-  /**
-   * What the sign-in's id token must also say before its account counts here,
-   * where the provider's user ids are only unique within a workspace the id
-   * token names: Slack's, whose team is `https://slack.com/team_id`. A
-   * sign-in with no id token, or one naming another value, vouches for nobody.
-   */
-  signInClaim?: { name: string; value: string };
-  /**
-   * Whether Settings › Identities offers signing in with that provider as the
-   * way to link an account. Not where the provider's accounts are one
-   * workspace's and a sign-in could be to another (Linear, Slack): those link
-   * on the tool's own page or with a code, which are this Socket's.
-   */
-  linkBySignIn?: boolean;
-}
-
 /**
  * Who makes the secret a tool signs its deliveries with, which decides how a
  * Socket's is changed.
@@ -418,8 +297,8 @@ export interface IdentityScope {
  *   one for it (`sockets.rotate`) or take one the tool has (`sockets.update`):
  *   a GitHub App's webhook secret, a GitLab webhook's secret or signing token.
  * - `tool`: the tool makes it and takes none typed in, so deevy can only take
- *   the tool's, and a minted one would refuse every delivery: Slack's signing
- *   secret, a Linear webhook's.
+ *   the tool's, and a minted one would refuse every delivery: a Linear
+ *   webhook's.
  * - `handshake`: the tool sends it to establish its webhook and deevy keeps
  *   what it sent (hooks.ts): Notion's verification token. A minted one would
  *   replace it and break the webhook.
@@ -427,8 +306,10 @@ export interface IdentityScope {
  *   whoever sends the tool's deliveries is given it: the generic Socket, whose
  *   sender is an adapter somebody wrote and has nowhere a secret comes from
  *   but deevy. A new one is minted the same way (`sockets.rotate`).
+ * - `none`: the tool delivers nothing, so there is nothing to sign: a chat
+ *   tool, which deevy only tells (ADR-0036). A secret typed in is refused.
  */
-export const webhookSecretOrigins = ["either", "tool", "handshake", "deevy"] as const;
+export const webhookSecretOrigins = ["either", "tool", "handshake", "deevy", "none"] as const;
 export type WebhookSecretFrom = (typeof webhookSecretOrigins)[number];
 
 export interface SocketModule {
@@ -436,17 +317,6 @@ export interface SocketModule {
   capabilities: ReadonlySet<SocketCapability>;
   /** Who makes what its deliveries are signed with: see `WebhookSecretFrom`. */
   webhookSecretFrom: WebhookSecretFrom;
-  /** Where its accounts live. Absent, the provider's name is the instance and nothing is shared. */
-  identityScope?: IdentityScope;
-  /**
-   * Whether a Ruling made on this tool may count (ADR-0025). Absent is yes:
-   * the tool signs what one of its own accounts did, and an Identity says
-   * whose that account is. The generic Socket says no, because whoever holds
-   * its secret writes the delivery, the author's name and address included,
-   * and that is not the tool vouching for anybody: every Ruling through it is
-   * refused before anybody is looked up.
-   */
-  vouches?: false;
   /**
    * Whether this module has been walked against the tool itself, rather than
    * only its recorded payloads (docs/plans/simplify.md, slice 7). Absent is
@@ -482,8 +352,6 @@ export interface SocketModule {
    * a laptop behind a tunnel with a new hostname — so nobody retypes it.
    */
   rewire?(url: string): Promise<void>;
-  /** Present where a Human links an account here through the tool's own OAuth. */
-  accountLink?: AccountLink;
   tracker?: TrackerSocket;
   chat?: ChatSocket;
 }
@@ -496,28 +364,6 @@ export interface SocketModuleInput {
   /** Injected, so a provider test reaches a fixture rather than the network. */
   fetch: typeof fetch;
   now: () => Date;
-}
-
-/**
- * Whether a comment is a Ruling, and which: the first line and nothing else,
- * `/approve`, or `/reject <why>`, with the rest of the comment as the note
- * (ADR-0025). A comment that merely mentions the word is a comment.
- *
- * One parser for every tracker, because the command is deevy's rather than
- * any tool's, and a Human who rules from GitHub and from Linear should not
- * learn two grammars.
- */
-export function parseRulingCommand(
-  body: string,
-): { decision: "approved" | "rejected"; note: string | null } | null {
-  const [first = "", ...rest] = body.trim().split("\n");
-  const match = /^\/(approve|reject)\b\s*(.*)$/i.exec(first.trim());
-  if (!match) return null;
-  const note = [match[2] ?? "", ...rest].join("\n").trim();
-  return {
-    decision: match[1]?.toLowerCase() === "approve" ? "approved" : "rejected",
-    note: note || null,
-  };
 }
 
 /**

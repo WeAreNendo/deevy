@@ -125,12 +125,10 @@ export const HandleInput = z
   .regex(/^[a-z0-9][a-z0-9-]*$/, "A handle is lowercase letters, digits and hyphens");
 
 /**
- * What an allowlist rule holds, whatever its kind: trimmed, lowercased so a
- * rule matches whatever case the sign-in arrives in, short enough to be a name
- * rather than a document, and made of the characters all three kinds are made
- * of. The exact shape is the kind's, checked below — this is the widest of the
- * three, and the one an OpenAPI reader sees, since a `pattern` cannot depend on
- * a sibling field.
+ * What an allowlist rule holds: an email domain, trimmed and lowercased so a
+ * rule matches whatever case the sign-in arrives in. Dotted labels and nothing
+ * else, so `acme/platform` or `@example.com` is refused rather than saved as a
+ * rule that can never match (docs/plans/sign-in.md).
  */
 const AllowlistValue = z
   .string()
@@ -138,66 +136,17 @@ const AllowlistValue = z
   .toLowerCase()
   .min(1)
   .max(255)
-  .regex(
-    /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/,
-    "A domain such as example.com, an organization login, or a group path",
-  );
+  .regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*$/, "A domain such as example.com");
 
 /**
- * The shape a value may take is its kind's, because the three are not one
- * shape. An email domain and a GitHub organization login are dotted labels; a
- * GitLab group is a path — `acme/platform`, subgroups nested, `_` and `.`
- * legal — which the label pattern refuses and which is not a domain
- * (docs/plans/sign-in.md).
+ * A rule as an admin states one: an address's domain, the one rule there is
+ * (docs/plans/simplify.md, slice 10). Who signs in with which provider admits
+ * nobody, and an invitation admits the rest.
  */
-const allowlistValueShapes = {
-  email_domain: {
-    pattern: /^[a-z0-9-]+(\.[a-z0-9-]+)*$/,
-    message: "A domain such as example.com",
-  },
-  github_org: {
-    // A GitHub login is one label: letters, digits and single hyphens, never a
-    // dot. `example.com` in this field is a rule that can never match, and it
-    // was accepted because this shape was the email domain's
-    // (docs/plans/sign-in.md).
-    pattern: /^[a-z0-9](-?[a-z0-9])*$/,
-    message: "An organization login such as acme",
-  },
-  gitlab_group: {
-    pattern: /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/,
-    message: "A group path such as acme/platform",
-  },
-} satisfies Record<(typeof allowlistRuleKinds)[number], { pattern: RegExp; message: string }>;
-
-/**
- * The sign-in each kind of rule is decided by, or null for the kind the address
- * alone decides. A `github_org` rule asks the sign-in's GitHub account which
- * organizations it is in, and a `gitlab_group` rule its GitLab account
- * (auth.ts, `joinPorts`), so where nobody signs in with that provider the rule
- * admits nobody. deevy Cloud has no GitLab sign-in and offered the rule all the
- * same; `allowlist.add` refuses one there now, and Settings › General offers a
- * kind only beside its provider's button (docs/plans/docs.md).
- */
-export const allowlistRuleSignIn = {
-  email_domain: null,
-  github_org: { id: "github", label: "GitHub", rule: "GitHub organization" },
-  gitlab_group: { id: "gitlab", label: "GitLab", rule: "GitLab group" },
-} as const satisfies Record<
-  (typeof allowlistRuleKinds)[number],
-  { id: string; label: string; rule: string } | null
->;
-
-/**
- * A rule as an admin states one. The kind is checked with the value rather
- * than beside it, so the message names the shape the admin was actually asked
- * for instead of the union of all three.
- */
-export const AllowlistRuleInput = z
-  .object({ kind: z.enum(allowlistRuleKinds), value: AllowlistValue })
-  .superRefine(({ kind, value }, ctx) => {
-    const { pattern, message } = allowlistValueShapes[kind];
-    if (!pattern.test(value)) ctx.addIssue({ code: "custom", message, path: ["value"] });
-  });
+export const AllowlistRuleInput = z.object({
+  kind: z.enum(allowlistRuleKinds),
+  value: AllowlistValue,
+});
 
 /** Strict on the way in: a slug is a URL handle and a typo in one is a 404 later. */
 export const ProjectSlug = z

@@ -6,7 +6,6 @@ import { socketStanding } from "@/routes/settings/sockets";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Switch } from "@/components/ui/switch";
 import { SecretInput } from "@/components/secret-input";
 import {
   AlertDialog,
@@ -34,17 +33,15 @@ import { cn } from "@/lib/utils";
  * provider's own word — `webhookSecretFrom` in `sockets.providers`, which
  * `sockets.rotate` decides by too — so the page and the server cannot
  * disagree, and a tool with no sentence here still gets the right controls:
- * `tool` (Slack, Linear) takes only the tool's, `either` (GitHub, GitLab)
- * takes the tool's or mints one, `deevy` (the generic Socket) only mints, and
- * `handshake` (Notion) has no section, since "Verifying the webhook" is where
- * its token is.
+ * `tool` (Linear) takes only the tool's, `either` (GitHub, GitLab) takes the
+ * tool's or mints one, `deevy` (the generic Socket) only mints, `handshake`
+ * (Notion) has no section, since "Verifying the webhook" is where its token
+ * is, and `none` (Slack) has none, since it sends deevy nothing.
  *
  * Either way the one replaced is still taken for a day (`PREVIOUS_SECRET_MS`
  * in the core's hooks.ts), so the two sides can change in either order.
  */
 const whereItIsMade: Record<string, string> = {
-  slack:
-    "Slack makes it: the Signing Secret, under Basic Information in the app's settings. When you regenerate it there, paste the new one here.",
   linear:
     "Linear makes it: the signing secret on the webhook in your OAuth application's settings. When it changes there, paste the new one here.",
   github:
@@ -139,8 +136,11 @@ export function SocketPage({ socketId }: { socketId: string }) {
   // then says only whether there is a secret, and offers nothing to change it.
   const provider = providers.data?.providers.find((one) => one.id === socket.provider);
   const from = provider?.webhookSecretFrom;
+  // A tool that only takes what deevy posts — a chat tool — delivers nothing,
+  // so it has no address, no secret and nothing it has said (ADR-0036).
+  const listens = socket.capabilities.includes("tracker");
   const signing =
-    providers.isPending || from === "handshake"
+    providers.isPending || from === "handshake" || from === "none" || !listens
       ? null
       : {
           made: from ? madeWhere(socket.provider, from, tool) : null,
@@ -255,50 +255,52 @@ export function SocketPage({ socketId }: { socketId: string }) {
         {check.error ? <p className="text-sm text-destructive">{check.error.message}</p> : null}
       </SettingsSection>
 
-      <SettingsSection
-        aria-label="Where it delivers"
-        title="Where it delivers"
-        description="The address the tool sends what happens to. It is not a secret."
-      >
-        <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
-          {socket.inboundUrl}
-        </p>
-        {socket.provider === "github" ? (
-          <>
+      {listens ? (
+        <SettingsSection
+          aria-label="Where it delivers"
+          title="Where it delivers"
+          description="The address the tool sends what happens to. It is not a secret."
+        >
+          <p className="rounded-md border bg-card p-3 font-mono text-sm break-all">
+            {socket.inboundUrl}
+          </p>
+          {socket.provider === "github" ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                When this deevy&apos;s address changes — a tunnel with a new hostname — deevy can
+                point the App&apos;s webhook here itself.
+              </p>
+              <div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={rewire.isPending}
+                  onClick={() => rewire.mutate({ socketId })}
+                >
+                  Point GitHub at this address
+                </Button>
+              </div>
+              {rewire.isSuccess ? (
+                <p className="text-sm text-muted-foreground">GitHub delivers here now.</p>
+              ) : null}
+              {rewire.error ? (
+                <p className="text-sm text-destructive">{rewire.error.message}</p>
+              ) : null}
+            </>
+          ) : adapter ? (
             <p className="text-sm text-muted-foreground">
-              When this deevy&apos;s address changes — a tunnel with a new hostname — deevy can
-              point the App&apos;s webhook here itself.
+              When this deevy&apos;s address changes, give it to your adapter again. Until then
+              nothing reaches deevy, and what the adapter could not deliver is its to send again.
             </p>
-            <div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={rewire.isPending}
-                onClick={() => rewire.mutate({ socketId })}
-              >
-                Point GitHub at this address
-              </Button>
-            </div>
-            {rewire.isSuccess ? (
-              <p className="text-sm text-muted-foreground">GitHub delivers here now.</p>
-            ) : null}
-            {rewire.error ? (
-              <p className="text-sm text-destructive">{rewire.error.message}</p>
-            ) : null}
-          </>
-        ) : adapter ? (
-          <p className="text-sm text-muted-foreground">
-            When this deevy&apos;s address changes, give it to your adapter again. Until then
-            nothing reaches deevy, and what the adapter could not deliver is its to send again.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            When this deevy&apos;s address changes, paste it into the tool&apos;s webhook settings
-            again. Until then nothing the tool says reaches deevy, and its own redelivery sends what
-            was missed.
-          </p>
-        )}
-      </SettingsSection>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              When this deevy&apos;s address changes, paste it into the tool&apos;s webhook settings
+              again. Until then nothing the tool says reaches deevy, and its own redelivery sends
+              what was missed.
+            </p>
+          )}
+        </SettingsSection>
+      ) : null}
 
       {socket.provider === "github" && socket.status !== "pending" ? (
         <SettingsSection
@@ -381,34 +383,6 @@ export function SocketPage({ socketId }: { socketId: string }) {
               this Socket&apos;s address, and the token Notion sends appears here.
             </p>
           )}
-        </SettingsSection>
-      ) : null}
-
-      {socket.provider === "notion" ? (
-        <SettingsSection
-          aria-label="Who commented"
-          title="Who commented"
-          description="Notion has no account to link, so a ruling from a comment needs another proof."
-        >
-          <label className="flex items-center gap-3 text-sm">
-            {/* Named by the label around it, which Base UI points it at. */}
-            <Switch
-              checked={config.identityByEmail === true}
-              disabled={update.isPending}
-              onCheckedChange={(checked) =>
-                update.mutate({ socketId, identityByEmail: checked === true })
-              }
-            />
-            Take a verified address as proof
-          </label>
-          {/* The mark is the Gate page's list of decisions (gates/gate.tsx), and
-              only there: Slack, the feed and the tracker's comment name the
-              Human without it, so the sentence says where to look. */}
-          <p className="text-xs text-muted-foreground">
-            A comment counts as a Member&apos;s when Notion reports an address they verified in
-            deevy. That is weaker than a linked account, so the Gate&apos;s page marks every ruling
-            made this way &ldquo;(email)&rdquo;.
-          </p>
         </SettingsSection>
       ) : null}
 
@@ -526,19 +500,21 @@ export function SocketPage({ socketId }: { socketId: string }) {
         </SettingsSection>
       ) : null}
 
-      <SettingsSection aria-label="Deliveries" title="What it has said lately">
-        <DataTable
-          aria-label="Deliveries"
-          columns={columns}
-          rows={(deliveries.data?.deliveries ?? []) as Delivery[]}
-          getRowId={(row) => row.id}
-          loading={deliveries.isPending}
-          empty={{
-            title: "Nothing yet",
-            description: "A delivery shows up here the moment the tool speaks.",
-          }}
-        />
-      </SettingsSection>
+      {listens ? (
+        <SettingsSection aria-label="Deliveries" title="What it has said lately">
+          <DataTable
+            aria-label="Deliveries"
+            columns={columns}
+            rows={(deliveries.data?.deliveries ?? []) as Delivery[]}
+            getRowId={(row) => row.id}
+            loading={deliveries.isPending}
+            empty={{
+              title: "Nothing yet",
+              description: "A delivery shows up here the moment the tool speaks.",
+            }}
+          />
+        </SettingsSection>
+      ) : null}
 
       <SettingsSection
         aria-label="Disconnect"

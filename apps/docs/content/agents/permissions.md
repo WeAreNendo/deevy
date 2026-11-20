@@ -49,19 +49,20 @@ A suspended Agent is refused everything, and is given no new work.
 
 ## A Gate is a Human's, in deevy
 
-Approving and rejecting a Gate in deevy needs a Human signed in to deevy in a browser. An Agent's key is
-refused with "An Agent cannot do that". The party that proposes never has a route to approve.
+Approving and rejecting a Gate needs a Human signed in to deevy in a browser, and is done nowhere else. An
+Agent's key is refused with "An Agent cannot do that". The party that proposes never has a route to approve.
 
-A Human can also rule from a tool, by commenting `/approve` in the tracker or clicking **Approve** in Slack.
-That counts only when the tool vouches for which Human it was, through their own account there. A comment by
-a bot, deevy's own included, rules nothing. See [Ruling from your tools](/gates/ruling-from-your-tools/).
+Nothing written in a tool rules either: a comment that starts `/approve` on the record is only a comment,
+whoever wrote it, and the message deevy posts in a chat channel has no buttons, only a link to the Gate. So
+an Agent that can write in your tracker, with the access you gave it, can't rule there. See
+[How a Gate asks](/gates/how-a-gate-asks/).
 
 ## A key is an Agent's
 
 An API key always stands for an Agent. deevy issues keys only to Agents, and takes one only as an Agent's:
 there is no key, token or MCP client that acts as a Human. A Human works in deevy's own pages, in the
 tracker and in the chat channel, signed in as themselves. So nothing that runs while a Human is away can
-rule as them, link an account for them or act in their name.
+rule as them or act in their name.
 
 ## Untrusted input
 

@@ -172,7 +172,7 @@ describe("an issue, as deevy projects it", () => {
         parentExternalId: null,
         updatedAt: new Date("2026-09-24T09:14:05Z"),
       },
-      // GitLab redacts a user's address in a webhook, so none is claimed.
+      // Who did it there, for the log: deevy knows no Member behind this account.
       actor: { login: "grace", id: "2931", isBot: false },
     });
   });
@@ -213,23 +213,25 @@ describe("an issue, as deevy projects it", () => {
 });
 
 describe("a comment", () => {
-  it("whose first line is /approve is a Ruling, with the rest as its note", () => {
-    const [event] = tracker().normalize("Note Hook", noted);
+  it("whose first line is /approve is a comment like any other, every line of it kept", () => {
+    const events = tracker().normalize("Note Hook", noted);
 
-    expect(event).toEqual({
-      kind: "ruling",
-      scopeKey: "4211",
-      issueExternalId: "88104233",
-      comment: {
-        externalId: "1990442711",
-        url: "https://gitlab.com/acme/deevy/-/issues/42#note_1990442711",
-        body: "/approve cap it at the basket total\nand say so in the changelog",
-        author: { login: "grace", id: "2931", isBot: false },
-        createdAt: new Date("2026-09-24T10:21:17Z"),
+    // Something said on the record, and nothing more: a Ruling is made in
+    // deevy (ADR-0036).
+    expect(events).toEqual([
+      {
+        kind: "comment",
+        scopeKey: "4211",
+        issueExternalId: "88104233",
+        comment: {
+          externalId: "1990442711",
+          url: "https://gitlab.com/acme/deevy/-/issues/42#note_1990442711",
+          body: "/approve cap it at the basket total\nand say so in the changelog",
+          author: { login: "grace", id: "2931", isBot: false },
+          createdAt: new Date("2026-09-24T10:21:17Z"),
+        },
       },
-      decision: "approved",
-      note: "cap it at the basket total\nand say so in the changelog",
-    });
+    ]);
   });
 
   it("that says anything else is a comment", () => {

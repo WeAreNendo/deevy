@@ -1,7 +1,6 @@
 import {
   gateDecision as gateDecisionTable,
   gateRequest as gateRequestTable,
-  identityVerifications,
   type GateDecision,
   type GateRequest,
   type Member,
@@ -26,11 +25,10 @@ import { isOpen, setRunStatus } from "./runs.ts";
 /**
  * A Gate is a Run's request to pass a Checkpoint (ADR-0024, amending ADR-0020).
  *
- * One function decides every Ruling, whichever door it came through: deevy's
- * own screen, a comment on the tracker, a button in Slack. That is the whole
- * reason this module exists rather than the logic living in the operation — a
- * second door with its own copy of the arithmetic is how four-eyes quietly
- * stops being true (ADR-0025).
+ * One function decides every Ruling, and a Ruling is made in deevy, signed in
+ * (ADR-0036): the ruling screen and the API behind it are the one door. The
+ * logic lives here rather than in the operation because a second door with its
+ * own copy of the arithmetic is how four-eyes quietly stops being true.
  *
  * **A visit is a request.** Approvals are counted on one row and a rejection
  * ends it; asking again is a new row one visit later. Nothing clears stale
@@ -39,14 +37,10 @@ import { isOpen, setRunStatus } from "./runs.ts";
 
 export interface RulingInput {
   requestId: string;
-  /** The Human ruling. Resolved by the caller: a session, an Identity, a Slack user. */
+  /** The Human ruling, as their session says. */
   memberId: string;
   decision: GateDecision["decision"];
   note?: string | null;
-  via?: GateDecision["via"];
-  /** The Socket a Ruling from outside arrived through (ADR-0025). */
-  socketId?: string | null;
-  externalRef?: Record<string, unknown> | null;
 }
 
 /** What one Ruling did: the request as it now stands, and whether it settled it. */
@@ -57,8 +51,7 @@ export interface RulingResult {
 }
 
 /**
- * Records one Ruling, or refuses it. The one policy function all three doors
- * call (ADR-0025).
+ * Records one Ruling, or refuses it.
  */
 export async function recordRuling(source: EventSource, input: RulingInput): Promise<RulingResult> {
   const { db } = source;
@@ -104,11 +97,8 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
       memberId: member.id,
       decision: input.decision,
       note: input.note ?? null,
-      via: input.via ?? "web",
-      socketId: input.socketId ?? null,
-      externalRef: input.externalRef ?? null,
     })
-    // Two doors at once is the race this is about: the second loses and is
+    // Two tabs at once is the race this is about: the second loses and is
     // told what the first already said rather than counting twice.
     .onConflictDoNothing()
     .returning();
@@ -133,7 +123,6 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
         checkpoint: request.checkpoint,
         approvals,
         required: policy.approvalsRequired,
-        via: recorded.via,
         ...(input.note ? { note: input.note } : {}),
       },
     });
@@ -148,7 +137,6 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
       status,
       approvals,
       required: policy.approvalsRequired,
-      via: recorded.via,
       note: recorded.note,
     },
     request.run,
@@ -191,8 +179,6 @@ export async function passLoweredGates(
         status: "approved",
         approvals,
         required: change.to,
-        // Where the admin decided it, which is deevy's own screen or its API.
-        via: "web",
         note: null,
         loweredFrom: change.from,
       },
@@ -208,7 +194,6 @@ interface Settlement {
   status: "approved" | "rejected";
   approvals: number;
   required: number;
-  via: GateDecision["via"];
   note: string | null;
   /** The threshold an admin lowered, where lowering it is what passed the Gate. */
   loweredFrom?: number;
@@ -252,7 +237,6 @@ async function settleGate(
       checkpoint: request.checkpoint,
       approvals: settlement.approvals,
       required: settlement.required,
-      via: settlement.via,
       ...(settlement.note ? { note: settlement.note } : {}),
       ...(settlement.loweredFrom === undefined ? {} : { loweredFrom: settlement.loweredFrom }),
     },
@@ -317,19 +301,6 @@ export const GateDecisionSchema = z.object({
   memberId: z.string(),
   decision: z.enum(["approved", "rejected"]),
   note: z.string().nullable(),
-  via: z.enum(["web", "socket", "slack"]),
-  /**
-   * The tool it came through, where it came through one. A screen says "via
-   * GitHub" from this rather than from the Socket list, which is an admin's
-   * (ADR-0025).
-   */
-  socket: z.object({ id: z.string(), provider: z.string(), name: z.string() }).nullable(),
-  /**
-   * How deevy knew the Human behind a Ruling made outside it, or null for one
-   * made in deevy. `email` is the weak one, and a screen says so wherever the
-   * Ruling is shown (ADR-0025).
-   */
-  verifiedBy: z.enum(identityVerifications).nullable(),
   createdAt: z.date(),
 });
 
@@ -397,21 +368,10 @@ export const GateRequestSchema = z.object({
 
 export type GateRequestView = z.infer<typeof GateRequestSchema>;
 
-/** What a Ruling from outside recorded about how its author was known (sockets/rulings.ts). */
-function verifiedByOf(ref: unknown): (typeof identityVerifications)[number] | null {
-  const said = (ref as { verifiedBy?: unknown } | null)?.verifiedBy;
-  return identityVerifications.find((one) => one === said) ?? null;
-}
-
-/** A Ruling, with the tool it came through where it came through one. */
-export type GateDecisionRow = GateDecision & {
-  socket?: { id: string; provider: string; name: string } | null;
-};
-
 export interface GateViewInput {
   request: GateRequest;
   policy: CheckpointPolicy;
-  decisions: GateDecisionRow[];
+  decisions: GateDecision[];
   issueKey: string;
   origin: string;
   /** Who is reading, so the view can say where they stand. */
@@ -473,11 +433,6 @@ export function gateView({
       memberId: row.memberId,
       decision: row.decision,
       note: row.note,
-      via: row.via,
-      socket: row.socket
-        ? { id: row.socket.id, provider: row.socket.provider, name: row.socket.name }
-        : null,
-      verifiedBy: verifiedByOf(row.externalRef),
       createdAt: row.createdAt,
     })),
     approvals: approvedBy.length,

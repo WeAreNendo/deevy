@@ -22,10 +22,10 @@ import { signDelivery, socketModules } from "../src/index.ts";
  * hold it against: what is under test is the sentence its page tells an
  * adapter's author. Connect one and deevy mints its secret and says it once; a
  * delivery signed with it is a record like any other tracker's, and opens the
- * Run its label names; a Ruling through it rules nothing, because whoever
- * holds the secret is not the tool vouching for anybody (ADR-0025); and a Gate
- * is heard on the Workspace's webhooks, naming the record, since deevy writes
- * nothing back through it.
+ * Run its label names; a `/approve` in it is a comment, since a Ruling is made
+ * in deevy (ADR-0036); and a Gate, and the Ruling on it, is heard on the
+ * Workspace's webhooks, naming the record, since deevy writes nothing back
+ * through it.
  */
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -103,6 +103,7 @@ async function workspaceOnAnyTool(db: Db) {
   const sockets = socketModules();
   const extra = { sockets, socketSecret: sealing };
   const asAda = createRouterClient(router, { context: contextFor(db, ada, workspace, extra) });
+  const asGrace = createRouterClient(router, { context: contextFor(db, grace, workspace, extra) });
   const connected = await asAda.sockets.connect({ provider: "generic", name: "Acme's tracker" });
   const project = await asAda.projects.create({
     slug: "ops",
@@ -129,7 +130,7 @@ async function workspaceOnAnyTool(db: Db) {
   const sweep = () =>
     runDueWork({ db, sockets, socketSecret: sealing, baseUrl: "https://deevy.test", fetch });
 
-  return { app, asAda, asPlanner, connected, grace, planner, posted, sweep };
+  return { app, asAda, asGrace, asPlanner, connected, grace, planner, posted, sweep };
 }
 
 /** The record as the adapter states it, labelled for the Planner. */
@@ -159,14 +160,14 @@ async function delivery(secret: string, events: unknown[]) {
 
 let comments = 0;
 
-/** A comment as the adapter states one: Grace's, from the address she verified in deevy. */
+/** A comment as the adapter states one: Grace's, by her account on the tool. */
 function graceSays(body: string) {
   comments += 1;
   return {
     externalId: `c-${String(comments)}`,
     url: `${RECORD_URL}#comment-${String(comments)}`,
     body,
-    author: { login: "grace", id: "u-77", email: "grace@example.com" },
+    author: { login: "grace", id: "u-77" },
     createdAt: "2026-11-01T10:00:30.000Z",
   };
 }
@@ -211,7 +212,8 @@ describe("connecting any tool", () => {
       gitlab: [false, "either"],
       linear: [false, "tool"],
       notion: [false, "handshake"],
-      slack: [false, "tool"],
+      // A chat tool deevy only posts to, which signs nothing it sends here.
+      slack: [false, "none"],
     });
   });
 });
@@ -251,10 +253,10 @@ describe("a delivery from any tool", () => {
     expect(await db.query.issue.findFirst({})).toBeUndefined();
   });
 
-  it("rules nothing, by command or by event, even from an address deevy knows, and says so", async () => {
+  it("takes a /approve as a comment and a ruling event as none it takes, and the Gate stays open", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
-    const { app, asAda, asPlanner, connected, secret } = await opened(db);
+    const { app, asPlanner, connected, posted, secret, sweep } = await opened(db);
     const run = await db.query.run.findFirst({});
     if (!run) throw new Error("the label opened no Run");
     const gate = await asPlanner.gates.request({
@@ -262,11 +264,9 @@ describe("a delivery from any tool", () => {
       checkpoint: "plan",
       proposal: "Rotate it on Tuesday.",
     });
-    // The one way a tool with no account of its own could name a Member:
-    // taken here for nothing, because the adapter writes the address too.
-    await asAda.sockets.update({ socketId: connected.id, identityByEmail: true });
+    const before = Math.max(0, ...(await db.query.event.findMany({})).map((one) => one.seq));
 
-    const ruled = await app.request(
+    const said = await app.request(
       `/hooks/${connected.id}`,
       await delivery(secret, [
         { kind: "comment", issueExternalId: "10042", comment: graceSays("/approve") },
@@ -279,19 +279,25 @@ describe("a delivery from any tool", () => {
         },
       ]),
     );
+    await sweep();
 
-    expect(ruled.status).toBe(200);
+    expect(said.status).toBe(200);
+    expect(await said.json()).toMatchObject({
+      status: "applied",
+      applied: 1,
+      skipped: ["Event 2 is `ruling`, and deevy takes only issue and comment events"],
+    });
     expect(await db.query.gateDecision.findMany({})).toEqual([]);
     expect(await db.query.gateRequest.findFirst({ where: { id: gate.id } })).toMatchObject({
       status: "open",
     });
-    // Nobody was linked by it either: the refusal comes before any lookup.
-    expect(await db.query.memberIdentity.findMany({})).toEqual([]);
-    const refused = await db.query.event.findMany({ where: { kind: "gate.ruling_refused" } });
-    expect(refused.map((event) => event.payload)).toEqual([
-      expect.objectContaining({ reason: "unvouched", externalActor: "grace", checkpoint: "plan" }),
-      expect.objectContaining({ reason: "unvouched", externalActor: "grace", checkpoint: "plan" }),
-    ]);
+    const since = await db.query.event.findMany({ where: { seq: { gt: before } } });
+    expect(since.map((one) => one.kind)).toEqual(["comment.created"]);
+    expect(since[0]?.payload).toMatchObject({ body: "/approve", externalActor: "grace" });
+    // And nothing answers it: the adapter hears the comment, and no word on the Gate.
+    const heard = posted.map((post) => (JSON.parse(post.body) as { kind: string }).kind);
+    expect(heard).toContain("comment.created");
+    expect(heard.filter((kind) => kind.startsWith("gate."))).toEqual(["gate.requested"]);
   });
 });
 
@@ -339,5 +345,41 @@ describe("a Gate on a record from any tool", () => {
     const owed = await db.query.delivery.findMany({ where: { target: "socket" } });
     expect(owed).toHaveLength(1);
     expect(owed[0]?.deliveredAt).toBeInstanceOf(Date);
+  });
+
+  it("is ruled on in deevy, and the adapter hears the Ruling naming the record", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { asGrace, asPlanner, connected, grace, posted, sweep } = await opened(db);
+    const run = await db.query.run.findFirst({});
+    if (!run) throw new Error("the label opened no Run");
+    const gate = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Rotate it on Tuesday.",
+    });
+    await sweep();
+
+    await asGrace.gates.approve({ requestId: gate.id, note: "Tuesday suits." });
+    await sweep();
+
+    expect(await db.query.gateDecision.findMany({})).toMatchObject([
+      { gateRequestId: gate.id, memberId: grace.id, decision: "approved", note: "Tuesday suits." },
+    ]);
+    const approved = posted.find((post) => JSON.parse(post.body).kind === "gate.approved");
+    expect(JSON.parse(approved?.body ?? "{}")).toMatchObject({
+      subjectId: gate.id,
+      payload: {
+        checkpoint: "plan",
+        note: "Tuesday suits.",
+        issueSocketId: connected.id,
+        issueExternalId: "10042",
+        issueKey: "OPS-12",
+        issueUrl: RECORD_URL,
+      },
+    });
+    // Said to the adapter alone, which says it in the tool.
+    expect(posted.every((post) => post.url === ADAPTER)).toBe(true);
+    expect(await db.query.socketMirror.findMany({})).toEqual([]);
   });
 });

@@ -158,26 +158,16 @@ describe("what deevy makes of a comment", () => {
     });
   });
 
-  it("is a Ruling when the first line is one, and says which", () => {
-    const approving = {
-      ...commented,
-      comment: { ...commented.comment, body: "/approve\n\nReads right to me." },
-    };
-    const rejecting = {
-      ...commented,
-      comment: { ...commented.comment, body: "/reject the flag has to come first" },
-    };
+  it("is a comment when its first line is /approve or /reject, every word of it kept", () => {
+    for (const body of ["/approve\n\nReads right to me.", "/reject the flag has to come first"]) {
+      const said = { ...commented, comment: { ...commented.comment, body } };
 
-    expect(tracker().normalize("issue_comment", approving)[0]).toMatchObject({
-      kind: "ruling",
-      decision: "approved",
-      note: "Reads right to me.",
-    });
-    expect(tracker().normalize("issue_comment", rejecting)[0]).toMatchObject({
-      kind: "ruling",
-      decision: "rejected",
-      note: "the flag has to come first",
-    });
+      // What was said on the record, for the log and whoever it mentions: a
+      // Ruling is made in deevy (ADR-0036).
+      expect(tracker().normalize("issue_comment", said)).toMatchObject([
+        { kind: "comment", issueExternalId: "I_kwDOMxK7Zs6oF3S9", comment: { body } },
+      ]);
+    }
   });
 
   it("acts on a comment as it was written, and never on an edit of one", () => {

@@ -1,7 +1,6 @@
 import { openDatabase } from "@deevy/adapters/node";
-import { createApp, finishAccountLink, newId, router, runDueWork, sealSecret } from "@deevy/core";
+import { createApp, newId, router, runDueWork, sealSecret } from "@deevy/core";
 import {
-  account as accountTable,
   agent as agentTable,
   member as memberTable,
   project as projectTable,
@@ -20,14 +19,15 @@ import created from "./fixtures/linear/Issue.create.json" with { type: "json" };
 import commented from "./fixtures/linear/Comment.create.json" with { type: "json" };
 
 /**
- * Linear, through the door deevy actually serves (ADR-0024, ADR-0025).
+ * Linear, through the door deevy actually serves (ADR-0024, ADR-0036).
  *
  * The module is proved against recorded payloads and a fake API in the other
  * `linear-*` tests. This puts the real module behind the real route with a
  * real database and replaces only Linear's API — so what is under test is the
  * whole sentence: somebody labels an issue in Linear, the Agent it names has a
- * Run, the Agent's Proposal appears on the issue as the app's comment, and a
- * Human who linked their Linear account approves it by commenting `/approve`.
+ * Run, the Agent's Proposal appears on the issue as the app's comment with
+ * where to rule on it, a `/approve` on the issue is a comment and nothing
+ * more, and a Human rules in deevy and the issue is told.
  */
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -37,7 +37,6 @@ afterEach(() => {
 
 const migrationsFolder = new URL("../../db/drizzle", import.meta.url).pathname;
 const sealing = "a-test-sealing-secret-of-at-least-32-chars";
-const instanceSecret = "an-instance-secret-of-at-least-32-chars";
 const webhookSecret = "lin_wh_the_app_and_deevy_share_this";
 const ORG = created.organizationId;
 const TEAM = created.data.teamId;
@@ -50,19 +49,16 @@ function linearApi() {
   let comments = 0;
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : input.toString();
-    const headers = new Headers(init?.headers);
     const raw = typeof init?.body === "string" ? init.body : "";
     if (url.endsWith("/oauth/token")) {
       const form = Object.fromEntries(new URLSearchParams(raw));
       calls.push({ operation: `token:${form.grant_type ?? ""}`, variables: form });
       return Response.json({
-        access_token:
-          form.grant_type === "client_credentials" ? "lin_app_token" : `lin_user_${form.code}`,
+        access_token: "lin_app_token",
         token_type: "Bearer",
         expires_in: 86_399,
       });
     }
-    if (url.endsWith("/oauth/revoke")) return new Response(null, { status: 200 });
 
     const { query, variables = {} } = JSON.parse(raw) as {
       query: string;
@@ -70,12 +66,9 @@ function linearApi() {
     };
     const operation = /(?:query|mutation)\s+(\w+)/.exec(query)?.[1] ?? "";
     calls.push({ operation, variables });
-    const asGrace = headers.get("authorization") === "Bearer lin_user_grace-consented";
     const data: Record<string, unknown> = {
       DeevyWho: {
-        viewer: asGrace
-          ? { id: GRACE, name: "Grace Hopper", displayName: "grace" }
-          : { id: APP_USER, name: "deevy", displayName: "deevy" },
+        viewer: { id: APP_USER, name: "deevy", displayName: "deevy" },
         organization: { id: ORG, name: "Acme", urlKey: "acme" },
       },
       DeevyCommentCreate: {
@@ -125,7 +118,7 @@ async function human(db: Db, workspaceId: string, name: string, role: Member["ro
  * A Workspace with a Linear Socket and a Project bound to the ENG team,
  * written straight into the tables: what `sockets.connect` and
  * `projects.create` would have left. Ada is the admin and the Planner's
- * Sponsor; Grace is the Human who will link her Linear account and rule.
+ * Sponsor; Grace is the Human who comments on the issue, and rules in deevy.
  */
 async function workspaceOnLinear(db: Db) {
   const workspaceId = newId("workspace");
@@ -188,7 +181,7 @@ async function workspaceOnLinear(db: Db) {
       createLinearSocket({ ...input, fetch: api.fetch }),
   };
   const app = createApp({ db, sockets, socketSecret: sealing, baseURL: "https://deevy.test" });
-  const extra = { sockets, socketSecret: sealing, secret: instanceSecret };
+  const extra = { sockets, socketSecret: sealing };
   const asPlanner = createRouterClient(router, {
     context: contextFor(db, planner, workspace, { ...extra, grantedProjectIds: [projectId] }),
   });
@@ -196,22 +189,30 @@ async function workspaceOnLinear(db: Db) {
   const sweep = () =>
     runDueWork({ db, sockets, socketSecret: sealing, baseUrl: "https://deevy.test" });
 
-  return {
-    db,
-    app,
-    api,
-    socketId,
-    workspace,
-    ada,
-    grace,
-    planner,
-    asPlanner,
-    asGrace,
-    sweep,
-    graceContext: contextFor(db, grace, workspace, extra) as Parameters<
-      typeof finishAccountLink
-    >[0],
-  };
+  return { db, app, api, socketId, workspace, ada, grace, planner, asPlanner, asGrace, sweep };
+}
+
+/** What deevy has said on the issue, in the order it said it. */
+function saidOnLinear(api: ReturnType<typeof linearApi>): string[] {
+  return api.calls
+    .filter((call) => call.operation === "DeevyCommentCreate")
+    .map((call) => String((call.variables.input as { body: string }).body));
+}
+
+/** The kinds of every Event written after the one at `seq`. */
+async function kindsSince(db: Db, seq: number): Promise<string[]> {
+  const since = await db.query.event.findMany({
+    where: { seq: { gt: seq } },
+    columns: { kind: true },
+    orderBy: { seq: "asc" },
+  });
+  return since.map((event) => event.kind);
+}
+
+/** The last Event's place in the log, to read what follows it. */
+async function lastSeq(db: Db): Promise<number> {
+  const all = await db.query.event.findMany({ columns: { seq: true } });
+  return Math.max(0, ...all.map((event) => event.seq));
 }
 
 /** One delivery, stamped now and signed the way Linear signs: hex HMAC over the raw body. */
@@ -247,10 +248,10 @@ function comment(body: string, userId = GRACE, name = "Grace Hopper") {
 }
 
 describe("somebody labels an issue in Linear", () => {
-  it("and the Agent it names has a Run, whose Gate is said on the issue and ruled from it", async () => {
+  it("and the Agent it names has a Run, whose Gate is said on the issue and ruled on in deevy", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
-    const { app, api, socketId, planner, grace, asPlanner, asGrace, sweep, graceContext } =
+    const { app, api, socketId, planner, grace, asPlanner, asGrace, sweep } =
       await workspaceOnLinear(db);
 
     // The label routes it.
@@ -261,7 +262,8 @@ describe("somebody labels an issue in Linear", () => {
     const run = await db.query.run.findFirst({ where: { agentMemberId: planner.id } });
     expect(run).toMatchObject({ status: "pending", trigger: "assignment" });
 
-    // The Agent asks, and the Proposal becomes the app's comment on the issue.
+    // The Agent asks, and the Proposal becomes the app's comment on the issue,
+    // with where to rule on it.
     const gate = await asPlanner.gates.request({
       runId: run?.id ?? "",
       checkpoint: "plan",
@@ -272,44 +274,46 @@ describe("somebody labels an issue in Linear", () => {
     expect(said?.variables).toMatchObject({
       input: { issueId: created.data.id, body: expect.stringContaining("Cap the coupon") },
     });
+    const [announced] = saidOnLinear(api);
+    expect(announced).toContain(`Rule on it in deevy: https://deevy.test/gates/${gate.id}`);
+    expect(announced).not.toContain("/approve");
 
-    // Grace links her Linear account on Linear's own consent page.
-    const { url } = await asGrace.identities.begin({ socketId });
-    const state = new URL(url).searchParams.get("state") ?? "";
-    const linked = await finishAccountLink(graceContext, {
-      provider: "linear",
-      code: "grace-consented",
-      state,
-    });
-    expect(linked.location).toBe("https://deevy.test/settings/identities?linked=linear");
-
-    // And rules by commenting where she read the Proposal.
-    const ruled = await app.request(
+    // Grace answers where she read the Proposal, in words that once ruled:
+    // they are a comment on the record, and the Gate goes on waiting.
+    const before = await lastSeq(db);
+    const commentedOn = await app.request(
       `/hooks/${socketId}`,
       await delivery("Comment", comment("/approve cap it at the basket total"), "d-2"),
     );
-    expect(await ruled.json()).toMatchObject({ status: "applied" });
-    const [decision] = await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } });
+    expect(await commentedOn.json()).toMatchObject({ status: "applied", applied: 1 });
+    expect(await kindsSince(db, before)).toEqual(["comment.created"]);
+    expect(await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } })).toEqual([]);
+    expect((await asGrace.gates.get({ requestId: gate.id })).status).toBe("open");
+    // And deevy says nothing back to it.
+    await sweep();
+    expect(saidOnLinear(api)).toHaveLength(1);
+
+    // She rules in deevy, signed in.
+    await asGrace.gates.approve({ requestId: gate.id, note: "cap it at the basket total" });
+    const [decision, ...others] = await db.query.gateDecision.findMany({
+      where: { gateRequestId: gate.id },
+    });
+    expect(others).toEqual([]);
     expect(decision).toMatchObject({
       memberId: grace.id,
       decision: "approved",
-      via: "socket",
-      socketId,
       note: "cap it at the basket total",
     });
     expect(await db.query.run.findFirst({ where: { id: run?.id ?? "" } })).toMatchObject({
       status: "active",
     });
 
-    // What deevy says back: the arithmetic, as another comment, and nothing
-    // else on the issue.
+    // What deevy says back: the Ruling, as another comment, and nothing else
+    // on the issue.
     await sweep();
-    const bodies = api.calls
-      .filter((call) => call.operation === "DeevyCommentCreate")
-      .map((call) => String((call.variables.input as { body: string }).body));
-    expect(bodies.some((body) => body.includes("**Approved** at the `plan` Checkpoint"))).toBe(
-      true,
-    );
+    const ruled = saidOnLinear(api).at(-1);
+    expect(ruled).toContain("**Approved** at the `plan` Checkpoint");
+    expect(ruled).toContain("> cap it at the basket total");
     expect(
       api.calls
         .map((call) => call.operation)
@@ -317,72 +321,7 @@ describe("somebody labels an issue in Linear", () => {
     ).toEqual(["DeevyCommentCreate", "DeevyCommentCreate"]);
   });
 
-  /**
-   * Sign in with Linear keeps the viewer's id, which is the same id a comment
-   * in that workspace carries: somebody who signed in to deevy with it rules
-   * by commenting, with no linking step, as on github.com.
-   */
-  it("and somebody who signed in to deevy with Linear rules from it with no linking step", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { app, socketId, planner, grace, asPlanner } = await workspaceOnLinear(db);
-    await db.insert(accountTable).values({
-      id: newId("account"),
-      accountId: GRACE,
-      providerId: "linear",
-      userId: grace.userId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    await app.request(`/hooks/${socketId}`, await delivery("Issue", created, "d-1"));
-    const run = await db.query.run.findFirst({ where: { agentMemberId: planner.id } });
-    const gate = await asPlanner.gates.request({
-      runId: run?.id ?? "",
-      checkpoint: "plan",
-      proposal: "Cap the coupon.",
-    });
-
-    await app.request(`/hooks/${socketId}`, await delivery("Comment", comment("/approve"), "d-2"));
-
-    expect(
-      await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } }),
-    ).toMatchObject([{ memberId: grace.id, decision: "approved", via: "socket" }]);
-    expect(await db.query.memberIdentity.findMany({ where: { memberId: grace.id } })).toMatchObject(
-      [{ provider: "linear", externalUserId: GRACE, verifiedBy: "sign_in" }],
-    );
-  });
-
-  it("but a comment from an account nobody linked rules nothing, and is told where to link it", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { app, api, socketId, planner, asPlanner, sweep } = await workspaceOnLinear(db);
-    await app.request(`/hooks/${socketId}`, await delivery("Issue", created, "d-1"));
-    const run = await db.query.run.findFirst({ where: { agentMemberId: planner.id } });
-    const gate = await asPlanner.gates.request({
-      runId: run?.id ?? "",
-      checkpoint: "plan",
-      proposal: "Cap the coupon.",
-    });
-
-    await app.request(
-      `/hooks/${socketId}`,
-      await delivery(
-        "Comment",
-        comment("/approve", "9f8e7d6c-0000-4000-8000-00000000abcd", "A Stranger"),
-        "d-2",
-      ),
-    );
-    await sweep();
-
-    expect(await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } })).toEqual([]);
-    const reply = api.calls
-      .filter((call) => call.operation === "DeevyCommentCreate")
-      .map((call) => String((call.variables.input as { body: string }).body))
-      .find((body) => body.includes("ruled nothing"));
-    expect(reply).toContain("https://deevy.test/settings/identities");
-  });
-
-  it("and deevy's own comment coming back rules nothing, whatever it quotes", async () => {
+  it("and deevy's own comment coming back is no comment anybody made, whatever it quotes", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
     const { app, socketId, planner, asPlanner } = await workspaceOnLinear(db);
@@ -397,12 +336,16 @@ describe("somebody labels an issue in Linear", () => {
       ...comment("/approve", APP_USER, "deevy"),
       actor: { id: APP_USER, type: "OauthClient", name: "deevy" },
     };
+    const before = await lastSeq(db);
 
-    await app.request(`/hooks/${socketId}`, await delivery("Comment", echoed, "d-2"));
+    const answered = await app.request(
+      `/hooks/${socketId}`,
+      await delivery("Comment", echoed, "d-2"),
+    );
 
+    expect(await answered.json()).toMatchObject({ status: "skipped" });
+    expect(await kindsSince(db, before)).toEqual([]);
     expect(await db.query.gateDecision.findMany({})).toEqual([]);
-    const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
-    expect(kinds).not.toContain("gate.ruling_refused");
   });
 
   it("refuses a delivery that is stale or not Linear's, and writes neither down", async () => {

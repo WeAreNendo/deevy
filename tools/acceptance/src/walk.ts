@@ -9,7 +9,7 @@
  *
  * What is real is deevy: the Human's surface, the hooks a tracker delivers to,
  * `/mcp` and `/api` as an Agent reaches them with its key, the Gates, the
- * Rulings from the tracker and what deevy says back there. What is scripted is
+ * Rulings made in deevy and what deevy says back there. What is scripted is
  * whatever runs the Agent. deevy runs no Agent and manages no access
  * (docs/plans/simplify.md), so the scripted Agent does what any harness does:
  * it finds its work in its inbox, calls the tools with its own key, clones and
@@ -235,50 +235,25 @@ function stated(
 let comments = 0;
 
 /**
- * A comment on the record that is a Ruling, as a provider's `normalize` reads
- * one (`parseRulingCommand`). The author is the tool's own account id, which
- * for the stub's GitHub is the address the Human signs in with — the id
- * `apps/web/scripts/stub-oauth.js` hands Better Auth.
+ * A Human's comment on the record, as a provider's `normalize` reads one. It is
+ * only ever that: one that starts `/approve` rules nothing, whoever wrote it,
+ * since a Ruling is made in deevy (ADR-0036).
  */
-function rulingComment(
+function trackerComment(
   record: { externalId: string; url: string },
-  author: { login: string; id: string },
   body: string,
+  { author = { login: "ada", id: "stub-user-ada" }, scopeKey = CONTAINER } = {},
 ): unknown {
   comments += 1;
-  const [first = ""] = body.split("\n");
-  const rejected = first.startsWith("/reject");
   return {
-    kind: "ruling",
-    scopeKey: CONTAINER,
+    kind: "comment",
+    scopeKey,
     issueExternalId: record.externalId,
     comment: {
       externalId: `walk-${String(comments)}`,
       url: `${record.url}#walk-${String(comments)}`,
       body,
       author: { ...author, isBot: false },
-      createdAt: new Date().toISOString(),
-    },
-    decision: rejected ? "rejected" : "approved",
-    note: first.replace(/^\/(approve|reject)\s*/, "") || null,
-  };
-}
-
-/**
- * A Human's comment on the record that rules nothing, as a provider's
- * `normalize` reads one: here, the reply to what the Agent asked there.
- */
-function replyComment(record: { externalId: string; url: string }, body: string): unknown {
-  comments += 1;
-  return {
-    kind: "comment",
-    scopeKey: CONTAINER,
-    issueExternalId: record.externalId,
-    comment: {
-      externalId: `walk-${String(comments)}`,
-      url: `${record.url}#walk-${String(comments)}`,
-      body,
-      author: { login: "ada", id: "stub-user-ada", isBot: false },
       createdAt: new Date().toISOString(),
     },
   };
@@ -408,13 +383,9 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   const socket = await human(
     origin,
     "sockets/connect",
-    // Its accounts are the ones deevy signs people in with, as github.com's
-    // are: so a Human who signed in with GitHub rules from the tracker with no
-    // linking step (ADR-0025).
     {
       provider: "stub",
       name: "Example tracker",
-      config: { signInProvider: "github" },
       webhookSecret,
     },
     ada,
@@ -545,7 +516,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   await deliver(
     origin,
     socketId,
-    [replyComment(record, "@planner /healthz, like the other services")],
+    [trackerComment(record, "@planner /healthz, like the other services")],
     "acceptance-reply-1",
   );
   check(
@@ -582,6 +553,11 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     mirrored.includes("Planner") && mirrored.includes(runId),
     mirrored,
   );
+  check(
+    "and it links to the Gate in deevy, the one place it is ruled on",
+    mirrored.includes(`/gates/${String(plan.id)}`) && !mirrored.includes("/approve"),
+    mirrored,
+  );
 
   // A Run waiting on a Human is waiting, whatever the sweeps do meanwhile.
   await deployment.tick();
@@ -591,45 +567,39 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     (await agent.tool("runs_get", { runId })).status === "awaiting_input",
   );
 
-  // Part 4: the Human rules where they read the Proposal — in the tracker —
-  // and the Agent carries on (ADR-0025).
-  //
-  // First somebody deevy cannot place, who is told how to be placed and rules
-  // nothing: an account id is proof, a login is not.
-  const stranger = await deliver(
+  // Part 4: a comment that starts `/approve` is a comment, even from the
+  // account the admin signs in to deevy with, and deevy answers nothing
+  // (ADR-0036). The Human rules in deevy, and the Agent carries on.
+  const typed = await deliver(
     origin,
     socketId,
-    [rulingComment(record, { login: "mallory", id: "mallory@example.net" }, "/approve")],
-    "acceptance-ruling-1",
+    [
+      trackerComment(record, "/approve Looks right, build it", {
+        author: { login: "ada", id: adminEmail },
+      }),
+    ],
+    "acceptance-approve-comment",
   );
-  check("a Ruling from the tracker is a delivery like any other", stranger.status === 200);
-  const linkReply = await until(
-    deployment,
-    "the stranger being answered",
-    async () => (await said(origin, record)).find((one) => one.includes("@mallory")) ?? null,
-  );
-  check(
-    "an account nobody linked rules nothing, and is told where to link it",
-    linkReply.includes("ruled nothing") && linkReply.includes("/settings/identities"),
-    linkReply,
-  );
+  check("a comment that starts /approve is a delivery like any other", typed.status === 200);
+  await deployment.tick();
   const stillOpen = await agent.tool("gates_get", { requestId: plan.id });
-  check("and the Gate is still waiting", stillOpen.status === "open", JSON.stringify(stillOpen));
-
-  // Then the admin, from the GitHub account they signed in to deevy with.
-  await deliver(
-    origin,
-    socketId,
-    [rulingComment(record, { login: "ada", id: adminEmail }, "/approve Looks right, build it")],
-    "acceptance-ruling-2",
+  check(
+    "and rules nothing, whoever wrote it: the Gate is still waiting",
+    stillOpen.status === "open" &&
+      (await agent.tool("runs_get", { runId })).status === "awaiting_input",
+    JSON.stringify(stillOpen),
   );
+
+  await human(origin, "gates/approve", { requestId: plan.id, note: "Looks right, build it" }, ada);
   const planRuled = (await human(origin, "gates/list", { runId }, ada)).gates as Array<{
     status: string;
-    decisions: Array<{ via: string }>;
+    decisions: Array<Record<string, unknown>>;
   }>;
   check(
-    "the admin rules from the tracker with no linking step, and deevy says where it came from",
-    planRuled[0]?.status === "approved" && planRuled[0]?.decisions[0]?.via === "socket",
+    "the admin rules in deevy, and the Ruling says nothing of a tool",
+    planRuled[0]?.status === "approved" &&
+      planRuled[0].decisions.length === 1 &&
+      !("via" in (planRuled[0].decisions[0] ?? {})),
     JSON.stringify(planRuled.map((gate) => [gate.status, gate.decisions])),
   );
 
@@ -701,36 +671,17 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     refusedSaid.includes("wants somebody other than the Human this Run is for"),
     refusedSaid,
   );
-  await deliver(
-    origin,
-    socketId,
-    [rulingComment(record, { login: "ada", id: adminEmail }, "/approve")],
-    "acceptance-ruling-3",
-  );
-  const fourEyes = await until(
-    deployment,
-    "the requester being answered",
-    async () =>
-      (await said(origin, record)).find((one) =>
-        one.includes("wants somebody other than the Human this Run is for"),
-      ) ?? null,
-  );
-  check(
-    "and refused from the tracker too, in the same words",
-    fourEyes.startsWith("@ada, that ruled nothing"),
-    fourEyes,
-  );
-  // Somebody else rules, in deevy: both doors lead to the same Ruling.
+  // Somebody else rules, in deevy.
   await human(origin, "gates/approve", { requestId: ship.id, note: "Ship it" }, grace);
   const shipped = (await agent.tool("gates_get", { requestId: ship.id })) as {
     status: string;
-    decisions: Array<{ memberId: string; via: string }>;
+    decisions: Array<{ memberId: string }>;
   };
   check(
     "and somebody else rules on it, in deevy",
     graceId !== "" &&
       shipped.status === "approved" &&
-      shipped.decisions.some((one) => one.memberId === graceId && one.via === "web"),
+      shipped.decisions.some((one) => one.memberId === graceId),
     JSON.stringify(shipped.decisions),
   );
 
@@ -779,8 +730,8 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     ruled.includes("1 of 1") || ruled.toLowerCase().includes("approved"),
     ruled,
   );
-  // And nothing else: a Gate waiting is one comment, its Ruling another, and a
-  // Ruling the tracker could not count is answered where it was made. A Run
+  // And nothing else: a Gate waiting is one comment and its Ruling another,
+  // and a comment that starts `/approve` is answered by nothing. A Run
   // starting, working or finishing says nothing on the record
   // (docs/plans/simplify.md, slice 4).
   const spoken = (await said(origin, record)).map((one) =>
@@ -788,14 +739,11 @@ export async function walk(deployment: Deployment, label: string, repo: string):
       ? "gate"
       : one.startsWith("**Approved**") || one.startsWith("**Rejected**")
         ? "ruling"
-        : one.includes("ruled nothing")
-          ? "refused"
-          : one.split("\n")[0],
+        : one.split("\n")[0],
   );
   check(
-    "and deevy says nothing else there: two Gates, their two Rulings, two Rulings refused",
-    JSON.stringify([...spoken].sort()) ===
-      JSON.stringify(["gate", "gate", "refused", "refused", "ruling", "ruling"]),
+    "and deevy says nothing else there: two Gates and their two Rulings",
+    JSON.stringify([...spoken].sort()) === JSON.stringify(["gate", "gate", "ruling", "ruling"]),
     JSON.stringify(spoken),
   );
 
@@ -812,10 +760,8 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "the Event log tells the story of the Run from the label to the finish",
     story ===
       "run.started run.activity run.activity comment.created gate.requested run.awaiting_input " +
-        "gate.ruling_refused " +
-        "identity.linked gate.approved run.answered issue.link_added gate.requested " +
-        "run.awaiting_input gate.ruling_refused gate.approved run.answered " +
-        "run.completed",
+        "comment.created gate.approved run.answered issue.link_added gate.requested " +
+        "run.awaiting_input gate.approved run.answered run.completed",
     story,
   );
   // These are a Human's or the tracker's, each for the right reason:
@@ -827,11 +773,9 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "gate.approved",
     "gate.rejected",
     "run.answered",
-    // The tracker's, not the Agent's: the Human's reply, a comment deevy could
-    // not count, and an account it came to know. None is anything the Agent did.
+    // The tracker's, not the Agent's: the Human's reply, and the comment that
+    // ruled nothing. Neither is anything the Agent did.
     "comment.created",
-    "gate.ruling_refused",
-    "identity.linked",
   ]);
   check(
     "the Agent is the actor throughout, and the Human exactly one hop away",
@@ -931,9 +875,8 @@ export async function walk(deployment: Deployment, label: string, repo: string):
 
   // Part 9: any other tool, through an adapter that says what happened there
   // in deevy's own format (docs/plans/simplify.md, slice 7). deevy makes the
-  // secret and says it once, takes a record signed with it as it takes one
-  // from any tracker, and counts no Ruling that comes this way: whoever holds
-  // the secret writes the author too.
+  // secret and says it once, and takes a record signed with it as it takes one
+  // from any tracker.
   const generic = await human(
     origin,
     "sockets/connect",
@@ -1014,25 +957,31 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   const ruledThere = await deliver(
     origin,
     genericId,
-    [rulingComment(elsewhere, { login: "ada", id: adminEmail }, "/approve")],
-    "generic-ruling",
+    [
+      trackerComment(elsewhere, "/approve", {
+        author: { login: "ada", id: adminEmail },
+        scopeKey: "OPS",
+      }),
+    ],
+    "generic-comment",
     minted,
   );
-  const unvouched = (
-    (await human(origin, "events/list", { kindPrefix: "gate", limit: 20 }, ada)).events as Array<{
-      kind: string;
-      payload: Record<string, unknown> | null;
-    }>
-  ).filter(
-    (event) => event.kind === "gate.ruling_refused" && event.payload?.reason === "unvouched",
-  );
+  const opsGateEvents = (
+    (
+      await human(
+        origin,
+        "events/list",
+        { kindPrefix: "gate", subjectId: opsGate.id, limit: 10 },
+        ada,
+      )
+    ).events as Array<{ kind: string }>
+  ).map((event) => event.kind);
   check(
-    "and a Ruling through it counts for nothing, whoever it names, and the Gate still waits",
+    "and a comment through it that starts /approve rules nothing either, and the Gate still waits",
     ruledThere.status === 200 &&
-      unvouched.length === 1 &&
-      unvouched[0]?.payload?.issueKey === elsewhere.externalKey &&
+      JSON.stringify(opsGateEvents) === JSON.stringify(["gate.requested"]) &&
       (await agent.tool("gates_get", { requestId: opsGate.id })).status === "open",
-    JSON.stringify(unvouched),
+    JSON.stringify(opsGateEvents),
   );
 
   return story;

@@ -49,8 +49,8 @@ with a few trade-offs:
 
 - **An address.** A domain or subdomain such as `deevy.example.com`, served over HTTPS, or a path on one
   you already have, such as `example.com/deevy`. On Cloudflare, the Worker's `workers.dev` subdomain works.
-- **A way to sign in.** At least one OAuth app you register with GitHub, Google, Microsoft, GitLab, Linear,
-  Slack or Atlassian, or a client with your own OpenID Connect identity provider. See
+- **A way to sign in.** At least one OAuth app you register with GitHub, Google or Microsoft, or a client
+  with your own OpenID Connect identity provider. See
   [Sign-in providers](/self-hosting/sign-in-providers/).
 - **Two secrets** you generate once and keep as safely as the data: one signs sign-ins, the other seals
   the credentials of the tools you connect. See [Configure deevy](/self-hosting/configuration/).

@@ -41,7 +41,7 @@ state are whatever the tracker last said. See [Issues](/concepts/issues/).
 how long it worked and waited. See [Runs and Checkpoints](/concepts/runs/).
 
 **Gates** are where a Run stops for a Human. At a Checkpoint, such as `plan` or `ship`, the Agent asks with a
-Proposal saying what it intends; Humans approve or reject it; the Run carries on. An Agent can ask, but it
+Proposal saying what it intends; Humans approve or reject it in deevy; the Run carries on. An Agent can ask, but it
 can never approve. See [Gates and Rulings](/concepts/gates-and-rulings/).
 
 **Events** record every change, in order. A record's history, the Gates posted in Slack, an Agent's inbox,
@@ -55,9 +55,9 @@ webhooks and the comments deevy writes on your tracker are all read from them. S
 2. deevy sees the record arrive, routes it to the Agent `builder`, and a Run starts.
 3. The Agent works, and reaches the `plan` Checkpoint. It stops and asks at a Gate, with a Proposal saying
    what it means to do.
-4. deevy comments on the issue that it is waiting. The Gate waits on **Needs me** for the Humans who may
-   approve it, and in the Project's Slack channel if it has one.
-5. A Human approves: in deevy, with `/approve` in a comment on the issue, or with a button in Slack.
+4. deevy comments on the issue that it is waiting, with a link to the Gate. The Gate waits on **Needs me**
+   for the Humans who may approve it, and is posted in the Project's Slack channel if it has one.
+5. A Human follows a link to the Gate and approves it, in deevy. deevy says so on the issue.
 6. The Run carries on. The Agent opens a pull request that closes the issue when it merges, and finishes.
 
 Each of those moments is recorded as an Event, so the record's page in deevy, the issue on GitHub and the

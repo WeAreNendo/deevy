@@ -209,8 +209,7 @@ export function delegationRefused(
  * Event's `issueId` is deevy's own and the tool has never heard of it
  * (docs/plans/simplify.md, slice 7). Every Gate Event carries it, however the
  * Gate settled. `issueSocketId` is the Socket the record is in, so an adapter
- * hearing every Gate in the Workspace says only its own tool's; a payload's
- * `socketId`, where there is one, is the Socket a Ruling came through.
+ * hearing every Gate in the Workspace says only its own tool's.
  */
 export function recordOf(issue: {
   socketId: string;
