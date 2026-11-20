@@ -800,14 +800,17 @@ export async function deliverDueSocketMirrors({
       const ref = { externalId: issue.externalId, url: issue.url };
       const posted = await tracker.createComment(scope, ref, comment);
       // Where it landed, so a later Ruling can go back and change what it
-      // finds (schema/gate.ts).
-      await db.insert(socketMirrorTable).values({
-        id: newId("socketMirror"),
-        gateRequestId: gateId,
-        socketId: socket.id,
-        kind: "comment",
-        externalRef: { externalId: posted.externalId, url: posted.url },
-      });
+      // finds (schema/gate.ts) — unless the tool took nothing, as the generic
+      // Socket does, whose adapter hears the Event on a webhook instead.
+      if (posted) {
+        await db.insert(socketMirrorTable).values({
+          id: newId("socketMirror"),
+          gateRequestId: gateId,
+          socketId: socket.id,
+          kind: "comment",
+          externalRef: { externalId: posted.externalId, url: posted.url },
+        });
+      }
       attempted.push({ id, delivered: true, status: 200, error: null });
     } catch (error) {
       attempted.push({
@@ -1243,7 +1246,7 @@ export interface RunDueWorkOptions {
   sockets?: SocketModules;
   /** What this deployment seals a Socket's credentials with (secrets.ts). */
   socketSecret?: string;
-  /** Injected, so a test reaches a fake tracker rather than the network. */
+  /** Injected, so a test reaches a fake tracker or webhook receiver rather than the network. */
   fetch?: typeof fetch;
   /** The email senders this runtime can run (docs/plans/email-channel.md). */
   emailSenders?: EmailSenders;
@@ -1376,7 +1379,8 @@ export async function runDueWork({
   // And what is owed to a subscribed URL, which needs no origin: the body is
   // the Event itself and carries no link (ADR-0003).
   await drain(
-    () => deliverDueWebhooks({ db, workspaceId, now, ...deliveryBound }),
+    () =>
+      deliverDueWebhooks({ db, workspaceId, now, ...deliveryBound, ...(fetch ? { fetch } : {}) }),
     (of) => {
       result.webhooks += of.delivered;
     },

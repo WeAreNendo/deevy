@@ -3,7 +3,15 @@ title: Notion
 description: Connect a Notion workspace through an internal connection, and bind a Project to a database's rows.
 sidebar:
   order: 5
+  badge:
+    text: Preview
+    variant: caution
 ---
+
+:::caution[Preview]
+deevy's Notion Socket is built and tested against Notion's recorded deliveries, and has not yet been tried
+against Notion itself. Settings says **Preview** beside it until it has.
+:::
 
 A Notion Socket is one Notion workspace, reached through an internal connection you make there. A database
 can be a Project's tracker, with each row a record. An Agent that reads your other pages, or writes in

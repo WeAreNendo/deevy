@@ -90,7 +90,8 @@ export {
   type FetchLike,
   type SlackPayload,
 } from "./slack.ts";
-export { signPayload, verifySignature, webhookBody, type VerifyInput } from "./webhooks.ts";
+export { signPayload, verifySignature, type VerifyInput } from "./signature.ts";
+export { webhookBody } from "./webhooks.ts";
 export {
   defaultDeliveryLimit,
   defaultMaxPasses,

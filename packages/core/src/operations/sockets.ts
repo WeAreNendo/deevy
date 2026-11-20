@@ -121,6 +121,17 @@ function mintRefusal(from: WebhookSecretFrom, tool: string): string | null {
 }
 
 /**
+ * Why deevy will not take a secret typed in for this tool, or null where it
+ * will: the generic Socket's is deevy's alone, minted at connect and by
+ * `sockets.rotate`, so its strength never depends on what somebody chose.
+ */
+function typedRefusal(from: WebhookSecretFrom): string | null {
+  return from === "deevy"
+    ? "deevy makes this Socket's secret and takes none typed in. Mint a new one on the Socket's page, under What it signs with (sockets.rotate), and give it to whatever signs the deliveries."
+    : null;
+}
+
+/**
  * Who deevy is on the tool, or a refusal an admin can read.
  *
  * A tool that will not answer has refused the credential, and that is the
@@ -187,6 +198,7 @@ const providerLabels: Record<string, string> = {
   gitlab: "GitLab",
   notion: "Notion",
   slack: "Slack",
+  generic: "Generic",
   stub: "the stub tracker",
 };
 
@@ -218,6 +230,12 @@ export const sockets = {
            * instead.
            */
           beginRefusal: z.string().nullable(),
+          /**
+           * Whether deevy has been walked against the tool itself. False is a
+           * Preview: built and tested against the tool's recorded deliveries,
+           * and not yet tried against the real thing.
+           */
+          walked: z.boolean(),
         }),
       ),
     }),
@@ -232,6 +250,7 @@ export const sockets = {
             capabilities: [...(module?.capabilities ?? [])],
             webhookSecretFrom: module?.webhookSecretFrom ?? "either",
             beginRefusal: module?.beginRefusal ?? null,
+            walked: module?.walked === true,
           };
         }),
       });
@@ -494,9 +513,14 @@ export const sockets = {
         { ...context, socketSecret: context.socketSecret },
         { provider: input.provider, config, credentials: sealed.credentials ?? null },
       );
+      const typed = input.webhookSecret ? typedRefusal(module.webhookSecretFrom) : null;
+      if (typed) throw new ORPCError("BAD_REQUEST", { message: typed });
       // What proving the credential taught deevy that is not a secret — a
       // Slack team's id — goes in the configuration, not the identity.
       const { learned, ...identity } = await provenIdentity(module, input.provider);
+      // A tool whose sender has nowhere a secret comes from but deevy — the
+      // generic Socket's adapter — is given one now, said once below.
+      const minted = module.webhookSecretFrom === "deevy" ? mintWebhookSecret() : null;
 
       const values = {
         capabilities: [...module.capabilities],
@@ -504,6 +528,7 @@ export const sockets = {
         identity,
         config: { ...config, ...learned },
         ...sealed,
+        ...(minted ? { webhookSecret: await seal(context, minted) } : {}),
       };
       const [row] = pending
         ? await context.db
@@ -532,8 +557,9 @@ export const sockets = {
       return {
         ...socketOut(row),
         inboundUrl: inboundUrl(context, row.id),
-        // Nothing to say back: the operator chose this one and already has it.
-        webhookSecret: null,
+        // The one minted, if deevy minted one; otherwise nothing to say back,
+        // since the operator chose theirs and already has it.
+        webhookSecret: minted,
       };
     },
   }),
@@ -570,6 +596,12 @@ export const sockets = {
       if (!found || found.status === "removed" || found.workspaceId !== context.workspace.id) {
         throw new ORPCError("NOT_FOUND", { message: "No such Socket" });
       }
+
+      const typed =
+        input.webhookSecret === undefined
+          ? null
+          : typedRefusal(bareModuleOf(context, found.provider)?.webhookSecretFrom ?? "either");
+      if (typed) throw new ORPCError("BAD_REQUEST", { message: typed });
 
       const changes = {
         ...(input.name === undefined ? {} : { name: input.name }),

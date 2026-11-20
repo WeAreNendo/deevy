@@ -12,7 +12,8 @@
     "check:linear": "node scripts/check-linear.ts"
   },
   "dependencies": {
-    "@deevy/core": "workspace:*"
+    "@deevy/core": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@deevy/adapters": "workspace:*",

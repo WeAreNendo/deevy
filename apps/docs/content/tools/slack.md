@@ -3,7 +3,15 @@ title: Slack
 description: Create deevy's Slack app from its manifest, route Gates to a channel, and approve or reject them with a button.
 sidebar:
   order: 6
+  badge:
+    text: Preview
+    variant: caution
 ---
+
+:::caution[Preview]
+deevy's Slack Socket is built and tested against Slack's recorded deliveries, and has not yet been tried
+against Slack itself. Settings says **Preview** beside it until it has.
+:::
 
 A Slack Socket is a Slack app made from deevy's manifest. It holds no records, so no Project is bound to it.
 It is where deevy asks: a Gate arrives in a channel with **Approve** and **Reject** buttons, and a Human

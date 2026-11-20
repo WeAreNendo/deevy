@@ -354,8 +354,9 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   still talking to deevy (`How it is doing`), where it delivers (`region "Where it delivers"`,
   with **Point GitHub at this address** for an App), what it signs with (by the provider's own
   `webhookSecretFrom` in `sockets.providers`, which `sockets.rotate` obeys too: a field for the tool's new
-  secret where the tool makes one, **Mint** where deevy may, and no section for Notion, whose verification
-  token is its secret), and what it has said lately
+  secret where the tool makes one, **Mint** where deevy may, Mint alone for the generic Socket, whose secret
+  only deevy makes, and no section for Notion, whose verification token is its secret), and what it has
+  said lately
   (`table "Deliveries"`). A section that only one tool has — Notion's `region "Verifying the webhook"` and
   "Who commented", Linear's "Assigning issues to deevy", GitHub's "Where it is installed" with a link to
   install the App on more repositories — keys off `socket.provider`; what a tool _can_ do is the server's to
@@ -438,7 +439,12 @@ ways to sign in` (with `aria-expanded`) past four; `form "Development sign-in"`,
   `list "Gates"`, `list "Links"`, `list "Events"`, link `Read the conversation on <tool>`.
 - **Inbox.** `heading "Inbox"`, `list "Notifications"`, `checkbox "Select <what it says>"`, `toolbar
 "Selection"`, `Mark read`, `Mark all read`, the All / Unread toggles.
-- **Sockets.** `heading "Sockets"`, `list "Sockets"`, `group "Connect a tool"` with `Connect <tool>`;
+- **Sockets.** `heading "Sockets"`, `list "Sockets"`, `group "Connect a tool"` with `Connect <tool>` and,
+  last, `Connect another tool` (the generic Socket); a tool `sockets.providers` says is not `walked` has the
+  description `Preview` on its button (a badge `aria-describedby` points at, so the name stays exact), a
+  `Preview` badge on its row in `list "Sockets"` and in its page's description, and the section says what
+  Preview means; the generic dialog is `Name`, `Connect`, then the URL, the minted secret once ("only time
+  deevy shows it") and link `what a delivery says` to `https://docs.deevy.dev/tools/generic/`;
   GitHub's `Organization` (an organization's login, or empty for the person's own account), `form "Create
 the App on GitHub"` and `Paste an App you already have` — none of it until `sockets.providers` has
   answered (a muted "Checking which GitHub deevy works with…", or an `alert` with `Try again` if it
@@ -451,7 +457,8 @@ token`, `Use the signing token`; Notion's `Installation access token`, link `Not
   `Connect`, `Done`; every secret field is `type="password"` with `autocomplete="off"`. On a Socket's page: its name as `heading`, `region "Where it delivers"` with `Point GitHub
 at this address`, `region "Where it is installed"` with link `Install it` or `Install it on more
 repositories` (only where the Socket holds an `htmlUrl`), `Pause`, `region "What it signs with"` with `New secret from <tool>` and `Use the new secret`
-  (not for Notion) and `Mint a webhook secret` (GitHub, GitLab and the stub only), `region "Verifying the
+  (not for Notion or the generic Socket) and `Mint a webhook secret` (GitHub, GitLab, the stub and the
+  generic Socket, whose copy says deevy makes it), `region "Verifying the
 webhook"` with `Show the token`,
   `switch "Take a verified address as proof"`, `table "Deliveries"`, `Disconnect` then `Disconnect it`.
 - **Projects.** `Bind a Project` opening `dialog "Bind a Project"` with `combobox "Tool"`, `combobox

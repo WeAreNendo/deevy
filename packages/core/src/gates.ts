@@ -20,6 +20,7 @@ import {
 } from "./checkpoints.ts";
 import { appendEvent, type EventSource } from "./events.ts";
 import { newId } from "./ids.ts";
+import { recordColumns, recordOf } from "./issues.ts";
 import { isOpen, setRunStatus } from "./runs.ts";
 
 /**
@@ -63,7 +64,8 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
   const { db } = source;
   const request = await db.query.gateRequest.findFirst({
     where: { id: input.requestId },
-    with: { decisions: true, run: true },
+    // The record as its tool knows it, in the same read, for the Events below.
+    with: { decisions: true, run: true, issue: { columns: recordColumns } },
   });
   if (!request) throw new ORPCError("NOT_FOUND", { message: "No such Gate" });
   if (request.status !== "open") {
@@ -126,6 +128,7 @@ export async function recordRuling(source: EventSource, input: RulingInput): Pro
       projectId: request.projectId,
       payload: {
         issueId: request.issueId,
+        ...recordOf(request.issue),
         runId: request.runId,
         checkpoint: request.checkpoint,
         approvals,
@@ -174,7 +177,7 @@ export async function passLoweredGates(
   if (lowered.size === 0) return 0;
   const open = await source.db.query.gateRequest.findMany({
     where: { projectId, status: "open", checkpoint: { in: [...lowered.keys()] } },
-    with: { decisions: true, run: true },
+    with: { decisions: true, run: true, issue: { columns: recordColumns } },
   });
   let passed = 0;
   for (const request of open) {
@@ -224,7 +227,9 @@ interface Settlement {
  */
 async function settleGate(
   source: EventSource,
-  request: GateRequest,
+  request: GateRequest & {
+    issue: { socketId: string; externalId: string; externalKey: string; url: string };
+  },
   settlement: Settlement,
   run?: Run | null,
 ): Promise<GateRequest | null> {
@@ -242,6 +247,7 @@ async function settleGate(
     projectId: request.projectId,
     payload: {
       issueId: request.issueId,
+      ...recordOf(request.issue),
       runId: request.runId,
       checkpoint: request.checkpoint,
       approvals: settlement.approvals,

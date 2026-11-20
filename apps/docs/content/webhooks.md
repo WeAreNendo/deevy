@@ -99,6 +99,11 @@ And three headers:
 | `gate.approval`                  | A Gate got one approval, and still wants more.                                                                                        |
 | `gate.approved`, `gate.rejected` | A Gate was decided.                                                                                                                   |
 
+Every `gate.*` Event also names the record the Gate is on as its tool knows it: `payload.issueExternalId`,
+`payload.issueKey` (such as `acme/deevy#42` or `OPS-42`) and `payload.issueUrl`, with
+`payload.issueSocketId`, the Socket the record is in. That is enough to say something on the record without
+asking deevy for it, which is how an adapter for [any other tool](/tools/generic/) announces a Gate there.
+
 [The Event log](/concepts/events/) lists the other families.
 
 ## Verify the signature

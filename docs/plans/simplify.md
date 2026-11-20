@@ -725,3 +725,44 @@ from when deevy opened them; it now names the Agent the record was kept from and
 slice 5, a Run whose trigger was `schedule`, a `delegation` inbox row and a routing rule naming it fail the
 output schema on a database from before this slice; the schema's comments say so, and slice 12's empty
 database clears them.
+
+**Slice 7, Preview and the generic Socket.** 789 lines of source in and 246 out, of which 183 moved rather
+than changed: the signing went from `webhooks.ts` to `signature.ts` in the core, and the stub's wire to
+`packages/sockets/src/generic/wire.ts` (207 lines), which both now read. 1,078 lines of tests in and 30 out
+(the walk's five checks are 121 of them), and 16 into the OpenAPI snapshot. The generic Socket is 53 lines on
+top of the wire; the dialog that connects it is 97. With Matt, two choices went past the plan. The wire signs
+as deevy's webhooks do (`deevy-signature: t=<unix>,v1=<hex>` over `<t>.<body>`, refused after five minutes)
+rather than with the stub's bare HMAC of the body, so an adapter has one routine for both directions and a
+captured delivery cannot be replayed after five minutes (within them, a replay with a fresh delivery id is
+taken, as GitHub's and Stripe's are); the stub moved to it too, which a script that posts to a stubbed
+deployment has to follow. And every `gate.*` Event names its record as the tool knows it (`issueExternalId`,
+`issueKey`, `issueUrl`) and the Socket it is in (`issueSocketId`, which the review added: a subscription hears
+every Gate in the Workspace, and an adapter has to tell its own tool's from GitHub's), read through the
+`with` of the queries that already loaded the Gate, so no counted path moved and an adapter can say a Gate
+in its tool with nothing but the Event.
+
+Two rules make the generic Socket safe to register everywhere. It vouches for nobody: `SocketModule.vouches:
+false` reaches `applyRuling`, which refuses as `unvouched` before the Identity or the verified address is
+looked up, and `vouches` is said by every caller of `applyInbound` rather than defaulted, so one that forgets
+it does not compile, so neither an account id nor an address in a delivery can make a Ruling count, whoever
+it names (a test does it with Grace's verified address and `identityByEmail` on, and the walk with the
+admin's own account id, which counts through the stub). The refusal is an Event with the record, and the
+mirror tells a tool that takes comments to rule in deevy. And it writes nothing back: `createComment` may
+now answer `null`, and `runDueWork` keeps no mirror row for a comment that was never posted. Connecting it
+mints its secret in `sockets.connect` (`webhookSecretFrom: "deevy"`, a fourth origin), which says it once and
+never again, and it takes no secret typed in, at connect or after; `secrets.test.ts` holds that the minted secret and its sealed
+row appear in no other answer and in neither snapshot.
+
+Three things the plan did not name. `runDueWork` did not pass an injected `fetch` to the webhook deliveries,
+only to the tracker mirror, so a test could not see a webhook go out; it does now. A comment from a generic
+Socket whose author is `deevy` is dropped by the loop guard, which is how an adapter that hears its own
+comments again marks the ones it posted for deevy; the public page says so. And `walked` is the module's
+word, not a list in the SPA: GitHub, the stub and the generic Socket say it; Linear, GitLab, Notion and Slack
+do not, and each shows **Preview** on its Connect button (as the button's description, so its accessible
+name stays the one tests and screen readers find it by), on its row, on its page and on its public page,
+with a Starlight badge in the sidebar. The GitLab dialog still asked for an account with Developer access,
+from when deevy pushed; it says Reporter now, as the public page did. A generic Socket's page speaks of
+the adapter where the others speak of the tool's webhook settings and its redelivery. The review also found
+that `gate.superseded` carried no record, that an empty `deevy-delivery` header would have made every later
+delivery its duplicate (it is no id now), and that the import's next steps, the page on leaving deevy Cloud
+and the docs' landing did not name the generic Socket. The walk has 167 checks, 41 on each deployment.

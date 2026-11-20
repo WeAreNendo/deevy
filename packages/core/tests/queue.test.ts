@@ -65,7 +65,7 @@ async function workspace(jobs: JobQueue) {
   });
   const socket = (await db.query.socket.findFirst({ where: { id: seeded.socketId } })) as Socket;
   const deliver = (events: InboundEvent[]) =>
-    applyInbound({ db, workspace: alice.workspace, socket, events, jobs });
+    applyInbound({ vouches: true, db, workspace: alice.workspace, socket, events, jobs });
   return { db, alice, asAlice, subscription, deliver };
 }
 

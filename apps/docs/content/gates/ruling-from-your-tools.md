@@ -61,6 +61,10 @@ or a login, which can be renamed and reused: it matches the tool's own account i
 | Slack  | You sign in to deevy with Slack, to the Socket's Slack team, or link Slack with a code (below).                                                                                             |
 | Notion | Notion has no account to link. A comment counts only when an admin turns on **Take a verified address as proof** on the Socket's page, and Notion reports an address you verified in deevy. |
 
+A Ruling through [any other tool](/tools/generic/) never counts, whoever it names: an adapter of yours writes
+everything its deliveries say, the author included, so nothing in one proves who wrote it. deevy records
+that it ruled nothing, and a Gate on one of its records is ruled on in deevy or in Slack.
+
 A Ruling proved only by an email address is weaker than an account, so the Gate's page marks it
 "(email)".
 
