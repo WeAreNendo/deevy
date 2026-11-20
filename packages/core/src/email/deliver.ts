@@ -208,23 +208,6 @@ export async function deliverDueEmails({
       })
     : [];
   const gateById = new Map(gates.map((row) => [row.id, row]));
-  // Whether a Run still waits on its answer: an email, unlike a Slack
-  // message, cannot be changed once it is read, so one about a wait that is
-  // over is not sent at all.
-  const askingRunIds = [
-    ...new Set(
-      events
-        .filter((event) => event.kind === "run.awaiting_input" && event.subjectType === "run")
-        .map((event) => event.subjectId),
-    ),
-  ];
-  const runs = askingRunIds.length
-    ? await db.query.run.findMany({
-        where: { id: { in: askingRunIds } },
-        columns: { id: true, status: true },
-      })
-    : [];
-  const runStatus = new Map(runs.map((row) => [row.id, row.status]));
   const issueIds = [...new Set(events.map(issueOf).filter((id): id is string => id !== null))];
   const issues = issueIds.length
     ? await db.query.issue.findMany({
@@ -310,15 +293,13 @@ export async function deliverDueEmails({
     const issue = issueId ? issueById.get(issueId) : undefined;
     const gateId = gateOf(event);
     const gate = gateId ? gateById.get(gateId) : undefined;
-    if (
-      (kind === "gate_awaiting" && gate?.status !== "open") ||
-      (kind === "run_awaiting_input" && runStatus.get(event.subjectId) !== "awaiting_input")
-    ) {
+    // An email, unlike a Slack message, cannot be changed once it is read,
+    // so one about a Gate already ruled on is not sent at all.
+    if (kind === "gate_awaiting" && gate?.status !== "open") {
       settled.push(row.id);
       continue;
     }
     const shown = gate ? chatGateMessage(gate, baseUrl) : null;
-    const payload = (event.payload ?? {}) as Record<string, unknown>;
     // A Human's own email can be stopped in one click; a team address is
     // stopped where it was routed, by an admin. Signed from when the Event
     // happened, not from this pass: every attempt then carries the same link,
@@ -346,8 +327,6 @@ export async function deliverDueEmails({
             required: shown.required,
           }
         : null,
-      question: typeof payload.question === "string" ? payload.question : null,
-      runId: event.subjectType === "run" ? event.subjectId : null,
     });
     const message: EmailMessage = {
       from,

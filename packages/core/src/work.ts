@@ -90,9 +90,9 @@ const runStartedRowsPerInsert = 16;
 
 /**
  * Where deevy is waiting on the Agent and silence means something is wrong.
- * `awaiting_input` is missing on purpose: that Run is waiting on a Human, and
- * `statusAfterAnswer` in runs.ts only un-blocks a Run that is still
- * `awaiting_input`, so sweeping one would strand the answer.
+ * `awaiting_input` is missing on purpose: that Run is waiting at a Gate, and
+ * only a Ruling on it un-waits the Run (gates.ts), so sweeping one would
+ * strand the Ruling a Human is about to make.
  */
 const sweepableStatuses = ["pending", "active"] as const;
 
@@ -1330,8 +1330,8 @@ export function waitingOnGatesQuery(
 
 /**
  * Asks a Gate's approvers again while it is undecided, the ones who have not
- * ruled on it yet, and the Human behind a Run's question again while nobody
- * has answered it.
+ * ruled on it yet. A Gate is the one thing a Run waits at; a question the
+ * Agent asked on the record is the tracker's to remind anybody of.
  *
  * A Run waiting on a Human is not stale, so the stale sweep leaves it alone
  * for ever (docs/plans/m2.md). Left there it occupies the Agent's one open Run

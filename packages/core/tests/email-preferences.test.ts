@@ -75,7 +75,6 @@ describe("a Human's email switches", () => {
       mention: false,
       assignment: false,
       gate_awaiting: true,
-      run_awaiting_input: true,
       run_finished: false,
       delegation: false,
     });
@@ -179,7 +178,7 @@ describe("the unsubscribe in every email", () => {
 
     expect(answered.status).toBe(200);
     expect(await emailFor(db, bob.member.id, "gate_awaiting")).toBe(false);
-    expect(await emailFor(db, bob.member.id, "run_awaiting_input")).toBeNull();
+    expect(await emailFor(db, bob.member.id, "run_finished")).toBeNull();
     expect(await emailFor(db, ada.member.id, "gate_awaiting")).toBe(true);
   });
 

@@ -87,17 +87,17 @@ And three headers:
 
 ### The kinds an Agent's loop usually wants
 
-| Kind                             | When                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------ |
-| `issue.assigned`                 | A record was routed to a Member. `payload.to` is who.                    |
-| `comment.created`                | Somebody commented on a record.                                          |
-| `run.started`                    | A Run started.                                                           |
-| `run.awaiting_input`             | A Run is waiting on a Human, for a question or at a Gate.                |
-| `run.answered`                   | A Human answered a Run's question, or the Gate it waited at was decided. |
-| `run.completed`, `run.failed`    | A Run ended.                                                             |
-| `gate.requested`                 | An Agent asked at a Gate.                                                |
-| `gate.approval`                  | A Gate got one approval, and still wants more.                           |
-| `gate.approved`, `gate.rejected` | A Gate was decided.                                                      |
+| Kind                             | When                                                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `issue.assigned`                 | A record was routed to a Member. `payload.to` is who.                                                                                 |
+| `comment.created`                | Somebody commented on a record. `payload.mentionedMemberIds` is whom it names: a reply to what an Agent asked on the record names it. |
+| `run.started`                    | A Run started.                                                                                                                        |
+| `run.awaiting_input`             | A Run is waiting at a Gate. `payload.gateRequestId` is which.                                                                         |
+| `run.answered`                   | The Gate a Run waited at was decided, and the Run carries on.                                                                         |
+| `run.completed`, `run.failed`    | A Run ended.                                                                                                                          |
+| `gate.requested`                 | An Agent asked at a Gate.                                                                                                             |
+| `gate.approval`                  | A Gate got one approval, and still wants more.                                                                                        |
+| `gate.approved`, `gate.rejected` | A Gate was decided.                                                                                                                   |
 
 [The Event log](/concepts/events/) lists the other families.
 

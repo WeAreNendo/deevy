@@ -35,7 +35,8 @@ describe("MemberChip", () => {
 describe("RunStatus", () => {
   it("uses the words a Run is read by", () => {
     render(<RunStatus status="awaiting_input" />);
-    expect(screen.getByText("Waiting for input")).toBeTruthy();
+    // A Run waits only at a Gate (docs/plans/simplify.md, slice 5).
+    expect(screen.getByText("Waiting on a ruling")).toBeTruthy();
     render(<RunStatus status="stale" />);
     expect(screen.getByText("Gone quiet")).toBeTruthy();
   });

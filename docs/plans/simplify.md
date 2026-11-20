@@ -173,9 +173,9 @@ These Event kinds go: `run.checkout_issued`, `run.pull_request_opened`, `run.usa
 ### Triggers and wake-ups (`packages/core/src/triggers.ts`)
 
 - Routing as today: the label prefix, an assignment or delegation in the tool, the default Agent.
-- A mention of an Agent opens a Run where it has none open, as today. **New:** where it has an open Run, the
-  mention lands in its inbox as `mention` and goes to its webhook, which is how an answer in the tracker
-  wakes it.
+- A mention of an Agent opens a Run where it has none open, as today. Where it has an open Run, the mention
+  lands in its inbox as `mention` and goes to its webhook, which is how an answer in the tracker wakes it;
+  slice 5 found that already so.
 - A sub-issue whose parent is routed to an Agent is routed by its own label. When the last child closes,
   `issue.children_closed` opens a Run on the parent for the Agent the parent is routed to (slice 4: deevy no
   longer knows who opened a child). A child deeper than `maxDelegationDepth` is
@@ -645,3 +645,43 @@ quiet that deevy was asking it and nothing was lost, the delegation ceilings pro
 any more (they bound nothing until slice 6, and the setting says so), and `issue.createdBy` was still in the
 API when every other cut column was not. A test now stores each old `mirror` value on a Project and finds it
 says the same two things as any other.
+
+**Slice 5, questions in the tracker.** 518 lines of source out and 128 in, 289 of tests out and 528 in (the
+new acceptance file is 237 of them, the walk's three checks 69), and 277 out of the two snapshots. The
+`elicitation` and `prompt` kinds, `runs.answer` with its route, tool and CLI command, `statusAfterAnswer`,
+and `mcp/elicitation.ts` (171 lines) are gone, and with that file the URL elicitation `gates_request`
+answered a capable client with, and the `input_required` retry; the MCP server lost its `secret` and its
+state lifetime, since that request state was all it signed. The `run_awaiting_input` kind went from the
+inbox, the preferences, routing, Slack, the email and its renderer, and Needs me lost **Runs awaiting your
+answer**. `runs.postActivity` refuses the two kinds with the four it takes, and a Run waits only where
+`gates.request` puts it. The tool set is fourteen, every one an Agent's, which is the number this plan set.
+
+The mention rule needed no code. `deriveNotifications` already gave every Member a comment names a `mention`
+row, Agents included; `comment.created` already went to an Agent's webhook in its granted Projects; and a
+mention already opened no Run for an Agent with one open. `triggers.ts` is unchanged, and the new tests and
+the walk pin all three, through a delivery from the tracker.
+
+It went further than the plan said in one place. A Gate's ask and its Ruling were written into the Run's
+feed, as an `elicitation` and a `prompt` Activity, so with the kinds gone the feed is only what the Agent
+narrated. The Gate's own rows, beside it on the Run's page, carry the Proposal and the Ruling, and the Agent
+reads them with `gates_get`, as the loop already told it to; the line that says a Checkpoint was passed on an
+approval given before stays, as an `action`. Four counted paths are a statement shorter for it: a Ruling
+from the tracker is 29, a Slack click 22, asking at a Gate 20 and a Ruling in deevy 18. And the email sender
+no longer looks up which Runs were asking before it skips a stale ask.
+
+Two reads in the SPA had been wrong since Gates became requests on a Run: the Event log looked for a
+`gateStateId` no Event carries, so every Gate wait read "is waiting on a Human", and the Inbox looked for
+`ruling` where the Event says `decision`, so a Ruling read as an answer to a question. Both say the
+Checkpoint and the decision now. agent-loop.md says how to ask: a comment on the record that names who is
+asked and asks them to mention the Agent back, an `action` saying so, and a Run left open, which goes stale
+after thirty minutes and is meant to; a test holds that the reply still finds the stale Run and opens no
+other.
+
+The review found that what this slice reads strictly, older rows break. A Gate's `elicitation` and
+`prompt` Activities, a `run_awaiting_input` inbox row and a routing rule for that kind, all written before
+it, now fail the API's output schema, so `runs.get`, `inbox.list` and `routing.list` refuse a database that
+has them. Convention 9 keeps no shim for that and slice 12 starts from an empty one, so the schema's comment
+now says so, and a developer's database from before this slice wants reseeding. It also found that an
+Agent's webhook carries every comment in its Projects, mention or not, which agent-loop.md now says; only the
+inbox and a new Run wait for the mention, and a Project's **Route by mention** turned off stops the Run and
+not the row.

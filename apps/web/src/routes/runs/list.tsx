@@ -86,7 +86,7 @@ export function RunsPage({ search }: { search: RunsSearch }) {
             className="inline-flex"
             onClick={(clicked) => clicked.stopPropagation()}
           >
-            <RunStatus status="awaiting_input" label="Waiting on a ruling" />
+            <RunStatus status="awaiting_input" />
           </Link>
         ) : (
           <RunStatus status={row.status as RunStatusValue} />

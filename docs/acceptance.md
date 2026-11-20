@@ -15,7 +15,7 @@ vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#buil
 vp run acceptance#walk
 ```
 
-A hundred and fifteen checks: twenty-eight against each of four deployments, and three comparing each Event
+A hundred and thirty-one checks: thirty-two against each of four deployments, and three comparing each Event
 log with Node's. The four are the image, the Worker, the image again under a path (`/deevy`), and a hosted
 Workspace at `/acme` behind the many-Workspaces Worker, provisioned through `Platform` and signed in through
 the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes,
@@ -75,32 +75,36 @@ order; a model may not. Pointing a real coding agent at a deployment this script
 3. **A delivery is taken once, and only signed.** The same delivery twice is one delivery; an unsigned one
    is 401 and changes nothing.
 4. **The Agent finds its work.** The label put an `assignment` in its inbox and opened one Run in `pending`.
-   The record it reads is the tracker's, and carries the Checkpoints this Project asks for; it says what it
+   The record it reads is the tracker's, and carries the Checkpoints this Project asks for.
+5. **A question goes on the record.** Posting one as an Activity is refused with the kinds an Agent may
+   post. The Agent says it asked on the record instead, and the Human's reply, a comment that mentions it,
+   lands in its inbox as a `mention`, opens no second Run, and leaves its Run working. Then it says what it
    intends to do and stops at the `plan` Gate, and its Run is `awaiting_input`.
-5. **deevy says so where the team reads.** The Proposal becomes a comment in the tracker, signed with the
+6. **deevy says so where the team reads.** The Proposal becomes a comment in the tracker, signed with the
    Agent and the Run id, read through `/dev/tracker`. deevy sets no label.
-6. **A Run nobody has ruled on stays at its Gate**, whatever the sweeps do meanwhile.
-7. **The Human rules from the tracker**, where they read the Proposal. First an account nobody linked
+7. **A Run nobody has ruled on stays at its Gate**, whatever the sweeps do meanwhile.
+8. **The Human rules from the tracker**, where they read the Proposal. First an account nobody linked
    comments `/approve`: it rules nothing, the Gate stays open, and deevy answers on the record with where to
    link it. Then the admin comments `/approve` with a note from the GitHub account they signed in to deevy
    with — no linking step — and the Gate records the Ruling `via: socket`. A `run_answered` lands in the
    Agent's inbox, the Run is `active` again, and `gates_get` carries the decision and the note. The Agent
    pushes its own branch, attaches its pull request, and stops at the `ship` Gate.
-8. **Four eyes, from both doors.** The Human the Run is for is refused at that Checkpoint in deevy, and from
+9. **Four eyes, from both doors.** The Human the Run is for is refused at that Checkpoint in deevy, and from
    the tracker, in the same words. Somebody else rules in deevy and the Gate records it `via: web`; the
    Agent hears it in its inbox, its Run is `active` again, and it finishes.
-9. **The evidence.** There is exactly one pull request on the record, the one the Agent attached,
-   attributed to the Run that produced it, and the ruling is said back in the tracker too. And deevy said
-   nothing else there: two Gates, their two Rulings and the two Rulings it refused are the whole of the
-   record's comments from deevy. What reached the remote is the Agent's own push, so the walk checks nothing
-   of deevy's there.
-10. **The record.** The Event log reads
-    `run.started run.activity gate.requested run.awaiting_input gate.ruling_refused identity.linked
-gate.approved run.answered issue.link_added gate.requested run.awaiting_input gate.ruling_refused
-gate.approved run.answered run.completed`, with the Agent as actor throughout and the Human exactly one hop
-    away at the Events that are theirs — the label that routed the work, the two rulings, and each ruling
-    reaching the Run — and the tracker's own at the two refusals and the account it came to know.
-11. **The same walk on the other deployments**, and each Event log is compared with Node's.
+10. **The evidence.** There is exactly one pull request on the record, the one the Agent attached,
+    attributed to the Run that produced it, and the ruling is said back in the tracker too. And deevy said
+    nothing else there: two Gates, their two Rulings and the two Rulings it refused are the whole of the
+    record's comments from deevy. What reached the remote is the Agent's own push, so the walk checks nothing
+    of deevy's there.
+11. **The record.** The Event log reads
+    `run.started run.activity run.activity comment.created gate.requested run.awaiting_input
+gate.ruling_refused identity.linked gate.approved run.answered issue.link_added gate.requested
+run.awaiting_input gate.ruling_refused gate.approved run.answered run.completed`, with the Agent as actor
+    throughout and the Human exactly one hop away at the Events that are theirs — the label that routed the
+    work, the two rulings, and each ruling reaching the Run — and the tracker's own at the reply, the two
+    refusals and the account it came to know.
+12. **The same walk on the other deployments**, and each Event log is compared with Node's.
 
 ## Whose account is whose
 
