@@ -15,13 +15,15 @@ afterEach(() => {
 /**
  * What deevy says back where the work lives (ADR-0024).
  *
- * The point of mirroring is that a team never has to come to deevy to follow
- * along: the Gate an Agent is waiting at, and the ruling that let it past,
- * both show up as comments on the record itself. The danger is equally plain —
- * deevy writes a comment, the tracker tells deevy about it, and deevy acts on
- * its own words — so the loop guard is tested here as well as at the door.
+ * A Socket announces (docs/plans/simplify.md, slice 4): the Gate an Agent is
+ * waiting at, and the ruling that let it past, show up as comments on the
+ * record itself, so a team never has to come to deevy to follow along. That
+ * is all it says — no label, no word about a Run — and no setting turns it
+ * down. The danger is plain: deevy writes a comment, the tracker tells deevy
+ * about it, and deevy acts on its own words, so the loop guard is tested here
+ * as well as at the door.
  */
-async function mirroring(db: Db, mirror: "off" | "gates" | "runs" = "gates") {
+async function mirroring(db: Db) {
   const ada = await memberContext(db, { role: "admin", name: "Ada" });
   const seeded = await seedProject(db, ada.workspace.id);
   const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
@@ -33,7 +35,6 @@ async function mirroring(db: Db, mirror: "off" | "gates" | "runs" = "gates") {
     grants: [seeded.project.id],
   });
   const fake = fakeSockets();
-  await db.update(projectTable).set({ mirror }).where(eq(projectTable.id, seeded.project.id));
 
   const asPlanner = createRouterClient(router, { context: { ...planner, sockets: fake.sockets } });
   const asBob = createRouterClient(router, {
@@ -63,8 +64,8 @@ async function mirroring(db: Db, mirror: "off" | "gates" | "runs" = "gates") {
   };
 }
 
-describe("a Gate on a Project that mirrors", () => {
-  it("is a comment on the record, and a label that says it is waiting", async () => {
+describe("a Gate", () => {
+  it("is a comment on the record, saying everything a Human needs to rule", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const { asPlanner, run, fake, send, owed } = await mirroring(db);
@@ -111,14 +112,9 @@ describe("a Gate on a Project that mirrors", () => {
         `— Planner · ${run.id} · via deevy`,
       ].join("\n"),
     );
-    expect(fake.labels[0]).toMatchObject({
-      externalId: "42",
-      add: ["deevy:awaiting-approval"],
-      remove: [],
-    });
   });
 
-  it("says the arithmetic on the way to a ruling, and takes the label off at it", async () => {
+  it("says the arithmetic at the ruling", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const { asPlanner, asBob, run, fake, send } = await mirroring(db);
@@ -129,7 +125,6 @@ describe("a Gate on a Project that mirrors", () => {
     });
     await send();
     fake.comments.length = 0;
-    fake.labels.length = 0;
 
     await asBob.gates.approve({ requestId: asked.id, note: "Reads right" });
     await send();
@@ -149,65 +144,69 @@ describe("a Gate on a Project that mirrors", () => {
         `— Planner · ${run.id} · via deevy`,
       ].join("\n"),
     );
-    // The record stops saying it is waiting, because it is not.
-    expect(fake.labels.at(-1)).toMatchObject({ remove: ["deevy:awaiting-approval"] });
   });
 });
 
-describe("how much a Project says back", () => {
-  it("is nothing at all when it says nothing", async () => {
+describe("everything a Project says back", () => {
+  it("is one comment when a Gate opens and another at its ruling, and nothing else", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asPlanner, run, owed } = await mirroring(db, "off");
+    const { asPlanner, asBob, run, issue, fake, send, owed } = await mirroring(db);
 
-    await asPlanner.gates.request({ runId: run.id, checkpoint: "ship", proposal: "Ship it" });
-
-    expect(await owed()).toEqual([]);
-  });
-
-  it("leaves a Run out where a Project mirrors Gates alone", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    // A Run starting is not a decision anybody has to make, so a Project that
-    // mirrors Gates says nothing about it.
-    const quiet = await mirroring(db, "gates");
-
-    expect(await quiet.owed()).toEqual([]);
-  });
-
-  it("carries one where a Project mirrors Runs as well", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const loud = await mirroring(db, "runs");
-    expect(await loud.owed()).toHaveLength(1);
-
-    const sent = await loud.send();
-
-    expect(sent.delivered).toBe(1);
-    expect(loud.fake.comments[0]?.body).toContain("started");
-  });
-});
-
-/**
- * A pull request, said on the record where the tracker cannot see it for
- * itself (docs/plans/sockets.md, "Mirroring"). GitHub shows a pull request on
- * the issue its body closes; Linear and Notion know nothing about a repository
- * they are not.
- */
-describe("a pull request on a Project that mirrors Runs", () => {
-  it("is nothing: the Agent opened it where the code is, and deevy only holds the Link", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const mirrored = await mirroring(db, "runs");
-    await mirrored.asPlanner.links.add({
-      issue: mirrored.issue.url,
+    // A Run starting, working and attaching its pull request is not a
+    // decision anybody has to make, so none of it is said on the record.
+    await asPlanner.runs.postActivity({ runId: run.id, kind: "thought", body: "Reading" });
+    await asPlanner.links.add({
+      issue: issue.url,
       url: "https://github.com/acme/deevy/pull/7",
       title: "Cap the coupon at the basket total",
-      runId: mirrored.run.id,
+      runId: run.id,
     });
+    expect(await owed()).toEqual([]);
 
-    // The Run starting, and nothing for the pull request (ADR-0034).
-    expect(await mirrored.owed()).toHaveLength(1);
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await asBob.gates.approve({ requestId: asked.id });
+    await asPlanner.runs.finish({ runId: run.id, status: "completed", summary: "Shipped" });
+
+    const sent = await send();
+
+    expect(sent).toMatchObject({ delivered: 2, failed: 0 });
+    expect(fake.comments.map((one) => one.body.split("\n")[0])).toEqual([
+      "**Waiting on a ruling at the `ship` Checkpoint.**",
+      "**Approved** at the `ship` Checkpoint — 1 of 1.",
+    ]);
+  });
+
+  // What a Project's old `mirror` setting held stays in its column until the
+  // clean break (schema/project.ts), and must change nothing: a Project once
+  // set to say nothing now announces its Gates, and one set to say its Runs as
+  // well no longer does.
+  it.each(["off", "runs"] as const)("is the same on a Project once set to %s", async (level) => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asPlanner, asBob, run, seeded, fake, send } = await mirroring(db);
+    await db
+      .update(projectTable)
+      .set({ mirror: level })
+      .where(eq(projectTable.id, seeded.project.id));
+
+    const asked = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "Ship it",
+    });
+    await asBob.gates.approve({ requestId: asked.id });
+    await asPlanner.runs.finish({ runId: run.id, status: "completed", summary: "Shipped" });
+    await send();
+
+    expect(fake.comments.map((one) => one.body.split("\n")[0])).toEqual([
+      "**Waiting on a ruling at the `ship` Checkpoint.**",
+      "**Approved** at the `ship` Checkpoint — 1 of 1.",
+    ]);
   });
 });
 

@@ -1,3 +1,4 @@
+import type { TrackerSocket } from "@deevy/core/sockets";
 import { describe, expect, it } from "vite-plus/test";
 import { createGitlabSocket } from "../src/gitlab/index.ts";
 
@@ -14,24 +15,6 @@ interface Asked {
   path: string;
   authorization: string;
   body: Record<string, unknown> | undefined;
-}
-
-/** An issue as GitLab's REST API answers one, rather than as its webhook does. */
-function apiIssue(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 88104233,
-    iid: 42,
-    project_id: 4211,
-    title: "Checkout totals are wrong with a coupon",
-    description: "A 10% coupon takes the total below zero.",
-    state: "opened",
-    labels: ["bug"],
-    assignees: [],
-    web_url: "https://gitlab.com/acme/deevy/-/issues/42",
-    updated_at: "2026-09-24T09:14:05.311Z",
-    references: { short: "#42", relative: "#42", full: "acme/deevy#42" },
-    ...overrides,
-  };
 }
 
 /** A GitLab that answers what each `METHOD /path` is recorded to answer. */
@@ -73,8 +56,16 @@ function gitlabReturning(
     },
     options.signInIssuer ? { signInIssuer: options.signInIssuer } : {},
   );
-  if (!module.tracker) throw new Error("a GitLab Socket is a tracker");
-  return { module, tracker: module.tracker, asked };
+  const { tracker } = module;
+  if (!tracker?.listContainers) {
+    throw new Error("a GitLab Socket is a tracker that offers projects");
+  }
+  // Checked just above: the binding picker lists the projects its user is in.
+  return {
+    module,
+    tracker: tracker as TrackerSocket & Required<Pick<TrackerSocket, "listContainers">>,
+    asked,
+  };
 }
 
 const scope = { scopeKey: "4211", path: "acme/deevy" };
@@ -99,7 +90,7 @@ describe("who deevy is on GitLab", () => {
 
   it("refuses a token that cannot write, and says which scope it needs", async () => {
     // A `read_user` token answers `/user` and nothing else deevy asks: it
-    // connected, and then every comment, label and merge request failed.
+    // connected, and then every comment failed.
     const { module } = gitlabReturning({
       "GET /user": { id: 7001, username: "deevy-bot", name: "deevy", bot: true },
       "GET /personal_access_tokens/self": {
@@ -111,7 +102,7 @@ describe("who deevy is on GitLab", () => {
     });
 
     await expect(module.identity()).rejects.toThrow(
-      "This token has read_user, read_api; deevy needs the api scope to comment, label and open merge requests",
+      "This token has read_user, read_api; deevy needs the api scope to comment on issues",
     );
   });
 
@@ -195,131 +186,9 @@ describe("the tracker", () => {
       },
     ]);
     // Only projects its user is a member of with Reporter or more: the ones
-    // whose issues it can comment on and label.
+    // whose issues it can comment on.
     expect(asked[0]?.path).toContain("membership=true");
     expect(asked[0]?.path).toContain("min_access_level=20");
-  });
-
-  it("reads one record by the number in its URL", async () => {
-    const { tracker, asked } = gitlabReturning({
-      "GET /projects/4211/issues/42": apiIssue({
-        state: "closed",
-        assignees: [{ id: 1044, username: "ada", name: "Ada Lovelace" }],
-      }),
-    });
-
-    const issue = await tracker.getIssue(scope, ref);
-
-    expect(asked[0]?.path).toBe("/projects/4211/issues/42");
-    expect(issue).toEqual({
-      externalId: "88104233",
-      key: "acme/deevy#42",
-      url: "https://gitlab.com/acme/deevy/-/issues/42",
-      title: "Checkout totals are wrong with a coupon",
-      body: "A 10% coupon takes the total below zero.",
-      state: "closed",
-      stateName: "closed",
-      assignees: [{ login: "ada", id: "1044" }],
-      labels: ["bug"],
-      parentExternalId: null,
-      updatedAt: new Date("2026-09-24T09:14:05.311Z"),
-    });
-  });
-
-  it("lists what changed since, oldest change first, a page at a time", async () => {
-    const { tracker, asked } = gitlabReturning({
-      "GET /projects/4211/issues": [
-        apiIssue({ id: 1, iid: 43, references: { full: "acme/deevy#43" } }),
-        apiIssue({ id: 2, iid: 44, references: { full: "acme/deevy#44" } }),
-      ],
-    });
-
-    const page = await tracker.listIssues(scope, {
-      updatedSince: new Date("2026-09-24T09:00:00Z"),
-      cursor: null,
-      limit: 2,
-    });
-
-    expect(page.issues.map((issue) => issue.key)).toEqual(["acme/deevy#43", "acme/deevy#44"]);
-    expect(page.nextCursor).toBe("2");
-    const query = new URLSearchParams(asked[0]?.path.split("?")[1]);
-    expect(Object.fromEntries(query)).toEqual({
-      scope: "all",
-      state: "all",
-      order_by: "updated_at",
-      sort: "asc",
-      per_page: "2",
-      page: "1",
-      updated_after: "2026-09-24T09:00:00.000Z",
-    });
-  });
-
-  it("reads a record's comments, leaving out what GitLab wrote itself", async () => {
-    const { tracker } = gitlabReturning({
-      "GET /projects/4211/issues/42/notes": [
-        {
-          id: 501,
-          body: "Is this the spring coupon?",
-          system: false,
-          created_at: "2026-09-24T09:40:00.000Z",
-          author: { id: 2931, username: "grace", name: "Grace Hopper" },
-        },
-        {
-          id: 502,
-          body: "added ~agent:planner label",
-          system: true,
-          created_at: "2026-09-24T09:41:00.000Z",
-          author: { id: 2931, username: "grace", name: "Grace Hopper" },
-        },
-      ],
-    });
-
-    expect(await tracker.listComments(scope, ref, 20)).toEqual([
-      {
-        externalId: "501",
-        url: "https://gitlab.com/acme/deevy/-/issues/42#note_501",
-        body: "Is this the spring coupon?",
-        author: { login: "grace", id: "2931", isBot: false },
-        createdAt: new Date("2026-09-24T09:40:00.000Z"),
-      },
-    ]);
-  });
-
-  it("opens a record with its labels, and relates it to its parent, which is all GitLab has", async () => {
-    const { tracker, asked } = gitlabReturning({
-      "POST /projects/4211/issues": apiIssue({
-        id: 88104300,
-        iid: 43,
-        labels: ["agent:builder", "sub-task"],
-        references: { full: "acme/deevy#43" },
-        web_url: "https://gitlab.com/acme/deevy/-/issues/43",
-      }),
-      "POST /projects/4211/issues/43/links": { source_issue: {}, target_issue: {} },
-    });
-
-    const created = await tracker.createIssue(scope, {
-      title: "Cap the coupon",
-      body: "Split out of acme/deevy#42.",
-      parent: ref,
-      labels: ["agent:builder", "sub-task"],
-    });
-
-    expect(asked[0]).toMatchObject({
-      method: "POST",
-      path: "/projects/4211/issues",
-      body: {
-        title: "Cap the coupon",
-        description: "Split out of acme/deevy#42.",
-        labels: "agent:builder,sub-task",
-      },
-    });
-    expect(asked[1]).toMatchObject({
-      method: "POST",
-      path: "/projects/4211/issues/43/links",
-      body: { target_project_id: "4211", target_issue_iid: "42", link_type: "relates_to" },
-    });
-    // A relation is not a parent: deevy keeps the tree itself (ADR-0022).
-    expect(created).toMatchObject({ key: "acme/deevy#43", parentLinked: false });
   });
 
   it("comments, and answers where the comment is", async () => {
@@ -336,25 +205,11 @@ describe("the tracker", () => {
     });
   });
 
-  it("adds and takes off labels in one call, making one it has never seen", async () => {
-    const { tracker, asked } = gitlabReturning({
-      "PUT /projects/4211/issues/42": apiIssue(),
-    });
-
-    await tracker.setLabels(scope, ref, { add: ["deevy:awaiting-approval"], remove: [] });
-    await tracker.setLabels(scope, ref, { add: [], remove: ["deevy:awaiting-approval"] });
-
-    expect(asked.map((one) => one.body)).toEqual([
-      { add_labels: "deevy:awaiting-approval" },
-      { remove_labels: "deevy:awaiting-approval" },
-    ]);
-  });
-
   it("says what GitLab said when it refuses", async () => {
     const { tracker } = gitlabReturning({});
 
-    await expect(tracker.getIssue(scope, ref)).rejects.toThrow(
-      "404 Not found (GET /projects/4211/issues/42)",
+    await expect(tracker.createComment(scope, ref, "Said")).rejects.toThrow(
+      "404 Not found (POST /projects/4211/issues/42/notes)",
     );
   });
 });

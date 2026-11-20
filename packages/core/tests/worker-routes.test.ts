@@ -14,7 +14,8 @@ afterEach(() => {
 /**
  * The instance a Worker serves. Auth is present although the Worker has none
  * until slice 5: the routing table has to carry every path the app can mount,
- * and `/api/auth/*` and the `.well-known` documents only exist with it.
+ * and `/api/auth/*` and the `.well-known` documents only exist with it. So is
+ * the stubbed tracker's window, which the acceptance walk reads on workerd.
  */
 function testApp(): App {
   const { db, close } = testDb();
@@ -27,7 +28,12 @@ function testApp(): App {
       providers: { github: { clientId: "github-client", clientSecret: "github-secret" } },
     },
   });
-  return createApp({ db, auth, baseURL: "https://deevy.example.com" });
+  return createApp({
+    db,
+    auth,
+    baseURL: "https://deevy.example.com",
+    devTracker: () => ({ containers: [] }),
+  });
 }
 
 /** A path a request could actually carry, from one of Hono's route patterns. */

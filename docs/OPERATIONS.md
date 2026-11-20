@@ -561,8 +561,8 @@ of the world. In order:
 | Channels, outgoing webhooks | Nothing: they name other people's addresses, not deevy's.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Only GitHub lets deevy move a webhook itself; every other tool keeps it in its own settings
-([Where a tool delivers](#where-a-tool-delivers)). Until a tool is pointed at the new address, polling still
-brings its records in, late, but not a comment or a click. The import prints this table for your own
+([Where a tool delivers](#where-a-tool-delivers)). Until a tool is pointed at the new address, nothing it
+says reaches deevy; its own redelivery sends what was missed once it is. The import prints this table for your own
 Sockets, with their addresses.
 
 Last, once the new deevy is up, delete the hosted Workspace in the console, so that nothing still pointed at
@@ -583,7 +583,6 @@ bindings arrive with the request.
 | `BETTER_AUTH_SECRET`           | env         | secret             | —                        | deevy does not run: the Node server refuses to start, and the Worker answers every request that reaches its code (the API and `/healthz`; the SPA's assets are served before it) with a 503 naming it, because Better Auth would otherwise fall back to a key it publishes. Changing it signs everyone out.                                                   |
 | `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume.                                                |
 | `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                                                                           |
-| `DEEVY_SOCKET_CATCHUP_MINUTES` | env         | var                | `30`                     | A connected tool that has said nothing for half an hour is asked what changed. Polling is what keeps an instance no tool can reach working, so lower it on a laptop and leave it alone on a public deployment.                                                                                                                                                |
 | `DEEVY_DEV_STUB_SOCKETS`       | env         | var                | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on.                                                 |
 | `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                | `acme/deevy`             | That stub offers one container. Container names, separated by commas, say what it holds. Read only when the flag above is set.                                                                                                                                                                                                                                |
 | `GITHUB_CLIENT_ID`             | env         | secret             | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                                                                            |
@@ -1008,7 +1007,7 @@ Sponsor is the Human who created it, and mints its first API key, shown **once**
 it — an Agent with no key could reach nothing at all. Later keys are issued on the Agent's own page and are
 shown once in the same way. Grant the Agent the Projects it should see: an ungranted Project does not exist
 to it, and an Agent starts with none. Nothing gives it work outside them either: a label or a mention that
-names it in another Project starts no Run, `issues.create` refuses to assign it a record there, and taking a
+names it in another Project starts no Run, and taking a
 Project back from the Agent that is its default leaves the Project with no default, with a `project.updated`
 saying so. A Run started there could never be seen by the Agent it was for, and would wait for good.
 
@@ -1029,9 +1028,9 @@ It is stateless, so any instance answers any request and nothing has to stick to
 unauthenticated request answers 401 naming its Protected Resource Metadata, which is how a client knows to
 start an OAuth flow rather than simply failing.
 
-An Agent can do less than a Human by construction: in the Projects it was granted it can read records and
-their conversation, open sub-issues and comment in the tracker through deevy, read a Project's documents, add
-Links, ask at a Checkpoint, open a pull request, and drive its own Runs. It can never administer the Workspace,
+An Agent can do less than a Human by construction: in the Projects it was granted it can read records, add
+Links, ask at a Checkpoint, and drive its own Runs; whatever it reads or writes in the tracker or a repository
+it does with its own access there. It can never administer the Workspace,
 manage Members, or rule on a Gate, and neither can anything holding a delegated credential — a Gate is decided
 by a Human, in deevy's browser or from a tool that vouches for them (ADR-0004, ADR-0010, ADR-0025). Which
 operations an Agent may call at all is default-deny, per operation (ADR-0011).
@@ -1077,7 +1076,7 @@ from that session is the Human's in the Event log, and its inbox is the Human's.
 
 What that client is offered is decided by the same registry that authorizes it (ADR-0016): the tool set less
 the four that are an Agent's own — `runs_start`, `runs_post_activity`, `gates_request` and `runs_finish`, and a Human naming one anyway is refused with "Only an Agent can do that" — plus
-`runs_answer`, which is a Human's. `issues_create` and `projects_get` face both.
+`runs_answer`, which is a Human's. `issues_get` and `projects_get` face both.
 [as-yourself.md](./as-yourself.md) is the worked example: the `CLAUDE.md` snippet a person puts in the
 repository they work in, beside the Agent's in [agent-loop.md](./agent-loop.md).
 
@@ -1420,10 +1419,10 @@ credential.
 
 | Tool   | What deevy uses it for                                  | What you register there, and paste into deevy                              |
 | ------ | ------------------------------------------------------- | -------------------------------------------------------------------------- |
-| GitHub | records (issues), and code (a repository to push to)    | a GitHub App deevy writes the manifest for, installed on your repositories |
+| GitHub | records (issues)                                        | a GitHub App deevy writes the manifest for, installed on your repositories |
 | Linear | records                                                 | an OAuth application with client credentials and a webhook                 |
-| GitLab | records, and code                                       | an access token for the user deevy acts as, and a webhook on each project  |
-| Notion | records (a database's rows), and a Project's documents  | an internal connection's token, and a webhook subscription                 |
+| GitLab | records                                                 | an access token for the user deevy acts as, and a webhook on each project  |
+| Notion | records (a database's rows)                             | an internal connection's token, and a webhook subscription                 |
 | Slack  | Gates in a room or a direct message, ruled with buttons | an app from deevy's manifest                                               |
 
 ### Where a tool delivers
@@ -1441,12 +1440,11 @@ at the new one from deevy — **Point GitHub at this address** on the Socket's p
 because GitHub lets an App say where its own webhook goes. The others keep their webhook in their own
 settings, and the address is pasted there again.
 
-**Polling is why none of this is required to try deevy.** A Socket that has said nothing for
-`DEEVY_SOCKET_CATCHUP_MINUTES` (half an hour) is asked what changed in each Project bound to it, one Project a
-pass, and a Socket connected with `pollMinutes` is asked on that schedule whether it has spoken or not. So a
-laptop with no tunnel still sees records arrive, change and close, and routes them to Agents — a little late.
-What polling cannot bring is what only a delivery carries: a comment, and so a `/approve` in one, and a
-click on a Slack button. Those need the public address.
+**A delivery is the only way in.** deevy asks no tool what changed (docs/plans/simplify.md, slice 4): a
+record reaches it when its tool delivers, and a laptop that no tool can reach hears nothing from them until
+it has an address they can. What a tool sent while deevy was unreachable is the tool's to send again — GitHub
+keeps its deliveries for a while and **Redeliver** sends one again; the others retry for a time and then drop
+it. A record that changes again after that arrives with its whole state, so deevy catches up then.
 
 ### What a tool signs with
 
@@ -1497,8 +1495,9 @@ with access you give them.
 A label `agent:<handle>` routes an issue to that Agent. GitHub cannot assign an App, so the label and the
 Project's **Default Agent** are how "give this to deevy" is said there; choosing an Agent as the default also
 lets it see the Project. A comment mentioning the App and an Agent — `@<app> builder, try again` — starts a Run
-for that Agent too. deevy writes its own `deevy:awaiting-approval` label the first time it needs it, and an
-Agent's sub-issues are GitHub's own.
+for that Agent too. deevy sets no label: what it writes is a comment when a Gate waits and one when it is
+ruled on. An Agent's sub-issues are GitHub's own, opened with the Agent's access, and deevy links each to its
+parent from GitHub's sub-issue delivery.
 
 **The code** is not deevy's (ADR-0034). The App reads and writes issues and nothing else, so it can neither
 clone nor push. Give the Agent its own access to the repository — a deploy key, a fine-grained token, or an
@@ -1544,10 +1543,9 @@ do so that it can show you the three addresses the application needs with their 
    A connection you started and did not finish stays on the Sockets page as _pending_; disconnect it there.
 
 Bind a Project to a team under **Settings › Projects**. A label `agent:<handle>` on an issue in that team
-routes it to that Agent, by the label's name, as on GitHub; deevy makes its `deevy:awaiting-approval` label
-in the team the first time it needs it. An issue in a state of type _completed_ or _canceled_ is closed,
+routes it to that Agent, by the label's name, as on GitHub; deevy sets no label of its own. An issue in a state of type _completed_ or _canceled_ is closed,
 whatever the team named the state, and a deleted issue is closed too. An Agent's sub-issues are Linear's
-own. Linear signs the moment it sent a delivery, and one more than a minute old is refused however it is
+own, opened with the Agent's access, and deevy reads their parent from the delivery. Linear signs the moment it sent a delivery, and one more than a minute old is refused however it is
 signed.
 
 **Assigning an issue to deevy** needs one more step, taken by a Linear admin: **Install deevy as an agent**,
@@ -1592,10 +1590,10 @@ GitLab**. deevy acts on GitLab as one user, so the first step is choosing which:
 
 Bind a Project to a GitLab project under **Settings › Projects**, as its tracker and its repository. deevy
 stores the project's id, so renaming it or moving it to another group breaks nothing. A label `agent:<handle>`
-routes an issue to that Agent, and deevy adds `deevy:awaiting-approval` (GitLab makes the label on the project
-the first time). GitLab's issues are open or closed and nothing else: a team's workflow is in its scoped labels,
-which deevy reads as labels. GitLab has no parent for an issue, so an Agent's sub-issue is _related_ to the
-record it came from and deevy keeps the tree itself.
+routes an issue to that Agent; deevy sets no label of its own. GitLab's issues are open or closed and nothing
+else: a team's workflow is in its scoped labels, which deevy reads as labels. GitLab has no parent for an
+issue, so deevy sees no family there: an Agent that splits its work in GitLab keeps track of the parts itself,
+and nothing wakes it when the last one closes.
 
 **The code** is not deevy's (ADR-0034): the Socket's token is for issues. Give the Agent access to the
 project yourself, and it opens its own merge request and attaches it to its Run with `links_add`; one that
@@ -1616,21 +1614,21 @@ but **not yet walked on a GitLab instance** (docs/plans/sockets.md, "The GitLab 
 
 ### Working in Notion
 
-A Notion workspace is a Socket, for a Project's records and for its documents: connect it under **Settings ›
+A Notion workspace is a Socket, for a Project's records: connect it under **Settings ›
 Sockets › Connect Notion**. deevy acts in Notion as an internal connection of your own — what Notion called an
 internal integration until it renamed them:
 
 1. In Notion's [Developer portal](https://app.notion.com/developers/connections), which a Workspace Owner can
    use, **Build › Internal connections › Create a new connection** called deevy — every comment it writes is
-   by that name. On its **Configuration** tab give it **read content**, **update content**, **insert
-   content**, **read comments**, **insert comments** and **user information with email addresses**, and
+   by that name. On its **Configuration** tab give it **read content**, **read comments**, **insert
+   comments** and **user information with email addresses** — it reads a row back and comments on it, and
+   writes nothing else — and
    paste its **installation access token** into deevy. Connecting asks Notion who the connection is, and a
    token that cannot answer is refused rather than stored. So is a personal access token: it acts as the
    person who made it, so deevy would write as them and take their comments — their `/approve` too — for
    its own.
-2. **Give the connection each database deevy should read**, and the pages its Agents should be able to read as
-   documents: on its **Content access** tab (**Edit access**), or from a database's own **••• › Connections ›
-   Add connection**. The connection sees what it is given and the pages under it, and nothing else, which is
+2. **Give the connection each database deevy should read**: on its **Content access** tab (**Edit access**),
+   or from a database's own **••• › Connections › Add connection**. The connection sees what it is given and the pages under it, and nothing else, which is
    Notion's rule and a good one.
 3. On the connection's **Webhooks** tab, **Create a subscription** to the Socket's address, on API version
    2025-09-03 or later, for page created, properties updated, content updated, moved, deleted and undeleted,
@@ -1647,14 +1645,10 @@ routes a row to that Agent; its first **people** property as assignees, where th
 them hands the row to the Project's default Agent; a relation to its own rows named like a parent — Notion's
 sub-items — as the parent; and its **ID** property, where it has one, as the key a Human types (`TASK-12`).
 A row in the trash is closed. Notion's webhooks name what changed and carry none of it, so deevy reads each
-row back when it is told; a poll reads rows and not their content, and keeps the body it last read.
-
-**Documents.** A Project's documents can live in Notion whatever its tracker is: choose the Socket under
-**Documents** in the Project's settings. An Agent then reads a page there as markdown with `docs_get`, naming
-the Project and the page's URL, and only a page shared with the connection answers. Where Notion could not
-read all of a page — past about 20,000 blocks, a child page not shared with the connection, or a kind of block
-it does not write as markdown, such as a bookmark or an embed — each gap is marked `<unknown>` and the
-markdown ends saying so, with the page's link.
+row back when it is told. Where Notion could not read all of a row's page — past about 20,000 blocks, a child
+page not shared with the connection, or a kind of block it does not write as markdown, such as a bookmark or
+an embed — each gap is marked `<unknown>` in the body deevy keeps, which ends saying so, with the page's link.
+A Project's other pages are not deevy's to read: an Agent reads them with Notion access of its own.
 
 **Ruling from Notion** is `/approve` and `/reject <why>` in a comment, as elsewhere, with one difference:
 Notion has no account a Human can link, so the only proof of who wrote a comment is the address Notion reports
@@ -1734,28 +1728,13 @@ is in the Event log (`identity.linked`, `identity.revoked`, `gate.ruling_refused
 ## How far an Agent may split work up
 
 An Agent can open sub-issues — records in the team's own tracker, under the one it is working — and hand them
-to other Agents ([ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md)). Left alone, an Agent
-that decides a task has forty parts will open forty records, each of which opens a Run. Three numbers on the Workspace decide
-how far it may go, under **Settings › Workspace**:
-
-| Setting              | Default | What it does                                              |
-| -------------------- | ------- | --------------------------------------------------------- |
-| **Sub-issues each**  | 20      | How many sub-issues one Issue may have                    |
-| **Levels deep**      | 3       | How far a tree of sub-issues may go below its root        |
-| **Open in one tree** | 50      | How many sub-issues of one tree may be unfinished at once |
-
-They bind Agents and never Humans: you are not stopped by them, and nor is anyone signing in with a browser.
-An Agent that reaches one is refused with a message naming the limit and the number, and the refusal appends a
-`delegation.refused` Event, so the Agent's Sponsor can see that the shape of the work was decided by a ceiling
-rather than by the Agent. Raise them if your Agents are hitting them for good reasons; the defaults are
-deliberately small, because twenty sub-issues is a large decomposition and three deep is a plan rather than a
-pyramid.
-
-Two things worth knowing before you raise them. A sub-issue may sit in any Project the Agent was granted, so
-these numbers bound a tree that may span Projects — what an Agent can reach across is its grants, and an admin
-who does not want an Agent opening work in the API Project simply does not grant it. And every sub-issue
-assigned to an Agent opens a Run, so these are also the numbers that bound what a single delegation costs to
-run.
+to other Agents ([ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md)). It opens them in
+the tracker with its own access, and deevy hears of each one when the tracker delivers it, so deevy counts
+nothing an Agent opens. The three numbers under **Settings › Workspace** (**Sub-issues each**, **Levels
+deep**, **Open in one tree**) were checked when deevy opened sub-issues for an Agent, and bound nothing now;
+`delegation.refused` Events already written stay in the Log. To bound how far an Agent splits work, bound
+its access to the tracker, and grant it only the Projects it should work: every sub-issue routed to an Agent
+opens a Run, so its grants and the tracker's own permissions are what bound what a delegation costs.
 
 ## The volume
 

@@ -1,4 +1,4 @@
-import { delivery as deliveryTable, type Db, type Event, type Project } from "@deevy/db";
+import { delivery as deliveryTable, type Db, type Event } from "@deevy/db";
 import { newId } from "../ids.ts";
 import type { EventKind } from "../events.ts";
 
@@ -17,11 +17,14 @@ import type { EventKind } from "../events.ts";
  * Nothing is copied into the row, because the Event is the source (ADR-0003).
  */
 
-/** What a Gate's mirrored comment marks the record with while it waits. */
-export const AWAITING_LABEL = "deevy:awaiting-approval";
-
-/** The kinds a Project that mirrors Gates says something about. */
-const gateKinds: ReadonlySet<string> = new Set<EventKind>([
+/**
+ * The kinds a Socket announces: a Gate waiting, and what was ruled on it
+ * (docs/plans/simplify.md, slice 4). Nothing about a Run is said on the
+ * record — starting, working and finishing are no decision anybody has to
+ * make — and no setting turns a Gate's announcement off, because a team that
+ * never opens deevy has to see what is waiting on it.
+ */
+const announcedKinds: ReadonlySet<string> = new Set<EventKind>([
   "gate.requested",
   "gate.approval",
   "gate.approved",
@@ -31,29 +34,14 @@ const gateKinds: ReadonlySet<string> = new Set<EventKind>([
   "gate.ruling_refused",
 ]);
 
-/** And the ones it adds when a Project mirrors Runs as well. */
-const runKinds: ReadonlySet<string> = new Set<EventKind>([
-  "run.started",
-  "run.completed",
-  "run.failed",
-]);
-
 /**
- * Whether this kind is worth a comment at all, before anything is read.
- *
- * Pure and first, because this runs in the tail of every write deevy makes:
- * the busy paths — a record syncing, a comment arriving — must not pay for a
- * Project lookup to be told they have nothing to say.
+ * Whether this kind is announced at all. Pure, because this runs in the tail
+ * of every write deevy makes: the busy paths — a record arriving, a Run
+ * starting — must not pay for a Project lookup to be told they have nothing
+ * to say.
  */
-export function mirrorsKind(kind: string, mirror: Project["mirror"]): boolean {
-  if (mirror === "off") return false;
-  if (gateKinds.has(kind)) return true;
-  return mirror === "runs" && runKinds.has(kind);
-}
-
-/** Which kinds could ever mirror, whatever a Project is set to. */
-export function couldMirror(kind: string): boolean {
-  return gateKinds.has(kind) || runKinds.has(kind);
+export function announces(kind: string): boolean {
+  return announcedKinds.has(kind);
 }
 
 /**
@@ -63,16 +51,16 @@ export function couldMirror(kind: string): boolean {
  * twice would be the same comment twice.
  */
 export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[]> {
-  if (!couldMirror(event.kind) || !event.projectId) return [];
+  if (!announces(event.kind) || !event.projectId) return [];
   // A Ruling refused in Slack was answered in Slack, to the one who clicked:
   // telling the record's tracker too would say it to everybody else
   // (sockets/chat.ts).
   if (event.kind === "gate.ruling_refused" && payloadVia(event) === "slack") return [];
   const project = await db.query.project.findFirst({
     where: { id: event.projectId },
-    columns: { mirror: true, trackerSocketId: true },
+    columns: { trackerSocketId: true },
   });
-  if (!project || !mirrorsKind(event.kind, project.mirror)) return [];
+  if (!project) return [];
 
   const [row] = await db
     .insert(deliveryTable)
@@ -99,11 +87,6 @@ function payloadText(event: Pick<Event, "payload">, key: string): string | null 
   return typeof value === "string" ? value : null;
 }
 
-/** The Run an Event names in its payload rather than as its subject: evidence it attached. */
-export function payloadRunId(event: Pick<Event, "payload">): string | null {
-  return payloadText(event, "runId");
-}
-
 export interface MirrorSubject {
   /** The Checkpoint a Gate is about, and what the Agent proposed. */
   gate?: {
@@ -117,12 +100,6 @@ export interface MirrorSubject {
   runId?: string | null;
   /** Where a Human opens the ruling in deevy. */
   origin?: string;
-}
-
-/** What one Event becomes in a tracker: something to say, something to label. */
-export interface MirrorAction {
-  comment: string;
-  labels: { add: string[]; remove: string[] };
 }
 
 /**
@@ -144,24 +121,6 @@ function paragraphs(...blocks: string[]): string {
   return blocks.filter((block) => block.trim() !== "").join("\n\n");
 }
 
-/** What started a Run, in words for a tracker: a stored value is not a sentence. */
-function startedBy(trigger: string): string {
-  switch (trigger) {
-    case "mention":
-      return ", by a mention";
-    case "schedule":
-      return ", on its schedule";
-    case "children_done":
-      return ", when its sub-issues finished";
-    case "retry":
-      return ", to try again";
-    case "manual":
-      return "";
-    default:
-      return ", by assignment";
-  }
-}
-
 /** A Human's note as a quote, every line of it. */
 function quoted(note: string): string {
   return note
@@ -170,11 +129,11 @@ function quoted(note: string): string {
     .join("\n");
 }
 
-/** What the tracker is told about this Event, or null when it is told nothing. */
+/** The comment the tracker is given for this Event, or null when it is told nothing. */
 export function mirrorFor(
   event: Pick<Event, "kind" | "payload">,
   subject: MirrorSubject,
-): MirrorAction | null {
+): string | null {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   const text = (key: string): string =>
     typeof payload[key] === "string" ? (payload[key] as string) : "";
@@ -186,40 +145,33 @@ export function mirrorFor(
     const gate = subject.gate;
     if (!gate) return null;
     const links = gate.links.map((link) => `- [${link.title}](${link.url})`).join("\n");
-    return {
-      comment: paragraphs(
-        `**Waiting on a ruling at the \`${gate.checkpoint}\` Checkpoint.**`,
-        gate.proposal,
-        links,
-        // The two ways to answer: here, in a comment, or in deevy. Both end up
-        // in the same place (ADR-0025).
-        [
-          "Reply `/approve` or `/reject <why>` to rule from here.",
-          url ? `Or open it in deevy: ${url}` : "",
-        ]
-          .filter((line) => line !== "")
-          .join("\n"),
-        signature(subject),
-      ),
-      labels: { add: [AWAITING_LABEL], remove: [] },
-    };
+    return paragraphs(
+      `**Waiting on a ruling at the \`${gate.checkpoint}\` Checkpoint.**`,
+      gate.proposal,
+      links,
+      // The two ways to answer: here, in a comment, or in deevy. Both end up
+      // in the same place (ADR-0025).
+      [
+        "Reply `/approve` or `/reject <why>` to rule from here.",
+        url ? `Or open it in deevy: ${url}` : "",
+      ]
+        .filter((line) => line !== "")
+        .join("\n"),
+      signature(subject),
+    );
   }
 
   if (event.kind === "gate.approval") {
     const approvals = number("approvals") ?? 0;
     const required = number("required") ?? 0;
     const note = text("note");
-    return {
-      comment: paragraphs(
-        `Approved: **${String(approvals)} of ${String(required)}**${
-          approvals < required ? ", still waiting" : ""
-        }.`,
-        note ? quoted(note) : "",
-        signature(subject),
-      ),
-      // Still waiting, so the label stays.
-      labels: { add: [], remove: [] },
-    };
+    return paragraphs(
+      `Approved: **${String(approvals)} of ${String(required)}**${
+        approvals < required ? ", still waiting" : ""
+      }.`,
+      note ? quoted(note) : "",
+      signature(subject),
+    );
   }
 
   if (event.kind === "gate.approved" || event.kind === "gate.rejected") {
@@ -234,21 +186,17 @@ export function mirrorFor(
       loweredFrom !== null && required !== null
         ? `, once Approvals was lowered from ${String(loweredFrom)} to ${String(required)}`
         : "";
-    return {
-      comment: paragraphs(
-        approved
-          ? `**Approved** at the \`${text("checkpoint")}\` Checkpoint${
-              approvals !== null && required !== null
-                ? ` — ${String(approvals)} of ${String(required)}`
-                : ""
-            }${lowered}.`
-          : `**Rejected** at the \`${text("checkpoint")}\` Checkpoint.`,
-        note ? quoted(note) : "",
-        signature(subject),
-      ),
-      // Whatever was decided, nothing is waiting on this record any more.
-      labels: { add: [], remove: [AWAITING_LABEL] },
-    };
+    return paragraphs(
+      approved
+        ? `**Approved** at the \`${text("checkpoint")}\` Checkpoint${
+            approvals !== null && required !== null
+              ? ` — ${String(approvals)} of ${String(required)}`
+              : ""
+          }${lowered}.`
+        : `**Rejected** at the \`${text("checkpoint")}\` Checkpoint.`,
+      note ? quoted(note) : "",
+      signature(subject),
+    );
   }
 
   if (event.kind === "gate.ruling_refused") {
@@ -260,33 +208,7 @@ export function mirrorFor(
         : text("reason") === "nothing_waiting"
           ? "Nothing on this record is waiting on a ruling."
           : text("message") || "deevy would not take it.";
-    return {
-      comment: paragraphs(`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "— deevy"),
-      // Nothing changed, so nothing about the record's labels does either.
-      labels: { add: [], remove: [] },
-    };
-  }
-
-  if (event.kind === "run.started") {
-    return {
-      comment: paragraphs(
-        `A deevy Agent started work here${startedBy(text("trigger"))}.`,
-        signature(subject),
-      ),
-      labels: { add: [], remove: [] },
-    };
-  }
-
-  if (event.kind === "run.completed" || event.kind === "run.failed") {
-    const summary = text("summary");
-    return {
-      comment: paragraphs(
-        event.kind === "run.completed" ? "**Finished.**" : "**Failed.**",
-        summary,
-        signature(subject),
-      ),
-      labels: { add: [], remove: [] },
-    };
+    return paragraphs(`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "— deevy");
   }
 
   return null;

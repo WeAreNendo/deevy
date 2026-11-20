@@ -39,7 +39,9 @@ describe("the committed tool manifest", () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
     /*
-     * Eighteen, now that deevy takes no report of what a session spent: time
+     * Fifteen, now that the tracker is the Agent's to read and write with its
+     * own access: deevy opens no record, writes no comment and reads no page
+     * for it (docs/plans/simplify.md, slice 4). Eighteen, now that deevy takes no report of what a session spent: time
      * is what deevy saw itself, and a token count was only ever a client's
      * word (docs/plans/simplify.md, slice 3). Nineteen, now that deevy opens
      * no pull request: the Agent opens its own and hands it over with
@@ -56,20 +58,12 @@ describe("the committed tool manifest", () => {
      * allowlist (docs/plans/sockets.md, slice 8), which is a different list.
      */
     expect(names).toEqual([
-      // Socket-backed: it says something on the record where the record lives,
-      // and what deevy keeps is the Event, because a mention is a trigger.
-      "comments_create",
-      // A page of the Project's documents, read where the team keeps them.
-      "docs_get",
       // What an Agent asks when it reaches a Checkpoint, carrying the Proposal
       // a Human rules on, and how it reads the ruling when its client cannot
       // be handed a URL to open (ADR-0020, ADR-0024).
       "gates_get",
       "gates_request",
       "inbox_list",
-      // Opens the record in the tracker the Project is bound to, which is how
-      // an Agent cuts work up (ADR-0022, ADR-0024).
-      "issues_create",
       "issues_get",
       "issues_list",
       "links_add",
@@ -79,8 +73,6 @@ describe("the committed tool manifest", () => {
       "links_remove",
       // Where an Agent learns what its Project is bound to.
       "projects_get",
-      // Opening the pull request for the branch it pushed. deevy opens it, so
-      // a Run's credential never has to be one that could.
       // The Human side of a Run: answering an Agent's question from the
       // client the Human read it in. Not an Agent's, and the manifest says so.
       "runs_answer",

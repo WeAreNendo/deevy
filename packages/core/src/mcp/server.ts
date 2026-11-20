@@ -61,9 +61,9 @@ export interface DeevyMcpOptions {
    */
   jobs?: JobQueue;
   /**
-   * The providers this deployment can speak (ADR-0024). A tool that reaches a
-   * tracker — `issues_create`, `comments_create` — is refused without them, so
-   * the MCP surface needs the same registry the operation surfaces get.
+   * The providers this deployment can speak (ADR-0024): the same registry the
+   * operation surfaces get, so a tool call runs in the context an RPC call
+   * would.
    */
   sockets?: SocketModules;
   /**

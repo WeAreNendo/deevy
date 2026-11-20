@@ -76,7 +76,6 @@ export interface WorkerBindings {
   DEEVY_WEB_ORIGIN?: string;
   /** What a Socket's credentials are sealed with (`wrangler secret put`). */
   DEEVY_SECRET?: string;
-  DEEVY_SOCKET_CATCHUP_MINUTES?: string;
   /** GitHub's REST root for a Socket that names none (GitHub Enterprise Server). */
   DEEVY_GITHUB_API?: string;
   /**
@@ -150,8 +149,6 @@ export interface WorkerEnv {
    * mean every connected tool has to be connected again.
    */
   socketSecret?: string;
-  /** Silence after which deevy asks a Socket rather than waiting to be told. */
-  socketCatchupMinutes?: number;
   /** GitHub's REST root for a Socket that names none (`DEEVY_GITHUB_API`). */
   githubApi?: string;
   /** Whether this deployment registered the Socket stub, and what it holds. */
@@ -231,9 +228,6 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
     ...emailFrom(env),
     devStubEmail: env.DEEVY_DEV_STUB_EMAIL === "1",
     devStubContainers: env.DEEVY_DEV_STUB_CONTAINERS,
-    ...(env.DEEVY_SOCKET_CATCHUP_MINUTES
-      ? { socketCatchupMinutes: Number(env.DEEVY_SOCKET_CATCHUP_MINUTES) }
-      : {}),
     webOrigin: env.DEEVY_WEB_ORIGIN,
     providers: providersFromEnv(env),
     ...(listOf(env.DEEVY_SIGN_IN_ORDER) ? { signInOrder: listOf(env.DEEVY_SIGN_IN_ORDER) } : {}),

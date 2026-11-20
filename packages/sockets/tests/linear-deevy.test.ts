@@ -48,8 +48,6 @@ const GRACE = commented.data.userId;
 function linearApi() {
   const calls: Array<{ operation: string; variables: Record<string, unknown> }> = [];
   let comments = 0;
-  // Labels Linear knows, so one made on first use is found the next time.
-  const labels: Array<{ id: string; name: string; team: { id: string } }> = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : input.toString();
     const headers = new Headers(init?.headers);
@@ -80,8 +78,6 @@ function linearApi() {
           : { id: APP_USER, name: "deevy", displayName: "deevy" },
         organization: { id: ORG, name: "Acme", urlKey: "acme" },
       },
-      DeevyLabels: { issueLabels: { nodes: labels } },
-      DeevyLabelsChange: { issueUpdate: { success: true } },
       DeevyCommentCreate: {
         commentCreate: {
           success: true,
@@ -92,12 +88,6 @@ function linearApi() {
         },
       },
     };
-    if (operation === "DeevyLabelCreate") {
-      const made = { id: `label-${String(labels.length + 1)}`, name: "", team: { id: TEAM } };
-      made.name = String((variables.input as { name: string }).name);
-      labels.push(made);
-      data.DeevyLabelCreate = { issueLabelCreate: { success: true, issueLabel: { id: made.id } } };
-    }
     return operation in data
       ? Response.json({ data: data[operation] })
       : Response.json({ errors: [{ message: `No answer for ${operation}` }] }, { status: 400 });
@@ -271,8 +261,7 @@ describe("somebody labels an issue in Linear", () => {
     const run = await db.query.run.findFirst({ where: { agentMemberId: planner.id } });
     expect(run).toMatchObject({ status: "pending", trigger: "assignment" });
 
-    // The Agent asks, and the Proposal becomes the app's comment on the issue,
-    // with the label that says it waits — made on first use.
+    // The Agent asks, and the Proposal becomes the app's comment on the issue.
     const gate = await asPlanner.gates.request({
       runId: run?.id ?? "",
       checkpoint: "plan",
@@ -282,9 +271,6 @@ describe("somebody labels an issue in Linear", () => {
     const said = api.calls.find((call) => call.operation === "DeevyCommentCreate");
     expect(said?.variables).toMatchObject({
       input: { issueId: created.data.id, body: expect.stringContaining("Cap the coupon") },
-    });
-    expect(api.calls.find((call) => call.operation === "DeevyLabelCreate")?.variables).toEqual({
-      input: { name: "deevy:awaiting-approval", teamId: TEAM },
     });
 
     // Grace links her Linear account on Linear's own consent page.
@@ -315,7 +301,8 @@ describe("somebody labels an issue in Linear", () => {
       status: "active",
     });
 
-    // What deevy says back: the arithmetic, and the label off.
+    // What deevy says back: the arithmetic, as another comment, and nothing
+    // else on the issue.
     await sweep();
     const bodies = api.calls
       .filter((call) => call.operation === "DeevyCommentCreate")
@@ -325,9 +312,9 @@ describe("somebody labels an issue in Linear", () => {
     );
     expect(
       api.calls
-        .filter((call) => call.operation === "DeevyLabelsChange")
-        .map((call) => call.variables.input),
-    ).toContainEqual({ addedLabelIds: [], removedLabelIds: ["label-1"] });
+        .map((call) => call.operation)
+        .filter((operation) => operation.startsWith("Deevy") && operation !== "DeevyWho"),
+    ).toEqual(["DeevyCommentCreate", "DeevyCommentCreate"]);
   });
 
   /**

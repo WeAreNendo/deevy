@@ -13,9 +13,9 @@ import {
  * delivery means is the half deevy proves against recorded payloads with no
  * network, and the half that breaks when a provider changes its shape.
  *
- * Linear describes a record two ways — a webhook's `data`, flat with ids and a
- * few objects beside them, and its GraphQL API's nodes, which nest — and both
- * are read here so a delivery and a poll project the same record the same way.
+ * A webhook's `data` is flat, with ids and a few objects beside them, and it
+ * is the only shape of a record read here: deevy asks Linear's API for none,
+ * since an Agent reads Linear with its own access.
  */
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
@@ -47,18 +47,14 @@ export function actorOf(actor: unknown): ExternalActor | null {
   };
 }
 
-/** Linear's labels, as names: a webhook sends objects, the API a connection of them. */
+/** Linear's labels, as names: a webhook sends each one as an object. */
 function labelsOf(value: unknown): string[] {
-  const list = Array.isArray(value)
-    ? value
-    : Array.isArray(record(value).nodes)
-      ? (record(value).nodes as unknown[])
-      : [];
+  const list = Array.isArray(value) ? value : [];
   return list.map((label) => text(record(label).name)).filter((name) => name.length > 0);
 }
 
 /**
- * One Linear issue as deevy projects it, from a webhook's `data` or an API node.
+ * One Linear issue as deevy projects it, from a webhook's `data`.
  *
  * The id is Linear's own, which survives a move to another team; the key is
  * the identifier a Human types (`ENG-12`), which does not.
@@ -72,8 +68,8 @@ export function issueOf(issue: unknown): ExternalIssue | null {
   const state = record(found.state);
   const assignee = record(found.assignee);
   const assigneeId = text(assignee.id) || text(found.assigneeId);
-  const parentId = text(found.parentId) || text(record(found.parent).id);
-  const delegateId = text(found.delegateId) || text(record(found.delegate).id);
+  const parentId = text(found.parentId);
+  const delegateId = text(found.delegateId);
   return {
     externalId,
     key,
@@ -99,9 +95,10 @@ export function teamOf(issue: unknown): string {
 }
 
 /**
- * A comment's bot actor, whichever way Linear sent it: an object from the API,
- * a string from a webhook — Linear's schema types it so — holding the same
- * thing as JSON, or just a name. Null where there is none.
+ * A comment's bot actor, whichever way a webhook carries it. Linear's schema
+ * types it as a string, holding the object as JSON or just a name; an object
+ * is read as itself all the same, because a machine's comment taken for a
+ * Human's would rule. Null where there is none.
  */
 function botActorOf(value: unknown): Record<string, unknown> | null {
   if (typeof value === "string") {

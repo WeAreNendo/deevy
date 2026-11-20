@@ -1,58 +1,17 @@
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@deevy/db";
-import {
-  delegationRefusalMessage,
-  refusesDelegation,
-  routeIssueTo,
-  upsertProjection,
-} from "../issues.ts";
 import { IssueDetailSchema, IssueSummarySchema } from "../schemas.ts";
-import { requireSocket, requireTracker, socketModuleFor } from "../sockets/registry.ts";
 import { ORPCError } from "@orpc/server";
-import { appendEvent } from "../events.ts";
 import { defineOperation, type ContextFor } from "./registry.ts";
 import {
   ProjectSlugLookup,
   QueryFlag,
   issueWith,
   loadIssue,
-  requireAssignee,
   requireProject,
   resolveIssueRef,
 } from "./shared.ts";
-
-/**
- * Whether there is room for one more Issue under this parent, for the callers
- * the ceilings bind (docs/plans/sub-issue-delegation.md). A Human is not one of
- * them: somebody opening two hundred Issues by hand is not the failure mode
- * this exists for, and a limit that stops them is a support ticket.
- *
- * A refusal is an Event as well as an error, because the Agent will note it and
- * carry on and the Sponsor is the one who needs to know a number shaped the
- * work.
- */
-async function assertRoomBelow(
-  context: ContextFor<"member">,
-  parent: { id: string; projectId: string },
-  parentKey: string,
-): Promise<void> {
-  if (context.member.kind !== "agent") return;
-  const refusal = await refusesDelegation(context.db, parent.id, context.workspace);
-  if (!refusal) return;
-  await appendEvent(context, {
-    kind: "delegation.refused",
-    subjectType: "issue",
-    subjectId: parent.id,
-    // The parent's Project, because the parent is what this is about: a
-    // Project-scoped read of the log has to find it, and a tree may cross one.
-    projectId: parent.projectId,
-    payload: { limit: refusal.limit, allowed: refusal.allowed, parentKey },
-  });
-  throw new ORPCError("BAD_REQUEST", {
-    message: delegationRefusalMessage(refusal, parentKey),
-  });
-}
 
 /** A page of a feed: the moment and the row, so two changes in one millisecond still order. */
 const IssueCursor = /^(\d+):(.+)$/;
@@ -64,130 +23,6 @@ function parseIssueCursor(cursor: string): { at: Date; id: string } {
 }
 
 export const issues = {
-  create: defineOperation({
-    name: "issues.create",
-    summary: "Open a record in the tracker a Project is bound to, and project it",
-    method: "POST",
-    path: "/issues",
-    auth: "member",
-    agents: true,
-    mcp: true,
-    input: z.object({
-      /**
-       * The Issue this one is a part of, by id, URL or key. Its Project is
-       * where the record is opened unless `projectSlug` names another one the
-       * caller was granted (docs/plans/sub-issue-delegation.md).
-       */
-      parent: z.string().trim().min(1).nullish(),
-      title: z.string().trim().min(1).max(300),
-      body: z.string().max(100_000).nullish(),
-      /**
-       * The Agent this is for. It is written as the routing label the Project
-       * names, so the tracker says who the work is for and deevy's own routing
-       * reads it back the same way a Human's label would.
-       */
-      assignAgent: z.string().nullish(),
-      /** Required when there is no parent to take the Project from. */
-      projectSlug: ProjectSlugLookup.optional(),
-    }),
-    output: IssueDetailSchema,
-    handler: async ({ input, context }) => {
-      const parent = input.parent ? await resolveIssueRef(context, input.parent) : null;
-      const project = input.projectSlug
-        ? await requireProject(context, input.projectSlug)
-        : parent
-          ? await requireProject(context, parent.project.slug)
-          : null;
-      if (!project) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: "Name a Project, or the Issue this one is a part of",
-        });
-      }
-      if (parent) await assertRoomBelow(context, parent.issue, parent.issue.externalKey);
-
-      const assignee = input.assignAgent
-        ? await requireAssignee(context, input.assignAgent, project.id)
-        : null;
-      if (assignee && assignee.kind !== "agent") {
-        throw new ORPCError("BAD_REQUEST", {
-          message: "Only an Agent is named by a routing label; assign a Human in the tracker",
-        });
-      }
-      // An Agent works only the Projects it was granted, and a record handed
-      // to one that cannot see it is a Run that waits for good: refused here,
-      // where whoever asked is still there to read why, rather than dropped by
-      // the trigger afterwards.
-      if (assignee && assignee.grantedProjects.length === 0) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: `${assignee.user.name} cannot see the ${project.name} Project; grant it the Project first`,
-        });
-      }
-
-      const row = await requireSocket(context, project.trackerSocketId);
-      const tracker = requireTracker(await socketModuleFor(context, row));
-      const label = assignee?.handle ? `${project.routing.labelPrefix}${assignee.handle}` : null;
-      const external = await tracker.createIssue(project.trackerScope, {
-        title: input.title,
-        // The parent's URL in the body, because a tracker that cannot link two
-        // records natively still has to say what this is a part of.
-        body: [input.body ?? "", parent ? `Part of ${parent.issue.url}` : ""]
-          .filter(Boolean)
-          .join("\n\n"),
-        parent: parent ? { externalId: parent.issue.externalId, url: parent.issue.url } : null,
-        labels: label ? [label] : [],
-      });
-
-      const { issue } = await upsertProjection(context.db, {
-        projectId: project.id,
-        socketId: row.id,
-        external,
-        createdBy: context.member.id,
-        parentId: parent?.issue.id ?? null,
-      });
-
-      await appendEvent(context, {
-        kind: "issue.created",
-        subjectType: "issue",
-        subjectId: issue.id,
-        projectId: project.id,
-        payload: {
-          key: issue.externalKey,
-          url: issue.url,
-          title: issue.title,
-          ...(parent ? { parentKey: parent.issue.externalKey } : {}),
-          /*
-           * The parent, not the Agent: a wave of sub-issues is one line about
-           * the parent, and `issueOf` points that line there because the parent
-           * is the only place the work is whole. Only an Agent's fan-out is
-           * rolled up, so what the Notification is stays a pure function of the
-           * Event row, read again hours later with no request around it
-           * (docs/plans/sub-issue-delegation.md, ADR-0003).
-           */
-          ...(parent && context.member.kind === "agent"
-            ? { delegatedTo: parent.issue.id, delegatedBy: context.member.id }
-            : {}),
-          ...(assignee ? { assignedTo: assignee.id } : {}),
-          ...(external.parentLinked ? {} : { parentLinked: false }),
-        },
-      });
-
-      if (assignee) {
-        await routeIssueTo(context.db, issue.id, assignee.id);
-        await appendEvent(context, {
-          kind: "issue.assigned",
-          subjectType: "issue",
-          subjectId: issue.id,
-          projectId: project.id,
-          payload: { from: null, to: assignee.id, toName: assignee.user.name, byRouting: true },
-        });
-      }
-
-      // A record opened a moment ago has no conversation, and nobody asked
-      // for one: `issues.get` is where a caller asks (ADR-0024).
-      return { ...(await loadIssue(context, issue.id)), comments: null };
-    },
-  }),
-
   list: defineOperation({
     name: "issues.list",
     summary: "The records deevy has projected, newest change first",
@@ -296,40 +131,14 @@ export const issues = {
     input: z.object({
       /** An `iss_` id, the record's URL, or the key the tracker wrote. */
       issue: z.string().trim().min(1),
-      /**
-       * Read the conversation from the tracker as well. Off by default,
-       * because it is a request to somebody else's API and most callers want
-       * the record: an Agent about to work one asks for it, a list does not.
-       */
-      comments: QueryFlag.optional(),
     }),
     output: IssueDetailSchema,
     handler: async ({ input, context }) => {
-      const { issue, project } = await resolveIssueRef(context, input.issue);
-      const found = await loadIssue(context, issue.id);
-      if (!input.comments) return { ...found, comments: null };
-
-      // Best effort, and said so: a tracker that is down or a Socket that was
-      // paused should not turn reading a record into a failure, and the
-      // record itself is deevy's own (ADR-0024). Said so in the answer, not
-      // only here: an empty list would tell the reader nobody said anything.
-      try {
-        const row = await requireSocket(context, project.trackerSocketId);
-        const tracker = requireTracker(await socketModuleFor(context, row));
-        const comments = await tracker.listComments(
-          project.trackerScope,
-          { externalId: issue.externalId, url: issue.url },
-          50,
-        );
-        return { ...found, comments };
-      } catch (error) {
-        const why = error instanceof Error ? error.message : String(error);
-        return {
-          ...found,
-          comments: null,
-          commentsUnavailable: `The tracker did not answer, so the conversation is unread: ${why}`,
-        };
-      }
+      // deevy's own copy, as the tracker last described it. The conversation
+      // is the tracker's, and the Agent reads it there with its own access
+      // (docs/plans/simplify.md, slice 4).
+      const { issue } = await resolveIssueRef(context, input.issue);
+      return loadIssue(context, issue.id);
     },
   }),
 };

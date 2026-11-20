@@ -2,7 +2,6 @@ import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
 import { routeIssueTo } from "../src/issues.ts";
-import type { SocketModules } from "../src/sockets/port.ts";
 import {
   agentContext,
   fakeSockets,
@@ -142,94 +141,6 @@ describe("a projection", () => {
     // The URL is canonical, and it is unambiguous by construction.
     const byUrl = await client.issues.get({ issue: "https://two.test/acme/deevy/1" });
     expect(byUrl.externalKey).toBe("acme/deevy#1");
-  });
-});
-
-describe("issues.create", () => {
-  it("opens the record in the tracker and projects what came back", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { admin, client, project } = await withProject(db);
-
-    const issue = await client.issues.create({
-      projectSlug: project.slug,
-      title: "Ship the Event log",
-    });
-
-    expect(issue).toMatchObject({
-      externalKey: "acme/deevy#new-1",
-      title: "Ship the Event log",
-      state: "open",
-      createdBy: admin.member.id,
-      parentId: null,
-    });
-    expect(issue.url).toBe("https://tracker.test/acme/deevy#new-1");
-    expect(issue.projectId).toBe(project.id);
-  });
-
-  it("records issue.created against the Project, carrying the tracker's handles", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { admin, client, project } = await withProject(db);
-
-    const issue = await client.issues.create({ projectSlug: project.slug, title: "Ship it" });
-    const { events } = await client.events.list({});
-    const created = events.find((event) => event.kind === "issue.created");
-
-    expect(created).toMatchObject({
-      subjectType: "issue",
-      subjectId: issue.id,
-      projectId: project.id,
-      actorMemberId: admin.member.id,
-    });
-    expect(created?.payload).toMatchObject({ key: issue.externalKey, url: issue.url });
-  });
-
-  it("needs a Project when there is no parent to take one from", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client } = await withProject(db);
-
-    await expect(client.issues.create({ title: "Nowhere" })).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-    });
-  });
-
-  it("names the Agent it is for with the Project's routing label", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { admin, client, project } = await withProject(db);
-    const planner = await agentContext(db, {
-      name: "Planner",
-      sponsor: admin.member,
-      grants: [project.id],
-    });
-
-    const issue = await client.issues.create({
-      projectSlug: project.slug,
-      title: "Cut the work up",
-      assignAgent: planner.member.id,
-    });
-
-    // The tracker says who the work is for, in the words deevy's own routing
-    // reads back: a label, exactly as a Human would write one.
-    expect(issue.labels).toContain(`agent:${planner.member.handle ?? ""}`);
-    expect(issue.assigneeMemberId).toBe(planner.member.id);
-  });
-
-  it("refuses to name a Human with a routing label", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client, project } = await withProject(db);
-    const grace = await memberContext(db, { name: "Grace" });
-
-    await expect(
-      client.issues.create({
-        projectSlug: project.slug,
-        title: "For a person",
-        assignAgent: grace.member.id,
-      }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
 
@@ -382,7 +293,7 @@ describe("what a Project asks of a Run", () => {
 });
 
 describe("reading the conversation", () => {
-  it("is the tracker's to answer, and only when somebody asks for it", async () => {
+  it("is the tracker's alone: deevy keeps the record, and the Agent reads the comments there", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
@@ -391,47 +302,14 @@ describe("reading the conversation", () => {
     const seeded = await seedProject(db, ada.workspace.id);
     const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
 
-    // deevy stores no comments (ADR-0024), so a read that does not ask for
-    // them makes no request to the tracker at all.
-    const quiet = await asAda.issues.get({ issue: issue.url });
-    expect(quiet.comments).toBeNull();
-
-    const loud = await asAda.issues.get({ issue: issue.url, comments: true });
-    expect(loud.comments).toEqual([]);
-    expect(loud.commentsUnavailable).toBeUndefined();
-  });
-
-  it("says it could not be read, rather than that nobody said anything", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const ada = await memberContext(db, { role: "admin", name: "Ada" });
-    const { sockets } = fakeSockets();
-    // A tracker that is down: reading the record still works, because the
-    // record is deevy's own, but an Agent told "no comments" would plan
-    // without a conversation it was never shown.
-    const failing: SocketModules = {
-      stub: (options) => {
-        const module = sockets.stub?.(options);
-        if (!module?.tracker) throw new Error("the fake is a tracker");
-        return {
-          ...module,
-          tracker: {
-            ...module.tracker,
-            listComments: () => Promise.reject(new Error("GitHub answered 502")),
-          },
-        };
-      },
-    };
-    const asAda = createRouterClient(router, { context: { ...ada, sockets: failing } });
-    const seeded = await seedProject(db, ada.workspace.id);
-    const issue = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
-
-    const read = await asAda.issues.get({ issue: issue.url, comments: true });
+    // deevy stores no comments (ADR-0024) and no longer reads them for anybody
+    // (docs/plans/simplify.md, slice 4), so asking is asking for nothing.
+    const read = await asAda.issues.get({ issue: issue.url, comments: true } as Parameters<
+      typeof asAda.issues.get
+    >[0]);
 
     expect(read.title).toBe("Checkout rewrite");
-    expect(read.comments).toBeNull();
-    expect(read.commentsUnavailable).toBe(
-      "The tracker did not answer, so the conversation is unread: GitHub answered 502",
-    );
+    expect(read).not.toHaveProperty("comments");
+    expect(read).not.toHaveProperty("commentsUnavailable");
   });
 });

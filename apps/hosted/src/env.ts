@@ -58,7 +58,6 @@ export interface HostedBindings extends ProviderVariables {
   DEEVY_HOSTED_EMAILS_PER_DAY?: string;
   DEEVY_RUN_STALE_MINUTES?: string;
   DEEVY_GATE_REMINDER_HOURS?: string;
-  DEEVY_SOCKET_CATCHUP_MINUTES?: string;
   DEEVY_GITHUB_API?: string;
   DEEVY_DEV_STUB_SOCKETS?: string;
   DEEVY_DEV_STUB_CONTAINERS?: string;
@@ -79,7 +78,6 @@ export interface HostedEnv {
   passSeconds: number;
   runStaleMinutes: number;
   gateReminderHours: number;
-  socketCatchupMinutes: number;
   githubApi: string | undefined;
   devStubSockets: boolean;
   devStubContainers: string | undefined;
@@ -164,7 +162,6 @@ export function readHostedEnv(bindings: HostedBindings): HostedEnv {
     passSeconds: positive(bindings.DEEVY_HOSTED_PASS_SECONDS, 60),
     runStaleMinutes: positive(bindings.DEEVY_RUN_STALE_MINUTES, 30),
     gateReminderHours: positive(bindings.DEEVY_GATE_REMINDER_HOURS, 4),
-    socketCatchupMinutes: positive(bindings.DEEVY_SOCKET_CATCHUP_MINUTES, 30),
     githubApi: bindings.DEEVY_GITHUB_API,
     devStubSockets,
     devStubContainers: bindings.DEEVY_DEV_STUB_CONTAINERS,

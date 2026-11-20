@@ -1,13 +1,14 @@
 /**
  * The provider that is not a tool.
  *
- * Every rule deevy has about inbound deliveries, routing, mirroring and
- * rulings is a rule about what happens when a tracker says something. Proving
- * those against GitHub means a network, an App, a tunnel and a clock; proving
- * them against this means a function call. So the stub is a real tracker with
- * an in-memory store, it signs its deliveries the way a
- * provider does, and it is what the core's tests, the seed and the acceptance
- * walk play (docs/plans/sockets.md).
+ * Every rule deevy has about inbound deliveries, routing, rulings and the
+ * comments that announce a Gate is a rule about what happens when a tracker
+ * says something, or is told something. Proving those against GitHub means a
+ * network, an App, a tunnel and a clock; proving them against this means a
+ * function call. So the stub is a real tracker with an in-memory store, it
+ * signs its deliveries the way a provider does, it keeps what deevy says on a
+ * record where a test can read it, and it is what the core's tests, the seed
+ * and the acceptance walk play (docs/plans/sockets.md).
  *
  * It is refused in production by the entry that registers it, never by this
  * file: a module that decides where it may run cannot be tested anywhere.
@@ -20,9 +21,6 @@ import type {
   InboundCheck,
   InboundEvent,
   InboundInput,
-  IssueDraft,
-  IssuePage,
-  IssueQuery,
   Scope,
   SocketModule,
   SocketModuleInput,
@@ -44,7 +42,7 @@ export interface StubContainer {
 export interface StubStore {
   id: string;
   containers: Map<string, StubContainer>;
-  /** What the loop guard drops: a comment this login wrote is deevy's own mirror. */
+  /** What the loop guard drops: a comment this login wrote is deevy's own announcement. */
   identity: { login: string; id: string; mentionHandle: string };
 }
 
@@ -82,10 +80,9 @@ export const DEV_STUB_STORE = "dev";
 /**
  * The containers a stubbed deployment offers, from one string.
  *
- * `acme/deevy=/srv/repos/deevy.git,acme/ops` — a name, and optionally a
- * repository a Run can clone. An entry that is already there is left alone,
- * because this runs where the entry is built and an entry rebuilt would drop
- * every record the store holds.
+ * `acme/deevy,acme/ops` — their names, separated by commas. An entry that is
+ * already there is left alone, because this runs where the entry is built and
+ * an entry rebuilt would drop every record the store holds.
  *
  * It exists because a store lives in the process deevy runs in: a developer
  * driving a stubbed instance from outside — a browser, the acceptance walk —
@@ -105,6 +102,38 @@ export function openDevStubStore(spec = "", id: string = DEV_STUB_STORE): StubSt
     if (scopeKey && !store.containers.has(scopeKey)) addContainer(store, { scopeKey });
   }
   return store;
+}
+
+/** What `/dev/tracker` answers: the stubbed tracker, container by container. */
+export interface DevTrackerView {
+  containers: Array<{
+    scopeKey: string;
+    name: string;
+    issues: ExternalIssue[];
+    /** Keyed by the record's `externalId`. */
+    comments: Record<string, ExternalComment[]>;
+  }>;
+}
+
+/**
+ * What the stubbed tracker holds, as JSON a walk outside this process can read
+ * at `/dev/tracker`: each container's records and the comments on them,
+ * deevy's own among them (docs/acceptance.md).
+ */
+export function devTrackerView(id: string = DEV_STUB_STORE): DevTrackerView {
+  // Looked up, never opened: only the entry that registers the stub makes its
+  // store, and a request that made one would leave a tracker behind in a
+  // deployment that has none.
+  const store = stores.get(id);
+  if (!store) return { containers: [] };
+  return {
+    containers: [...store.containers.values()].map((container) => ({
+      scopeKey: container.scopeKey,
+      name: container.name,
+      issues: [...container.issues.values()],
+      comments: Object.fromEntries(container.comments),
+    })),
+  };
 }
 
 export interface AddContainerOptions {
@@ -282,41 +311,6 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
         return Promise.resolve(issue);
       },
 
-      listIssues(scope: Scope, query: IssueQuery): Promise<IssuePage> {
-        const all = [...requireContainer(store, scope).issues.values()]
-          .filter((issue) => !query.updatedSince || issue.updatedAt > query.updatedSince)
-          .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
-        const from = query.cursor ? Number(query.cursor) : 0;
-        const page = all.slice(from, from + query.limit);
-        const next = from + page.length;
-        return Promise.resolve({
-          issues: page,
-          nextCursor: next < all.length ? String(next) : null,
-        });
-      },
-
-      listComments(scope: Scope, ref: ExternalRef, limit: number): Promise<ExternalComment[]> {
-        const comments = requireContainer(store, scope).comments.get(ref.externalId) ?? [];
-        return Promise.resolve(comments.slice(-limit));
-      },
-
-      createIssue(
-        scope: Scope,
-        draft: IssueDraft,
-      ): Promise<ExternalIssue & { parentLinked: boolean }> {
-        const container = requireContainer(store, scope);
-        const externalId = String(container.issues.size + 1);
-        const issue = putIssue(container, {
-          externalId,
-          title: draft.title,
-          body: draft.body,
-          labels: draft.labels,
-          parentExternalId: draft.parent?.externalId ?? null,
-          updatedAt: now(),
-        });
-        return Promise.resolve({ ...issue, parentLinked: draft.parent !== null });
-      },
-
       createComment(scope: Scope, ref: ExternalRef, body: string): Promise<ExternalRef> {
         const container = requireContainer(store, scope);
         const thread = container.comments.get(ref.externalId) ?? [];
@@ -329,21 +323,6 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
         };
         container.comments.set(ref.externalId, [...thread, comment]);
         return Promise.resolve({ externalId: comment.externalId, url: comment.url });
-      },
-
-      setLabels(
-        scope: Scope,
-        ref: ExternalRef,
-        change: { add: string[]; remove: string[] },
-      ): Promise<void> {
-        const container = requireContainer(store, scope);
-        const issue = container.issues.get(ref.externalId);
-        if (!issue) throw new Error(`stub: no issue ${ref.externalId}`);
-        const labels = new Set(issue.labels);
-        for (const label of change.remove) labels.delete(label);
-        for (const label of change.add) labels.add(label);
-        container.issues.set(ref.externalId, { ...issue, labels: [...labels] });
-        return Promise.resolve();
       },
 
       listContainers(): Promise<Container[]> {

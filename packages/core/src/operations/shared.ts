@@ -353,31 +353,6 @@ export async function loadIssue(context: ContextFor<"member">, id: string) {
   };
 }
 
-/** The Member an Issue may be assigned to, or BAD_REQUEST. */
-export async function requireAssignee(
-  context: ContextFor<"member">,
-  memberId: string,
-  projectId: string,
-) {
-  const found = await context.db.query.member.findFirst({
-    where: { id: memberId, workspaceId: context.workspace.id },
-    // With their name, because every caller that checks an Assignee is about to
-    // write one into an Event, and whether it was granted the Project, because
-    // an Agent works only those; a second query for either would be a second
-    // statement against the budget.
-    with: {
-      user: { columns: { name: true } },
-      grantedProjects: { where: { id: projectId }, columns: { id: true } },
-    },
-  });
-  if (!found) {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "An Issue can only be assigned to a Member of this Workspace",
-    });
-  }
-  return found;
-}
-
 /** The Run an operation names, with the Issue key the tracker wrote. */
 export function runView(row: Run, issueKey: string) {
   return {
@@ -466,7 +441,7 @@ export async function addIssueLink(context: ContextFor<"member">, input: IssueLi
       linkId: id,
       kind: input.kind ?? parsed.kind,
       url: input.url,
-      // What a mirrored comment names the link by, where somebody named it.
+      // What the record's history names the link by, where somebody named it.
       ...(input.title ? { title: input.title } : {}),
       ...(input.runId ? { runId: input.runId } : {}),
     },

@@ -71,11 +71,9 @@ describe("what the registry turns into", () => {
       "email.configure.credentials",
       "gates.request.links",
       "preferences.set.preferences",
-      "projects.create.docs",
       "projects.create.tracker",
-      // The rest of a binding, changed after the fact: where the documents
-      // are, and how a record names the Agent it is for (ADR-0024).
-      "projects.update.docs",
+      // The rest of a binding, changed after the fact: how a record names the
+      // Agent it is for (ADR-0024).
       "projects.update.routing",
       "routing.set.rules",
       "runs.postActivity.payload",
@@ -106,12 +104,12 @@ describe("what the registry turns into", () => {
   });
 
   it("makes a flag out of every field that is not a positional", () => {
-    const create = built()
+    const list = built()
       .commands.find((c) => c.name() === "issues")
-      ?.commands.find((c) => c.name() === "create");
-    const flags = (create?.options ?? []).map((option) => option.long);
+      ?.commands.find((c) => c.name() === "list");
+    const flags = (list?.options ?? []).map((option) => option.long);
     expect(flags).toContain("--project-slug");
-    expect(flags).toContain("--assign-agent");
+    expect(flags).toContain("--assignee-member-id");
     expect(flags).toContain("--json");
   });
 
@@ -163,14 +161,13 @@ describe("a flag's name and its value", () => {
 
 describe("the input an operation is called with", () => {
   it("puts positionals under the names the path gave them", () => {
-    const comment = byOperation.get("comments.create");
-    expect(comment).toBeDefined();
+    const link = byOperation.get("links.add");
+    expect(link).toBeDefined();
     // The record is named by one string, which is an id, a URL or the key the
     // tracker wrote (ADR-0024).
-    expect(inputFor(comment!, ["acme/deevy#42"], { body: "Looks right" })).toEqual({
-      issue: "acme/deevy#42",
-      body: "Looks right",
-    });
+    expect(
+      inputFor(link!, ["acme/deevy#42"], { url: "https://example.com/pull/1", title: "PR" }),
+    ).toEqual({ issue: "acme/deevy#42", url: "https://example.com/pull/1", title: "PR" });
   });
 
   it("leaves out what was not given, so a default in the schema still applies", () => {
@@ -197,7 +194,7 @@ describe("a generated command against a real deevy", () => {
    * registry, reaching a real instance over the real transport with a real
    * token, and coming back with the thing it asked for.
    */
-  it("creates an Issue, and lists it back", async () => {
+  it("reads back a record the tracker delivered, by list and by its key", async () => {
     const deevy = testDeevy();
     closers.push(deevy.close);
     await humanMember(deevy.db);
@@ -220,7 +217,17 @@ describe("a generated command against a real deevy", () => {
     // `--json` because this asserts on the exact answer, which is what the
     // flag is for; the shaped output is the default and is tested in render.
     await root.parseAsync(
-      ["sockets", "connect", "--provider", "stub", "--name", "Example tracker", "--json"],
+      [
+        "sockets",
+        "connect",
+        "--provider",
+        "stub",
+        "--name",
+        "Example tracker",
+        "--webhook-secret",
+        "a-secret-the-tracker-signs-with",
+        "--json",
+      ],
       { from: "user" },
     );
     const socket = JSON.parse(said.at(-1) ?? "{}") as { id: string };
@@ -240,20 +247,45 @@ describe("a generated command against a real deevy", () => {
       { from: "user" },
     );
 
-    await root.parseAsync(
-      ["issues", "create", "--project-slug", "acme-deevy", "--title", "Something to do", "--json"],
-      { from: "user" },
-    );
-    const created = JSON.parse(said.at(-1) ?? "{}") as { externalKey: string; title: string };
-    expect(created.title).toBe("Something to do");
-    // The key is the tracker's, and it is the only one there is (ADR-0024).
-    expect(created.externalKey).toMatch(/^acme\/deevy#\d+$/);
+    // The record is opened in the tracker, by whoever opens records there, and
+    // deevy hears of it in a delivery (docs/plans/simplify.md, slice 4).
+    const delivered = await deevy.fetch(`${baseURL}/hooks/${socket.id}`, {
+      method: "POST",
+      body: JSON.stringify({
+        events: [
+          {
+            kind: "issue",
+            scopeKey: "acme/deevy",
+            actor: { login: "ada", id: "u-ada", isBot: false },
+            issue: {
+              externalId: "1",
+              key: "acme/deevy#1",
+              url: "https://tracker.test/acme/deevy/issues/1",
+              title: "Something to do",
+              body: "",
+              state: "open",
+              stateName: "open",
+              assignees: [],
+              labels: [],
+              parentExternalId: null,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        ],
+      }),
+    });
+    expect(delivered.status).toBe(200);
 
     await root.parseAsync(["issues", "list", "--project-slug", "acme-deevy", "--json"], {
       from: "user",
     });
     const listed = JSON.parse(said.at(-1) ?? "{}") as { issues: { externalKey: string }[] };
-    expect(listed.issues.map((issue) => issue.externalKey)).toContain(created.externalKey);
+    // The key is the tracker's, and it is the only one there is (ADR-0024).
+    expect(listed.issues.map((issue) => issue.externalKey)).toEqual(["acme/deevy#1"]);
+
+    await root.parseAsync(["issues", "get", "acme/deevy#1", "--json"], { from: "user" });
+    const read = JSON.parse(said.at(-1) ?? "{}") as { title: string };
+    expect(read.title).toBe("Something to do");
   });
 
   it("hands back what zod actually said, not 'Input validation failed'", async () => {

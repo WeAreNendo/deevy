@@ -11,7 +11,7 @@ import {
 } from "@deevy/core";
 import { emailSenders, stubOutbox } from "@deevy/email";
 import type { EmailSenders } from "@deevy/core/email";
-import { socketModules } from "@deevy/sockets";
+import { devTrackerView, socketModules } from "@deevy/sockets";
 import { fetchClientMetadataResource } from "./cimd.ts";
 
 /** Written by `vp pack` from package.json; see vite.config.ts. */
@@ -90,6 +90,8 @@ export function buildServer(env: ServerEnv) {
     secret: env.secret,
     devSignIn: env.devStubOAuth,
     devSockets: env.devStubSockets,
+    // What the stub holds, at `/dev/tracker`, wherever it is registered.
+    ...(env.devStubSockets ? { devTracker: () => devTrackerView() } : {}),
     // The tools this build can speak (ADR-0024). A stub Socket is a development
     // fixture, so it is registered only where the entry says it may be, which
     // `readEnv` refuses to be production.
