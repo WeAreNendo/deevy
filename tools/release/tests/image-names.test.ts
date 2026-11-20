@@ -37,12 +37,7 @@ const literal = (line: string): string =>
  * at the time rather than instructions to follow now.
  */
 describe("the image name", () => {
-  const sources = [
-    ".github/workflows/release.yml",
-    "docker-compose.yml",
-    "docs/OPERATIONS.md",
-    "docs/m3-acceptance.md",
-  ];
+  const sources = [".github/workflows/release.yml", "docker-compose.yml", "docs/OPERATIONS.md"];
 
   it("is lowercase everywhere somebody could copy it", async () => {
     for (const file of sources) {

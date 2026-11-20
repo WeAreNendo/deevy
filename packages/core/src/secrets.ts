@@ -5,7 +5,7 @@ import { ORPCError } from "@orpc/server";
  *
  * A Socket holds a real credential — a GitHub App's private key, a Linear
  * token, the secret a provider signs its deliveries with — and the database is
- * a file on a volume or a D1 database somebody can read. So the column holds an
+ * a file on a volume or an object's storage somebody can read. So the column holds an
  * envelope and nothing else: AES-256-GCM, the key derived from the instance's
  * own sealing secret, the whole of it web-standard so the same code runs on
  * Node and on a Worker (ADR-0006).

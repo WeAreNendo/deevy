@@ -1,7 +1,8 @@
 /**
  * deevy's acceptance walk, executed rather than described (docs/acceptance.md).
  *
- * Everything is on this machine: deevy on Node and on workerd, a sign-in stub,
+ * Everything is on this machine: deevy as the image and as a hosted Workspace
+ * on workerd, a sign-in stub,
  * a bare git repository as the remote, and a tracker deevy talks to exactly as
  * it will talk to GitHub — the Socket provider that is not a tool
  * (packages/sockets/src/stub). No Cloudflare account, no OAuth App, no GitHub
@@ -24,14 +25,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import {
-  adminEmail,
-  startHosted,
-  startNode,
-  startWorkers,
-  type Deployment,
-  type StartOptions,
-} from "./boot.ts";
+import { adminEmail, startHosted, startNode, type Deployment, type StartOptions } from "./boot.ts";
 
 const git = promisify(execFile);
 const mcpProtocolVersion = "2026-07-28";
@@ -57,16 +51,10 @@ function check(name: string, ok: boolean, detail = ""): void {
   }
 }
 
-/** Waits for something a background pass produces, nudging the deployment as it goes. */
-async function until<T>(
-  deployment: Pick<Deployment, "tick">,
-  what: string,
-  read: () => Promise<T | null>,
-  seconds = 20,
-): Promise<T> {
+/** Waits for something a background pass produces. */
+async function until<T>(what: string, read: () => Promise<T | null>, seconds = 20): Promise<T> {
   const deadline = Date.now() + seconds * 1000;
   for (;;) {
-    await deployment.tick();
     const found = await read();
     if (found !== null) return found;
     if (Date.now() > deadline) throw new Error(`${what} did not happen in ${String(seconds)}s`);
@@ -545,7 +533,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   );
 
   // What deevy says back where the team reads: the Proposal, signed.
-  const mirrored = await until(deployment, "the Gate reaching the tracker", async () => {
+  const mirrored = await until("the Gate reaching the tracker", async () => {
     return (await said(origin, record)).find((one) => one.includes("## What I will do")) ?? null;
   });
   check(
@@ -560,7 +548,6 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   );
 
   // A Run waiting on a Human is waiting, whatever the sweeps do meanwhile.
-  await deployment.tick();
   await new Promise((resolve) => setTimeout(resolve, 1_500));
   check(
     "a Run nobody has ruled on stays at its Gate",
@@ -581,7 +568,9 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "acceptance-approve-comment",
   );
   check("a comment that starts /approve is a delivery like any other", typed.status === 200);
-  await deployment.tick();
+  // Past a background pass, which both deployments run every second, so a
+  // sweep that ruled on it would be caught as surely as the delivery.
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
   const stillOpen = await agent.tool("gates_get", { requestId: plan.id });
   check(
     "and rules nothing, whoever wrote it: the Gate is still waiting",
@@ -721,7 +710,6 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   );
 
   const ruled = await until(
-    deployment,
     "the ruling reaching the tracker",
     async () => (await said(origin, record)).find((one) => one.includes("Ship it")) ?? null,
   );
@@ -1002,22 +990,21 @@ async function main(): Promise<void> {
       {
         name: "given",
         origin: process.argv[given + 1] ?? "",
-        tick: () => Promise.resolve(),
         stop: () => undefined,
       },
       "an instance that is already running",
       repo,
     );
   } else {
-    // Every deployment, from one codebase, and the Agent cannot tell them
-    // apart: that is the claim ADR-0006 makes and this is what checks it. And
-    // the image once more under a path, which is where a hosted Workspace
+    // Both shapes, from one codebase, and the Agent cannot tell them apart:
+    // that is the claim ADR-0006 makes and this is what checks it. The image,
+    // then the image once more under a path, which is where a hosted Workspace
     // lives (docs/plans/hosted.md): nothing the walk does may notice. Then a
     // hosted Workspace itself, in its object behind the many-Workspaces
     // Worker, signed in through the relay (ADR-0028).
     const stories: Record<string, string> = {};
     const underAPath = (options: StartOptions) => startNode({ ...options, basePath: "/deevy" });
-    for (const start of [startNode, startWorkers, underAPath, startHosted]) {
+    for (const start of [startNode, underAPath, startHosted]) {
       let deployment: Deployment | null = null;
       // A repository each: the walk pushes the same branch on every one, and a
       // shared remote would make the second push a non-fast-forward.
@@ -1033,12 +1020,7 @@ async function main(): Promise<void> {
     }
     console.log("");
     check(
-      "the same walk leaves the same Event log on both deployments",
-      stories.node !== undefined && stories.node === stories.workers,
-      `node:    ${stories.node ?? "(none)"}\nworkers: ${stories.workers ?? "(none)"}`,
-    );
-    check(
-      "and under a path",
+      "the same walk leaves the same Event log under a path",
       stories.node !== undefined && stories.node === stories["node under a path"],
       `node:    ${stories.node ?? "(none)"}\nunder a path: ${stories["node under a path"] ?? "(none)"}`,
     );

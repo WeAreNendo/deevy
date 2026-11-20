@@ -6,7 +6,7 @@ export { relations } from "./relations.ts";
 
 /**
  * The database handle the core works with. Both `drizzle-orm/node-sqlite` and
- * `drizzle-orm/d1` produce one of these, so nothing outside packages/adapters
+ * `drizzle-orm/durable-sqlite` produce one of these, so nothing outside packages/adapters
  * knows which driver is underneath (ADR-0006).
  */
 export type Db = SQLiteAsyncDatabase<"sync" | "async", unknown, typeof relations>;

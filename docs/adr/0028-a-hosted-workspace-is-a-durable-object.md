@@ -1,5 +1,8 @@
 # A hosted Workspace is a Durable Object
 
+> Amended by [ADR-0037](./0037-two-deployment-shapes.md): the hosted Worker is one of two shapes, beside the
+> image, rather than the third. The single-Workspace Worker on D1 is gone.
+
 Amends [ADR-0006](./0006-runtime-agnostic-core-node-first.md), which gave deevy two deployment shapes —
 Node with SQLite in Docker, and a Worker with D1 — each serving one Workspace, by adding a third shape that
 serves many. Planned in [hosted.md](../plans/hosted.md).

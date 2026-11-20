@@ -1,13 +1,13 @@
 /**
- * deevy, on every deployment, on this machine and nothing else.
+ * deevy, in both its shapes (ADR-0037), on this machine and nothing else.
  *
  * The acceptance walk's claim is that an Agent cannot tell them apart
  * (ADR-0006), so it has to be able to start each: a Node process from the
- * packed bundle, workerd from the built Worker on a local D1, and workerd from
- * the many-Workspaces Worker with a Workspace in a Durable Object (ADR-0028).
- * None needs an account, and sign-in is an OAuth stub prepended to the bundle
- * — the same trick `apps/web/scripts/smoke-workers.ts` uses, and the reason
- * this walk needs no OAuth App either (docs/acceptance.md).
+ * packed bundle, as the image runs it, and workerd from the many-Workspaces
+ * Worker with a Workspace in a Durable Object (ADR-0028). Neither needs an
+ * account, and sign-in is an OAuth stub prepended to the bundle — the same
+ * trick the hosted smoke uses, and the reason this walk needs no OAuth App
+ * either (docs/acceptance.md).
  */
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
@@ -20,22 +20,17 @@ import { localConfigs, platform, startLocal } from "../../../apps/hosted/scripts
 const here = new URL(".", import.meta.url).pathname;
 const root = join(here, "../../..");
 const stub = join(root, "apps/web/scripts/stub-oauth.js");
-const wrangler = join(root, "apps/web/node_modules/.bin/wrangler");
 const childEnv = { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" };
 
+/**
+ * One deployment the walk runs on. What it owes in the background — the Socket
+ * mirror that says a Gate is waiting, and the sweeps beside it — it does on
+ * its own clock, which each start below sets to a second: the Node runner's
+ * timer, the Workspace's alarm. The walk waits for what that work produces.
+ */
 export interface Deployment {
   name: string;
   origin: string;
-  /**
-   * Makes this deployment do the background work it owes: the Socket mirror
-   * that says a Gate is waiting, and the sweeps beside it.
-   *
-   * Node runs it on a timer this walk sets to a second, so there is nothing to
-   * do; workerd's Cron Trigger does not fire under `wrangler dev`, so it is
-   * poked. The walk waits for what the work produces either way, which is why
-   * one of these can do nothing at all (apps/web/scripts/smoke-workers.ts).
-   */
-  tick(): Promise<void>;
   stop(): void;
 }
 
@@ -132,101 +127,6 @@ export async function startNode({ containers, basePath = "" }: StartOptions): Pr
   return {
     name: basePath ? "node under a path" : "node",
     origin,
-    // Nothing: the runner's own timer is the tick here.
-    tick: () => Promise.resolve(),
-    stop: () => child.kill("SIGTERM"),
-  };
-}
-
-function runToCompletion(command: string, args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"], env: childEnv });
-    let output = "";
-    child.stdout?.on("data", (chunk: Buffer) => (output += chunk.toString()));
-    child.stderr?.on("data", (chunk: Buffer) => (output += chunk.toString()));
-    child.on("error", reject);
-    child.on("exit", (code) =>
-      code === 0 ? resolve() : reject(new Error(`${command} exited ${String(code)}:\n${output}`)),
-    );
-  });
-}
-
-/** deevy on workerd, with a local D1. `wrangler dev --local` needs no account. */
-export async function startWorkers({ containers }: StartOptions): Promise<Deployment> {
-  const built = join(root, "apps/web/dist/deevy");
-  await stubbed(join(built, "index.js"), join(built, "index.acceptance.js"));
-  const config = join(built, "wrangler.acceptance.json");
-  const written = JSON.parse(await readFile(join(built, "wrangler.json"), "utf8")) as Record<
-    string,
-    unknown
-  >;
-  await writeFile(config, JSON.stringify({ ...written, main: "index.acceptance.js" }));
-
-  const port = await freePort();
-  const origin = `http://localhost:${String(port)}`;
-  const persistTo = await mkdtemp(join(tmpdir(), "deevy-acceptance-d1-"));
-
-  // The local D1 starts empty, and wrangler is the only thing that migrates a
-  // D1 (ADR-0008). Without this every request is an Internal Server Error, and
-  // the first one a walk makes is a sign-in.
-  await runToCompletion(wrangler, [
-    "d1",
-    "migrations",
-    "apply",
-    "deevy",
-    "--local",
-    "--config",
-    config,
-    "--persist-to",
-    persistTo,
-  ]);
-  const vars: Record<string, string> = {
-    BETTER_AUTH_URL: origin,
-    BETTER_AUTH_SECRET: secret,
-    GITHUB_CLIENT_ID: "acceptance",
-    GITHUB_CLIENT_SECRET: "acceptance",
-    DEEVY_ADMIN_EMAIL: adminEmail,
-    DEEVY_SECRET: sealingSecret,
-    DEEVY_DEV_STUB_SOCKETS: "1",
-    DEEVY_DEV_STUB_CONTAINERS: containers,
-  };
-
-  const child = spawn(
-    wrangler,
-    [
-      "dev",
-      "--local",
-      "--config",
-      config,
-      "--persist-to",
-      persistTo,
-      "--ip",
-      "127.0.0.1",
-      "--port",
-      String(port),
-      ...Object.entries(vars).flatMap(([name, value]) => ["--var", `${name}:${value}`]),
-    ],
-    { stdio: ["ignore", "pipe", "pipe"], env: childEnv },
-  );
-  await waitForReady(child, "wrangler dev", /Ready on https?:\/\//);
-  return {
-    name: "workers",
-    origin,
-    /*
-     * One Cron Trigger, waited for: workerd holds the invocation open for
-     * `ctx.waitUntil`, so a 200 is the pass having finished.
-     *
-     * `/cdn-cgi/handler/scheduled` rather than `--test-scheduled`'s
-     * `/__scheduled`, which a Worker that also serves assets answers with the
-     * SPA's index.html and a 200 that ran nothing — the same trap
-     * `apps/web/scripts/smoke-workers.ts` documents.
-     */
-    tick: async () => {
-      const fired = await fetch(
-        `${origin}/cdn-cgi/handler/scheduled?cron=${encodeURIComponent("* * * * *")}`,
-      );
-      await fired.text();
-    },
     stop: () => child.kill("SIGTERM"),
   };
 }
@@ -264,8 +164,6 @@ export async function startHosted({ containers }: StartOptions): Promise<Deploym
     return {
       name: "hosted",
       origin: url,
-      // Nothing: the Workspace's alarm is the tick here, every second.
-      tick: () => Promise.resolve(),
       stop: () => child.kill("SIGTERM"),
     };
   } catch (error) {

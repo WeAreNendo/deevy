@@ -12,10 +12,9 @@
   },
   "scripts": {
     "generate:auth": "auth generate --config ./auth.generate.config.ts --output ./src/schema/auth.ts -y",
-    "generate": "drizzle-kit generate && node scripts/emit-d1-migrations.ts",
-    "generate:d1": "node scripts/emit-d1-migrations.ts",
-    "check:migrations": "node scripts/check-migrations.ts",
-    "check:d1": "node scripts/check-d1-apply.ts"
+    "generate": "drizzle-kit generate && node scripts/emit-durable-migrations.ts",
+    "generate:durable": "node scripts/emit-durable-migrations.ts",
+    "check:migrations": "node scripts/check-migrations.ts"
   },
   "dependencies": {
     "drizzle-orm": "catalog:"
@@ -29,7 +28,6 @@
     "drizzle-kit": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:",
-    "wrangler": "catalog:"
+    "vite-plus": "catalog:"
   }
 }

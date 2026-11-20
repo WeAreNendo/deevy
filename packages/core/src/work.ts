@@ -51,7 +51,7 @@ export const defaultSilenceMs = 30 * 60_000;
 export const defaultSweepLimit = 50;
 
 /**
- * D1 accepts 100 bound parameters per statement and each Event row binds five,
+ * A Durable Object's SQLite accepts 100 bound parameters per statement and each Event row binds five,
  * so the Events go in chunks of twenty rather than one statement of `limit`
  * rows. The number of statements stays a function of the limit, never of the
  * Workspace. Adding a column to these rows means lowering this number.
@@ -141,8 +141,8 @@ export async function sweepStaleRuns({
   const result = { scanned: due.length, changed: 0, more: due.length >= limit };
   if (due.length === 0) return result;
 
-  // One statement, and it re-checks the status it read: D1 has no interactive
-  // transactions (ADR-0006), so a Run the Agent revived between the SELECT and
+  // One statement, and it re-checks the status it read: a Durable Object has no
+  // interactive transactions (ADR-0037), so a Run the Agent revived between the SELECT and
   // here must not be dragged back. RETURNING says which ones really moved, and
   // only those get an Event.
   const moved = await db

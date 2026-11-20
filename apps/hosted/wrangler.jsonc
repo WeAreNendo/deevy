@@ -16,7 +16,7 @@
   "assets": {
     // The SPA apps/web builds; every Workspace serves the same files under its
     // own path (@deevy/adapters/spa). Build apps/web first.
-    "directory": "../web/dist/client",
+    "directory": "../web/dist",
     "binding": "ASSETS",
     // A route the SPA owns, asked of the binding, is its index.
     "not_found_handling": "single-page-application",

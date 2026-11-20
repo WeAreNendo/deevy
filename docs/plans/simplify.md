@@ -920,3 +920,41 @@ The docs' landing graph had a Human approve with `/approve` and a Slack button, 
 Gate in three places and rule in deevy. Notion's connection now needs user information without email
 addresses, since deevy reads only an author's name. `gates/ruling-from-your-tools/` redirects to
 `gates/how-a-gate-asks/`, and Identity moves to CONTEXT.md's retired words.
+
+**Slice 11, two deployment shapes.** 1,139 lines of source out and 154 in, 2,712 of tests and smokes out and
+328 in, and the 836 lines of the D1 migration projection. `apps/web` lost its Worker, its environment
+reader, its `wrangler.jsonc` and `.dev.vars.example`, and the 1,606-line smoke with its two stubs.
+`@deevy/adapters` lost `./workers`, and the walk lost its Worker leg and the `tick` that poked its Cron
+Trigger. The acceptance test is `tools/release/tests/two-deployment-shapes.test.ts`, which was red on all four
+of its cases first. The walk passes on the image, the image under `/deevy` and a hosted Workspace, with
+122 checks: 40 on each and two comparisons, where it had 163 on four.
+
+Four things followed that the plan did not name. With no D1 left, the D1 projection of every migration
+(`packages/db/migrations`), `db#check:d1`, `import.mjs --for-d1` and `server#check:d1-import` had nothing to
+serve, so they went too. `emit-d1-migrations.ts` became `emit-durable-migrations.ts`, which keeps every
+refusal for the Durable Object alone. The plan said `vp run web#build` writes `dist/client`, but that
+directory was the Cloudflare plugin's. The plain build writes `apps/web/dist`, which the image already
+serves, so the hosted Worker now serves that too, and the archive keeps its `client/` layout. The routing
+table test held the routes `createApp` mounts against the Worker's `run_worker_first`, a list nothing reads
+now. It became `app-paths.test.ts` and holds them against `isAppPath`, which the hosted router does read.
+The SPA's build also stopped defining a version it never read.
+
+Of the rules the core kept for D1, none turned out to be D1's alone. A Durable Object's SQLite takes 100
+bound parameters a statement, as D1 did, and its `transactionSync` takes no awaits. So the chunked inserts
+and the sequential writes stay, and a dozen comments now give the object as their reason. The statement
+budget keeps its ceiling of fifty, because an object runs one request at a time. The stream that ends itself
+was D1's, but the hosted Workspace still uses it for a tab on the polling fallback, so the mechanism stays.
+ADR-0037 records each, and notes on ADR-0006, 0012 and 0028 point to it.
+
+The review found that the test's check on CI and the pre-push hook could not see `web#build:workers`, since
+`\w` stops at the colon, so it now matches the whole script name and is red on the old hook. The hosted
+Worker now uploads all of `apps/web/dist`. A checkout that once built the Worker still had its bundle, its
+`wrangler.json` and a dry run in there, and `vp run web#build` empties the directory but nothing else does.
+So `hosted#package` now refuses an SPA directory that holds anything another build left, and
+`artifact.test.ts` holds the rule. ADR-0037 claimed that a team on its own Worker could carry its D1
+database into the image, but `import.mjs` takes only a hosted dump, so it now says the move starts empty. The
+walk now waits past one background pass before checking that an `/approve` comment ruled nothing, which the
+Worker leg's Cron poke used to cover. Two pending changesets from `main` still mention the Worker
+(`auth-secret-required.md` and `hosted-logs-no-row-values.md`); they are left as they are, because a release
+cut from `main` before this stack lands would publish them as true. The README still said a Human rules
+with `/approve` or a Slack button, which slice 10 made untrue, and now says a Human rules in deevy.

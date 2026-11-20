@@ -4,14 +4,14 @@ import type { Db } from "@deevy/db";
 /**
  * deevy's background work, on the Node deployment.
  *
- * What it does is `runDueWork` in `packages/core/src/work.ts`, which the
- * Cloudflare Worker's Cron Trigger calls too. What is left here is everything
- * only a long-lived process has: the timer, the guarantee that ticks do not
- * overlap, and a stop that waits for the pass in flight so the database is not
- * closed under it (apps/server/src/index.ts).
+ * What it does is `runDueWork` in `packages/core/src/work.ts`, which a hosted
+ * Workspace's alarm calls too (apps/hosted/src/workspace.ts). What is left here
+ * is everything only a long-lived process has: the timer, the guarantee that
+ * ticks do not overlap, and a stop that waits for the pass in flight so the
+ * database is not closed under it (apps/server/src/index.ts).
  *
- * It lives beside the listener rather than in `createApp` on purpose:
- * `apps/web/src/worker.ts` builds one app per isolate, and a schedule started
+ * It lives beside the listener rather than in `createApp` on purpose: a hosted
+ * Workspace's object builds the app when it wakes, and a schedule started
  * inside it would be a timer nobody owns.
  */
 

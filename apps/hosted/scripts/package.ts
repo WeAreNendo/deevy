@@ -1,6 +1,6 @@
 /**
  * `vp run hosted#package`: the hosted Worker as a release carries it
- * (docs/plans/hosted.md slice 13), from what `vp run web#build:workers` and
+ * (docs/plans/hosted.md slice 13), from what `vp run web#build` and
  * `vp run hosted#build:hosted` left behind.
  *
  *   dist/deevy-hosted-<version>.tar.gz
@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { gzipSync } from "node:zlib";
-import { manifest, sha256, tar, template } from "./artifact.ts";
+import { manifest, notTheSpa, sha256, tar, template } from "./artifact.ts";
 import { app, version as packageVersion } from "./local.ts";
 
 const encoder = new TextEncoder();
@@ -53,10 +53,16 @@ if (workerText.includes("__DEEVY_VERSION__") || !workerText.includes(JSON.string
   );
 }
 
-const client = join(app, "../web/dist/client");
+const client = join(app, "../web/dist");
 const spa = await filesUnder(client).catch((): string[] => []);
 if (!spa.includes("index.html")) {
-  throw new Error("No SPA at apps/web/dist/client: build it with `vp run web#build:workers`");
+  throw new Error("No SPA at apps/web/dist: build it with `vp run web#build`");
+}
+const stray = notTheSpa(spa);
+if (stray.length > 0) {
+  throw new Error(
+    `apps/web/dist holds more than the SPA (${stray.slice(0, 3).join(", ")}): build it again with \`vp run web#build\``,
+  );
 }
 
 const config = template(await readFile(join(app, "wrangler.jsonc"), "utf8"));

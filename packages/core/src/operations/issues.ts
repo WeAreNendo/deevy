@@ -35,7 +35,7 @@ export const issues = {
       /**
        * Left out, every Project the caller may see, newest change first, in
        * one query: "what is deevy working on" is a Workspace-wide question and
-       * one list beats one per Project on D1's per-invocation budget.
+       * one list beats one per Project on the statement budget.
        */
       projectSlug: ProjectSlugLookup.optional(),
       /** A tracker key (`acme/deevy#42`) or a word of the title. */

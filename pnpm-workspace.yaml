@@ -105,7 +105,6 @@ catalog:
   "@base-ui/react": ^1.7.0
   react-markdown: ^10.1.0
   remark-gfm: ^4.0.1
-  "@cloudflare/vite-plugin": 1.54.3
   "@cloudflare/workers-types": 5.20260903.1
   wrangler: 4.128.0
   # The docs site (apps/docs, docs.deevy.dev). Pinned exactly and moved as a

@@ -55,7 +55,7 @@ export const delivery = sqliteTable(
     }),
     attempts: integer("attempts").default(0).notNull(),
     nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }).default(now).notNull(),
-    /** Held briefly by whoever is sending it, since D1 has no transactions. */
+    /** Held briefly by whoever is sending it, since a Durable Object has no interactive transactions. */
     lockedUntil: integer("locked_until", { mode: "timestamp_ms" }),
     lastStatus: integer("last_status"),
     lastError: text("last_error"),

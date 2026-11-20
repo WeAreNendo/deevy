@@ -1,24 +1,18 @@
 ---
 title: Configure deevy
-description: The settings a self-hosted deevy needs, in the order you set them, and how to set them on the Docker image and on a Worker.
+description: The settings a self-hosted deevy needs, in the order you set them, and how to set them.
 sidebar:
   order: 4
 ---
 
-deevy is configured with environment variables. The names are the same on the Docker image and on a
-Worker, and so is what they do. This page takes the ones you need in the order you need them;
-[Environment variables](/reference/environment/) lists every one.
+deevy is configured with environment variables. This page takes the ones you need in the order you need
+them; [Environment variables](/reference/environment/) lists every one.
 
 ## How you set them
 
-**On the Docker image**, set them in the container's environment: an `--env-file` for `docker run`, or
-`env_file` or `environment` in Compose. The server reads them when it starts, so a change takes effect when
-the container is recreated, for example with `docker compose up -d`.
-
-**On a Worker**, set a credential with `wrangler secret put NAME`, which takes effect within a few seconds
-with no deploy. Anything else can be a secret too, or a `vars` entry in `apps/web/wrangler.jsonc`, which
-takes effect with the next build and deploy. See
-[Settings that aren't secret](/self-hosting/cloudflare-workers/#settings-that-arent-secret).
+Set them in the container's environment: an `--env-file` for `docker run`, or `env_file` or `environment`
+in Compose. The server reads them when it starts, so a change takes effect when the container is
+recreated, for example with `docker compose up -d`.
 
 ## Its address
 
@@ -46,9 +40,8 @@ Generate each with `openssl rand -base64 32`, once, and keep them with your back
 different values.
 
 - **`BETTER_AUTH_SECRET`** signs sessions and the links deevy sends you back through, such as a tool's
-  consent, and seals the sign-in providers' tokens. Without it, deevy doesn't run: the Docker image exits at
-  start, and a Worker answers its API and `/healthz` with an error that names it. Changing it signs
-  everybody out; Agents' keys keep working.
+  consent, and seals the sign-in providers' tokens. Without it, deevy doesn't run: the server exits at
+  start. Changing it signs everybody out; Agents' keys keep working.
 - **`DEEVY_SECRET`** seals what deevy holds for the tools you connect. It must be at least 32 characters.
   Without it, deevy refuses to connect a tool that needs a credential.
 
@@ -92,6 +85,5 @@ its Gates are not configuration: an admin sets them in **Settings**.
 ## What never goes in production
 
 The variables that start with `DEEVY_DEV_STUB_` replace sign-in or a tool with stand-ins for trying deevy
-on a laptop. The Docker image refuses to start with the sign-in and tool stand-ins on. A
-Worker can't tell it is in production, so leave them unset there; `GET /api/health/ping` reports
-`devSignIn` and `devSockets` as `false` when they are off.
+on a laptop. The Docker image refuses to start with the sign-in and tool stand-ins on, and
+`GET /api/health/ping` reports `devSignIn` and `devSockets` as `false` when they are off.

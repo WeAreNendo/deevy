@@ -7,7 +7,7 @@ Notion, and deevy routes it to Agents, records their Runs, and holds the Gates o
 vocabulary in [CONTEXT.md](CONTEXT.md) (Member, Human, Agent, Sponsor, Workspace, Socket, Project, Issue,
 Checkpoint, Gate, Proposal, Ruling, Run, Event) in code, API names, and UI copy; it lists the words to
 avoid. Hard-to-reverse choices live in `docs/adr`, the plan in `docs/PLAN.md`, setup and env vars in
-`docs/DEVELOPMENT.md`, running the image, the Worker and each tool's setup in `docs/OPERATIONS.md`. History:
+`docs/DEVELOPMENT.md`, running the image, the hosted Worker and each tool's setup in `docs/OPERATIONS.md`. History:
 M1 (Humans), M2 (Agents), M3 (Workers) and M4 (a reference runtime, since removed) built v1, each from its
 plan in `docs/plans/`, followed by the harness spike (ADR-0018), the agent owning git (ADR-0019), sign-in and
 invitations, four-eyes Gates (ADR-0020), live Documents (ADR-0021) and sub-issue delegation (ADR-0022). Then
@@ -48,8 +48,8 @@ the prompt to wipe `node_modules`, so if an install hangs with no output, check 
 `vp dev`, `vp build`, `vp test`, `vp check` are built-ins that ignore package.json scripts; `vp run <script>`
 runs scripts, `-r` recursively, `pkg#script` for one package (package names are `web`, `server`, `core`, `db`,
 `adapters`, `sockets`, `design`, `cli`, `release`, `acceptance`, `hosted`, `docs`; `release` is
-`tools/release`, which holds the changelog fold and the commit-message rules, `acceptance` is `tools/acceptance`, the walk, which needs the server, the Worker and
-the hosted Worker built first, `hosted` is `apps/hosted`, the many-Workspaces Worker: `vp run web#build:workers` then `vp run
+`tools/release`, which holds the changelog fold and the commit-message rules, `acceptance` is `tools/acceptance`, the walk, which needs the server, the SPA and
+the hosted Worker built first, `hosted` is `apps/hosted`, the many-Workspaces Worker: `vp run web#build` then `vp run
 hosted#build:hosted`, and `vp run hosted#test:hosted` runs two Workspaces on workerd, `docs` is `apps/docs`,
 the docs.deevy.dev site, and `design` is `packages/design`, the tokens, faces and logo both of them
 wear).
@@ -64,9 +64,10 @@ wear).
   that `run.tasks` block and leaves `test` out of its `scripts`.
 - `vp run -r --parallel dev`: Node server on 3000 (rebuilt and restarted by `vp pack --watch`) plus the SPA
   on 5173 proxying `/api`, `/rpc`, `/healthz`. Needs a `.env` (copy `.env.example`).
-- `vp run -r build`, `vp run web#build:workers` then `vp run web#check:workers` (wrangler dry run). In that
-  order: the check dry-runs `apps/web/dist/deevy/wrangler.json`, which the build writes, and the committed
-  `wrangler.jsonc` is a source that wrangler will not deploy on its own.
+- `vp run -r build`, then `vp run hosted#build:hosted`, which bundles the hosted Worker beside the SPA that
+  build wrote; `vp run hosted#package` then `vp run hosted#check:hosted` packs the release archive and
+  dry-runs its `wrangler.json` as shipped. The committed `apps/hosted/wrangler.jsonc` is a source, not what a
+  deploy uploads.
 - `vp run docs#build`: docs.deevy.dev into `apps/docs/dist`, `vp run docs#serve` to read it. Its pages are
   written by hand for two readers, a team on deevy Cloud and whoever hosts deevy, in `apps/docs/content`
   (`docs/plans/docs.md`, "Writing the pages"), and the API reference is generated from the OpenAPI snapshot.
@@ -95,7 +96,8 @@ authority to Gate`. The type is one of `build chore ci docs feat fix perf refact
 
 ## Architecture
 
-One typed core, projected to three surfaces (ADR-0005), on two runtimes from one codebase (ADR-0006).
+One typed core, projected to three surfaces (ADR-0005), on two shapes from one codebase: the image and the
+hosted Worker (ADR-0006, ADR-0037).
 
 **Operation registry** (`packages/core/src/operations/registry.ts`): every API operation is a `defineOperation({
 name, summary, method, path, auth, input, output, handler })`. `auth` is `public | session | member | admin`
@@ -110,9 +112,9 @@ module and never build oRPC procedures outside the registry (ADR-0009). GET oper
 need an object input schema; use `NoInput` for none.
 
 **Request context** is built once per request in `packages/core/src/app.ts`: Better Auth session, then the
-caller's Member row and the Workspace. `createApp({ db, auth?, origin })` is the Hono app the three entries mount:
-`apps/server` (Node, `@hono/node-server`), `apps/web/src/worker.ts` (Cloudflare Worker, D1) and
-`apps/hosted/src/workspace.ts` (one per hosted Workspace's Durable Object).
+caller's Member row and the Workspace. `createApp({ db, auth?, origin })` is the Hono app the two entries mount:
+`apps/server` (Node, `@hono/node-server`) and `apps/hosted/src/workspace.ts` (one per hosted Workspace's
+Durable Object).
 
 **Sockets** (ADR-0024): the core holds the port — the types a tool must answer to, in
 `packages/core/src/sockets/port.ts`, exported as `@deevy/core/sockets` — and never a provider. Each tool is a
@@ -126,9 +128,11 @@ injected `fetch`, never the network, and one walk per provider puts the real mod
 
 **Runtime boundary**: `packages/core`, `packages/db` and `packages/sockets` use web-standard APIs only; no
 `node:` imports and no `types: ["node"]` in their tsconfigs. Anything runtime-specific goes in `packages/adapters` (`./node`:
-`node:sqlite`, migrator, SPA serving; `./workers`: D1). The Workers build in CI is what catches a leak.
-The core uses no interactive transactions because D1 has none; multi-statement writes are sequential
-(bootstrap) or batches.
+`node:sqlite`, migrator, SPA serving, the timer; `./durable`: a Durable Object's database, migrator, alarm
+queue and dump; `./spa`: the SPA under a path, which the hosted router uses; `./testing`: a Durable Object's
+storage on `node:sqlite` for tests). The hosted Worker's build in CI is what catches a leak. The core uses
+no interactive transactions, because a Durable Object behind an async core has none either;
+multi-statement writes are sequential (bootstrap) or batches.
 
 **Members and sign-in** (ADR-0007): every Member is a Better Auth user (`user.kind` is `human | agent`); deevy's own
 `workspace` and `member` tables hold roles and Sponsors. A self-hosted deployment serves one Workspace, a hosted
@@ -154,12 +158,14 @@ never `crypto.randomUUID()`. `Event.seq` stays an integer, and an Issue's key is
 **Data** (ADR-0008): Drizzle 1.0 rc on the SQLite dialect. Relations use `defineRelations` /
 `defineRelationsPart` merged per table in `packages/db/src/relations.ts`; dates are integer `timestamp_ms`
 columns; the Better Auth adapter is the `/relations-v2` entry. Migrations are applied by the Node migrator at
-startup (`openDatabase`) or by `wrangler d1 migrations apply`, never by `drizzle-kit migrate`.
+startup (`openDatabase`) or by a hosted Workspace's object from `packages/db/src/durable-migrations.ts`, never
+by `drizzle-kit migrate`; `vp run db#generate` chains `generate:durable`, which writes that file, and
+`db#check:migrations` fails on a stale one.
 
 **Builds**: `vp pack` bundles every dependency into `apps/server/dist/index.mjs` and copies the migrations next
-to it, so the Docker runtime image carries `dist/` and the SPA only. `apps/web` builds the Worker only when
-`DEEVY_TARGET=workers`, emitting `dist/deevy` (the bundle plus the `wrangler.json` a deploy uploads) beside
-`dist/client` (the SPA those assets are). A deploy uses that generated configuration, never `src/worker.ts`.
+to it, so the Docker runtime image carries `dist/` and the SPA only. `apps/web` builds the SPA only, into
+`apps/web/dist`: the image serves it, and the hosted Worker serves it as every Workspace's assets under its
+path (`assets.directory` in `apps/hosted/wrangler.jsonc`).
 
 ## UI
 

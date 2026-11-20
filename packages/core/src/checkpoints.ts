@@ -158,7 +158,7 @@ export async function gateApprovers(
  * inserting every row, as this did until 2026-10-16, cut every open Gate
  * loose on any save, and both then said one approval whatever was wanted.
  *
- * Sequential statements, because D1 has no interactive transactions: the rows
+ * Sequential statements, because a Durable Object has no interactive transactions: the rows
  * removed, the approvers of the rows kept where they had any, a statement per
  * Checkpoint, every approver in one, and — for a Checkpoint added at a name an
  * open Gate already asked at — that Gate linked to it, so it reads the new

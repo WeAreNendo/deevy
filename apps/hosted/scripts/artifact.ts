@@ -280,6 +280,25 @@ export const settings: Setting[] = [
   },
 ];
 
+/**
+ * What another build left in apps/web/dist, which `vp run web#build` empties
+ * and nothing else does: the Worker on D1's bundle, its `wrangler.json` and its
+ * dry run from before ADR-0037, or the Cloudflare plugin's `client/`. None of
+ * it is the SPA, and a `wrangler.json` or a `.dev.vars` among a Workspace's
+ * assets would be served to whoever asked for it. Paths are relative to the
+ * SPA's directory.
+ */
+export function notTheSpa(paths: string[]): string[] {
+  return paths
+    .map((path) => path.split("\\").join("/"))
+    .filter(
+      (path) =>
+        /^(client|deevy|wrangler-dry-run)\//.test(path) ||
+        /(^|\/)\.(vite|wrangler)\//.test(path) ||
+        /(^|\/)(wrangler[^/]*\.jsonc?|\.dev\.vars[^/]*)$/.test(path),
+    );
+}
+
 /** What the manifest says, and the shape a deployer may rely on while `format` is 1. */
 export interface Manifest {
   format: 1;

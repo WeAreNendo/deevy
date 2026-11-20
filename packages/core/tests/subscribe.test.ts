@@ -180,10 +180,10 @@ describe("a stream that has to end", () => {
   });
 
   /**
-   * On D1 a stream's life is arithmetic: one query per poll, against a cap on
-   * the queries one invocation may run. So the number that matters is the one
-   * the entry can compute before it chooses a duration, and it is asserted
-   * here rather than assumed (docs/plans/m3.md slice 7).
+   * A stream's cost is arithmetic: one query per poll, for as long as it runs.
+   * So the number that matters is the one the entry can compute before it
+   * chooses a duration, and it is asserted here rather than assumed
+   * (docs/plans/m3.md slice 7).
    */
   it("runs no more queries than maxDurationMs / pollMs", async () => {
     const { db, close, statements } = countingDb();

@@ -250,7 +250,7 @@ describe("the stale sweep", () => {
 
     expect(result).toEqual({ scanned: 50, changed: 50, more: true });
     // One indexed SELECT, one batched UPDATE, and the Events in chunks that
-    // stay inside D1's hundred bound parameters per statement.
+    // stay inside a Durable Object's hundred bound parameters per statement.
     // The trailing select is the subscriptions this sweep owes delivery to:
     // one read for the pass, not one per Run (webhooks.ts).
     expect(statements).toEqual(["select", "update", "insert", "insert", "insert", "select"]);

@@ -89,7 +89,7 @@ jobs:
       # The SPA first: the hosted Worker serves apps/web's build as its assets.
       - name: Build the SPA and the hosted Worker
         run: |
-          vp run web#build:workers
+          vp run web#build
           vp run hosted#build:hosted
 
       # The two steps ci.yml runs on every pull request: the archive, then the

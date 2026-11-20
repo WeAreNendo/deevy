@@ -68,12 +68,12 @@ plan documents. Read `shadcn` (component rules) and `frontend-design` (design pr
 ## Running the app without an OAuth App or a tool
 
 `DEEVY_DEV_STUB_OAUTH=1` makes the Node server import `apps/web/scripts/stub-oauth.js` — the same stub the
-acceptance walk and the Workers smoke prepend to their bundles — so the OAuth `code` is the email address and
+acceptance walk and the hosted Worker's smoke prepend to their bundles — so the OAuth `code` is the email address and
 the signed-out page offers "Sign in as this email". It stands in for the client pairs too, so an environment
 that configures no provider still offers all four buttons: GitHub, Google, Microsoft and one generic OpenID
 Connect entry. `DEEVY_DEV_STUB_SOCKETS=1` registers the Socket provider that is not a tool — a tracker in the
 process, `packages/sockets/src/stub` — so records arrive, route and open Runs with no App, no
-tunnel and no network. Both are refused under `NODE_ENV=production`; the Worker never has the first.
+tunnel and no network. Both are refused under `NODE_ENV=production`; the hosted Worker never reads the first.
 `health.ping` reports `devSignIn` and `devSockets`, which is how the SPA knows.
 
 Two launch configurations in `.claude/launch.json` put that together:

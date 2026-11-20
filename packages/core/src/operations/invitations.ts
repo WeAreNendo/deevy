@@ -274,7 +274,7 @@ export const invitations = {
         });
       }
 
-      // Four sequential writes, no transaction: D1 has none (ADR-0006), and
+      // Four sequential writes, no transaction: a Durable Object has none (ADR-0037), and
       // `joinWorkspace` joins the same way. A request that dies between the
       // Member and the invitation leaves a Member whose `member.joined` never
       // landed — the same shape a rule-based join has, and the reason the
