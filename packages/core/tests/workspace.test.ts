@@ -20,7 +20,7 @@ describe("workspace.update", () => {
     expect(renamed).toMatchObject({ name: "Acme Team", slug: "acme-team" });
     // A later request builds its context afresh, which is what sees the change.
     const later = createRouterClient(router, {
-      context: contextFor(db, admin.member, renamed),
+      context: contextFor(db, admin.member, { ...admin.workspace, ...renamed }),
     });
     expect(await later.workspace.get()).toMatchObject({ name: "Acme Team" });
     const page = await client.events.list({ subjectType: "workspace" });

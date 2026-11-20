@@ -1,11 +1,10 @@
 import type { Db, Issue } from "@deevy/db";
-import { agent as agentTable, event as eventTable, webhookSubscription } from "@deevy/db";
+import { event as eventTable, webhookSubscription } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
-import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { appendEvent } from "../src/events.ts";
 import type { InboundEvent } from "../src/sockets/port.ts";
-import { deliverDueWebhooks, deliverWebhook, sweepSchedules } from "../src/work.ts";
+import { deliverDueWebhooks, deliverWebhook, sweepStaleRuns } from "../src/work.ts";
 import { router } from "../src/operations/index.ts";
 import {
   agentContext,
@@ -407,11 +406,6 @@ function stubFetch(respond: () => Response) {
 
 const ok = () => new Response("", { status: 200 });
 
-interface Started {
-  kind: string;
-  payload: { trigger: string };
-}
-
 describe("delivering what is owed to a URL", () => {
   it("POSTs the Event itself, signed, and marks the delivery done", async () => {
     const { db, seeded, subscribe } = await workspace();
@@ -664,8 +658,7 @@ describe("what a receiver actually gets", () => {
     const { sockets } = fakeSockets();
     const asAda = createRouterClient(router, { context: { ...ada, sockets } });
     const seeded = await seedProject(db, ada.workspace.id);
-    const agent = await agentContext(db, { sponsor: ada.member, grants: [seeded.project.id] });
-    const asAgent = createRouterClient(router, { context: agent });
+    await agentContext(db, { sponsor: ada.member, grants: [seeded.project.id] });
 
     const secret = "whsec_the_receiver_holds_this_one";
     await asAda.webhooks.create({ url: "https://runner.example/deevy", secret, kinds: ["run.*"] });
@@ -675,21 +668,14 @@ describe("what a receiver actually gets", () => {
     await seeded.deliver([
       announced({ externalId: "7", title: "Nightly", labels: ["agent:planner"] }),
     ]);
-    const issue = await projected(db, "7");
-    const opened = await asAgent.runs.list({ issue: issue.externalKey });
-    await asAgent.runs.finish({
-      runId: opened.runs[0]?.id ?? "",
-      status: "completed",
-      summary: "done",
+    // The Run routing opened goes quiet, and the stale sweep writes
+    // `run.went_stale` without going through appendEvent.
+    const swept = await sweepStaleRuns({
+      db,
+      workspaceId: ada.workspace.id,
+      now: new Date(Date.now() + 31 * 60_000),
     });
-    await db
-      .update(agentTable)
-      .set({ scheduleMinutes: 60 })
-      .where(eq(agentTable.memberId, agent.member.id));
-
-    // The schedule sweep writes run.started without going through appendEvent.
-    const swept = await sweepSchedules({ db, workspaceId: ada.workspace.id });
-    expect(swept.started).toBe(1);
+    expect(swept.changed).toBe(1);
 
     const receiver = stubFetch(ok);
     await deliverDueWebhooks({
@@ -699,16 +685,10 @@ describe("what a receiver actually gets", () => {
     });
 
     // Both paths arrive: the assignment trigger goes through appendEvent, the
-    // schedule does not, and the receiver cannot tell the difference.
-    const started = receiver.posted
-      .map((post) => ({ post, body: JSON.parse(post.body) as Started }))
-      .filter(({ body }) => body.kind === "run.started");
-    expect(started.map(({ body }) => body.payload.trigger).sort()).toEqual([
-      "assignment",
-      "schedule",
-    ]);
-
-    const post = started.find(({ body }) => body.payload.trigger === "schedule")?.post;
+    // sweep does not, and the receiver cannot tell the difference.
+    const kinds = receiver.posted.map((post) => (JSON.parse(post.body) as { kind: string }).kind);
+    expect(kinds.sort()).toEqual(["run.started", "run.went_stale"]);
+    const post = receiver.posted.find((one) => one.body.includes('"run.went_stale"'));
     expect(post?.url).toBe("https://runner.example/deevy");
 
     // And the receiver can prove it came from deevy, which is the only reason

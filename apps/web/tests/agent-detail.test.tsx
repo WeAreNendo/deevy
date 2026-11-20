@@ -18,7 +18,6 @@ const stub = vi.hoisted(() => ({
       user: { id: "u-ada", name: "Ada Lovelace", email: "ada@example.com", image: null },
     },
     webhookUrl: null,
-    scheduleMinutes: null,
     grantedProjectIds: ["p-dev"],
   },
   projects: [
@@ -142,11 +141,12 @@ describe("an Agent's own page", () => {
 });
 
 describe("the Agent's own settings", () => {
-  it("offers the schedule, the Sponsor, its recent Runs, and the way to suspend it", async () => {
+  it("offers the Sponsor, its recent Runs, and the way to suspend it, and no schedule", async () => {
     await mountAt("/settings/agents/m-planner");
 
-    expect(await screen.findByLabelText("Wake")).toBeTruthy();
-    expect(screen.getByLabelText("Change Sponsor")).toBeTruthy();
+    expect(await screen.findByLabelText("Change Sponsor")).toBeTruthy();
+    expect(screen.queryByLabelText("Wake")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Schedule" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Recent Runs" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Suspend" })).toBeTruthy();
   });

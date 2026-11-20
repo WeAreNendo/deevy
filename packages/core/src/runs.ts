@@ -1,5 +1,5 @@
 import type { Db, Run } from "@deevy/db";
-import { activityKinds, run as runTable } from "@deevy/db";
+import { activityKinds, run as runTable, runTriggers } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -93,7 +93,7 @@ export const RunSchema = z.object({
   issueKey: z.string(),
   agentMemberId: z.string(),
   triggeredByMemberId: z.string().nullable(),
-  trigger: z.enum(["assignment", "mention", "schedule", "manual", "children_done", "retry"]),
+  trigger: z.enum(runTriggers),
   status: z.enum(["pending", "active", "awaiting_input", "completed", "failed", "stale"]),
   summary: z.string().nullable(),
   startedAt: z.date().nullable(),

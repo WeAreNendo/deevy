@@ -305,19 +305,19 @@ Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
    new version by itself, live within a few seconds — so a deployment configured entirely through secrets
    skips this step.
 
-8. **Check the trigger fires**, by giving it something to do rather than by watching the log. `wrangler tail`
-   does not reliably surface `scheduled` invocations — ten minutes of it on a working deployment showed
-   request traffic and no scheduled event at all, which reads exactly like a dead schedule and is not one. So
-   ask the sweep for a visible effect instead: give an Agent that has an assigned Issue a one-minute schedule,
-   and a Run with `trigger = "schedule"` appears within two minutes. That is `runDueWork`, one bounded pass
-   (ADR-0012), driven by Cloudflare's own timer.
+8. **Check the trigger fires**, once you are signed in (the next step), by giving it something to do rather
+   than by watching the log. `wrangler tail` does not reliably surface `scheduled` invocations — ten minutes
+   of it on a working deployment showed request traffic and no scheduled event at all, which reads exactly
+   like a dead schedule and is not one. So ask the sweep for a visible effect instead: under Settings,
+   Webhooks, add one to any URL, then rename the Workspace under Settings, General. The rename is an Event
+   the webhook is owed, and with no `JOBS` queue bound, as the committed configuration has none, only the
+   sweep sends what is owed, so the delivery is attempted within two minutes whether or not anything answers
+   at that URL. That is `runDueWork`, one bounded pass (ADR-0012),
+   driven by Cloudflare's own timer. Remove the webhook afterwards.
 
    ```bash
-   wrangler d1 execute deevy --remote --command "update agent set schedule_minutes = 1"
-   # wait two minutes, then:
-   wrangler d1 execute deevy --remote --command "select status, trigger from run"
-   # and put it back:
-   wrangler d1 execute deevy --remote --command "update agent set schedule_minutes = null"
+   # two minutes after the rename:
+   wrangler d1 execute deevy --remote --command "select attempts, last_status, delivered_at from delivery"
    ```
 
 9. **Sign in** at the `workers.dev` origin with the GitHub account whose email is `DEEVY_ADMIN_EMAIL`. The
@@ -639,7 +639,7 @@ signing in: `BETTER_AUTH_*`, `GITHUB_*`, `GOOGLE_*`, `GITLAB_*`, `DEEVY_OIDC_*`,
 
 ### Background work, on a timer or on a Cron Trigger
 
-The stale sweep, the schedule trigger, the Gate reminder and both delivery loops are one function,
+The stale sweep, the Gate reminder and the delivery loops are one function,
 `runDueWork` in `packages/core/src/work.ts`, and each runtime brings its own schedule to it. Node's
 `startRunner` brings a timer every `DEEVY_SWEEP_INTERVAL_SECONDS` and drains: it goes again while a pass says
 there is more. Cloudflare owns its own schedule, so the Worker has no interval to configure — `triggers.crons`
@@ -1254,9 +1254,8 @@ same either way.
 ## Notification Channels and routing
 
 A Notification reaches a Human through Channels: their in-app inbox always, a Slack channel or a team email
-address when the Workspace routes it there, and their own email when they want it (see [Email](#email)). Five
-kinds exist — `mention`, `assignment`, `gate_awaiting`, `run_finished`, `delegation` —
-and who a Notification concerns is decided from the Event alone, never from where it is delivered. Turning
+address when the Workspace routes it there, and their own email when they want it (see [Email](#email)). Four
+kinds exist — `mention`, `assignment`, `gate_awaiting`, `run_finished` — and who a Notification concerns is decided from the Event alone, never from where it is delivered. Turning
 Slack or email off changes where a Human hears about something, never whether it concerns them.
 
 An admin adds a Channel under Settings, Channels: a name, usually the Slack channel (`#deevy`), and a Slack
@@ -1725,16 +1724,27 @@ comment by a bot — deevy's own included — rules nothing and is not answered.
 under Settings › Identities stays unlinked: nothing links it again until they do. Every link and every refusal
 is in the Event log (`identity.linked`, `identity.revoked`, `gate.ruling_refused`).
 
-## How far an Agent may split work up
+## How deep sub-issues may go
 
 An Agent can open sub-issues — records in the team's own tracker, under the one it is working — and hand them
 to other Agents ([ADR-0022](./adr/0022-a-parent-finishes-and-the-last-child-wakes-it.md)). It opens them in
 the tracker with its own access, and deevy hears of each one when the tracker delivers it, so deevy counts
-nothing an Agent opens. The three numbers under **Settings › Workspace** (**Sub-issues each**, **Levels
-deep**, **Open in one tree**) were checked when deevy opened sub-issues for an Agent, and bound nothing now;
-`delegation.refused` Events already written stay in the Log. To bound how far an Agent splits work, bound
-its access to the tracker, and grant it only the Projects it should work: every sub-issue routed to an Agent
-opens a Run, so its grants and the tracker's own permissions are what bound what a delegation costs.
+nothing an Agent opens: to bound how many, bound its access to the tracker, and grant it only the Projects
+it should work. Every sub-issue routed to an Agent opens a Run.
+
+What deevy bounds is depth: **Levels deep** under **Settings › General** (`workspace.max_delegation_depth`,
+3 by default, at most 20). A record's depth is how many parents it has. When routing would hand a record
+deeper than that to an Agent, by its label, the Project's default or the tracker's assignment, the record is
+routed to nobody and its history gets one `delegation.refused` (`limit: "depth"`, `allowed`, `to`) per
+Agent kept from it; a mention of an Agent on such a record opens no Run either, and says so each time, and
+the mention still reaches the Agent's inbox. `runs.start` on such a record is `FORBIDDEN`, and the wake when
+a parent's sub-issues finish opens no Run on a parent past the ceiling. GitHub opens a record before it
+makes it a sub-issue, so the link can arrive after routing opened a Run: routing reads the depth for the
+record's holder on every delivery, takes the record back (`issue.assigned` to nobody), and fails each
+`pending` Run on it with the reason as the summary; an `active` one goes on. Raising the number lets the
+next delivery route the record. The two other numbers the
+setting used to show, sub-issues per record and open in one tree, went in slice 6 of
+[the simplification](./plans/simplify.md); their columns are still in `workspace` and read by nothing.
 
 ## The volume
 

@@ -8,6 +8,7 @@ import {
   type Run,
 } from "@deevy/db";
 import type { EventInput } from "./events.ts";
+import { delegationRefused, pastDepthCeiling } from "./issues.ts";
 import { openRunFor } from "./runs.ts";
 import { newId } from "./ids.ts";
 
@@ -76,7 +77,14 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
 
   const parent = await db.query.issue.findFirst({
     where: { id: child.parentId },
-    columns: { id: true, projectId: true, state: true, assigneeMemberId: true },
+    columns: {
+      id: true,
+      parentId: true,
+      projectId: true,
+      externalKey: true,
+      state: true,
+      assigneeMemberId: true,
+    },
   });
   if (!parent || parent.state === "closed") return [];
 
@@ -120,6 +128,10 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
   if (!delegator) return [closed];
   const [working] = await workingAgents(db, [delegator], event.workspaceId, parent.projectId);
   if (!working) return [closed];
+  // A parent past the ceiling is handed to no Agent, the wake included: it
+  // was routed before the ceiling came down to where it is (issues.ts).
+  const past = await pastDepthCeiling(db, parent, event.workspaceId);
+  if (past !== null) return [closed, delegationRefused(parent, past, working)];
 
   const started = await startRun(db, {
     issueId: parent.id,
@@ -153,6 +165,20 @@ async function startRuns(
   const events: EventInput[] = [];
   if (!event.projectId) return events;
   const working = await workingAgents(db, candidates, event.workspaceId, event.projectId);
+  if (working.length === 0) return events;
+
+  // A mention routes work as a label does, so the depth ceiling holds it too
+  // (issues.ts). A label is held where routing reads it (sockets/apply.ts),
+  // so an assignment that reached here was already within it.
+  if (trigger === "mention") {
+    const issue = await db.query.issue.findFirst({
+      where: { id: event.subjectId },
+      columns: { id: true, parentId: true, projectId: true, externalKey: true },
+    });
+    const past = issue ? await pastDepthCeiling(db, issue, event.workspaceId) : null;
+    if (issue && past !== null) return working.map((to) => delegationRefused(issue, past, to));
+  }
+
   for (const agentMemberId of working) {
     const started = await startRun(db, {
       issueId: event.subjectId,

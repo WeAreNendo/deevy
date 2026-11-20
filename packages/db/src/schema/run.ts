@@ -5,16 +5,22 @@ import { member } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
-/** What made deevy ask an Agent to work (PLAN.md's four triggers, plus by hand). */
+/**
+ * What made deevy ask an Agent to work, or that the Agent started it by hand.
+ * `schedule` was another until docs/plans/simplify.md slice 6: routing and the
+ * parent wake are what deevy starts a Run for now. A Run started on a schedule
+ * before it no longer reads, since the API's schema is this list; slice 12's
+ * empty database is what clears them, and nothing is kept for one before that
+ * (that plan's convention 9).
+ */
 export const runTriggers = [
   "assignment",
   "mention",
-  "schedule",
   "manual",
   /**
-   * The last sub-issue of this Issue closed, so the Agent that opened them is
-   * asked to pick the work back up (docs/plans/sub-issue-delegation.md). A
-   * delegating Run finishes rather than waiting, and this is how it is woken.
+   * The last sub-issue of this Issue closed, so the Agent the Issue is routed
+   * to is asked to pick the work back up (docs/plans/sub-issue-delegation.md).
+   * A delegating Run finishes rather than waiting, and this is how it is woken.
    */
   "children_done",
   /**

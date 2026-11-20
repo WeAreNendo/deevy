@@ -63,7 +63,6 @@
                       "enum": [
                         "assignment",
                         "mention",
-                        "schedule",
                         "manual",
                         "children_done",
                         "retry"
@@ -221,7 +220,6 @@
                       "enum": [
                         "assignment",
                         "mention",
-                        "schedule",
                         "manual",
                         "children_done",
                         "retry"
@@ -416,7 +414,6 @@
                           "enum": [
                             "assignment",
                             "mention",
-                            "schedule",
                             "manual",
                             "children_done",
                             "retry"
@@ -650,7 +647,6 @@
                       "enum": [
                         "assignment",
                         "mention",
-                        "schedule",
                         "manual",
                         "children_done",
                         "retry"
@@ -866,7 +862,6 @@
                             "enum": [
                               "assignment",
                               "mention",
-                              "schedule",
                               "manual",
                               "children_done",
                               "retry"
@@ -1096,7 +1091,6 @@
                       "enum": [
                         "assignment",
                         "mention",
-                        "schedule",
                         "manual",
                         "children_done",
                         "retry"
@@ -1483,17 +1477,7 @@
                             "slug": {
                               "type": "string"
                             },
-                            "maxChildrenPerIssue": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
                             "maxDelegationDepth": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "maxOpenDescendants": {
                               "type": "integer",
                               "minimum": -9007199254740991,
                               "maximum": 9007199254740991
@@ -1508,9 +1492,7 @@
                             "id",
                             "name",
                             "slug",
-                            "maxChildrenPerIssue",
                             "maxDelegationDepth",
-                            "maxOpenDescendants",
                             "createdAt"
                           ],
                           "additionalProperties": false
@@ -1565,17 +1547,7 @@
                     "slug": {
                       "type": "string"
                     },
-                    "maxChildrenPerIssue": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
                     "maxDelegationDepth": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "maxOpenDescendants": {
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
@@ -1590,9 +1562,7 @@
                     "id",
                     "name",
                     "slug",
-                    "maxChildrenPerIssue",
                     "maxDelegationDepth",
-                    "maxOpenDescendants",
                     "createdAt"
                   ],
                   "additionalProperties": false
@@ -1604,7 +1574,7 @@
       },
       "patch": {
         "operationId": "workspace.update",
-        "summary": "Rename the Workspace this instance serves, and set what an Agent may not go past",
+        "summary": "Rename the Workspace this instance serves, and set how deep sub-issues may go",
         "requestBody": {
           "required": true,
           "content": {
@@ -1617,20 +1587,10 @@
                     "minLength": 1,
                     "maxLength": 120
                   },
-                  "maxChildrenPerIssue": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 500
-                  },
                   "maxDelegationDepth": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 20
-                  },
-                  "maxOpenDescendants": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 2000
                   }
                 }
               }
@@ -1654,17 +1614,7 @@
                     "slug": {
                       "type": "string"
                     },
-                    "maxChildrenPerIssue": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
                     "maxDelegationDepth": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "maxOpenDescendants": {
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
@@ -1679,9 +1629,7 @@
                     "id",
                     "name",
                     "slug",
-                    "maxChildrenPerIssue",
                     "maxDelegationDepth",
-                    "maxOpenDescendants",
                     "createdAt"
                   ],
                   "additionalProperties": false
@@ -2940,18 +2888,6 @@
                               "null"
                             ]
                           },
-                          "scheduleMinutes": {
-                            "anyOf": [
-                              {
-                                "type": "integer",
-                                "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "grantedProjectIds": {
                             "type": "array",
                             "items": {
@@ -2972,7 +2908,6 @@
                           "user",
                           "sponsor",
                           "webhookUrl",
-                          "scheduleMinutes",
                           "grantedProjectIds"
                         ],
                         "additionalProperties": false
@@ -3252,18 +3187,6 @@
                         "null"
                       ]
                     },
-                    "scheduleMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "grantedProjectIds": {
                       "type": "array",
                       "items": {
@@ -3357,7 +3280,6 @@
                     "user",
                     "sponsor",
                     "webhookUrl",
-                    "scheduleMinutes",
                     "grantedProjectIds",
                     "key"
                   ],
@@ -3372,7 +3294,7 @@
     "/agents/{memberId}": {
       "patch": {
         "operationId": "agents.update",
-        "summary": "Change an Agent's name, handle, delivery URL, or schedule",
+        "summary": "Change an Agent's name, handle, or delivery URL",
         "parameters": [
           {
             "in": "path",
@@ -3417,18 +3339,6 @@
                     "type": "string",
                     "minLength": 16,
                     "maxLength": 200
-                  },
-                  "scheduleMinutes": {
-                    "anyOf": [
-                      {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 10080
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
                   }
                 }
               }
@@ -3662,18 +3572,6 @@
                         "null"
                       ]
                     },
-                    "scheduleMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "grantedProjectIds": {
                       "type": "array",
                       "items": {
@@ -3694,7 +3592,6 @@
                     "user",
                     "sponsor",
                     "webhookUrl",
-                    "scheduleMinutes",
                     "grantedProjectIds"
                   ],
                   "additionalProperties": false
@@ -3964,18 +3861,6 @@
                         "null"
                       ]
                     },
-                    "scheduleMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "grantedProjectIds": {
                       "type": "array",
                       "items": {
@@ -3996,7 +3881,6 @@
                     "user",
                     "sponsor",
                     "webhookUrl",
-                    "scheduleMinutes",
                     "grantedProjectIds"
                   ],
                   "additionalProperties": false
@@ -4258,18 +4142,6 @@
                         "null"
                       ]
                     },
-                    "scheduleMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "grantedProjectIds": {
                       "type": "array",
                       "items": {
@@ -4290,7 +4162,6 @@
                     "user",
                     "sponsor",
                     "webhookUrl",
-                    "scheduleMinutes",
                     "grantedProjectIds"
                   ],
                   "additionalProperties": false
@@ -4552,18 +4423,6 @@
                         "null"
                       ]
                     },
-                    "scheduleMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "grantedProjectIds": {
                       "type": "array",
                       "items": {
@@ -4584,7 +4443,6 @@
                     "user",
                     "sponsor",
                     "webhookUrl",
-                    "scheduleMinutes",
                     "grantedProjectIds"
                   ],
                   "additionalProperties": false
@@ -12844,7 +12702,6 @@
                               "assignment",
                               "gate_awaiting",
                               "run_finished",
-                              "delegation",
                               "run_answered"
                             ]
                           },
@@ -14320,8 +14177,7 @@
                                   "mention",
                                   "assignment",
                                   "gate_awaiting",
-                                  "run_finished",
-                                  "delegation"
+                                  "run_finished"
                                 ]
                               },
                               {
@@ -14392,8 +14248,7 @@
                                 "mention",
                                 "assignment",
                                 "gate_awaiting",
-                                "run_finished",
-                                "delegation"
+                                "run_finished"
                               ]
                             },
                             {
@@ -14447,8 +14302,7 @@
                                   "mention",
                                   "assignment",
                                   "gate_awaiting",
-                                  "run_finished",
-                                  "delegation"
+                                  "run_finished"
                                 ]
                               },
                               {
@@ -14519,8 +14373,7 @@
                               "mention",
                               "assignment",
                               "gate_awaiting",
-                              "run_finished",
-                              "delegation"
+                              "run_finished"
                             ]
                           },
                           "inbox": {
@@ -14575,7 +14428,7 @@
                 "type": "object",
                 "properties": {
                   "preferences": {
-                    "maxItems": 5,
+                    "maxItems": 4,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -14586,8 +14439,7 @@
                             "mention",
                             "assignment",
                             "gate_awaiting",
-                            "run_finished",
-                            "delegation"
+                            "run_finished"
                           ]
                         },
                         "inbox": {
@@ -14637,8 +14489,7 @@
                               "mention",
                               "assignment",
                               "gate_awaiting",
-                              "run_finished",
-                              "delegation"
+                              "run_finished"
                             ]
                           },
                           "inbox": {

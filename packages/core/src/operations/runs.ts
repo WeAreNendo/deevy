@@ -29,6 +29,7 @@ import {
 /** The Agent working a Run, joined so "mine" can ask who sponsors it. */
 const agentMember = alias(memberTable, "agent_member");
 import { newId } from "../ids.ts";
+import { pastDepthCeiling, tooDeep } from "../issues.ts";
 
 export const runs = {
   start: defineOperation({
@@ -47,6 +48,10 @@ export const runs = {
     output: RunSchema,
     handler: async ({ input, context }) => {
       const { issue, project } = await resolveIssueRef(context, input.issue);
+      // The ceiling holds an Agent's own start as it holds a label or a
+      // mention, or the Agent could start its way past it (issues.ts).
+      const past = await pastDepthCeiling(context.db, issue, context.workspace.id);
+      if (past !== null) throw new ORPCError("FORBIDDEN", { message: tooDeep(past) });
       // An Agent runs as itself, and the registry has already refused a Human
       // (ADR-0016): a Human who wants an Agent to work assigns it the Issue.
       // One attempt at a time: a second open Run on the same Issue by the same

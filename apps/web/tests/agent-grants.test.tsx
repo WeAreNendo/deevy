@@ -38,7 +38,6 @@ vi.mock("../src/lib/orpc.ts", async () => {
             },
             sponsor: null,
             webhookUrl: null,
-            scheduleMinutes: null,
             grantedProjectIds: [],
           },
         ],

@@ -19,28 +19,6 @@ import { ConnectAgent } from "@/components/connect-agent";
 import { MemberChip } from "@/components/member-chip";
 import { SettingsPage } from "@/components/settings-page";
 import { orpc } from "@/lib/orpc.ts";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-/**
- * The intervals a schedule offers. Anything finer than a quarter of an hour is
- * a poll, not a schedule, and the sweep only runs once a minute anyway.
- */
-const NEVER = "never";
-const intervals = [
-  { minutes: 15, label: "Every 15 minutes" },
-  { minutes: 30, label: "Every 30 minutes" },
-  { minutes: 60, label: "Hourly" },
-  { minutes: 240, label: "Every 4 hours" },
-  { minutes: 1440, label: "Daily" },
-];
 
 /** "1 Project", "3 Projects", or the fact that it can see nothing yet. */
 function grantSummary(count: number): string {
@@ -61,10 +39,9 @@ export function AgentsPage() {
     await queryClient.invalidateQueries({ queryKey: orpc.agents.key() });
     await queryClient.invalidateQueries({ queryKey: orpc.members.key() });
   };
-  const update = useMutation(orpc.agents.update.mutationOptions({ onSuccess: refresh }));
   const suspend = useMutation(orpc.agents.suspend.mutationOptions({ onSuccess: refresh }));
   const reinstate = useMutation(orpc.agents.reinstate.mutationOptions({ onSuccess: refresh }));
-  const failed = suspend.error ?? reinstate.error ?? update.error;
+  const failed = suspend.error ?? reinstate.error;
 
   if (agents.isError) {
     return <p className="text-destructive">Could not load Agents: {agents.error.message}</p>;
@@ -119,47 +96,6 @@ export function AgentsPage() {
         </span>
       ),
       sortValue: (agent) => agent.grantedProjectIds.length,
-    },
-    {
-      id: "schedule",
-      header: "Schedule",
-      cell: (agent) => (
-        <Select
-          value={agent.scheduleMinutes === null ? NEVER : String(agent.scheduleMinutes)}
-          disabled={update.isPending}
-          onValueChange={(next) => {
-            if (next === null) return;
-            update.mutate({
-              memberId: agent.id,
-              scheduleMinutes: next === NEVER ? null : Number(next),
-            });
-          }}
-        >
-          <SelectTrigger size="sm" aria-label={`Schedule for ${agent.user.name}`} className="w-44">
-            <SelectValue>
-              {(selected: string) =>
-                selected === NEVER
-                  ? "Never"
-                  : (intervals.find((interval) => String(interval.minutes) === selected)?.label ??
-                    selected)
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value={NEVER}>Never</SelectItem>
-            </SelectGroup>
-            <SelectSeparator />
-            <SelectGroup>
-              {intervals.map((interval) => (
-                <SelectItem key={interval.minutes} value={String(interval.minutes)}>
-                  {interval.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      ),
     },
     {
       id: "status",

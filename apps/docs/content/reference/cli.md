@@ -83,7 +83,7 @@ command the Workspace does not have rather than failing at it.
 | A signed-in Human     | Somebody signed in to deevy, a Member or not yet.                                     |
 | Not from the CLI      | Only a Human in deevy's own pages, in a browser. The CLI says why and stops.          |
 
-Within those, deevy may refuse more: an Agent's keys, grants and schedule are its Sponsor's or an admin's to
+Within those, deevy may refuse more: an Agent's keys, grants and webhook are its Sponsor's or an admin's to
 change, for instance.
 
 ## Signing in
@@ -102,20 +102,20 @@ for trying deevy without a real tool, and only a deevy started for development o
 
 ### agents
 
-| Command                                             | What it does                                                           | Flags                                                                                                                                | Who    |
-| --------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| `deevy agents create`                               | Sponsor a new Agent; the Human who creates it is accountable for it    | `--name <string>` (required)<br>`--handle <string>`                                                                                  | Humans |
-| `deevy agents grants add <memberId>`                | Let an Agent see a Project                                             | `--project-id <string>` (required)                                                                                                   | Humans |
-| `deevy agents grants list <memberId>`               | The Projects an Agent may see                                          | —                                                                                                                                    | Humans |
-| `deevy agents grants remove <memberId> <projectId>` | Take a Project back from an Agent                                      | —                                                                                                                                    | Humans |
-| `deevy agents keys issue <memberId>`                | Mint an API key for an Agent; the plaintext is shown exactly once      | `--name <string>` (required)<br>`--expires-in-days <number>`                                                                         | Humans |
-| `deevy agents keys list <memberId>`                 | The API keys an Agent holds, without any plaintext                     | —                                                                                                                                    | Humans |
-| `deevy agents keys revoke <memberId> <keyId>`       | Retire one of an Agent's API keys                                      | —                                                                                                                                    | Humans |
-| `deevy agents list`                                 | Every Agent in this Workspace, with its Sponsor and its Project grants | —                                                                                                                                    | Humans |
-| `deevy agents reinstate <memberId>`                 | Let a suspended Agent work again                                       | —                                                                                                                                    | Humans |
-| `deevy agents set-sponsor <memberId>`               | Hand accountability for an Agent to another Human                      | `--sponsor-member-id <string>` (required)                                                                                            | Admins |
-| `deevy agents suspend <memberId>`                   | Stop an Agent without deleting its trail                               | —                                                                                                                                    | Humans |
-| `deevy agents update <memberId>`                    | Change an Agent's name, handle, delivery URL, or schedule              | `--name <string>`<br>`--handle <string>`<br>`--webhook-url <string>`<br>`--webhook-secret <string>`<br>`--schedule-minutes <number>` | Humans |
+| Command                                             | What it does                                                           | Flags                                                                                               | Who    |
+| --------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------ |
+| `deevy agents create`                               | Sponsor a new Agent; the Human who creates it is accountable for it    | `--name <string>` (required)<br>`--handle <string>`                                                 | Humans |
+| `deevy agents grants add <memberId>`                | Let an Agent see a Project                                             | `--project-id <string>` (required)                                                                  | Humans |
+| `deevy agents grants list <memberId>`               | The Projects an Agent may see                                          | —                                                                                                   | Humans |
+| `deevy agents grants remove <memberId> <projectId>` | Take a Project back from an Agent                                      | —                                                                                                   | Humans |
+| `deevy agents keys issue <memberId>`                | Mint an API key for an Agent; the plaintext is shown exactly once      | `--name <string>` (required)<br>`--expires-in-days <number>`                                        | Humans |
+| `deevy agents keys list <memberId>`                 | The API keys an Agent holds, without any plaintext                     | —                                                                                                   | Humans |
+| `deevy agents keys revoke <memberId> <keyId>`       | Retire one of an Agent's API keys                                      | —                                                                                                   | Humans |
+| `deevy agents list`                                 | Every Agent in this Workspace, with its Sponsor and its Project grants | —                                                                                                   | Humans |
+| `deevy agents reinstate <memberId>`                 | Let a suspended Agent work again                                       | —                                                                                                   | Humans |
+| `deevy agents set-sponsor <memberId>`               | Hand accountability for an Agent to another Human                      | `--sponsor-member-id <string>` (required)                                                           | Admins |
+| `deevy agents suspend <memberId>`                   | Stop an Agent without deleting its trail                               | —                                                                                                   | Humans |
+| `deevy agents update <memberId>`                    | Change an Agent's name, handle, or delivery URL                        | `--name <string>`<br>`--handle <string>`<br>`--webhook-url <string>`<br>`--webhook-secret <string>` | Humans |
 
 ### allowlist
 
@@ -309,7 +309,7 @@ for trying deevy without a real tool, and only a deevy started for development o
 
 ### workspace
 
-| Command                  | What it does                                                                     | Flags                                                                                                                              | Who    |
-| ------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `deevy workspace get`    | The Workspace this instance serves                                               | —                                                                                                                                  | Humans |
-| `deevy workspace update` | Rename the Workspace this instance serves, and set what an Agent may not go past | `--name <string>`<br>`--max-children-per-issue <number>`<br>`--max-delegation-depth <number>`<br>`--max-open-descendants <number>` | Admins |
+| Command                  | What it does                                                                  | Flags                                                  | Who    |
+| ------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------ | ------ |
+| `deevy workspace get`    | The Workspace this instance serves                                            | —                                                      | Humans |
+| `deevy workspace update` | Rename the Workspace this instance serves, and set how deep sub-issues may go | `--name <string>`<br>`--max-delegation-depth <number>` | Admins |

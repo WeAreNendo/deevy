@@ -134,18 +134,15 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say(`${verb} it to ${to}${was}`);
     }
     case "delegation.refused": {
+      // The one ceiling left (docs/plans/simplify.md, slice 6): a record nested
+      // deeper than the Workspace allows is handed to no Agent.
       const allowed = typeof p.allowed === "number" ? p.allowed : null;
-      const which =
-        p.limit === "depth"
-          ? "sub-issues may not go deeper here"
-          : p.limit === "open"
-            ? "this tree already has as many open sub-issues as it may"
-            : "this Issue already has as many sub-issues as it may";
-      return say(
-        `could not open another sub-issue: ${which}${allowed === null ? "" : ` (${String(allowed)})`}`,
-        null,
-        agentTone,
-      );
+      const to = member(p.to, p.toName) ?? "an Agent";
+      const deep =
+        allowed === null
+          ? "sub-issues may not go this deep here"
+          : `sub-issues may go only ${String(allowed)} ${allowed === 1 ? "level" : "levels"} deep here`;
+      return say(`did not hand it to ${to}: ${deep}`, null, "muted");
     }
     case "issue.children_closed": {
       const children = typeof p.children === "number" ? p.children : null;
@@ -420,24 +417,14 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     case "workspace.created":
       return say(`created the Workspace ${str(p.name) ?? ""}`);
     case "workspace.updated": {
-      // A rename and a changed limit are the same Event; only a rename carries
-      // a new name (docs/plans/sub-issue-delegation.md).
+      // A rename and a changed ceiling are the same Event; only a rename
+      // carries a new name.
       const renamed = str(p.to);
       if (renamed) return say(`renamed the Workspace to ${renamed}`);
-      const limits = [
-        typeof p.maxChildrenPerIssue === "number"
-          ? `${String(p.maxChildrenPerIssue)} sub-issues each`
-          : null,
-        typeof p.maxDelegationDepth === "number"
-          ? `${String(p.maxDelegationDepth)} levels deep`
-          : null,
-        typeof p.maxOpenDescendants === "number"
-          ? `${String(p.maxOpenDescendants)} open in one tree`
-          : null,
-      ].filter((one): one is string => one !== null);
-      return limits.length > 0
-        ? say(`set how far an Agent may split work up: ${join(limits)}`)
-        : say("changed the Workspace");
+      const depth = typeof p.maxDelegationDepth === "number" ? p.maxDelegationDepth : null;
+      return depth === null
+        ? say("changed the Workspace")
+        : say(`let sub-issues go ${String(depth)} ${depth === 1 ? "level" : "levels"} deep`);
     }
     default:
       return say(event.kind);
