@@ -427,42 +427,6 @@ export async function requireRun(context: ContextFor<"member">, runId: string) {
   };
 }
 
-/**
- * Where a Project's code is, or the refusal that says it has none.
- *
- * A Project without a forge binding is ordinary — a tracker with no repository
- * behind it is a perfectly good Project — so this is a `NOT_FOUND` about the
- * repository rather than an error about the Project (docs/plans/sockets.md).
- */
-export interface ForgeBinding {
-  socketId: string;
-  scope: Record<string, unknown>;
-  baseBranch: string;
-}
-
-/**
- * Where a Project's code is, or null when it has none.
- *
- * A Project bound to a tracker and nothing else is ordinary: its Runs read,
- * decide and say things, and write no code (ADR-0024). So this answers rather
- * than refuses, and the caller decides whether the absence is a problem.
- */
-export function forgeBindingOf(project: Project): ForgeBinding | null {
-  if (!project.forgeSocketId || !project.forgeScope) return null;
-  const scope = project.forgeScope;
-  const baseBranch = typeof scope.baseBranch === "string" ? scope.baseBranch : "main";
-  return { socketId: project.forgeSocketId, scope, baseBranch };
-}
-
-/** The same, for the caller that asked for something only a repository can give. */
-export function requireForgeBinding(project: Project): ForgeBinding {
-  const binding = forgeBindingOf(project);
-  if (!binding) {
-    throw new ORPCError("NOT_FOUND", { message: "This Project has no repository" });
-  }
-  return binding;
-}
-
 export interface IssueLinkInput {
   issue: { id: string };
   project: { id: string };
@@ -476,9 +440,9 @@ export interface IssueLinkInput {
 /**
  * Attaches evidence to a record, and says so in the log.
  *
- * One path for `links.add` and for the pull request `pulls.open` opens, so a
- * link looks the same whoever attached it and the Event carries the Run either
- * way (docs/plans/sockets.md, slice 6).
+ * The path every Link takes, a pull request an Agent opened itself among them,
+ * so a link looks the same whoever attached it and the Event carries the Run
+ * where there is one.
  */
 export async function addIssueLink(context: ContextFor<"member">, input: IssueLinkInput) {
   const parsed = parseLink(input.url);

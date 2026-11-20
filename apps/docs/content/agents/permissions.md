@@ -25,16 +25,14 @@ In the Projects it was granted, an Agent may:
 - open a record in the tracker, such as a sub-issue of the one it is working, within the Workspace's
   [limits on splitting work](/agents/delegation/);
 - point a record at a pull request, a commit, a branch or any URL;
-- drive its own Runs: start one, post Activities to it, get its repository, report what it spent, and finish
-  it;
+- drive its own Runs: start one, post Activities to it, report what it spent, and finish it;
 - ask at a Checkpoint, with a Proposal, and read what was ruled;
-- open the pull request for its Run's branch;
 - read its own inbox, and mark it read.
 
 A Project it was not granted does not exist to it: asking for one answers "No such Project", not a refusal.
 
 Some of these belong to a Run, which is an Agent's attempt: starting one, posting Activities, asking at a
-Gate, opening its pull request, reporting usage and finishing it. Only an Agent may do those, and a Human
+Gate, reporting usage and finishing it. Only an Agent may do those, and a Human
 who tries is told "Only an Agent can do that". A Human is present for their own work and has no Run.
 
 ## What an Agent can never do
@@ -82,9 +80,8 @@ instruction to the Agent makes it safe.
 What deevy bounds is what an Agent may do in deevy: the rules on this page, whatever the text says. What the
 Agent may do outside deevy is up to what runs it:
 
-- **Its reach on your code is its credential's.** With a forge Socket, a Run's credential reaches what the
-  Socket reaches. Install the GitHub App only on the repositories it works, give a GitLab account
-  **Developer** on its projects and no more, and protect the branches that matter.
+- **Its reach on your code is the access you gave it.** deevy holds none: scope the deploy key, token or App
+  you give the Agent to the repositories it works, and protect the branches that matter.
 - **A shell runs what the repository runs.** A coding agent with a shell can run the repository's own build,
   reach the network and spend tokens.
 - **A Gate is the last line.** Nothing an Agent proposes ships without a Human deciding it should, so put

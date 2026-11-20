@@ -17,9 +17,9 @@ describe("projecting operations to MCP tools", () => {
   it("leaves out anything a Human must do in deevy's own UI", () => {
     const names = projectTools(router).map((t) => t.name);
 
-    // A credential in a model's context is a credential in a transcript, so
-    // the operation that answers with one is not projected at all (ADR-0014).
+    // deevy hands out no credential and opens no pull request (ADR-0034).
     expect(names).not.toContain("runs_checkout");
+    expect(names).not.toContain("pulls_open");
     expect(names).not.toContain("gates_approve");
     expect(names).not.toContain("gates_reject");
     expect(names).not.toContain("agents_create");
@@ -39,7 +39,8 @@ describe("the committed tool manifest", () => {
     const names = (await toolManifest()).map((tool) => tool.name);
 
     /*
-     * Twenty, with `runs_report_usage`: what a session spent, reported by
+     * Nineteen, now that deevy opens no pull request: the Agent opens its own
+     * and hands it over with `links_add` (ADR-0034). Twenty, with `runs_report_usage`: what a session spent, reported by
      * whatever ran it, since deevy runs no Agent and so cannot count it
      * (docs/plans/run-usage.md). Nineteen, with `docs_get`: a Project's documents live in the team's own
      * tool, and this is how an Agent reads one (ADR-0024). Eighteen, now that deevy opens the pull request: `pulls_open` is a tool
@@ -77,7 +78,6 @@ describe("the committed tool manifest", () => {
       "projects_get",
       // Opening the pull request for the branch it pushed. deevy opens it, so
       // a Run's credential never has to be one that could.
-      "pulls_open",
       // The Human side of a Run: answering an Agent's question from the
       // client the Human read it in. Not an Agent's, and the manifest says so.
       "runs_answer",
@@ -137,8 +137,6 @@ describe("the committed tool manifest", () => {
     expect(names).not.toContain("sockets_list");
     // A Gate is a Human's to rule on, whatever credential asks (ADR-0004,
     // ADR-0010). It is not a tool, and it does not become one in slice 2.
-    // A credential in a model's context is a credential in a transcript, so
-    // the operation that answers with one is not projected at all (ADR-0014).
     expect(names).not.toContain("runs_checkout");
     expect(names).not.toContain("gates_approve");
     expect(names).not.toContain("gates_reject");

@@ -259,8 +259,6 @@ export function fakeSockets(
   remarks: Map<string, ExternalComment>;
   /** Every address the tool was told to deliver to (`rewire`). */
   rewired: string[];
-  /** Every pull request this fake was asked to open, for a test to read back. */
-  pulls: Array<{ scopeKey: string; head: string; base: string; title: string; body: string }>;
   /** Every comment deevy wrote through it, which is what a mirror is. */
   comments: Array<{ externalId: string; body: string }>;
   /** And every label change, which is the other half of what a mirror does. */
@@ -270,16 +268,9 @@ export function fakeSockets(
   const rewired: string[] = [];
   const comments: Array<{ externalId: string; body: string }> = [];
   const labels: Array<{ externalId: string; add: string[]; remove: string[] }> = [];
-  const pulls: Array<{
-    scopeKey: string;
-    head: string;
-    base: string;
-    title: string;
-    body: string;
-  }> = [];
   const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
     provider: "stub",
-    capabilities: new Set(["tracker", "forge", "docs"] as const),
+    capabilities: new Set(["tracker", "docs"] as const),
     webhookSecretFrom: "either",
     // Its accounts are GitHub's sign-in accounts where the Socket's
     // configuration says so, which is how a test plays a Human who signed in
@@ -426,29 +417,8 @@ export function fakeSockets(
         });
       },
     },
-
-    // A repository, for the half of a Run that is code (ADR-0014). The token
-    // is a constant on purpose: every test about it is a test that it does not
-    // come back out, and a constant is greppable.
-    forge: {
-      credential: (scope) =>
-        Promise.resolve({
-          cloneUrl: `/tmp/${scopeKeyOf(scope).replace("/", "-")}.git`,
-          username: "x-access-token",
-          secret: "stub-token",
-          expiresAt: new Date(Date.now() + 3_600_000),
-        }),
-      openPullRequest: (scope, draft) => {
-        const container = scopeKeyOf(scope);
-        pulls.push({ scopeKey: container, ...draft });
-        return Promise.resolve({
-          url: `https://tracker.test/${container}/pull/${String(pulls.length)}`,
-          number: pulls.length,
-        });
-      },
-    },
   });
-  return { sockets: { stub: module }, records, remarks, rewired, pulls, comments, labels };
+  return { sockets: { stub: module }, records, remarks, rewired, comments, labels };
 }
 
 /** JSON has no clock: what a provider's own `normalize` answers has Dates. */
@@ -461,11 +431,6 @@ function reviveDates(event: unknown): InboundEvent {
     one.comment = { ...one.comment, createdAt: new Date(one.comment.createdAt) };
   }
   return one as unknown as InboundEvent;
-}
-
-/** The container a scope names, read the way a provider module reads one. */
-function scopeKeyOf(scope: Record<string, unknown>): string {
-  return typeof scope.scopeKey === "string" ? scope.scopeKey : "acme/deevy";
 }
 
 /** A record as a tracker would state one, for a test that only cares about a few fields. */

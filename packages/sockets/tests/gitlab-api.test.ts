@@ -73,8 +73,8 @@ function gitlabReturning(
     },
     options.signInIssuer ? { signInIssuer: options.signInIssuer } : {},
   );
-  if (!module.tracker || !module.forge) throw new Error("a GitLab Socket is a tracker and a forge");
-  return { module, tracker: module.tracker, forge: module.forge, asked };
+  if (!module.tracker) throw new Error("a GitLab Socket is a tracker");
+  return { module, tracker: module.tracker, asked };
 }
 
 const scope = { scopeKey: "4211", path: "acme/deevy" };
@@ -189,15 +189,15 @@ describe("the tracker", () => {
 
     expect(await tracker.listContainers()).toEqual([
       {
-        scope: { scopeKey: "4211", path: "acme/deevy", baseBranch: "trunk" },
+        scope: { scopeKey: "4211", path: "acme/deevy" },
         scopeKey: "4211",
         name: "acme/deevy",
       },
     ]);
-    // Only projects its user is a member of with Developer or more: the ones
-    // it could push a branch to and comment on.
+    // Only projects its user is a member of with Reporter or more: the ones
+    // whose issues it can comment on and label.
     expect(asked[0]?.path).toContain("membership=true");
-    expect(asked[0]?.path).toContain("min_access_level=30");
+    expect(asked[0]?.path).toContain("min_access_level=20");
   });
 
   it("reads one record by the number in its URL", async () => {
@@ -356,58 +356,5 @@ describe("the tracker", () => {
     await expect(tracker.getIssue(scope, ref)).rejects.toThrow(
       "404 Not found (GET /projects/4211/issues/42)",
     );
-  });
-});
-
-/**
- * The forge half, as slice 6 proved it against GitHub (ADR-0014, ADR-0019):
- * what a Run clones with, and the merge request deevy opens for it.
- */
-describe("the repository", () => {
-  it("is cloned over HTTPS with the Socket's own token, as GitLab's oauth2 user", async () => {
-    const { forge } = gitlabReturning({
-      "GET /projects/4211": {
-        id: 4211,
-        http_url_to_repo: "https://gitlab.com/acme/deevy.git",
-        default_branch: "main",
-      },
-    });
-
-    expect(await forge.credential(scope)).toEqual({
-      cloneUrl: "https://gitlab.com/acme/deevy.git",
-      username: "oauth2",
-      secret: "glpat-deevy-bot-token",
-      expiresAt: null,
-    });
-  });
-
-  it("gets a merge request from the Run's branch, which goes when it is merged", async () => {
-    const { forge, asked } = gitlabReturning({
-      "POST /projects/4211/merge_requests": {
-        iid: 7,
-        web_url: "https://gitlab.com/acme/deevy/-/merge_requests/7",
-      },
-    });
-
-    const opened = await forge.openPullRequest(scope, {
-      head: "deevy/acme-deevy-42-abcd1234",
-      base: "main",
-      title: "acme/deevy#42: Cap the coupon",
-      body: "Cap the coupon.\n\nCloses https://gitlab.com/acme/deevy/-/issues/42",
-    });
-
-    expect(opened).toEqual({
-      url: "https://gitlab.com/acme/deevy/-/merge_requests/7",
-      number: 7,
-      // GitLab's own words, which is what the link on the record says.
-      label: "Merge request !7",
-    });
-    expect(asked[0]?.body).toEqual({
-      source_branch: "deevy/acme-deevy-42-abcd1234",
-      target_branch: "main",
-      title: "acme/deevy#42: Cap the coupon",
-      description: "Cap the coupon.\n\nCloses https://gitlab.com/acme/deevy/-/issues/42",
-      remove_source_branch: true,
-    });
   });
 });

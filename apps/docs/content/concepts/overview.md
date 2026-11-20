@@ -31,7 +31,7 @@ Sponsor: the Human who answers for it. See [Humans, Agents and Sponsors](/concep
 a GitHub App, a Linear application, a GitLab account, a Notion connection, a Slack app.
 
 **Projects** bind part of a tool, such as a repository or a Linear team. A Project says where its records
-come from, where its code is, which Agent takes a record nobody named, and how much deevy writes back. See
+come from, which Agent takes a record nobody named, and how much deevy writes back. See
 [Sockets and Projects](/concepts/sockets-and-projects/).
 
 **Issues** are deevy's view of the records in those places. deevy never writes one: its title, body and

@@ -27,9 +27,7 @@ import noted from "./fixtures/gitlab/note.approve.json" with { type: "json" };
  * a real database and replaces only GitLab's API — so what is under test is the
  * whole sentence: somebody labels an issue on GitLab, the Agent it names has a
  * Run, its Proposal is a comment on the issue, a Human who signs in to deevy
- * with GitLab approves it by commenting with no linking step, and the Run
- * clones with the Socket's token and opens a merge request that closes the
- * issue. The forge half is slice 6's, run against GitLab.
+ * with GitLab approves it by commenting with no linking step.
  */
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -60,15 +58,6 @@ function gitlabApi() {
       return Response.json({ id: 1990442800 + ++notes, body: body.body }, { status: 201 });
     }
     if (method === "PUT" && path === "/projects/4211/issues/42") return Response.json({});
-    if (method === "GET" && path === "/projects/4211") {
-      return Response.json({ id: 4211, http_url_to_repo: "https://gitlab.com/acme/deevy.git" });
-    }
-    if (method === "POST" && path === "/projects/4211/merge_requests") {
-      return Response.json(
-        { iid: 7, web_url: "https://gitlab.com/acme/deevy/-/merge_requests/7" },
-        { status: 201 },
-      );
-    }
     return Response.json({ message: "404 Not found" }, { status: 404 });
   };
   return { calls, fetch };
@@ -145,7 +134,7 @@ async function workspaceOnGitlab(db: Db) {
     id: socketId,
     workspaceId,
     provider: "gitlab",
-    capabilities: ["tracker", "forge"],
+    capabilities: ["tracker"],
     name: "Acme on GitLab",
     identity: {
       login: DEEVY_BOT.username,
@@ -167,8 +156,6 @@ async function workspaceOnGitlab(db: Db) {
     trackerSocketId: socketId,
     trackerScope: scope,
     trackerScopeKey: "gitlab:4211",
-    forgeSocketId: socketId,
-    forgeScope: { ...scope, baseBranch: "main" },
   });
   await db.insert(projectGrant).values({ memberId: plannerId, projectId });
 
@@ -339,76 +326,3 @@ describe("somebody labels an issue on GitLab", () => {
  * Slice 6's forge half, against GitLab: what a Run clones with, and the merge
  * request deevy opens for it (ADR-0014, ADR-0019).
  */
-describe("the code half of a Run on GitLab", () => {
-  it("clones with the Socket's token as oauth2, which reaches no Event and no read", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { asPlanner, asAda, run } = await opened(db);
-
-    const checkout = await asPlanner.runs.checkout({ runId: run.id });
-
-    expect(checkout).toMatchObject({
-      cloneUrl: "https://gitlab.com/acme/deevy.git",
-      username: "oauth2",
-      token: TOKEN,
-      baseBranch: "main",
-    });
-    expect(checkout?.headBranch).toMatch(/^deevy\/acme-deevy-42-/);
-    const events = await db.query.event.findMany({});
-    expect(events.map((event) => event.kind)).toContain("run.checkout_issued");
-    const reads = JSON.stringify([
-      events,
-      await asAda.runs.get({ runId: run.id }),
-      await asAda.events.list({}),
-    ]);
-    expect(reads).not.toContain(TOKEN);
-  });
-
-  it("opens one merge request that closes the issue and names the Run, as evidence on the record", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { api, asPlanner, run } = await opened(db);
-
-    const first = await asPlanner.pulls.open({
-      runId: run.id,
-      head: "deevy/acme-deevy-42-abcd1234",
-      summary: "Cap the coupon at the basket total",
-    });
-    const again = await asPlanner.pulls.open({
-      runId: run.id,
-      head: "deevy/acme-deevy-42-abcd1234",
-    });
-
-    expect(first).toMatchObject({
-      url: "https://gitlab.com/acme/deevy/-/merge_requests/7",
-      number: 7,
-    });
-    // Asked twice, it is the one that exists: its number read back out of
-    // GitLab's own name for it.
-    expect(again).toMatchObject({ url: first.url, number: 7 });
-    const asked = api.calls.filter((call) => call.path === "/projects/4211/merge_requests");
-    expect(asked).toHaveLength(1);
-    expect(asked[0]?.body).toMatchObject({
-      source_branch: "deevy/acme-deevy-42-abcd1234",
-      target_branch: "main",
-      title: "acme/deevy#42: Cap the coupon at the basket total",
-      remove_source_branch: true,
-    });
-    // GitLab closes an issue named by its full URL when the merge request is
-    // merged, as GitHub does.
-    expect(String(asked[0]?.body.description)).toContain(`Closes ${ISSUE_URL}`);
-    expect(String(asked[0]?.body.description)).toContain(run.id);
-
-    const [link] = await db.query.issueLink.findMany({});
-    expect(link).toMatchObject({
-      kind: "pull_request",
-      runId: run.id,
-      url: first.url,
-      title: "Merge request !7",
-    });
-    const linked = (await db.query.event.findMany({})).find(
-      (event) => event.kind === "issue.link_added",
-    );
-    expect(linked?.payload).toMatchObject({ runId: run.id });
-  });
-});

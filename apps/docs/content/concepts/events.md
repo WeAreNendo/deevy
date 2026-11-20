@@ -38,7 +38,7 @@ An Event's kind is its subject and what happened to it, such as `issue.assigned`
 | `issue.*`                                        | A record arriving, changing, being routed to an Agent, closing or reopening                    |
 | `comment.*`                                      | A comment on a record                                                                          |
 | `delegation.*`                                   | A sub-issue an Agent was not allowed to open                                                   |
-| `run.*`                                          | A Run starting, its Activity, waiting, being answered, its pull request, finishing or failing  |
+| `run.*`                                          | A Run starting, its Activity, waiting, being answered, finishing or failing                    |
 | `gate.*`                                         | A Gate asked, approved, rejected or superseded, each approval, and a Ruling that ruled nothing |
 | `workspace.*`                                    | The Workspace made, and its settings changed                                                   |
 | `member.*`                                       | Members joining, changing role, suspended and reinstated                                       |

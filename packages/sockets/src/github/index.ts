@@ -1,7 +1,5 @@
 import type {
   Container,
-  ForgeCredential,
-  PullRequestDraft,
   SetupInput,
   SetupResult,
   ExternalComment,
@@ -124,8 +122,7 @@ function isRefusal(error: unknown): boolean {
  * across Workspaces, once one isolate serves several. The API is in it because
  * two GitHub Enterprise Servers number their Apps independently.
  *
- * These are deevy's own, and reach every repository of their installation. A
- * Run's token is never one of them, and never kept here (`mintedForRun`).
+ * These are deevy's own, and reach every repository of their installation.
  */
 const tokens = new Map<string, Minted>();
 
@@ -280,14 +277,11 @@ export function createGithubSocket({
     return id;
   }
 
-  /**
-   * A new token from GitHub for an installation: as far as the installation
-   * reaches, or only as far as `narrowed` names (`mintedForRun`).
-   */
-  async function mint(id: string, narrowed?: Record<string, unknown>): Promise<Minted> {
+  /** A new token from GitHub for an installation, as far as the installation reaches. */
+  async function mint(id: string): Promise<Minted> {
     const minted = await asApp<{ token: string; expires_at: string }>(
       `/app/installations/${id}/access_tokens`,
-      { method: "POST", ...(narrowed ? { body: JSON.stringify(narrowed) } : {}) },
+      { method: "POST" },
     );
     return { token: minted.token, expiresAt: new Date(minted.expires_at).getTime() };
   }
@@ -308,7 +302,7 @@ export function createGithubSocket({
 
   /**
    * A token for the installation that covers a repository: deevy's own, from
-   * `tokens`, unless `minting` makes another kind (`mintedForRun`).
+   * `tokens`.
    *
    * An id remembered from before the App was uninstalled there and installed
    * again is a dead one, and GitHub says so by answering 404 for its token.
@@ -316,48 +310,24 @@ export function createGithubSocket({
    * installation covers the repository now. Forgetting it when the removal is
    * delivered would not be enough: that delivery may reach another isolate.
    */
-  async function mintedForRepository(
-    scopeKey: string,
-    minting: (id: string) => Promise<Minted> = mintedFor,
-  ): Promise<Minted> {
+  async function mintedForRepository(scopeKey: string): Promise<Minted> {
     const prefix = await cachePrefix();
     const remembered = installations.has(`${prefix}:${scopeKey}`);
     const id = await installationIdFor(scopeKey);
     try {
-      return await minting(id);
+      return await mintedFor(id);
     } catch (error) {
       if (!remembered || !(error instanceof GithubError) || error.status !== 404) throw error;
       tokens.delete(`${prefix}:${id}`);
       for (const [key, value] of installations) {
         if (value === id && key.startsWith(`${prefix}:`)) installations.delete(key);
       }
-      return minting(await installationIdFor(scopeKey));
+      return mintedFor(await installationIdFor(scopeKey));
     }
   }
 
   async function installationToken(scopeKey: string): Promise<string> {
     return (await mintedForRepository(scopeKey)).token;
-  }
-
-  /**
-   * A token for one Run: one repository, its code and nothing else.
-   *
-   * GitHub narrows a token as it mints it, to the repositories and the
-   * permissions the request names. Unnarrowed, a Run's token would reach
-   * every repository the App was installed on there, with every permission
-   * deevy holds. A Run clones and pushes, so `contents` is all it is given:
-   * deevy opens the pull request itself (`openPullRequest`). Minted every time
-   * it is asked for and kept nowhere, so a Run resumed after a Gate is given a
-   * new one, and none is ever the token deevy makes its own calls with.
-   *
-   * Named by the repository's id, never its name. A Project keeps the name it
-   * was bound with, GitHub follows a rename for every read, and a token asked
-   * for under the old name would be refused.
-   */
-  async function mintedForRun(scopeKey: string, repositoryId: number): Promise<Minted> {
-    return mintedForRepository(scopeKey, (id) =>
-      mint(id, { repository_ids: [repositoryId], permissions: { contents: "write" } }),
-    );
   }
 
   /**
@@ -402,7 +372,7 @@ export function createGithubSocket({
 
   return {
     provider: "github",
-    capabilities: new Set(["tracker", "forge"] as const),
+    capabilities: new Set(["tracker"] as const),
     // The manifest conversion hands GitHub's own back, and the App's settings
     // take any typed in, so deevy may mint one too.
     webhookSecretFrom: "either",
@@ -721,19 +691,14 @@ export function createGithubSocket({
             const token = await tokenForInstallation(installation.id);
             for (let number = 1; number <= MAX_PAGES; number += 1) {
               const page = await call<{
-                repositories: { full_name: string; name: string; default_branch?: string | null }[];
+                repositories: { full_name: string; name: string }[];
               }>(
                 `/installation/repositories?per_page=${String(PAGE_SIZE)}&page=${String(number)}`,
                 { token },
               );
               for (const repository of page.repositories) {
-                // With the branch it defaults to, which is what a Run starts from
-                // once the repository is bound as a Project's code (forgeBindingOf).
                 found.push({
-                  scope: {
-                    scopeKey: repository.full_name,
-                    ...(repository.default_branch ? { baseBranch: repository.default_branch } : {}),
-                  },
+                  scope: { scopeKey: repository.full_name },
                   scopeKey: repository.full_name,
                   name: repository.full_name,
                 });
@@ -750,57 +715,6 @@ export function createGithubSocket({
         const [first] = refused;
         if (first && refused.length === installations.length) throw first;
         return containers;
-      },
-    },
-
-    /**
-     * The repository behind a Project (ADR-0014, ADR-0019).
-     *
-     * A Run clones with an installation token that lives an hour and reaches
-     * one repository's code (`mintedForRun`): it is minted for every checkout,
-     * it never touches `.git/config`, and a Run resumed after a Gate is given
-     * another. The pull request is opened by deevy rather than by the Agent's
-     * session, so the credential never has to be one that could open one.
-     */
-    forge: {
-      async credential(scope: Scope): Promise<ForgeCredential> {
-        const { owner, repo, scopeKey } = repositoryOf(scope);
-        // With deevy's own token, which follows a renamed repository to where
-        // it is now and answers with the id the Run's token is minted for.
-        const repository = await asInstallation<{ id: number; clone_url: string }>(
-          scopeKey,
-          `/repos/${owner}/${repo}`,
-        );
-        const minted = await mintedForRun(scopeKey, repository.id);
-        return {
-          cloneUrl: repository.clone_url,
-          // GitHub's own name for an installation token used over HTTPS. The
-          // token is the password; this is the user it goes with.
-          username: "x-access-token",
-          secret: minted.token,
-          expiresAt: new Date(minted.expiresAt),
-        };
-      },
-
-      async openPullRequest(
-        scope: Scope,
-        draft: PullRequestDraft,
-      ): Promise<{ url: string; number: number }> {
-        const { owner, repo, scopeKey } = repositoryOf(scope);
-        const opened = await asInstallation<{ html_url: string; number: number }>(
-          scopeKey,
-          `/repos/${owner}/${repo}/pulls`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              head: draft.head,
-              base: draft.base,
-              title: draft.title,
-              body: draft.body,
-            }),
-          },
-        );
-        return { url: opened.html_url, number: opened.number };
       },
     },
   };

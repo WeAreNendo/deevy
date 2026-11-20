@@ -75,8 +75,7 @@ deevy reads what each row means from the data source's own properties:
 A row in the trash is closed.
 
 Notion's deliveries name what changed and carry none of it, so deevy reads each row back when it is told.
-Notion holds no code: set the Project's **Repository** to a GitHub or GitLab repository if its Agents should
-push.
+Notion holds no code: an Agent that should push reaches its repository with access you give it.
 
 ## Hand a row to an Agent
 

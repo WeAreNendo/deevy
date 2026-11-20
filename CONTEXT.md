@@ -43,13 +43,12 @@ _Avoid_: organization, tenant, account, instance
 
 **Socket**:
 One connected external tool under one identity: a GitHub App, a Linear app, a GitLab account, a Notion
-connection, a Slack app. A Socket has capabilities — tracker, forge, docs, chat — and holds the credential
+connection, a Slack app. A Socket has capabilities — tracker, docs, chat — and holds the credential
 deevy uses to act there.
 _Avoid_: integration, connector, plugin, provider (for the row; the provider is the kind of tool)
 
 **Project**:
-A scope of work bound to Sockets: where its Issues live, where its code lives, optionally where its
-documents are read from, which Agents may work it, its default Agent and routing rule, its Checkpoints, and
+A scope of work bound to Sockets: where its Issues live, optionally where its documents are read from, which Agents may work it, its default Agent and routing rule, its Checkpoints, and
 how much deevy mirrors back.
 _Avoid_: board, space, repo, team, binding
 
