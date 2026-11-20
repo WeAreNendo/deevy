@@ -158,7 +158,7 @@ What it holds is `DEEVY_DEV_STUB_CONTAINERS`, `name[=cloneUrl]` separated by com
 `acme/deevy=/tmp/origin.git` for a container a Run can actually clone and push to. The default is one
 container called `acme/deevy` with no repository. A store lives in the process deevy runs in, so this is the
 only way to say what the tracker contains from outside it; that is also how the acceptance walk fills one
-(`docs/sockets-acceptance.md`). `readEnv` refuses the flag under `NODE_ENV=production`, and `health.ping`
+(`docs/acceptance.md`). `readEnv` refuses the flag under `NODE_ENV=production`, and `health.ping`
 reports it as `devSockets` the way it reports `devSignIn`.
 
 ### Running without an email account

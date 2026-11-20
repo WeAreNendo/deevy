@@ -1,13 +1,13 @@
 /**
  * deevy, on every deployment, on this machine and nothing else.
  *
- * The acceptance walk's claim is that the runtime cannot tell them apart
+ * The acceptance walk's claim is that an Agent cannot tell them apart
  * (ADR-0006), so it has to be able to start each: a Node process from the
  * packed bundle, workerd from the built Worker on a local D1, and workerd from
  * the many-Workspaces Worker with a Workspace in a Durable Object (ADR-0028).
  * None needs an account, and sign-in is an OAuth stub prepended to the bundle
  * — the same trick `apps/web/scripts/smoke-workers.ts` uses, and the reason
- * this walk needs no OAuth App either (docs/sockets-acceptance.md).
+ * this walk needs no OAuth App either (docs/acceptance.md).
  */
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
@@ -15,7 +15,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { localConfigs, platform, startLocal } from "../../hosted/scripts/local.ts";
+import { localConfigs, platform, startLocal } from "../../../apps/hosted/scripts/local.ts";
 
 const here = new URL(".", import.meta.url).pathname;
 const root = join(here, "../../..");

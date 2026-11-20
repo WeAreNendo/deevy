@@ -95,7 +95,7 @@ export const DEV_STUB_STORE = "dev";
  * It exists because a store lives in the process deevy runs in: a developer
  * driving a stubbed instance from outside — a browser, the acceptance walk —
  * has no other way to say what the tracker contains
- * (docs/sockets-acceptance.md).
+ * (docs/acceptance.md).
  */
 export function openDevStubStore(spec = "", id: string = DEV_STUB_STORE): StubStore {
   const store = openStubStore({ id });
