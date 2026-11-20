@@ -73,8 +73,8 @@ export interface CountingDatabase extends OpenedDatabase {
 }
 
 /**
- * A database that says what it was asked to do. On D1 the number of statements
- * one request runs is a limit rather than a detail, so the budget for a write
+ * A database that says what it was asked to do. The number of statements one
+ * request runs is a cost rather than a detail (ADR-0037), so the budget for a write
  * is a test with a number in it rather than a note in a document
  * (docs/plans/m3.md). Migrations run before the array is handed over, so what
  * a test empties and reads back is its own work and nothing else.

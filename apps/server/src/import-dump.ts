@@ -3,14 +3,11 @@
  * Workspace home"). What the hosted console hands over is the dump
  * `dumpDatabase` writes of the Workspace's Durable Object
  * (packages/adapters/src/durable/dump.ts) and its two secrets; this is what the
- * image does with the dump, and what a Worker of the team's own needs it to be
- * for D1.
+ * image does with the dump, the one place a Workspace goes home to (ADR-0037).
  *
- * Both go through a scratch SQLite database: the dump is loaded and checked to
- * be one deevy Workspace whose rows all hold together. The image then migrates it with the migrator
- * the server starts with and moves it into place; D1 gets it back as SQL, by
- * the same writer, less what D1 refuses and with wrangler's journal in place of
- * drizzle's.
+ * It goes through a scratch SQLite database: the dump is loaded and checked to
+ * be one deevy Workspace whose rows all hold together, migrated with the
+ * migrator the server starts with, and moved into place.
  */
 import {
   existsSync,
@@ -22,13 +19,7 @@ import {
   statSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import {
-  dumpDatabase,
-  type DurableSqlCursor,
-  type DurableSqlValue,
-  type DurableStorage,
-} from "@deevy/adapters/durable";
+import { DatabaseSync } from "node:sqlite";
 import { openDatabase } from "@deevy/adapters/node";
 import { openSecret } from "@deevy/core";
 
@@ -49,11 +40,7 @@ export interface ImportReport {
   events: number;
   /** The `seq` the next Event gets: the dump carries the counter, not only the rows. */
   nextSeq: number;
-  /**
-   * The migrations this release has that the dump's did not. The image applies
-   * them on import; for D1 they are what `wrangler d1 migrations apply` applies
-   * afterwards.
-   */
+  /** The migrations this release has that the dump's did not, which the image applies on import. */
   migrations: string[];
   /**
    * Whether `DEEVY_SECRET` opens what is sealed under it, when one was given:
@@ -65,7 +52,9 @@ export interface ImportReport {
   warnings: string[];
 }
 
-interface Common {
+export interface ImportOptions {
+  /** Where the database goes (`DEEVY_DATABASE_PATH`). Nothing may be there yet. */
+  path: string;
   /** The SQL `Platform.dump` handed over. */
   dump: string;
   /** Folder of drizzle's migrations: the image's `dist/drizzle`, packages/db/drizzle in a checkout. */
@@ -78,11 +67,6 @@ interface Common {
   baseURL?: string;
   /** `DEEVY_SECRET`, when it is set: checked against everything sealed under it. */
   socketSecret?: string;
-}
-
-export interface ImportOptions extends Common {
-  /** Where the database goes (`DEEVY_DATABASE_PATH`). Nothing may be there yet. */
-  path: string;
 }
 
 /**
@@ -141,75 +125,6 @@ export async function importDump(options: ImportOptions): Promise<ImportReport> 
   }
 }
 
-/**
- * The dump as SQL for a new, empty D1 database: `wrangler d1 execute <db>
- * --remote --file`, in place of `wrangler d1 migrations apply` for the first
- * time. Three things differ from the dump itself, each because D1 would refuse
- * or misread it:
- *
- * - No transaction control and no `PRAGMA foreign_keys`: D1 runs the file in a
- *   transaction of its own and enforces foreign keys inside it, so the rows,
- *   which come table by table rather than in the order their keys need, go in
- *   under `PRAGMA defer_foreign_keys`, checked once at the end.
- * - wrangler's journal, `d1_migrations`, in place of drizzle's: D1 is only
- *   ever migrated by wrangler, which names a migration by its file in
- *   packages/db/migrations (`NNNN_<folder>.sql`), so each one the dump had
- *   applied is recorded under that name and `wrangler d1 migrations list`
- *   shows only what this release added since.
- * - A statement over D1's 100 KB limit is refused here, by table, rather than
- *   by D1 halfway through.
- */
-export async function dumpForD1(options: Common): Promise<{ sql: string; report: ImportReport }> {
-  const known = migrationNames(options.migrationsFolder);
-  const db = new DatabaseSync(":memory:");
-  try {
-    load(db, options.dump);
-    const pending = journalAgainst(db, known);
-    const applied = journal(db);
-    const report = await inspect(db, options, pending);
-    db.exec(`DROP TABLE "${JOURNAL}"`);
-
-    const statements: string[] = [D1_HEADER, "PRAGMA defer_foreign_keys = true;\n"];
-    for (const item of dumpDatabase(storageOf(db))) {
-      if (TRANSACTION_CONTROL.has(item)) continue;
-      const bytes = encoder.encode(item).byteLength;
-      if (bytes > D1_MAX_STATEMENT_BYTES) {
-        throw new ImportRefused(
-          `A row of ${tableOf(item)} is ${String(Math.ceil(bytes / 1000))} KB as a statement, and D1 refuses any over 100 KB. This Workspace can go to the image, which has no such limit, but not to D1.`,
-        );
-      }
-      if (item.includes("BEGIN TRANSACTION")) {
-        report.warnings.push(
-          `A row of ${tableOf(item)} contains the words BEGIN TRANSACTION. wrangler's local d1 execute --file deletes them from the file wherever they are; --remote does not.`,
-        );
-      }
-      statements.push(item);
-    }
-    statements.push(D1_JOURNAL);
-    for (const name of applied) {
-      statements.push(
-        `INSERT INTO d1_migrations (name) VALUES(${quote(d1FileName(name, known))});\n`,
-      );
-    }
-    return { sql: statements.join(""), report };
-  } finally {
-    db.close();
-  }
-}
-
-/**
- * The file packages/db/migrations holds for a drizzle folder: its place among
- * this release's folders, then its name. The same rule
- * packages/db/scripts/emit-d1-migrations.ts writes them by, and migrations are
- * only ever added after the last, so a name means the same file in every later
- * release.
- */
-export function d1FileName(folder: string, known: string[]): string {
-  const index = known.indexOf(folder);
-  if (index === -1) throw new Error(`${folder} is not one of this release's migrations`);
-  return `${String(index + 1).padStart(4, "0")}_${folder}.sql`;
-}
-
 /** The migration folders drizzle-kit wrote, in the order every migrator applies them. */
 export function migrationNames(folder: string): string[] {
   try {
@@ -225,33 +140,6 @@ export function migrationNames(folder: string): string[] {
 // -------------------------------------------------------------------- loading
 
 const JOURNAL = "__drizzle_migrations";
-
-/** What `dumpDatabase` wraps the dump in, which D1 neither needs nor takes. */
-const TRANSACTION_CONTROL = new Set([
-  "PRAGMA foreign_keys=OFF;\n",
-  "BEGIN TRANSACTION;\n",
-  "COMMIT;\n",
-  "PRAGMA foreign_keys=ON;\n",
-]);
-
-const encoder = new TextEncoder();
-
-/** D1's limit on one SQL statement, in bytes (Cloudflare's D1 limits page). */
-const D1_MAX_STATEMENT_BYTES = 100_000;
-
-const D1_HEADER =
-  "-- A deevy Workspace for a new, empty D1 database, written by `import.mjs --for-d1`.\n" +
-  "-- Apply it in place of the first `wrangler d1 migrations apply`, never after one:\n" +
-  "--   wrangler d1 execute deevy --remote --file <this file>\n" +
-  "-- then `wrangler d1 migrations list deevy --remote` shows what is newer than the dump.\n";
-
-/** Exactly what wrangler creates, so whichever of the two comes first the table is the same. */
-const D1_JOURNAL = `CREATE TABLE IF NOT EXISTS d1_migrations(
-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		name       TEXT UNIQUE,
-		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-`;
 
 /** The tables deevy itself must hold for a dump to be a Workspace's. */
 const REQUIRED_TABLES = [JOURNAL, "workspace", "member", "user", "socket", "project", "event"];
@@ -332,7 +220,7 @@ function journalAgainst(db: DatabaseSync, known: string[]): string[] {
 
 async function inspect(
   db: DatabaseSync,
-  options: Common,
+  options: ImportOptions,
   pending: string[],
 ): Promise<ImportReport> {
   const workspace = db.prepare("SELECT name, slug FROM workspace").get() as {
@@ -520,39 +408,4 @@ function hasTable(db: DatabaseSync, name: string): boolean {
 
 function count(db: DatabaseSync, table: string): number {
   return (db.prepare(`SELECT count(*) AS n FROM "${table}"`).get() as { n: number }).n;
-}
-
-function quote(text: string): string {
-  return `'${text.replaceAll("'", "''")}'`;
-}
-
-/** The table a dump statement writes, for a message. */
-function tableOf(statement: string): string {
-  return /^INSERT INTO "((?:[^"]|"")+)"/.exec(statement)?.[1]?.replaceAll('""', '"') ?? "a table";
-}
-
-/**
- * A plain SQLite connection as the storage `dumpDatabase` reads, so the D1
- * file is written by the writer the dump was. It only ever reads.
- */
-function storageOf(db: DatabaseSync): DurableStorage {
-  return {
-    sql: {
-      exec<T extends Record<string, DurableSqlValue>>(
-        query: string,
-        ...bindings: unknown[]
-      ): DurableSqlCursor<T> {
-        const rows = db.prepare(query).all(...(bindings as SQLInputValue[])) as T[];
-        return {
-          toArray: () => rows,
-          one: () => {
-            if (rows.length !== 1) throw new Error(`expected one row, got ${String(rows.length)}`);
-            return rows[0]!;
-          },
-          raw: <U extends DurableSqlValue[]>() => rows.map((row) => Object.values(row) as U),
-        };
-      },
-    },
-    transactionSync: (closure) => closure(),
-  };
 }

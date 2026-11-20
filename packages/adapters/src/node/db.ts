@@ -12,8 +12,9 @@ export interface OpenDatabaseOptions {
   migrationsFolder: string;
   /**
    * Told about every statement drizzle runs, migrations included. deevy's own
-   * budget test counts them with it, because on D1 the number of statements
-   * one request runs is a limit rather than a detail (docs/plans/m3.md).
+   * budget test counts them with it, because the number of statements one
+   * request runs is a cost every other request in a hosted Workspace's object
+   * waits behind, rather than a detail (ADR-0037).
    */
   logger?: { logQuery: (query: string, params: unknown[]) => void };
 }

@@ -124,8 +124,8 @@ function viewOf(
 /**
  * How many pages Needs me reads before it stops looking: seven hundred open
  * Gates at the largest page, which no team keeps waiting. A page costs at most
- * four statements after the first, so the longest look stays inside the fifty a
- * D1 Worker may run for one request (budget.test.ts).
+ * four statements after the first, so the longest look stays inside the fifty
+ * a request is held to (budget.test.ts).
  */
 export const maxMinePages = 7;
 

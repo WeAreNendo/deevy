@@ -6,7 +6,7 @@
  * stand-in for the console (scripts/console-stub.js), each reaching the other
  * over a service binding as in production. The outside world is replaced only
  * where deevy calls it: a provider's OAuth endpoints, through
- * apps/web/scripts/stub-oauth.js prepended to the bundle, as the Worker smoke
+ * apps/web/scripts/stub-oauth.js prepended to the bundle, as the acceptance walk
  * does. Two Workspaces are provisioned through `Platform`, and the rest is what
  * a team would do: sign in through the relay, read their Workspace, invite
  * somebody, and never see the other team's — and what the console would: read
@@ -458,11 +458,9 @@ async function live(origin: string, cookie: string): Promise<void> {
   check("a suspended Workspace lets its open tabs go", letGo, String(tab.socket.readyState));
 }
 
-// The SPA every Workspace serves, as the Worker build makes it (apps/web), and
-// the hosted Worker around it, stamped with its version as a release is.
-await run(join(app, "../web/node_modules/.bin/vp"), ["build"], join(app, "../web"), {
-  DEEVY_TARGET: "workers",
-});
+// The SPA every Workspace serves, as apps/web builds it, and the hosted Worker
+// around it, stamped with its version as a release is.
+await run(join(app, "../web/node_modules/.bin/vp"), ["build"], join(app, "../web"));
 await buildHosted();
 const persistTo = await mkdtemp(join(tmpdir(), "deevy-hosted-"));
 let server: ChildProcess | null = null;

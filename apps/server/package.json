@@ -9,7 +9,6 @@
     "start": "node dist/index.mjs",
     "test:image": "node scripts/smoke-image.ts",
     "test:previous": "vp pack && node scripts/smoke-previous.ts",
-    "check:d1-import": "node scripts/check-d1-import.ts",
     "seed": "vp pack && node --env-file-if-exists=../../.env dist/seed.mjs"
   },
   "dependencies": {

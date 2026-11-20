@@ -1,5 +1,9 @@
 # The Cron port stayed Node's, and a stream ends itself
 
+> Amended by [ADR-0037](./0037-two-deployment-shapes.md): the per-invocation cap that made a stream end
+> itself was D1's, and is gone with the Worker on D1. A hosted Workspace still ends the polling stream a tab
+> falls back to, so the tab lets go of its object; the image's stream runs for as long as the browser holds it.
+
 > Amended by [ADR-0032](./0032-a-hosted-workspace-pushes-its-events.md): the "real bus" deferred below is a
 > hosted Workspace's object pushing each new seq to its tabs' hibernatable WebSockets, and on every
 > deployment a hidden tab lets go of its stream and resumes from its cursor (OPERATIONS.md, "Live updates").

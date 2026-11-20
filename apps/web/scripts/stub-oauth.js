@@ -6,7 +6,7 @@
  * a generic OIDC provider's from a configured issuer, so the only seam that
  * covers all four is the global `fetch` they are called through.
  * `apps/server/src/index.ts` imports this file when `DEEVY_DEV_STUB_OAUTH=1`;
- * `apps/web/scripts/smoke-workers.ts` and `tools/acceptance/src/boot.ts` prepend
+ * `tools/acceptance/src/boot.ts` and `apps/hosted/scripts/local.ts` prepend
  * its source to a built bundle instead. Either way deevy itself — its routing,
  * its database, Better Auth's real OAuth dance — is the real one, and the
  * outside world is the only thing replaced.

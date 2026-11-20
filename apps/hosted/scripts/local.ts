@@ -46,7 +46,7 @@ export async function version(): Promise<string> {
 /**
  * `dist/hosted/worker.js`, bundled by wrangler from wrangler.jsonc, with the
  * version it is written in: what a Workspace reports to `Platform.status`.
- * The SPA it serves is apps/web's, built first by `vp run web#build:workers`.
+ * The SPA it serves is apps/web's, built first by `vp run web#build`.
  */
 export async function buildHosted(): Promise<void> {
   const define = `__DEEVY_VERSION__:${JSON.stringify(await version())}`;
@@ -72,8 +72,8 @@ export interface LocalOptions {
 }
 
 /**
- * The built bundle with the providers' OAuth endpoints stubbed — the Worker
- * smoke's trick, apps/web/scripts/stub-oauth.js prepended — and the two
+ * The built bundle with the providers' OAuth endpoints stubbed —
+ * apps/web/scripts/stub-oauth.js prepended, as the walk does to the image's — and the two
  * configurations `wrangler dev` runs: the hosted Worker's, and the console's.
  */
 export async function localConfigs({
@@ -84,7 +84,7 @@ export async function localConfigs({
   const bundle = join(dist, "worker.js");
   if (!existsSync(bundle)) {
     throw new Error(
-      "No hosted Worker to run: build it with `vp run web#build:workers && vp run hosted#build:hosted`",
+      "No hosted Worker to run: build it with `vp run web#build && vp run hosted#build:hosted`",
     );
   }
   const [oauth, source, committed] = await Promise.all([
@@ -103,7 +103,7 @@ export async function localConfigs({
     JSON.stringify({
       ...shipped,
       main,
-      assets: { ...shipped.assets, directory: join(app, "../web/dist/client") },
+      assets: { ...shipped.assets, directory: join(app, "../web/dist") },
       kv_namespaces: [{ binding: "DIRECTORY", id: `${label}-directory` }],
       services: [{ binding: "CONSOLE", service: consoleName }],
       vars: {

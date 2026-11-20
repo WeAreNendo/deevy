@@ -6,8 +6,7 @@ sidebar:
 ---
 
 The Docker image speaks plain HTTP, so it usually sits behind a reverse proxy that terminates TLS: Caddy,
-nginx, Traefik, a load balancer or a tunnel. A Worker can sit behind a proxy too. Either way, deevy needs
-a few things from the proxy to work.
+nginx, Traefik, a load balancer or a tunnel. deevy needs a few things from the proxy to work.
 
 ## What a proxy must do
 
@@ -42,21 +41,6 @@ BETTER_AUTH_URL=https://example.com/deevy
   `https://example.com/deevy/mcp`, and the CLI's `DEEVY_URL` is `https://example.com/deevy`. Use a current
   CLI: older ones cut the address down to its host.
 
-### On a Worker
-
-Cloudflare's asset handler, which serves the web app at the root, knows nothing about a path. Under one,
-every request has to reach deevy, which then serves the web app itself. In `apps/web/wrangler.jsonc`, set:
-
-```jsonc
-"assets": {
-  "binding": "ASSETS",
-  "not_found_handling": "single-page-application",
-  "run_worker_first": true,
-},
-```
-
-Then build, check and deploy again, as in [Deploy to Cloudflare Workers](/self-hosting/cloudflare-workers/).
-
 ## What a page may run
 
 Every page deevy serves runs only the scripts deevy shipped, with one exception: the API reference at
@@ -85,7 +69,6 @@ An Agent's key is unaffected, from an MCP client, the CLI or a script.
 
 ## The web app on an address of its own
 
-Both the Docker image and the Worker serve the web app themselves, at `BETTER_AUTH_URL`, and that is the
-setup to keep. If you serve the web app from a different origin anyway, set `DEEVY_WEB_ORIGIN` to it. deevy
+The Docker image serves the web app itself, at `BETTER_AUTH_URL`, and that is the setup to keep. If you serve the web app from a different origin anyway, set `DEEVY_WEB_ORIGIN` to it. deevy
 then accepts that origin's calls, and builds the links it hands a Human, in an invitation, a Gate or a
 Slack message, on it rather than on the API's address.

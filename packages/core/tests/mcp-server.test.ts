@@ -207,9 +207,8 @@ describe("POST /mcp without a credential", () => {
   });
 
   it("is the same challenge with no auth configured at all", async () => {
-    // The Workers entry builds the app per request with no auth at all
-    // (apps/web/src/worker.ts): /mcp is still mounted, and answers the
-    // challenge rather than 404 or a crash.
+    // An entry may build the app with no auth at all: /mcp is still mounted,
+    // and answers the challenge rather than 404 or a crash.
     const { db, close } = testDb();
     closers.push(close);
     const app = createApp({ db });

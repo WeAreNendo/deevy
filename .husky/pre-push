@@ -7,8 +7,7 @@ set -e
 vp check
 vp run -r test
 vp run -r build
-vp run web#build:workers
-vp run web#check:workers
+vp run hosted#build:hosted
 vp run db#check:migrations
 
 # The two snapshots are generated artefacts that CI diffs (ADR-0009), so a

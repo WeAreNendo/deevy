@@ -1,6 +1,6 @@
 ---
 title: Bringing a Workspace from deevy Cloud
-description: Export a Workspace from deevy Cloud and load it into the Docker image or a D1 database of your own, then point your tools and Agents at its new address.
+description: Export a Workspace from deevy Cloud and load it into a Docker image of your own, then point your tools and Agents at its new address.
 sidebar:
   order: 11
 ---
@@ -9,9 +9,8 @@ A Workspace on deevy Cloud can move to a deevy you host, with everything in it: 
 sign in, its Agents and their keys, its Sockets and their credentials, its Projects, Runs and Gates, and
 its Event log, which carries on numbering from where it was.
 
-You need deevy running somewhere first, or ready to start: read
-[Run the Docker image](/self-hosting/docker/) or [Deploy to Cloudflare Workers](/self-hosting/cloudflare-workers/),
-and stop before the first sign-in.
+You need deevy ready to start: read [Run the Docker image](/self-hosting/docker/), and stop before the
+first sign-in.
 
 ## Export it
 
@@ -40,7 +39,7 @@ jq -r .deevySecret deevy-acme-2026-10-16.json        # your DEEVY_SECRET
 Use the two secrets wherever the setup pages ask you to generate new ones. Leave `DEEVY_ADMIN_EMAIL`
 unset if you like: the Workspace and its admins come with the dump.
 
-## Into the Docker image
+## Import it
 
 The image carries the import as a second script beside the server. Run it once, on a new volume, before
 deevy ever starts on that volume.
@@ -74,36 +73,6 @@ What the import does, in order:
   could not open.
 - **It prints what it imported**, and what to point at the new address, with each Socket's own address
   filled in.
-
-## Into a Worker
-
-D1 needs the dump in its own shape, so convert it first, with the same release you will deploy:
-
-```bash
-docker run --rm -i ghcr.io/wearenendo/deevy:<version> dist/import.mjs --for-d1 - \
-  < workspace.sql > workspace.d1.sql
-```
-
-From a checkout instead, `vp run server#build`, then
-`node apps/server/dist/import.mjs --for-d1 workspace.sql > workspace.d1.sql`. The SQL goes to standard
-output and everything the conversion tells you to standard error.
-
-Then follow [Deploy to Cloudflare Workers](/self-hosting/cloudflare-workers/#deploy-it) with two changes:
-
-- **In place of step 4**, load the converted file into the database the first deploy created, before you
-  apply any migrations there:
-
-  ```bash
-  wrangler d1 execute deevy --remote --file workspace.d1.sql
-  wrangler d1 migrations list deevy --remote    # nothing, or what this release added since
-  wrangler d1 migrations apply deevy --remote   # only if it listed something
-  ```
-
-- **In step 6**, `BETTER_AUTH_SECRET` and `DEEVY_SECRET` are the export's values.
-
-The conversion refuses a row too large for one D1 statement, naming its table. The Docker image has no
-such limit and takes any Workspace. On a free Cloudflare account, every row loaded counts against D1's
-daily allowance of rows written, which a large Workspace can use up.
 
 ## Point everything at the new address
 

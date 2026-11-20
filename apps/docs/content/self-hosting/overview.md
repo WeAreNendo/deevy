@@ -1,6 +1,6 @@
 ---
 title: Hosting deevy yourself
-description: Run deevy on infrastructure you choose, as a Docker image with one volume or as a Cloudflare Worker with D1, and serve your team's Workspace at your own address.
+description: Run deevy on a machine of your own, as a Docker image with one volume, and serve your team's Workspace at your own address.
 sidebar:
   order: 1
 ---
@@ -22,33 +22,22 @@ first sign-in with that address creates the Workspace and makes that person its 
 joins through a rule or an invitation the admin sets up. There is no second Workspace to create; a team
 that wants two runs two deployments.
 
-## Two ways to run it
+## How it runs
 
-|                   | Docker image                                             | Cloudflare Worker                                      |
-| ----------------- | -------------------------------------------------------- | ------------------------------------------------------ |
-| What runs         | One container, serving the web app and the API on a port | One Worker on your Cloudflare account                  |
-| Where the data is | One SQLite file on a volume                              | One D1 database                                        |
-| How you get it    | Pull `ghcr.io/wearenendo/deevy`, published every release | Build it from the source and deploy it with `wrangler` |
-| Background work   | A timer in the process, every 60 seconds by default      | A Cron Trigger, once a minute                          |
-| Upgrading         | Start the new image; it migrates its database itself     | Apply the new migrations with `wrangler`, then deploy  |
-| Backups           | A copy of the database file, taken from beside it        | D1 Time Travel, plus exports you keep                  |
+deevy is one Docker image, `ghcr.io/wearenendo/deevy`, published with every release. Run it wherever you
+already run containers, on your own machines or network.
 
-**Choose the image** if you already run containers, want deevy on your own machines or network, or expect
-a busy Workspace: it has no per-request or daily database limits beyond your disk.
-
-**Choose the Worker** if you would rather not keep a server running. A free Cloudflare account is enough,
-with a few trade-offs:
-
-- Background work, such as the comments deevy writes in your tools and the Gates it posts in chat, runs in
-  small passes once a minute, so a backlog takes a few minutes to clear.
-- A webhook deevy owes goes out at the next pass rather than at once, unless you add a Queue, which is a
-  paid Cloudflare feature.
-- D1's free plan limits how many rows can be written in a day. A busy Workspace outgrows it.
+- **One container** serves the web app and the API on one port.
+- **One volume** holds the data: a single SQLite file.
+- **Background work**, such as the comments deevy writes in your tools and the Gates it posts in chat,
+  runs on a timer inside the container, every 60 seconds by default.
+- **Upgrading** is starting the new image, which migrates its database itself.
+- **A backup** is a copy of the database file, taken from beside it.
 
 ## What you need
 
 - **An address.** A domain or subdomain such as `deevy.example.com`, served over HTTPS, or a path on one
-  you already have, such as `example.com/deevy`. On Cloudflare, the Worker's `workers.dev` subdomain works.
+  you already have, such as `example.com/deevy`.
 - **A way to sign in.** At least one OAuth app you register with GitHub, Google or Microsoft, or a client
   with your own OpenID Connect identity provider. See
   [Sign-in providers](/self-hosting/sign-in-providers/).
@@ -72,5 +61,4 @@ Publish your changes and point the people who use your deevy to them.
 ## Next
 
 - [Run the Docker image](/self-hosting/docker/)
-- [Deploy to Cloudflare Workers](/self-hosting/cloudflare-workers/)
 - [Configure deevy](/self-hosting/configuration/)

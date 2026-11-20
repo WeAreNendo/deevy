@@ -2,8 +2,7 @@
  * A hosted Workspace taken home (docs/OPERATIONS.md, "Taking a hosted
  * Workspace home"): dumped from its Durable Object, imported by the image's
  * `dist/import.mjs`, and served by the image's own server with the two secrets
- * the export handed over. The D1 half is proven against wrangler itself in
- * scripts/check-d1-import.ts; what this file checks of it is the SQL.
+ * the export handed over.
  *
  * The OAuth stub replaces `fetch` for the process, so it is installed here and
  * put back afterwards, as tests/stub-oauth.test.ts does.
@@ -18,13 +17,7 @@ import { openSecret } from "@deevy/core";
 import { migrations as everyMigration } from "@deevy/db/durable-migrations";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 import { readEnv } from "../src/env.ts";
-import {
-  d1FileName,
-  dumpForD1,
-  ImportRefused,
-  importDump,
-  migrationNames,
-} from "../src/import-dump.ts";
+import { ImportRefused, importDump, migrationNames } from "../src/import-dump.ts";
 import { buildServer } from "../src/server.ts";
 import {
   callerFor,
@@ -41,7 +34,6 @@ afterAll(() => {
 });
 
 const migrationsFolder = new URL("../../../packages/db/drizzle", import.meta.url).pathname;
-const d1Folder = new URL("../../../packages/db/migrations", import.meta.url).pathname;
 /** Where the team's own deevy answers. */
 const homeURL = "https://deevy.example.org";
 const known = migrationNames(migrationsFolder);
@@ -241,56 +233,11 @@ describe("a hosted Workspace's dump, imported into the image", () => {
   });
 });
 
-describe("a hosted Workspace's dump, for D1", () => {
-  it("is the dump with wrangler's journal in place of drizzle's, and loads as D1 runs a file", async () => {
-    const hosted = await hostedWorkspace();
-    const { sql, report } = await dumpForD1({
-      dump: hosted.dump(),
-      migrationsFolder,
-      baseURL: homeURL,
-    });
-    hosted.storage.close();
-    expect(report).toMatchObject({ workspace: { name: "Acme" }, humans: 2, migrations: [] });
-
-    expect(sql).not.toMatch(/__drizzle_migrations|BEGIN TRANSACTION|COMMIT;|PRAGMA foreign_keys/);
-    expect(sql).toContain("PRAGMA defer_foreign_keys = true;\n");
-    const recorded = [
-      ...sql.matchAll(/INSERT INTO d1_migrations \(name\) VALUES\('([^']+)'\);/g),
-    ].map(([, name]) => name);
-    // Every file wrangler would otherwise apply, by the name it applies it under.
-    expect(recorded).toEqual(readdirSync(d1Folder).sort());
-
-    // One transaction with foreign keys enforced and deferred, which is how D1
-    // runs a file: rows table by table, every key checked at the end.
-    const d1 = new DatabaseSync(":memory:");
-    d1.exec(`BEGIN;\n${sql}COMMIT;`);
-    const one = (query: string) => d1.prepare(query).get() as Record<string, unknown>;
-    expect(one("SELECT count(*) AS n FROM member")).toEqual({ n: 3 });
-    expect(one("SELECT seq FROM sqlite_sequence WHERE name = 'event'")).toEqual({
-      seq: hosted.eventSeq,
-    });
-    expect(d1.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-    d1.close();
-  });
-
-  it("leaves what is newer than the dump for wrangler to apply", async () => {
-    const older = Object.fromEntries(Object.entries(everyMigration).slice(0, -1));
-    const { sql, report } = await dumpForD1({ dump: workspaceAt(older), migrationsFolder });
-    expect(report.migrations).toEqual([known.at(-1)]);
-    expect(sql).not.toContain(d1FileName(known.at(-1)!, known));
-    expect(sql).toContain(d1FileName(known.at(-2)!, known));
-  });
-
-  it("refuses a row D1 would refuse, rather than D1 refusing it halfway", async () => {
-    await expect(
-      dumpForD1({ dump: workspaceAt(everyMigration, "A".repeat(120_000)), migrationsFolder }),
-    ).rejects.toThrow(
-      /A row of workspace is 12\d KB as a statement, and D1 refuses any over 100 KB/,
-    );
-  });
-
-  it("names a migration by the file packages/db/migrations holds for it", () => {
-    expect(known.map((folder) => d1FileName(folder, known))).toEqual(readdirSync(d1Folder).sort());
-    expect(() => d1FileName("29991231000000_not_yet", known)).toThrow(/not one of this release's/);
+describe("a hosted Workspace's dump, anywhere but the image", () => {
+  // deevy is deployed as the image or as a hosted Workspace (ADR-0037), so a
+  // Workspace taken home goes into the image's database, and into no D1.
+  it("is written for nothing else", async () => {
+    const converters = Object.keys(await import("../src/import-dump.ts"));
+    expect(converters.filter((name) => /d1/i.test(name))).toEqual([]);
   });
 });

@@ -22,17 +22,19 @@ afterEach(() => {
 });
 
 /**
- * D1 caps the statements one Worker invocation may run, and PLAN.md's risks
- * put that cap at 50. Nobody had counted what deevy's busiest write actually
- * spends, so this test does, and it is the same number on both runtimes: the
- * core has no idea which one it is running on (docs/plans/m3.md slice 5).
+ * The ceiling a request keeps under. A hosted Workspace's object runs one
+ * thing at a time, so every statement one request spends is one every other
+ * request in that Workspace waits behind (ADR-0037). Fifty was D1's cap on one
+ * Worker invocation when deevy also ran on D1, and stays as the line. It is
+ * the same count on both shapes: the core has no idea which one it is running
+ * on (docs/plans/m3.md slice 5).
  */
-const d1StatementsPerInvocation = 50;
+const statementsPerRequest = 50;
 
 /**
  * Each budget below is a ratchet, not a target: a change that adds a query to
- * a path fails here, on Node, long before a Worker invocation runs out of
- * statements. The count is asserted exactly rather than as a ceiling, so a test
+ * a path fails here, on Node, long before a hosted Workspace is slowed by
+ * it. The count is asserted exactly rather than as a ceiling, so a test
  * also fails when it stops counting — a `logger` that changes shape, or a
  * `countingDb` swapped back for `testDb`, leaves the array empty and a ceiling
  * is happy with nothing. A change that genuinely spends fewer statements is
@@ -83,7 +85,7 @@ describe("reading an Issue with children", () => {
     await asAda.issues.get({ issue: parent.url });
 
     expect(statements.length).toBe(withOne);
-    expect(withOne).toBeLessThan(d1StatementsPerInvocation);
+    expect(withOne).toBeLessThan(statementsPerRequest);
   });
 });
 
@@ -106,8 +108,8 @@ describe("reading an Issue with children", () => {
  */
 const delivery = 21;
 
-describe(`the D1 request budget: one delivery that opens a Run costs ${String(delivery)}`, () => {
-  it("is under D1's cap for the record a routing label names an Agent on", async () => {
+describe(`the request budget: one delivery that opens a Run costs ${String(delivery)}`, () => {
+  it("is under the ceiling for the record a routing label names an Agent on", async () => {
     const { db, close, statements } = countingDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
@@ -145,7 +147,7 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
 
     expect(await response.json()).toMatchObject({ status: "applied" });
     expect(statements.length).toBe(delivery);
-    expect(delivery).toBeLessThan(d1StatementsPerInvocation);
+    expect(delivery).toBeLessThan(statementsPerRequest);
   });
 });
 
@@ -176,8 +178,8 @@ describe(`the D1 request budget: one delivery that opens a Run costs ${String(de
 const asking = 15;
 const ruling = 18;
 
-describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
-  it("stays well under D1's cap on both halves", async () => {
+describe(`the request budget: a Gate costs ${String(asking)} to ask and ${String(ruling)} to rule`, () => {
+  it("stays well under the ceiling on both halves", async () => {
     const { db, close, statements } = countingDb();
     closers.push(close);
     const ada = await memberContext(db, { role: "admin", name: "Ada" });
@@ -207,7 +209,7 @@ describe(`the D1 request budget: a Gate costs ${String(asking)} to ask and ${Str
     await asBob.gates.approve({ requestId: asked.id, note: "Reads right" });
 
     expect(statements.length).toBe(ruling);
-    expect(ruling).toBeLessThan(d1StatementsPerInvocation);
+    expect(ruling).toBeLessThan(statementsPerRequest);
   });
 });
 
@@ -263,7 +265,7 @@ describe(`the Runs feed: ${String(listingRuns)} statements a page`, () => {
  * Checkpoint that excludes the Human the work is for, so each page also reads
  * its Runs and the Members they name. The first page reads the Checkpoints and
  * who is active besides; every page after costs the same four, so the look
- * stops well inside D1's fifty.
+ * stops well inside the fifty.
  */
 const needsMeLongest = 30;
 
@@ -306,7 +308,7 @@ describe(`Needs me: at most ${String(needsMeLongest)} statements, however many G
 
     expect(mine.gates).toEqual([]);
     expect(statements.length).toBe(needsMeLongest);
-    expect(needsMeLongest).toBeLessThan(d1StatementsPerInvocation);
+    expect(needsMeLongest).toBeLessThan(statementsPerRequest);
   });
 });
 
@@ -361,6 +363,6 @@ describe(`saving Checkpoints: ${String(savingCheckpoints)} statements, however m
     const one = await lowering(1);
     expect(await lowering(3)).toBe(one);
     expect(one).toBe(savingCheckpoints);
-    expect(savingCheckpoints).toBeLessThan(d1StatementsPerInvocation);
+    expect(savingCheckpoints).toBeLessThan(statementsPerRequest);
   });
 });
