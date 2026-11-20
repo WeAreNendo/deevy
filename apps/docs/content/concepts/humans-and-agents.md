@@ -39,10 +39,9 @@ See [What an Agent may do](/agents/permissions/).
 ## Sponsors
 
 Every Agent has a **Sponsor**: the Human who answers for it. An Agent acts on its own, and somebody has to
-be accountable for what it does, see what it costs, and be told when it needs a person. That is the Sponsor:
+be accountable for what it does and be told when it needs a person. That is the Sponsor:
 
 - They manage the Agent: its keys, its Projects, where it is told about work, and suspending it.
-- They see what its Runs used, month by month, on the Agent's page.
 - They are told when a Run the Agent started for itself, or that routing started, finishes or asks a
   question, and when the Agent splits work into sub-issues.
 - At a Gate, they are the Human the work is for when routing started the Run, which matters to a

@@ -96,6 +96,55 @@ describe("how long a Run took", () => {
     expectAbout(read.timing.workingMs, 13 * minute);
   });
 
+  it("adds up a Run's waits at two Gates, ruled on one after the other", async () => {
+    const { asAdmin, asAgent, run, earlier } = await workspaceWithAgent();
+    await asAgent.runs.postActivity({ runId: run.id, kind: "thought", body: "Planning" });
+    await earlier({ startedAt: ago(40 * minute) });
+
+    const plan = await asAgent.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Cap the discount at the subtotal.",
+    });
+    await earlier({ waitingSince: ago(12 * minute) });
+    await asAdmin.gates.approve({ requestId: plan.id });
+
+    const ship = await asAgent.gates.request({
+      runId: run.id,
+      checkpoint: "ship",
+      proposal: "The pull request is up.",
+    });
+    await earlier({ waitingSince: ago(8 * minute) });
+    await asAdmin.gates.approve({ requestId: ship.id });
+
+    const read = await asAdmin.runs.get({ runId: run.id });
+    expect(read.status).toBe("active");
+    expectAbout(read.timing.waitingMs, 20 * minute);
+    expectAbout(read.timing.workingMs, 20 * minute);
+    // The feed says the same; only the working clock is still running.
+    const [listed] = (await asAdmin.runs.list({})).runs;
+    expect(listed?.timing.waitingMs).toBe(read.timing.waitingMs);
+    expectAbout(listed?.timing.workingMs ?? 0, 20 * minute);
+  });
+
+  /**
+   * Time is the one thing deevy says about what a Run cost, because it is the
+   * one thing deevy saw: a token or a dollar is only ever a client's report,
+   * and deevy no longer takes one (docs/plans/simplify.md, slice 3).
+   */
+  it("is all a Run says about what it cost, on its page and in the feed", async () => {
+    const { asAdmin, asAgent, run } = await workspaceWithAgent();
+    await asAgent.runs.postActivity({ runId: run.id, kind: "thought", body: "Reading" });
+
+    const read = await asAdmin.runs.get({ runId: run.id });
+    const [listed] = (await asAdmin.runs.list({})).runs;
+
+    for (const shown of [read, listed]) {
+      expect(shown).toHaveProperty("timing");
+      expect(shown).not.toHaveProperty("usage");
+    }
+  });
+
   it("counts a wait still going until now, and a finished Run until it finished", async () => {
     const { asAdmin, asAgent, run, earlier } = await workspaceWithAgent();
     await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which one?" });

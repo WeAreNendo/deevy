@@ -370,12 +370,10 @@ decisions"` — each saying where it was made: "in deevy", "in Slack", "via GitH
   whether a mention routes (**Route by mention**), the Mirror, and **Documents** — where its plans live, for
   an Agent's `docs_get`. `region
 "Checkpoints"` is the policy (`checkpoint-policy.tsx`).
-- **What a Run spent is always somebody else's word** (docs/plans/run-usage.md). A Run's rail has
-  `region "Usage"` — the harness's estimate said as one ("≈ $2.89, estimated by Claude Code"), "Cost not
-  reported by Cursor" where nothing priced it, "No usage reported" where nobody reported, tokens with the
-  prompt cache apart, and the models behind a disclosure — and `region "Time"` with Working, Waiting on a
-  Human and Queued. The feed has **Cost** (a dash, never $0, for what nobody priced) and **Time** (working
-  time; the rest in its tooltip). The words are `lib/usage.ts`'s; deevy never prices a token.
+- **What a Run cost is how long it took**, the one thing deevy saw itself (docs/plans/simplify.md, slice 3):
+  no screen shows a token or a dollar, because those were only ever a client's report. A Run's rail has
+  `region "Time"` with Working, Waiting on a Human and Queued, and the feed has **Time** (working time,
+  sortable; the rest in its tooltip). The words are `duration` in `lib/time.ts`.
 - **A Run that did not finish can be tried again.** A failed or stale Run's page offers **Try again**
   (`runs.retry`) in its header and goes to the fresh Run; the server decides who may, and a refusal shows in
   its own words under the button.
@@ -429,8 +427,8 @@ ways to sign in` (with `aria-expanded`) past four; `form "Development sign-in"`,
   `Sign out and try another account` for somebody who is not a Member.
 - **Needs me.** `region "Needs me"`, `region "Gates awaiting you"` with a link per Gate, `region "Runs
 awaiting your answer"`, `region "Your Agents' Runs"`.
-- **Runs.** `table "Runs"` with a row per Run, `group "Filters"`, and the columns `Cost` and `Time`; on a Run
-  `ol "Activity of <run id>"` and `list "Gates"`, `region "Usage"` with `list "Models"`, `region "Time"`,
+- **Runs.** `table "Runs"` with a row per Run, `group "Filters"`, and the column `Time`; on a Run
+  `ol "Activity of <run id>"` and `list "Gates"`, `region "Time"`,
   `heading` named by the record, and `Try again` on a failed or stale one.
 - **A Gate.** `region "Proposal"` with the Proposal's own headings; `group "<Checkpoint> Gate"` with
   `data-focused`; `Note`, `Approve`, `Reject`; `list "Gate decisions"`; a link to the record by its key.

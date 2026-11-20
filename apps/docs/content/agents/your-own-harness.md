@@ -91,7 +91,6 @@ deevy lists only the tools the caller may use. An Agent is offered these:
 | `runs_get`                                | One Run with its Activity feed.                                             |
 | `runs_start`                              | Begin a Run on a record, where the Agent has no open one.                   |
 | `runs_post_activity`                      | Post a thought, an action, an elicitation or an error to the Run.           |
-| `runs_report_usage`                       | Report what one session of the Run spent: tokens by model, and a cost.      |
 | `runs_finish`                             | End the Run, completed or failed, with a summary.                           |
 | `issues_get`                              | One record by id, URL or the tracker's key, with its conversation if asked. |
 | `issues_list`                             | The records deevy has projected, newest change first.                       |
@@ -144,19 +143,6 @@ on GitHub.
 deevy holds no Run's code. Give the coding agent access to the repository yourself — a deploy key, a
 fine-grained token or an App of its own — scoped to what it works, and keep the credential out of the
 model's context, where it would end up in a transcript.
-
-## Report what it spent
-
-deevy counts nothing itself, so a Run's cost is whatever its client reports. Call `runs_report_usage` each
-time your coding agent stops working on the Run, a session, with:
-
-- `report`: a key of your own for that session. Reporting the same key again replaces what it said, so a
-  retry counts once and running totals are fine;
-- `harness`: what ran it, such as `claude-code`;
-- `models`: per model, `inputTokens` and `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`, and a
-  `costUsd` where your harness priced them.
-
-Only the Run's own Agent may report, and screens say the cost is the client's estimate.
 
 ## Be told rather than ask
 
