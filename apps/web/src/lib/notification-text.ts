@@ -73,6 +73,8 @@ function describe(row: DescribableNotification): NotificationText {
        * opened and the wave is not finished being opened yet. The excerpt is
        * that first one's title, which is the most useful thing there is.
        */
+      // Only a row written before deevy stopped opening sub-issues
+      // (docs/plans/simplify.md, slice 4) is about a wave being opened.
       return row.event.kind === "issue.children_closed"
         ? { verb: "finished every sub-issue of this", excerpt: null, tone: "agent" }
         : { verb: "opened sub-issues under this", excerpt: text(payload.title), tone: "agent" };

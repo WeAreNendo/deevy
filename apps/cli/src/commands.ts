@@ -20,7 +20,7 @@ import { getOperationMeta } from "@deevy/core";
 /** One operation, as the CLI sees it. */
 export interface CommandDescriptor {
   /**
-   * The words a user types: `["issues", "set-labels"]`. Not the operation's
+   * The words a user types: `["inbox", "mark-all-read"]`. Not the operation's
    * HTTP path, which is where `parameters` comes from — the two are different
    * things and sat under one name here until a review said so.
    */
@@ -99,7 +99,7 @@ function unwrapped(schema: unknown): unknown {
 }
 
 /**
- * `issues.setLabels` becomes `issues set-labels`.
+ * `inbox.markAllRead` becomes `inbox mark-all-read`.
  *
  * Dotted names are the registry's, and a command line is words: the dot is the
  * group and camelCase is a hyphen, which is what every other CLI looks like.

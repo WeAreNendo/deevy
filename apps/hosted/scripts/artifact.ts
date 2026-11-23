@@ -315,12 +315,6 @@ export const settings: Setting[] = [
     description: "How often an undecided Gate asks its approvers again; 4.",
   },
   {
-    name: "DEEVY_SOCKET_CATCHUP_MINUTES",
-    kind: "var",
-    required: false,
-    description: "How long a connected tool may say nothing before it is asked what changed; 30.",
-  },
-  {
     name: "DEEVY_GITHUB_API",
     kind: "var",
     required: false,

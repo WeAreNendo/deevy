@@ -127,8 +127,9 @@ deevy can't tell the rest of the world. In this order:
 
 The import prints this list for your own Sockets, with their addresses filled in. Only GitHub lets deevy
 move its webhook itself; every other tool keeps it in its own settings. Until a tool is pointed at the new
-address, deevy still asks it what changed from time to time, so records arrive, late, but comments and
-clicks made in the tool don't.
+address, your deevy hears nothing from it, and what the tool sent in between is not replayed: where the tool
+can send a delivery again, such as **Redeliver** on a GitHub App's recent deliveries, that is how to catch
+one up.
 
 ## Delete the copy you left
 

@@ -345,6 +345,25 @@ describe("the development Socket stub", () => {
     close();
   });
 
+  it("shows what the stub holds at /dev/tracker, and only when it is registered", async () => {
+    const stubbed = buildServer({
+      ...readEnv({ DEEVY_DEV_STUB_SOCKETS: "1", DEEVY_DEV_STUB_CONTAINERS: "acme/deevy" }),
+      databasePath: ":memory:",
+      migrationsFolder,
+      secret: "test-secret-test-secret-test-secret-1234",
+    });
+    const shown = await stubbed.app.request("/dev/tracker");
+    expect(shown.status).toBe(200);
+    expect(await shown.json()).toMatchObject({
+      containers: expect.arrayContaining([expect.objectContaining({ scopeKey: "acme/deevy" })]),
+    });
+    stubbed.close();
+
+    const real = testServer();
+    expect((await real.app.request("/dev/tracker")).status).toBe(404);
+    real.close();
+  });
+
   it("is refused in production rather than ignored", () => {
     expect(() => readEnv({ DEEVY_DEV_STUB_SOCKETS: "1", NODE_ENV: "production" })).toThrow(
       /production/,

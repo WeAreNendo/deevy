@@ -57,8 +57,8 @@ for that Agent". Make the label in the repository first if it has none by that n
 
 deevy hands the issue to the Agent and starts a Run, which waits until the Agent picks it up.
 
-To send the Agent every open issue that no label names, choose it as the Project's **Default Agent**,
-under **Settings › Projects**.
+To send the Agent every open issue that no label names, as deevy hears of each, choose it as the
+Project's **Default Agent**, under **Settings › Projects**.
 
 ## Watch the Run
 

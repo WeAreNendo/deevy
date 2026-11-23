@@ -139,9 +139,9 @@ theirs (ADR-0025).
 
 **Events**: every write appends one through `appendEvent` (`packages/core/src/events.ts`) in the same handler,
 and its tail derives what is owed right after the insert: inbox rows and Slack deliveries
-(`deriveNotifications`), webhook deliveries, what the tracker is told (`deriveSocketMirrors`) and chat message
-updates. The Event log is the only record of what happened: a record's history, the live stream, the inbox
-and every mirrored comment read it rather than keeping a second source. Add a new kind to the `EventKind`
+(`deriveNotifications`), webhook deliveries, what the tracker is told at a Gate (`deriveSocketMirrors`) and
+chat message updates. The Event log is the only record of what happened: a record's history, the live stream,
+the inbox and every comment deevy writes on a record read it rather than keeping a second source. Add a new kind to the `EventKind`
 union, with a case in the SPA's `lib/event-text.ts`.
 
 **Ids** (ADR-0015): every row deevy creates gets `<prefix>_<12 chars of 0-9a-z>` from `newId(kind)` in

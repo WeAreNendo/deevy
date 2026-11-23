@@ -1,10 +1,11 @@
-import { user, workspace } from "@deevy/db";
+import { user, workspace, type Socket } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { bootstrapWorkspace } from "../src/auth.ts";
 import { appendEvent } from "../src/events.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, contextFor, fakeSockets, memberContext, testDb } from "./helpers.ts";
+import { applyInbound } from "../src/sockets/apply.ts";
+import { contextFor, externalIssue, fakeSockets, memberContext, testDb } from "./helpers.ts";
 import { newId } from "../src/ids.ts";
 
 const closers: Array<() => void> = [];
@@ -171,7 +172,22 @@ describe("events.list by kind family", () => {
       name: "deevy",
       tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
     });
-    await client.issues.create({ projectSlug: "deevy", title: "Ship it" });
+    // A record the tracker announces is what writes an Issue's Events now: deevy
+    // opens nothing there itself (ADR-0024).
+    const row = (await db.query.socket.findFirst({ where: { id: socket.id } })) as Socket;
+    await applyInbound({
+      db,
+      workspace: alice.workspace,
+      socket: row,
+      events: [
+        {
+          kind: "issue",
+          scopeKey: "acme/deevy",
+          issue: externalIssue({ externalId: "7", title: "Ship it" }),
+          actor: { login: "alice", id: "u-alice", isBot: false },
+        },
+      ],
+    });
 
     const connected = await client.events.list({ kindPrefix: "socket" });
     expect(connected.events.map((event) => event.kind)).toEqual(["socket.connected"]);
@@ -321,45 +337,5 @@ describe("events.list access", () => {
       context: { db, session: null, member: null, workspace: null },
     });
     await expect(client.events.list({})).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-  });
-});
-
-describe("self-describing payloads", () => {
-  it("carries names and keys beside ids for the Agent routed to and the parent", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const alice = await memberContext(db, { role: "admin", name: "Alice" });
-    const { sockets } = fakeSockets();
-    const asAlice = createRouterClient(router, { context: { ...alice, sockets } });
-    const socket = await asAlice.sockets.connect({ provider: "stub", name: "Example tracker" });
-    const project = await asAlice.projects.create({
-      slug: "deevy",
-      name: "deevy",
-      tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
-    });
-    const planner = await agentContext(db, {
-      sponsor: alice.member,
-      name: "Planner",
-      grants: [project.id],
-    });
-    const parent = await asAlice.issues.create({ projectSlug: "deevy", title: "Parent" });
-    const child = await asAlice.issues.create({
-      parent: parent.externalKey,
-      title: "Child",
-      assignAgent: planner.member.id,
-    });
-
-    const { events } = await asAlice.events.list({ subjectType: "issue", subjectId: child.id });
-    const payloads = events.map((event) => [event.kind, event.payload] as const);
-    // A reader of the log should not have to resolve an id to know what
-    // happened, so the key and the name travel with them.
-    expect(payloads).toContainEqual([
-      "issue.created",
-      expect.objectContaining({ key: child.externalKey, parentKey: parent.externalKey }),
-    ]);
-    expect(payloads).toContainEqual([
-      "issue.assigned",
-      expect.objectContaining({ from: null, toName: "Planner" }),
-    ]);
   });
 });

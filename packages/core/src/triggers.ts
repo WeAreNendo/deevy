@@ -58,7 +58,7 @@ export async function triggersFor(db: Db, event: Event): Promise<EventInput[]> {
  * An Agent that delegates does not wait — its Run finishes, and this is what
  * wakes it (docs/plans/sub-issue-delegation.md). When the Issue that just
  * closed was the last of its parent's sub-issues, the parent is told so and the
- * Agent that opened them gets a Run to pick the work back up from.
+ * Agent it is routed to gets a Run to pick the work back up from.
  *
  * Three ways this could loop, and what stops each. A parent that is itself a
  * child closes bottom-up, one wake per level, because each level is only
@@ -76,7 +76,7 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
 
   const parent = await db.query.issue.findFirst({
     where: { id: child.parentId },
-    columns: { id: true, projectId: true, state: true },
+    columns: { id: true, projectId: true, state: true, assigneeMemberId: true },
   });
   if (!parent || parent.state === "closed") return [];
 
@@ -84,31 +84,32 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
   // a child in another tracker finishing counts exactly as one here does.
   const siblings = await db.query.issue.findMany({
     where: { parentId: parent.id },
-    columns: { id: true, createdBy: true, state: true },
+    columns: { id: true, state: true },
   });
   if (siblings.some((one) => one.state !== "closed")) return [];
 
   /*
-   * The Agent that opened them, and only where they agree on one: two Agents
-   * having each opened some of a parent's children is not a case this knows how
-   * to pick a winner in, and guessing would start a Run on work nobody asked
-   * that Agent for.
+   * The Agent the parent is routed to: the one that holds the work the
+   * children were cut from. deevy no longer opens a sub-issue, so it cannot
+   * say who did (docs/plans/simplify.md, slice 4); whoever holds the parent is
+   * who the finished parts come back to. A parent routed to a Human, or to
+   * nobody, wakes no Agent.
    */
-  const openers = [...new Set(siblings.map((one) => one.createdBy))].filter(
-    (id): id is string => id !== null,
+  const [delegator] = await agentsAmong(
+    db,
+    parent.assigneeMemberId ? [parent.assigneeMemberId] : [],
+    event.workspaceId,
   );
-  const [opener, ...rest] = await agentsAmong(db, openers, event.workspaceId);
-  const delegator = opener && rest.length === 0 ? opener : null;
 
   const closed: EventInput = {
     kind: "issue.children_closed",
     subjectType: "issue",
     subjectId: parent.id,
     projectId: parent.projectId,
-    // Who split the work, suspended or not: their Sponsor is who this is
-    // addressed to, and a Sponsor whose Agent cannot pick the work back up is
-    // exactly the person who needs to hear that it is finished.
-    payload: { children: siblings.length, ...(delegator ? { openedBy: delegator } : {}) },
+    // The Agent holding the parent, suspended or not: its Sponsor is who this
+    // is addressed to, and a Sponsor whose Agent cannot pick the work back up
+    // is exactly the person who needs to hear that it is finished.
+    payload: { children: siblings.length, ...(delegator ? { routedTo: delegator } : {}) },
   };
 
   /*
@@ -123,8 +124,8 @@ async function wakeParent(db: Db, event: Event): Promise<EventInput[]> {
   const started = await startRun(db, {
     issueId: parent.id,
     agentMemberId: working,
-    // The Agent that split the work, not whoever happened to close the last
-    // part of it. This field decides who hears when the Run finishes
+    // The Agent holding the work, not whoever happened to close the last part
+    // of it. This field decides who hears when the Run finishes
     // (`notifications.ts`), and a passing Human must not inherit that.
     triggeredByMemberId: delegator,
     trigger: "children_done",

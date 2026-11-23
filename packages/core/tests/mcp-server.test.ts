@@ -5,9 +5,17 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { App } from "../src/app.ts";
 import { createApp } from "../src/app.ts";
 import { createAuth } from "../src/auth.ts";
+import { upsertProjection } from "../src/issues.ts";
 import { opaqueToolError, toolError } from "../src/mcp/errors.ts";
 import { router } from "../src/operations/index.ts";
-import { agentContext, fakeSockets, memberContext, testDb, testSealingSecret } from "./helpers.ts";
+import {
+  agentContext,
+  externalIssue,
+  fakeSockets,
+  memberContext,
+  testDb,
+  testSealingSecret,
+} from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -138,17 +146,23 @@ async function workspaceWithAgent() {
     name: "deevy",
     tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
   });
-  const issue = await client.issues.create({
-    projectSlug: "deevy",
-    title: "Ship the MCP surface",
+  // Each record as a delivery projects one: somebody opened it in the tracker.
+  const { issue } = await upsertProjection(db, {
+    projectId: granted.id,
+    socketId: socket.id,
+    external: externalIssue({ externalId: "1", title: "Ship the MCP surface" }),
   });
 
-  await client.projects.create({
+  const ops = await client.projects.create({
     slug: "ops",
     name: "ops",
     tracker: { socketId: socket.id, scope: { scopeKey: "acme/ops" } },
   });
-  const ungranted = await client.issues.create({ projectSlug: "ops", title: "Rotate the keys" });
+  const { issue: ungranted } = await upsertProjection(db, {
+    projectId: ops.id,
+    socketId: socket.id,
+    external: externalIssue({ externalId: "2", key: "acme/ops#2", title: "Rotate the keys" }),
+  });
 
   const agent = await agentContext(db, {
     sponsor: admin.member,
@@ -251,15 +265,15 @@ describe("tools/list", () => {
     const names = toolNames(await mcp(app, key, "tools/list", {}));
 
     expect(names).toContain("issues_get");
-    expect(names).toContain("comments_create");
+    expect(names).toContain("gates_request");
     expect(names).not.toContain("agents_create");
     expect(names).not.toContain("projects_create");
   });
 });
 
 describe("a tool call authenticated with an Agent's key", () => {
-  it("reads the record it was granted and says something on it in the tracker", async () => {
-    const { app, key, db, agent, issue } = await workspaceWithAgent();
+  it("reads the record it was granted, as the tracker last described it", async () => {
+    const { app, key, issue } = await workspaceWithAgent();
 
     const read = await mcp(app, key, "tools/call", {
       name: "issues_get",
@@ -270,29 +284,56 @@ describe("a tool call authenticated with an Agent's key", () => {
       externalKey: issue.externalKey,
       title: "Ship the MCP surface",
     });
+  });
 
-    // FAILS in slice 0: `createApp` passes `sockets` to the /rpc and /api
-    // contexts and never to `createDeevyMcp`, so every Socket-backed tool
-    // answers NOT_IMPLEMENTED on the MCP surface. Reported, not worked around.
-    const written = await mcp(app, key, "tools/call", {
-      name: "comments_create",
-      arguments: { issue: issue.url, body: "Reading packages/core/src/mcp/server.ts first" },
-    });
-    expect(written.result?.isError).toBeUndefined();
-    expect(written.result?.structuredContent).toMatchObject({
-      body: "Reading packages/core/src/mcp/server.ts first",
-      author: { login: "deevy", isBot: true },
-    });
+  /**
+   * The tracker is the Agent's to read and write, with its own access, and
+   * deevy only hears what happened there (docs/plans/simplify.md, slice 4). So
+   * the three ways deevy wrote or read the tool on an Agent's behalf are gone
+   * rather than answering with a refusal.
+   */
+  it("opens no record, writes no comment and reads no page for it, over MCP or HTTP", async () => {
+    const { app, key, issue } = await workspaceWithAgent();
+    const names = toolNames(await mcp(app, key, "tools/list", {}));
+    const asked = {
+      issues_create: { projectSlug: "deevy", title: "A sub-issue" },
+      comments_create: { issue: issue.url, body: "Reading the code first" },
+      docs_get: { project: "deevy", page: "https://notion.test/the-plan" },
+    };
 
-    // The write went through the same handler /api and /rpc call, so the Event
-    // is that Agent's own rather than an MCP-shaped copy of one (ADR-0024).
-    const appended = await db.query.event.findFirst({
-      where: { kind: "comment.created", subjectId: issue.id },
+    for (const [name, args] of Object.entries(asked)) {
+      expect(names).not.toContain(name);
+      const answer = await mcp(app, key, "tools/call", { name, arguments: args });
+      expect(answer.result).toBeUndefined();
+      expect(answer.error?.message).toContain(name);
+    }
+
+    const headers = { authorization: `Bearer ${key}`, "content-type": "application/json" };
+    const opened = await app.request("/api/issues", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(asked.issues_create),
     });
-    expect(appended?.actorMemberId).toBe(agent.member.id);
-    expect(appended?.payload).toMatchObject({
-      body: "Reading packages/core/src/mcp/server.ts first",
+    expect(opened.status).toBe(404);
+    const commented = await app.request(`/api/issues/${issue.id}/comments`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ body: "Reading the code first" }),
     });
+    expect(commented.status).toBe(404);
+    const page = await app.request(
+      `/api/projects/deevy/docs?page=${encodeURIComponent("https://notion.test/the-plan")}`,
+      { headers },
+    );
+    expect(page.status).toBe(404);
+
+    // And the record is deevy's own copy alone: asking for the conversation
+    // reads nothing from the tracker.
+    const read = await mcp(app, key, "tools/call", {
+      name: "issues_get",
+      arguments: { issue: issue.externalKey, comments: true },
+    });
+    expect(read.result?.structuredContent).not.toHaveProperty("comments");
   });
 
   it("is told a record in a Project it was never granted does not exist", async () => {
@@ -586,7 +627,6 @@ describe("a Human's own client", () => {
     for (const name of [
       "issues_get",
       "issues_list",
-      "comments_create",
       "projects_get",
       "runs_list",
       "runs_get",

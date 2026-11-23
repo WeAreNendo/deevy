@@ -41,8 +41,11 @@ far end replaced; the delivery goes through the real `/hooks` route, the real si
 
 The stub is a real tracker with an in-memory store, and it is the deployment's, not the walk's: a store lives
 in the process deevy runs in, so the walk says what the tracker holds before it starts one
-(`DEEVY_DEV_STUB_CONTAINERS=acme/deevy`) and reaches it afterwards only the way anyone else would — through
-deevy. It names the container and nothing about the code: deevy never learns where the repository is.
+(`DEEVY_DEV_STUB_CONTAINERS=acme/deevy`). It names the container and nothing about the code: deevy never
+learns where the repository is. What deevy says on a record is a comment in the tracker and nowhere in deevy
+(docs/plans/simplify.md, slice 4), so a deployment that registered the stub opens a window on its store at
+`/dev/tracker` — each container's records and every comment on them, as JSON — and the walk reads deevy's
+comments there. It is mounted only where the stub is, which the Docker image and a hosted Workspace refuse outside development, and the API gains nothing.
 
 ## What is real, and what is scripted
 
@@ -66,17 +69,16 @@ order; a model may not. Pointing a real coding agent at a deployment this script
    connection by asking who deevy is there. Then a Project bound to that Socket's container, its Checkpoints
    (`plan`, and a `ship` that wants somebody other than the Human the work is for), an Agent, the grant that
    makes the Project exist to it, and a key shown once.
-2. **The work arrives as a record**, opened in the tracker through the Socket and projected. Nobody is
-   routed yet: it is a record like any other in the team's backlog.
-3. **The tracker says it is for the Planner**, as a signed delivery carrying the record with an
-   `agent:planner` label. deevy routes it and opens a Run. The same delivery twice is one delivery; an
-   unsigned one is 401 and changes nothing.
+2. **The work arrives as a record**, opened in the tracker by somebody on the team and labelled for the
+   Planner. deevy opens no record: it hears of this one as a signed delivery carrying it with an
+   `agent:planner` label, and projects it, routes it and opens a Run.
+3. **A delivery is taken once, and only signed.** The same delivery twice is one delivery; an unsigned one
+   is 401 and changes nothing.
 4. **The Agent finds its work.** The label put an `assignment` in its inbox and opened one Run in `pending`.
    The record it reads is the tracker's, and carries the Checkpoints this Project asks for; it says what it
    intends to do and stops at the `plan` Gate, and its Run is `awaiting_input`.
 5. **deevy says so where the team reads.** The Proposal becomes a comment in the tracker, signed with the
-   Agent and the Run id. (The `deevy:awaiting-approval` label that goes with it is the same delivery and is
-   asserted against the tracker's own state in `packages/core/tests/mirror.test.ts`.)
+   Agent and the Run id, read through `/dev/tracker`. deevy sets no label.
 6. **A Run nobody has ruled on stays at its Gate**, whatever the sweeps do meanwhile.
 7. **The Human rules from the tracker**, where they read the Proposal. First an account nobody linked
    comments `/approve`: it rules nothing, the Gate stays open, and deevy answers on the record with where to
@@ -88,8 +90,10 @@ order; a model may not. Pointing a real coding agent at a deployment this script
    the tracker, in the same words. Somebody else rules in deevy and the Gate records it `via: web`; the
    Agent hears it in its inbox, its Run is `active` again, and it finishes.
 9. **The evidence.** There is exactly one pull request on the record, the one the Agent attached,
-   attributed to the Run that produced it, and the ruling is said back in the tracker too. What reached the
-   remote is the Agent's own push, so the walk checks nothing of deevy's there.
+   attributed to the Run that produced it, and the ruling is said back in the tracker too. And deevy said
+   nothing else there: two Gates, their two Rulings and the two Rulings it refused are the whole of the
+   record's comments from deevy. What reached the remote is the Agent's own push, so the walk checks nothing
+   of deevy's there.
 10. **The record.** The Event log reads
     `run.started run.activity gate.requested run.awaiting_input gate.ruling_refused identity.linked
 gate.approved run.answered issue.link_added gate.requested run.awaiting_input gate.ruling_refused

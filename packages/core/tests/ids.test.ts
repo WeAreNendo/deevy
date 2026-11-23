@@ -1,8 +1,10 @@
+import type { Issue, Socket } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { authId, idPrefixes, isId, newId } from "../src/ids.ts";
 import { router } from "../src/operations/index.ts";
-import { fakeSockets, memberContext, testDb } from "./helpers.ts";
+import { applyInbound } from "../src/sockets/apply.ts";
+import { externalIssue, fakeSockets, memberContext, testDb } from "./helpers.ts";
 
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -75,7 +77,23 @@ describe("the rows deevy creates", () => {
       name: "deevy",
       tracker: { socketId: socket.id, scope: { scopeKey: "acme/deevy" } },
     });
-    const issue = await client.issues.create({ projectSlug: "deevy", title: "Ship it" });
+    // An Issue is the projection of a record the tracker announced, so that is
+    // where this one comes from (ADR-0024).
+    const row = (await db.query.socket.findFirst({ where: { id: socket.id } })) as Socket;
+    await applyInbound({
+      db,
+      workspace: alice.workspace,
+      socket: row,
+      events: [
+        {
+          kind: "issue",
+          scopeKey: "acme/deevy",
+          issue: externalIssue({ externalId: "7", title: "Ship it" }),
+          actor: { login: "alice", id: "u-alice", isBot: false },
+        },
+      ],
+    });
+    const issue = (await db.query.issue.findFirst({ where: { externalId: "7" } })) as Issue;
 
     expect(alice.member.id).toMatch(/^mem_/);
     expect(alice.workspace.id).toMatch(/^ws_/);

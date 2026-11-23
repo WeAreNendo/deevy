@@ -8,7 +8,7 @@ sidebar:
 Your team's work stays where it is today: in GitHub, Linear, GitLab or Notion. deevy connects to those
 tools, hands the records you choose to Agents, keeps a record of everything each Agent does, and stops an
 Agent at a Gate whenever a Human has to decide. Nobody has to move to a new tracker, and nobody has to
-open deevy to follow along: what deevy does shows up as comments on the record itself.
+open deevy to rule: a Gate waiting, and how it was ruled, show up as comments on the record itself.
 
 ## The pieces
 
@@ -31,7 +31,7 @@ Sponsor: the Human who answers for it. See [Humans, Agents and Sponsors](/concep
 a GitHub App, a Linear application, a GitLab account, a Notion connection, a Slack app.
 
 **Projects** bind part of a tool, such as a repository or a Linear team. A Project says where its records
-come from, which Agent takes a record nobody named, and how much deevy writes back. See
+come from, which Agent takes a record nobody named, and which Checkpoints its Runs stop at. See
 [Sockets and Projects](/concepts/sockets-and-projects/).
 
 **Issues** are deevy's view of the records in those places. deevy never writes one: its title, body and

@@ -12,6 +12,7 @@ import type { ApiKeys, ApiKeySummary } from "../src/keys.ts";
 import { newId } from "../src/ids.ts";
 import { upsertProjection } from "../src/issues.ts";
 import { sealSecret } from "../src/secrets.ts";
+import { applyInbound, type ApplyInboundResult } from "../src/sockets/apply.ts";
 import type {
   ChatInteraction,
   ChatMessage,
@@ -259,18 +260,17 @@ export function fakeSockets(
   remarks: Map<string, ExternalComment>;
   /** Every address the tool was told to deliver to (`rewire`). */
   rewired: string[];
-  /** Every comment deevy wrote through it, which is what a mirror is. */
+  /**
+   * Every comment deevy wrote through it, which is everything it says: a Gate
+   * waiting and the Ruling that settled it (sockets/mirror.ts).
+   */
   comments: Array<{ externalId: string; body: string }>;
-  /** And every label change, which is the other half of what a mirror does. */
-  labels: Array<{ externalId: string; add: string[]; remove: string[] }>;
 } {
-  let opened = 0;
   const rewired: string[] = [];
   const comments: Array<{ externalId: string; body: string }> = [];
-  const labels: Array<{ externalId: string; add: string[]; remove: string[] }> = [];
   const module = ({ config }: { config: Record<string, unknown> }): SocketModule => ({
     provider: "stub",
-    capabilities: new Set(["tracker", "docs"] as const),
+    capabilities: new Set(["tracker"] as const),
     webhookSecretFrom: "either",
     // Its accounts are GitHub's sign-in accounts where the Socket's
     // configuration says so, which is how a test plays a Human who signed in
@@ -334,21 +334,6 @@ export function fakeSockets(
         if (!found) throw new Error(`no record ${ref.externalId}`);
         return Promise.resolve(found);
       },
-      listIssues: (_scope, query) => {
-        // A real tracker answers a window, and the poll's whole shape depends
-        // on that: what changed since, in order, one page at a time.
-        const all = [...records.values()]
-          .filter((issue) => !query.updatedSince || issue.updatedAt > query.updatedSince)
-          .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
-        const from = query.cursor ? Number(query.cursor) : 0;
-        const page = all.slice(from, from + query.limit);
-        const next = from + page.length;
-        return Promise.resolve({
-          issues: page,
-          nextCursor: next < all.length ? String(next) : null,
-        });
-      },
-      listComments: () => Promise.resolve([]),
       getComment: (_scope, _ref, commentId) => Promise.resolve(remarks.get(commentId) ?? null),
       // Notion's shape: an unsigned body carrying the secret, sent once.
       handshake: (rawBody) => {
@@ -360,30 +345,6 @@ export function fakeSockets(
           return null;
         }
       },
-      createIssue: (scope, draft) => {
-        opened += 1;
-        const container = typeof scope.scopeKey === "string" ? scope.scopeKey : "acme/deevy";
-        // Prefixed, so a record this opens can never collide with one a test
-        // seeded by hand — a collision would silently update that record
-        // instead of opening a new one.
-        const externalId = `new-${String(opened)}`;
-        const key = `${container}#${externalId}`;
-        const made: ExternalIssue = {
-          externalId,
-          key,
-          url: `https://tracker.test/${key}`,
-          title: draft.title,
-          body: draft.body,
-          state: "open",
-          stateName: "Open",
-          assignees: [],
-          labels: draft.labels,
-          parentExternalId: draft.parent?.externalId ?? null,
-          updatedAt: new Date(),
-        };
-        records.set(made.externalId, made);
-        return Promise.resolve({ ...made, parentLinked: draft.parent !== null });
-      },
       createComment: (_scope, ref, body) => {
         comments.push({ externalId: ref.externalId, body });
         return Promise.resolve({
@@ -391,34 +352,13 @@ export function fakeSockets(
           url: `${ref.url}#c${String(comments.length)}`,
         });
       },
-      setLabels: (_scope, ref, change) => {
-        labels.push({ externalId: ref.externalId, ...change });
-        return Promise.resolve();
-      },
       listContainers: () =>
         Promise.resolve([
           { scope: { scopeKey: "acme/deevy" }, scopeKey: "acme/deevy", name: "acme/deevy" },
         ]),
     },
-
-    // Documents, for a Project whose plans live somewhere an Agent reads them
-    // (`docs.get`). A page whose name says it is missing is one the tool will
-    // not show, the way Notion will not show a page nobody shared with it.
-    docs: {
-      readPage: (ref) => {
-        const named = "url" in ref ? ref.url : ref.externalId;
-        if (named.includes("missing")) {
-          return Promise.reject(new Error("Could not find that page. Is it shared with deevy?"));
-        }
-        return Promise.resolve({
-          title: "The plan",
-          markdown: `# The plan\n\nRead from ${named}.`,
-          url: "url" in ref ? ref.url : `https://tracker.test/pages/${ref.externalId}`,
-        });
-      },
-    },
   });
-  return { sockets: { stub: module }, records, remarks, rewired, comments, labels };
+  return { sockets: { stub: module }, records, remarks, rewired, comments };
 }
 
 /** JSON has no clock: what a provider's own `normalize` answers has Dates. */
@@ -457,8 +397,16 @@ export function externalIssue(
 export interface SeededProject {
   socketId: string;
   project: Project;
-  /** Projects one record and hands back the row, as a delivery would. */
+  /**
+   * Projects one record and hands back the row, as a delivery would, with no
+   * Event: under a parent already projected when it names one.
+   */
   record: (over: Partial<ExternalIssue> & { externalId: string }) => Promise<Issue>;
+  /**
+   * The tracker saying something, as a delivery on this Socket does: the
+   * Events, the routing and the Runs a webhook would cause (sockets/apply.ts).
+   */
+  deliver: (events: InboundEvent[]) => Promise<ApplyInboundResult>;
   /** Who gets a record no label and no mention named (ADR-0024). */
   setDefaultAgent: (memberId: string | null) => Promise<void>;
 }
@@ -520,12 +468,24 @@ export async function seedProject(
         .where(eq(project.id, row.id));
     },
     record: async (over) => {
+      const parent = over.parentExternalId
+        ? await db.query.issue.findFirst({
+            where: { socketId, externalId: over.parentExternalId },
+            columns: { id: true },
+          })
+        : undefined;
       const { issue } = await upsertProjection(db, {
         projectId: row.id,
         socketId,
         external: externalIssue({ ...over, key: over.key ?? `${scopeKey}#${over.externalId}` }),
+        parentId: parent?.id ?? null,
       });
       return issue;
+    },
+    deliver: async (events) => {
+      const found = await db.query.socket.findFirst({ where: { id: socketId } });
+      if (!found) throw new Error("seedProject: the Socket is gone");
+      return applyInbound({ db, workspace: { id: workspaceId }, socket: found, events });
     },
   };
 }

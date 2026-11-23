@@ -9,8 +9,6 @@
 import { agents } from "./agents.ts";
 import { allowlist } from "./allowlist.ts";
 import { channels } from "./channels.ts";
-import { comments } from "./comments.ts";
-import { docs } from "./docs.ts";
 import { email } from "./email.ts";
 import { events } from "./events.ts";
 import { checkpoints, gates } from "./gates.ts";
@@ -46,9 +44,7 @@ export const router = {
   checkpoints,
   gates,
   issues,
-  comments,
   links,
-  docs,
   inbox,
   channels,
   routing,
@@ -64,7 +60,6 @@ export {
   allowlist,
   channels,
   checkpoints,
-  comments,
   email,
   events,
   gates,

@@ -43,7 +43,7 @@ be accountable for what it does and be told when it needs a person. That is the 
 
 - They manage the Agent: its keys, its Projects, where it is told about work, and suspending it.
 - They are told when a Run the Agent started for itself, or that routing started, finishes or asks a
-  question, and when the Agent splits work into sub-issues.
+  question, and when the sub-issues of a record routed to the Agent are all finished.
 - At a Gate, they are the Human the work is for when routing started the Run, which matters to a
   Checkpoint that wants [somebody else's approval](/gates/more-than-one-human/).
 

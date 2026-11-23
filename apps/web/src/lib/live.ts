@@ -19,14 +19,14 @@ export interface LiveEvent {
  * The queries an Event could have changed. Every Event touches the log; what
  * else it touches follows from its subject, so a Run's Activity re-reads Runs
  * and the inbox and nothing about Members. The list errs towards re-reading:
- * an Issue Event covers its comments, Documents and Links too, because those
- * are shown on the same screen and their Events are Issue Events.
+ * an Issue Event covers its Links too, because those are shown on the same
+ * screen and their Events are Issue Events.
  */
 export function keysFor(event: LiveEvent): QueryKey[] {
   const keys: QueryKey[] = [orpc.events.key()];
   switch (event.subjectType) {
     case "issue":
-      keys.push(orpc.issues.key(), orpc.comments.key(), orpc.links.key(), orpc.inbox.key());
+      keys.push(orpc.issues.key(), orpc.links.key(), orpc.inbox.key());
       break;
     case "run":
       // A Run's own Events move the Gate it is waiting at as well: a ruling

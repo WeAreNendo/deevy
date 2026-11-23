@@ -33,7 +33,6 @@ export const stubSocket = {
   installedBy: null,
   status: "active",
   lastInboundAt: stamp,
-  pollMinutes: null,
   createdAt: stamp,
   updatedAt: stamp,
 };
@@ -49,11 +48,8 @@ export function stubProject(slug: string, name: string, extra: Record<string, un
     trackerSocketId: stubSocket.id,
     trackerScope: { container: slug },
     trackerScopeKey: slug,
-    docsSocketId: null,
-    docsScope: null,
     defaultAgentMemberId: null,
     routing: { labelPrefix: "agent:", mention: true },
-    mirror: "gates",
     createdAt: stamp,
     archivedAt: null,
     ...extra,
@@ -86,7 +82,6 @@ const emptyIssue = {
   parent: null,
   parentId: null,
   children: [],
-  createdBy: null,
   externalUpdatedAt: stamp,
   lastSyncedAt: stamp,
   createdAt: stamp,
@@ -266,7 +261,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
     issues: {
       list: async () => ({ issues: [], nextCursor: null, hasMore: false }),
       get: async () => emptyIssue,
-      create: async () => emptyIssue,
     },
     inbox: {
       list: async () => ({ notifications: [], nextCursor: null }),
@@ -309,9 +303,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
       postActivity: async () => ({ run: {}, activity: {} }),
       answer: async () => ({ run: {}, activity: {} }),
       finish: async () => ({}),
-    },
-    comments: {
-      create: async () => ({}),
     },
     gates: {
       list: async () => ({ gates: [] }),

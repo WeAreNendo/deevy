@@ -89,8 +89,8 @@ an assignment. See [Needs me and the Inbox](/notifications/inbox/).
 
 ### Project
 
-A scope of work bound to Sockets: where its Issues live, optionally where its documents are read from, which Agents may work it, its Default Agent and routing label, its Checkpoints, and how much
-deevy writes back. See [Sockets and Projects](/concepts/sockets-and-projects/#projects).
+A scope of work bound to a Socket: where its Issues live, which Agents may work it, its Default Agent and
+routing label, and its Checkpoints. See [Sockets and Projects](/concepts/sockets-and-projects/#projects).
 
 ### Proposal
 
@@ -119,9 +119,9 @@ or Cloudflare Email Service. There is one at a time, from the deployment's confi
 ### Socket
 
 One connected tool under one identity of deevy's own there: a GitHub App, a Linear application, a GitLab
-account, a Notion connection, a Slack app. A Socket has capabilities, such as holding records, holding code,
-holding documents or chat, and holds the credential deevy uses to act there. See
-[Sockets and Projects](/concepts/sockets-and-projects/#sockets).
+account, a Notion connection, a Slack app. A Socket listens and announces: it takes what the tool delivers,
+and says on a record when a Gate is waiting and how it was ruled. It holds records or chat, and the
+credential deevy uses to act there. See [Sockets and Projects](/concepts/sockets-and-projects/#sockets).
 
 ### Sponsor
 
@@ -130,8 +130,8 @@ The Human accountable for an Agent. See [Humans, Agents and Sponsors](/concepts/
 ### Sub-issue
 
 A record opened under another in the tracker, which is its parent: a piece of a larger piece of work, with
-its own Runs and its own Gates. It may live in a different Project. deevy keeps the tree even where the
-tracker cannot link it. See [Issues](/concepts/issues/#sub-issues).
+its own Runs and its own Gates. It may live in a different Project. deevy links it to its parent by the
+tracker's own parent field. See [Issues](/concepts/issues/#sub-issues).
 
 ### Working time and waiting time
 

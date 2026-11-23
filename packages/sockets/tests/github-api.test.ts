@@ -1,10 +1,10 @@
 import { generateKeyPairSync, verify } from "node:crypto";
+import type { TrackerSocket } from "@deevy/core/sockets";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createGithubSocket, resetGithubTokens } from "../src/github/index.ts";
 import installations from "./fixtures/github/app.installations.json" with { type: "json" };
 import firstHundred from "./fixtures/github/installation.repositories.page-1.json" with { type: "json" };
 import theRest from "./fixtures/github/installation.repositories.page-2.json" with { type: "json" };
-import labeled from "./fixtures/github/issues.labeled.json" with { type: "json" };
 
 /**
  * What the GitHub module asks GitHub, and what it makes of the answers.
@@ -114,8 +114,15 @@ function githubReturning(
       fetch: fetchImpl,
       now: () => new Date("2026-09-21T10:00:00Z"),
     });
-    if (!module.tracker) throw new Error("a GitHub Socket is a tracker");
-    return { module, tracker: module.tracker };
+    const { tracker } = module;
+    if (!tracker?.listContainers) {
+      throw new Error("a GitHub Socket is a tracker that offers its repositories");
+    }
+    // Checked just above: the binding picker lists what the App can see.
+    return {
+      module,
+      tracker: tracker as TrackerSocket & Required<Pick<TrackerSocket, "listContainers">>,
+    };
   };
 
   return { ...connect({ privateKey }), asked, connect };
@@ -127,6 +134,14 @@ const credentials = {
   "POST /app/installations/61892041/access_tokens": {
     token: "ghs_installation_token_for_acme",
     expires_at: "2026-09-21T11:00:00Z",
+  },
+};
+
+/** What GitHub answers a comment on the issue: the one thing deevy writes there. */
+const commented = {
+  "POST /repos/acme/deevy/issues/42/comments": {
+    node_id: "IC_new",
+    html_url: "https://github.com/acme/deevy/issues/42#issuecomment-9",
   },
 };
 
@@ -157,34 +172,28 @@ describe("where the App delivers", () => {
 
 describe("how deevy authenticates", () => {
   it("asks as the App, then acts as the installation that covers the repository", async () => {
-    const { tracker, asked } = githubReturning({
-      ...credentials,
-      "GET /repos/acme/deevy/issues/42": labeled.issue,
-    });
+    const { tracker, asked } = githubReturning({ ...credentials, ...commented });
 
-    const issue = await tracker.getIssue(scope, ref);
+    const wrote = await tracker.createComment(scope, ref, "Said");
 
-    expect(issue.key).toBe("acme/deevy#42");
+    expect(wrote.externalId).toBe("IC_new");
     // The App's own JWT for the two credential calls, the installation's token
-    // for the repository call: a JWT cannot read an issue, and a token cannot
-    // mint itself.
+    // for the repository call: a JWT cannot comment on an issue, and a token
+    // cannot mint itself.
     expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
       "GET /repos/acme/deevy/installation",
       "POST /app/installations/61892041/access_tokens",
-      "GET /repos/acme/deevy/issues/42",
+      "POST /repos/acme/deevy/issues/42/comments",
     ]);
     expect(asked[0]?.authorization).toMatch(/^Bearer eyJ/);
     expect(asked[2]?.authorization).toBe("Bearer ghs_installation_token_for_acme");
   });
 
   it("mints one token and keeps it, because GitHub's last an hour", async () => {
-    const { tracker, asked } = githubReturning({
-      ...credentials,
-      "GET /repos/acme/deevy/issues/42": labeled.issue,
-    });
+    const { tracker, asked } = githubReturning({ ...credentials, ...commented });
 
-    await tracker.getIssue(scope, ref);
-    await tracker.getIssue(scope, ref);
+    await tracker.createComment(scope, ref, "Said");
+    await tracker.createComment(scope, ref, "Said again");
 
     expect(asked.filter((one) => one.url.includes("access_tokens"))).toHaveLength(1);
     expect(asked.filter((one) => one.url.endsWith("/installation"))).toHaveLength(1);
@@ -195,15 +204,17 @@ describe("how deevy authenticates", () => {
     // Workspaces: a token cached by the id alone would answer anyone who
     // pasted it, before their key ever signed anything.
     const { tracker, asked, connect } = githubReturning(
-      { ...credentials, "GET /repos/acme/deevy/issues/42": labeled.issue },
+      { ...credentials, ...commented },
       { publicKey },
     );
-    await tracker.getIssue(scope, ref);
+    await tracker.createComment(scope, ref, "Said");
 
     const impostor = connect({ privateKey: keyPair().privateKey });
 
-    await expect(impostor.tracker.getIssue(scope, ref)).rejects.toThrow(/GitHub answered 401/);
-    expect(asked.filter((one) => one.url.endsWith("/issues/42"))).toHaveLength(1);
+    await expect(impostor.tracker.createComment(scope, ref, "Said")).rejects.toThrow(
+      /GitHub answered 401/,
+    );
+    expect(asked.filter((one) => one.url.endsWith("/issues/42/comments"))).toHaveLength(1);
     expect(asked.filter((one) => one.url.endsWith("/installation"))).toHaveLength(2);
   });
 
@@ -218,10 +229,10 @@ describe("how deevy authenticates", () => {
         token: "ghs_old",
         expires_at: "2026-09-21T10:00:30Z",
       },
-      "GET /repos/acme/deevy/issues/42": labeled.issue,
+      ...commented,
     };
     const { tracker, asked } = githubReturning(answers);
-    await tracker.getIssue(scope, ref);
+    await tracker.createComment(scope, ref, "Said");
 
     delete answers["POST /app/installations/61892041/access_tokens"];
     answers["GET /repos/acme/deevy/installation"] = { id: 7 };
@@ -231,32 +242,29 @@ describe("how deevy authenticates", () => {
     };
     asked.length = 0;
 
-    await tracker.getIssue(scope, ref);
-    await tracker.getIssue(scope, ref);
+    await tracker.createComment(scope, ref, "Said");
+    await tracker.createComment(scope, ref, "Said again");
 
     // The dead id is asked for once, and never again.
     expect(asked.map((one) => `${one.method} ${new URL(one.url).pathname}`)).toEqual([
       "POST /app/installations/61892041/access_tokens",
       "GET /repos/acme/deevy/installation",
       "POST /app/installations/7/access_tokens",
-      "GET /repos/acme/deevy/issues/42",
-      "GET /repos/acme/deevy/issues/42",
+      "POST /repos/acme/deevy/issues/42/comments",
+      "POST /repos/acme/deevy/issues/42/comments",
     ]);
     expect(asked.at(-1)?.authorization).toBe("Bearer ghs_new");
   });
 
   it("mints for each key, and for each host, rather than sharing one App id's token", async () => {
-    const { tracker, asked, connect } = githubReturning({
-      ...credentials,
-      "GET /repos/acme/deevy/issues/42": labeled.issue,
-    });
+    const { tracker, asked, connect } = githubReturning({ ...credentials, ...commented });
 
-    await tracker.getIssue(scope, ref);
-    await connect({ privateKey: keyPair().privateKey }).tracker.getIssue(scope, ref);
-    await connect({ privateKey, apiBase: "https://github.acme.test/api/v3" }).tracker.getIssue(
-      scope,
-      ref,
-    );
+    await tracker.createComment(scope, ref, "Said");
+    await connect({ privateKey: keyPair().privateKey }).tracker.createComment(scope, ref, "Said");
+    await connect({
+      privateKey,
+      apiBase: "https://github.acme.test/api/v3",
+    }).tracker.createComment(scope, ref, "Said");
 
     const minted = asked.filter((one) => one.url.includes("access_tokens"));
     expect(minted.map((one) => new URL(one.url).host)).toEqual([
@@ -361,61 +369,7 @@ describe("how deevy authenticates", () => {
   });
 });
 
-describe("reading a repository", () => {
-  it("walks what changed since, oldest first, and leaves pull requests alone", async () => {
-    const { tracker, asked } = githubReturning({
-      ...credentials,
-      "GET /repos/acme/deevy/issues": [
-        labeled.issue,
-        { ...labeled.issue, node_id: "PR_1", number: 44, pull_request: { url: "…" } },
-      ],
-    });
-
-    const page = await tracker.listIssues(scope, {
-      updatedSince: new Date("2026-09-20T00:00:00Z"),
-      cursor: null,
-      limit: 2,
-    });
-
-    // A pull request is evidence on a record, never a record (ADR-0024).
-    expect(page.issues.map((issue) => issue.key)).toEqual(["acme/deevy#42"]);
-    // The page was full, so there is more: the next call carries on.
-    expect(page.nextCursor).toBe("2");
-    const query = new URL(asked[2]?.url ?? "").searchParams;
-    expect(Object.fromEntries(query)).toMatchObject({
-      state: "all",
-      sort: "updated",
-      direction: "asc",
-      since: "2026-09-20T00:00:00.000Z",
-      page: "1",
-      per_page: "2",
-    });
-  });
-
-  it("reads the conversation, which deevy stores none of", async () => {
-    const { tracker } = githubReturning({
-      ...credentials,
-      "GET /repos/acme/deevy/issues/42/comments": [
-        {
-          node_id: "IC_1",
-          body: "Looks right",
-          html_url: "https://github.com/acme/deevy/issues/42#issuecomment-1",
-          created_at: "2026-09-21T09:00:00Z",
-          user: { login: "grace-on-github", id: 5829302, type: "User" },
-        },
-      ],
-    });
-
-    const comments = await tracker.listComments(scope, ref, 20);
-
-    expect(comments).toHaveLength(1);
-    expect(comments[0]).toMatchObject({
-      externalId: "IC_1",
-      body: "Looks right",
-      author: { login: "grace-on-github", isBot: false },
-    });
-  });
-
+describe("the repositories it offers", () => {
   it("offers the repositories the App was installed on", async () => {
     const { tracker } = githubReturning({
       "POST /app/installations/61892041/access_tokens": {
@@ -430,8 +384,6 @@ describe("reading a repository", () => {
       },
     });
 
-    // Each with the branch it defaults to, so binding one as a Project's code
-    // gives its Runs the right base without anybody typing it.
     expect(await tracker.listContainers()).toEqual([
       {
         scope: { scopeKey: "acme/deevy" },
@@ -503,7 +455,7 @@ describe("reading a repository", () => {
       now: () => new Date("2026-09-21T10:00:00Z"),
     });
 
-    const containers = await module.tracker?.listContainers();
+    const containers = await module.tracker?.listContainers?.();
 
     expect(containers?.map((one) => one.scopeKey)).toEqual(["acme/deevy", "acme-labs/site"]);
   });
@@ -610,7 +562,7 @@ describe("reading a repository", () => {
       now: () => new Date("2026-09-21T10:00:00Z"),
     });
 
-    const containers = await module.tracker?.listContainers();
+    const containers = await module.tracker?.listContainers?.();
 
     expect(containers?.map((one) => one.scopeKey)).toEqual(["acme/ops"]);
   });
@@ -643,7 +595,7 @@ describe("reading a repository", () => {
         now: () => new Date("2026-09-21T10:00:00Z"),
       });
 
-      await expect(module.tracker?.listContainers()).rejects.toThrow(
+      await expect(module.tracker?.listContainers?.()).rejects.toThrow(
         `GitHub answered ${String(status)}`,
       );
     }
@@ -661,58 +613,9 @@ describe("reading a repository", () => {
   });
 });
 
-describe("writing to a repository", () => {
-  it("opens a record and links it under its parent", async () => {
-    const { tracker, asked } = githubReturning({
-      ...credentials,
-      "POST /repos/acme/deevy/issues": { ...labeled.issue, id: 2847193099, node_id: "I_child" },
-      "POST /repos/acme/deevy/issues/42/sub_issues": { id: 1 },
-    });
-
-    const opened = await tracker.createIssue(scope, {
-      title: "Cap the coupon",
-      body: "One part of it",
-      parent: ref,
-      labels: ["agent:builder"],
-    });
-
-    expect(opened.parentLinked).toBe(true);
-    expect(asked.at(-2)?.body).toMatchObject({
-      title: "Cap the coupon",
-      labels: ["agent:builder"],
-    });
-    // The sub-issue call takes the child's numeric id, which is the one place
-    // GitHub wants that rather than the node id.
-    expect(asked.at(-1)?.body).toEqual({ sub_issue_id: 2847193099 });
-  });
-
-  it("keeps the record when GitHub will not link the parent", async () => {
-    // A GitHub Enterprise Server without the sub-issues API answers 404, and
-    // deevy keeps the tree itself (ADR-0022): the record is still opened.
-    const { tracker } = githubReturning({
-      ...credentials,
-      "POST /repos/acme/deevy/issues": { ...labeled.issue, id: 2847193099, node_id: "I_child" },
-    });
-
-    const opened = await tracker.createIssue(scope, {
-      title: "Cap the coupon",
-      body: "",
-      parent: ref,
-      labels: [],
-    });
-
-    expect(opened.parentLinked).toBe(false);
-    expect(opened.externalId).toBe("I_child");
-  });
-
+describe("saying something on an issue", () => {
   it("says something on the record, and answers where it landed", async () => {
-    const { tracker, asked } = githubReturning({
-      ...credentials,
-      "POST /repos/acme/deevy/issues/42/comments": {
-        node_id: "IC_new",
-        html_url: "https://github.com/acme/deevy/issues/42#issuecomment-9",
-      },
-    });
+    const { tracker, asked } = githubReturning({ ...credentials, ...commented });
 
     const wrote = await tracker.createComment(scope, ref, "— Planner · via deevy");
 
@@ -721,24 +624,5 @@ describe("writing to a repository", () => {
       url: "https://github.com/acme/deevy/issues/42#issuecomment-9",
     });
     expect(asked.at(-1)?.body).toEqual({ body: "— Planner · via deevy" });
-  });
-
-  it("adds a label in one call and takes each one off in its own", async () => {
-    const { tracker, asked } = githubReturning({
-      ...credentials,
-      "POST /repos/acme/deevy/issues/42/labels": [],
-      "DELETE /repos/acme/deevy/issues/42/labels/deevy:awaiting-approval": [],
-    });
-
-    await tracker.setLabels(scope, ref, {
-      add: ["deevy:awaiting-approval"],
-      // One that is not on the issue: GitHub answers 404 and the state deevy
-      // wanted is the state there is, so nothing is thrown.
-      remove: ["deevy:awaiting-approval", "never-was-here"],
-    });
-
-    const writes = asked.filter((one) => one.url.includes("/labels"));
-    expect(writes.map((one) => one.method)).toEqual(["POST", "DELETE", "DELETE"]);
-    expect(writes[0]?.body).toEqual({ labels: ["deevy:awaiting-approval"] });
   });
 });

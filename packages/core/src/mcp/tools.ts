@@ -42,8 +42,8 @@ function schemasOf(procedure: object): { inputSchema: unknown; outputSchema: unk
 }
 
 /**
- * `issues.get` becomes `issues_get` and `issues.setLabels` becomes
- * `issues_set_labels`. Dots are not universally accepted by clients and
+ * `issues.get` becomes `issues_get` and `runs.postActivity` becomes
+ * `runs_post_activity`. Dots are not universally accepted by clients and
  * snake_case is what tool names look like everywhere else, so the dotted
  * registry name is lowered once, here, and `projectTools` proves the mapping
  * stays injective.

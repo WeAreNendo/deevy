@@ -66,7 +66,12 @@ export const issue = sqliteTable(
      * which is how a tree survives a provider without sub-issues.
      */
     parentId: text("parent_id"),
-    /** Set only where deevy created the record, which is delegation. */
+    /**
+     * Unused since deevy stopped opening records (docs/plans/simplify.md,
+     * slice 4): read by nothing and written as null. Dropped when the
+     * migration history starts afresh (slice 12), because removing a column
+     * with a foreign key is a table rebuild D1 and a Durable Object refuse.
+     */
     createdBy: text("created_by").references(() => member.id, { onDelete: "set null" }),
     /** The provider's clock. The upsert refuses to go backwards on it. */
     externalUpdatedAt: integer("external_updated_at", { mode: "timestamp_ms" }).notNull(),
@@ -87,8 +92,9 @@ export const issue = sqliteTable(
     index("issue_parentId_idx").on(table.parentId),
     /**
      * The feed is ordered by when the *record* last changed, not by when deevy
-     * last synced it: a catch-up poll touches a hundred rows in one second and
-     * a reader who asked for "newest change first" did not mean that. Without
+     * last projected it: a tool redelivering a backlog touches a hundred rows
+     * in one second and a reader who asked for "newest change first" did not
+     * mean that. Without
      * the index it sorts a scan of the table on a temporary b-tree, on every
      * Issue Event that re-runs it.
      */

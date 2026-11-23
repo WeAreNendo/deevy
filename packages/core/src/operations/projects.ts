@@ -20,7 +20,10 @@ import {
 /** A binding as a caller states one: a Socket, and the container inside it. */
 const BindingInput = z.object({
   socketId: z.string(),
-  /** The container the provider's own `listContainers` offered. */
+  /**
+   * The container: one the provider's own `listContainers` offered, or, for a
+   * tool that lists none, `{ scopeKey }` with the key an admin typed.
+   */
   scope: z.record(z.string(), z.unknown()),
 });
 
@@ -88,7 +91,7 @@ export const projects = {
 
   update: defineOperation({
     name: "projects.update",
-    summary: "Rename a Project, rebind its documents, or change what deevy says back",
+    summary: "Rename a Project, or change who gets its work and how a record names an Agent",
     method: "PATCH",
     path: "/projects/{slug}",
     auth: "member",
@@ -98,15 +101,13 @@ export const projects = {
       description: z.string().max(4000).nullish(),
       /** Who gets an open record no label and no mention named. */
       defaultAgentMemberId: z.string().nullish(),
-      mirror: z.enum(["off", "gates", "runs"]).optional(),
-      /**
-       * Where its documents are, for an Agent to read (`docs.get`), or null for
-       * nowhere. The tracker binding is not changeable: a Project is the
-       * container its records come from, and pointing it at another one would
-       * orphan every projection under it (ADR-0024). Where its code is, deevy
-       * does not hold (ADR-0034).
+      /*
+       * The tracker binding is not changeable: a Project is the container its
+       * records come from, and pointing it at another one would orphan every
+       * projection under it (ADR-0024). Where its code and its documents are,
+       * deevy does not hold (ADR-0034, docs/plans/simplify.md slice 4), and
+       * what it says in the tracker is a Gate and its Ruling, always.
        */
-      docs: BindingInput.nullish(),
       /** How a record says which Agent it is for: a label prefix, a mention, or neither. */
       routing: z
         .object({
@@ -139,21 +140,6 @@ export const projects = {
           to: input.defaultAgentMemberId ?? null,
         };
       }
-      if (input.mirror !== undefined && input.mirror !== found.mirror) {
-        changes.mirror = { from: found.mirror, to: input.mirror };
-      }
-      if (input.docs !== undefined) {
-        // A Socket that cannot read a page would bind documents nobody can open.
-        if (input.docs) {
-          const docsSocket = await requireSocket(context, input.docs.socketId);
-          if (!(await socketModuleFor(context, docsSocket)).docs) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: `The ${docsSocket.name} Socket cannot read documents`,
-            });
-          }
-        }
-        changes.docs = { from: found.docsSocketId, to: input.docs?.socketId ?? null };
-      }
       if (input.routing !== undefined) {
         changes.routing = { from: found.routing, to: input.routing };
       }
@@ -167,12 +153,6 @@ export const projects = {
           ...(input.defaultAgentMemberId === undefined
             ? {}
             : { defaultAgentMemberId: input.defaultAgentMemberId ?? null }),
-          ...(input.mirror === undefined ? {} : { mirror: input.mirror }),
-          ...(input.docs === undefined
-            ? {}
-            : input.docs
-              ? { docsSocketId: input.docs.socketId, docsScope: input.docs.scope }
-              : { docsSocketId: null, docsScope: null }),
           ...(input.routing === undefined ? {} : { routing: input.routing }),
         })
         .where(eq(projectTable.id, found.id));
@@ -231,7 +211,6 @@ export const projects = {
       description: z.string().max(4000).nullish(),
       /** Where this Project's Issues come from. Without one it has nothing to work. */
       tracker: BindingInput,
-      docs: BindingInput.optional(),
       defaultAgentMemberId: z.string().nullish(),
     }),
     output: ProjectSchema,
@@ -259,7 +238,6 @@ export const projects = {
           message: `${bound.name} is already bound to that container`,
         });
       }
-      if (input.docs) await requireSocket(context, input.docs.socketId);
       if (input.defaultAgentMemberId) {
         await requireDefaultAgent(context, input.defaultAgentMemberId);
       }
@@ -272,8 +250,6 @@ export const projects = {
         trackerSocketId: socket.id,
         trackerScope: input.tracker.scope,
         trackerScopeKey,
-        docsSocketId: input.docs?.socketId ?? null,
-        docsScope: input.docs?.scope ?? null,
         defaultAgentMemberId: input.defaultAgentMemberId,
       });
       await appendEvent(context, {

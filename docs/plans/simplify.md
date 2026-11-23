@@ -143,6 +143,8 @@ script and an n8n example. The stub keeps its in-memory store for tests and shar
 
 - `project`: `forge_socket_id`, `forge_scope`, `docs_socket_id`, `docs_scope`, `mirror` and
   `last_polled_at` go; `chat_socket_id` (nullable, `set null`) and `chat_channel` (nullable) arrive.
+- `socket`: `poll_minutes` goes.
+- `issue`: `created_by` goes, since deevy opens no record (slice 4).
 - `agent`: `schedule_minutes` and `schedule_ran_at` go.
 - `workspace`: `max_children_per_issue` and `max_open_descendants` go; `max_delegation_depth` stays.
 - `run_usage`, `channel`, `routing_rule`, `notification_preference` and `email_sender` go.
@@ -175,7 +177,8 @@ These Event kinds go: `run.checkout_issued`, `run.pull_request_opened`, `run.usa
   mention lands in its inbox as `mention` and goes to its webhook, which is how an answer in the tracker
   wakes it.
 - A sub-issue whose parent is routed to an Agent is routed by its own label. When the last child closes,
-  `issue.children_closed` opens a Run on the parent, as today. A child deeper than `maxDelegationDepth` is
+  `issue.children_closed` opens a Run on the parent for the Agent the parent is routed to (slice 4: deevy no
+  longer knows who opened a child). A child deeper than `maxDelegationDepth` is
   refused with `delegation.refused`, as today.
 - No schedule.
 
@@ -310,8 +313,13 @@ Run waiting at a Gate alone.
 **Depends on.** 4.
 
 **Work.** `max_children_per_issue` and `max_open_descendants` go from `workspace` and `limits.ts`, with their
-settings; `max_delegation_depth` is checked when deevy would open a Run on a routed child. deevy's own parent
-link resolves from the tracker's `parentExternalId` only. `sweepSchedules`, `schedule_minutes`,
+settings; the checks that read them went with `issues.create` in slice 4, so what is left is the settings,
+their columns and the operation fields. `max_delegation_depth` is checked when deevy would open a Run on a
+routed child. deevy's own parent
+link resolves from the tracker's `parentExternalId` only. A child taken out from under its parent stays
+linked for now: `parentExternalId: null` means "said no parent" on GitHub's `sub_issue_removed` but "said
+nothing" on most deliveries, so slice 4 keeps the link on both; telling them apart takes a third value in the
+port. `sweepSchedules`, `schedule_minutes`,
 `schedule_ran_at`, the `schedule` trigger and the schedule field on an Agent's page go. The `delegation`
 Notification kind goes. `agents/delegation.md` says the Agent opens sub-issues in the tracker.
 
@@ -596,3 +604,44 @@ whole, its working time with it, since it was the Usage section: a Run's time is
 feed, and nothing asked for a monthly one without the cost beside it. `duration` moved to `lib/time.ts`, and
 CONTEXT.md retires **Usage** now rather than in slice 13. The tool set is eighteen; the walk needed no
 change, because its scripted Agent never reported.
+
+**Slice 4, the port listens and announces.** 2,087 lines of source out and 487 in, 2,331 of tests out and
+1,241 in, and 2,252 out of the two snapshots. A tracker is now `verifyInbound`, `normalize` and
+`createComment`; `getIssue`, `getComment`, `handshake` and `listContainers` are optional, and a test module
+with only the three registers, is bound by a typed container (`sockets.containers` answers null and the Bind
+dialog asks for the key), routes a record and announces its Gate. GitHub, Linear and GitLab lost `getIssue`
+too, since none of them delivers a `changed` that needs a read-back, and Linear's and GitLab's parsers now
+read the webhook shape only. Every Project announces a Gate, each approval, the decision and a refused
+Ruling, and nothing about a Run; deevy sets no label. One inbound delivery is 23 statements, from 24: the
+Run it starts no longer reads its Project for a mirror level. `DEEVY_SOCKET_CATCHUP_MINUTES` went from all
+three entries and the hosted artifact's manifest; deevy-cloud never set it. Notion's connection needs read
+content, read comments, insert comments and user information, and no longer update or insert content.
+
+Three things went further than the plan said. With `issues.create` gone, the delegation ceilings lost their
+only caller, so `refusesDelegation` and the tree it read went with it (slice 6 above now removes only the
+settings), and the inbox's "wave of sub-issues" line lost its producer. deevy no longer knows which Agent
+opened a child, so when the last one closes it wakes the Agent the parent is routed to, and
+`issue.children_closed` carries `routedTo` where it carried `openedBy`; `issue.created_by` stays unused until
+slice 12. And GitLab, which has no parent field, has no tree in deevy any more: `issues.create` was what kept
+one there.
+
+The walk could no longer open its record or read deevy's comments back through deevy, so the record now
+arrives as a delivery like any other, and a deployment that registers the stub serves `/dev/tracker`, the
+stub's store as JSON, which the walk reads; it is mounted only where the stub is, sits in the Worker's
+`run_worker_first`, and the API gains nothing. The walk also checks that deevy said nothing else on the
+record: two Gates, their two Rulings and two refused Rulings. Rewriting the tests on records the tracker
+delivers turned up two things that were already true: a tracker comment that mentions an Agent puts no actor
+on the inbox row, and an author who mentions themselves from the tracker is not filtered out. The tool set
+is fifteen.
+
+One was a bug the cut uncovered. GitHub opens an issue first and adds it under its parent after, in a
+`sub_issues` delivery, and deevy took the parent only when it first saw a record, so a sub-issue the Agent
+opens on GitHub would never have been linked and its parent never woken. `issues.create` had hidden it by
+linking the child itself. A delivery that names a parent now links the record whenever it comes, even after a
+newer one, and one that names none keeps the link deevy has; a real-route GitHub test holds the order.
+
+The review found what the cut left saying the old thing: the Socket page told an operator whose tool had gone
+quiet that deevy was asking it and nothing was lost, the delegation ceilings promised a refusal nothing makes
+any more (they bound nothing until slice 6, and the setting says so), and `issue.createdBy` was still in the
+API when every other cut column was not. A test now stores each old `mirror` value on a Project and finds it
+says the same two things as any other.
