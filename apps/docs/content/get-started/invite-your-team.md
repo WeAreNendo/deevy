@@ -21,8 +21,8 @@ becomes a Member.
 2. Enter their **Email**, and choose a **Role**: **Member**, or **Admin** to run the Workspace with you.
 3. Choose **Create invitation**.
 
-deevy emails them the link, from `notifications@mail.deevy.dev`, and also shows it to you once, in case
-you'd rather send it yourself. Copy it then if you want it: deevy keeps only a hash of it, so it can't
+deevy shows you the link once. Choose **Copy the link**, and send it to them however you like: an email
+of your own, a chat message. deevy sends nothing itself, and it keeps only a hash of the link, so it can't
 show it again.
 
 An invitation:
@@ -31,9 +31,9 @@ An invitation:
 - works only for the address it was sent to, so a forwarded link lets nobody else in;
 - lets them in whether or not they match any of your rules.
 
-Until it is accepted, it is listed under **Invited**, with how long it has left and whether the email
-went. To send a fresh link, because it expired or went astray, choose **Revoke** and invite them again:
-an address holds one invitation at a time.
+Until it is accepted, it is listed under **Invited**, with how long it has left. To send a fresh link,
+because it expired, went astray or you didn't copy it, choose **Revoke** and invite them again: an address
+holds one invitation at a time.
 
 Every invitation counts toward your Workspace's 50 a day, whatever happens to it afterwards
 ([Daily limits](/cloud/limits/)). To bring in a whole team, a rule is the better tool.
@@ -65,22 +65,19 @@ invitations.
 
 ## What a new Member sees
 
-An invitation arrives as an email saying who invited them to which Workspace, with an **Accept the
-invitation** button. It opens the Workspace's sign-in page, which tells them an invitation is waiting;
-they sign in with the address it was sent to, and they're in. Someone a rule lets in simply signs in.
+The link you sent opens the Workspace's sign-in page, which tells them an invitation is waiting; they
+sign in with the address it was for, and they're in. Someone a rule lets in simply signs in.
 
-Either way, they land on **Needs me**: the Gates waiting on their ruling, the Runs waiting on their
-answer, and what their own Agents are doing. Until there is any, it says **Nothing needs you**. The
-sidebar also has:
+Either way, they land on **Needs me**: the Gates waiting on their ruling, and what their own Agents are
+doing. Until there is any, it says **Nothing needs you**. See [Needs me and chat](/needs-me/). The sidebar
+also has:
 
-- **Inbox**, their Notifications ([The inbox](/notifications/inbox/));
 - **Runs**, what the Workspace's Agents have been doing;
 - **Work**, every Issue deevy has brought in from your tools, to read: the work itself stays in the
   tools.
 
-Under **Settings**, in the **You** group, each Member chooses how they're told
-(**Notifications**), links their accounts on your tools so they can rule from there (**Identities**),
-and connects their own MCP client, such as Claude Code (**MCP clients**).
+Under **Settings**, in the **You** group, each Member links their accounts on your tools so they can rule
+from there (**Identities**), and connects their own MCP client, such as Claude Code (**MCP clients**).
 
 A Member can add Agents and rule on Gates. An admin can also connect tools, bind Projects, decide who
 joins, and change a Member's role or suspend them under **Settings › Members**.

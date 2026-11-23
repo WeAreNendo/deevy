@@ -1,6 +1,6 @@
 /**
  * What an Event says (docs/plans/ui-redesign-2.md slice D), shared by the Issue's
- * Activity, the Event log and the Inbox: the sentence with the actor as its
+ * Activity, the Event log and a Run's feed: the sentence with the actor as its
  * subject and the object named — which Gate, which Labels, which State — the
  * words someone wrote as `detail`, and the tone the row takes. New Events carry
  * names beside ids (the core writes them); older ones are resolved through the
@@ -11,8 +11,8 @@ import { startedBy } from "@/lib/run-trigger";
 export type EventTone = "human" | "agent" | "gate" | "muted" | "destructive";
 
 /**
- * The colour a tone takes on screen, as text: the one map the Inbox glyph,
- * the Event log's kind and any other row that speaks in a tone read from.
+ * The colour a tone takes on screen, as text: the one map the Event log's
+ * kind and any other row that speaks in a tone read from.
  */
 export const toneClass: Record<EventTone, string> = {
   human: "text-human",
@@ -225,6 +225,15 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say(`created the Project ${str(p.key) ?? ""} ${str(p.name) ?? ""}`.trim());
     case "project.updated": {
       const changed = Object.keys(p);
+      // Where the Project's Gates are posted is said in full: it moves where
+      // everybody will see the next one (docs/plans/simplify.md, slice 8).
+      if (changed.length === 1 && changed[0] === "chat") {
+        const to = (p.chat ?? {}) as { to?: { channel?: unknown } | null };
+        const channel = typeof to.to?.channel === "string" ? to.to.channel : null;
+        return channel
+          ? say(`posted the Project's Gates in ${channel}`)
+          : say("stopped posting the Project's Gates in chat", null, "muted");
+      }
       return say(`changed the Project's ${join(changed) || "settings"}`);
     }
     case "project.archived":
@@ -388,34 +397,12 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
       return say(`revoked the invitation for ${str(p.email) ?? "somebody"}`, null, "destructive");
     case "invitation.accepted":
       return say(`accepted the invitation for ${str(p.email) ?? "their address"}`, null, "human");
-    case "channel.created":
-      return say(`connected the Channel ${str(p.name) ?? ""}`);
-    case "channel.updated":
-      return say(`changed the Channel ${str(p.name) ?? ""}`);
-    case "channel.deleted":
-      return say(`removed the Channel ${str(p.name) ?? ""}`, null, "destructive");
-    case "channel.confirmed":
-      return say(
-        `confirmed ${str(p.address) ?? "a team address"} for the Channel ${str(p.name) ?? ""}`,
-      );
-    case "routing.updated":
-      return say(
-        typeof p.rules === "number"
-          ? `set ${String(p.rules)} routing rules`
-          : "changed the routing rules",
-      );
     case "webhook.subscribed":
       return say(`subscribed a webhook on ${str(p.host) ?? "a host"}`);
     case "webhook.removed":
       return say(`removed a webhook on ${str(p.host) ?? "a host"}`, null, "destructive");
     case "webhook.exhausted":
       return say("gave up on a webhook delivery", str(p.error), "destructive");
-    case "email.exhausted":
-      return say("gave up on an email", str(p.error), "destructive");
-    case "email.configured":
-      return say(`set email to go through ${str(p.sender) ?? "a sender"}, as ${str(p.from) ?? ""}`);
-    case "email.cleared":
-      return say("cleared the email sender set in Settings");
     case "workspace.created":
       return say(`created the Workspace ${str(p.name) ?? ""}`);
     case "workspace.updated": {

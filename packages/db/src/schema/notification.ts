@@ -7,55 +7,25 @@ import { member } from "./workspace.ts";
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
 /**
- * The kinds a Human is sent. These are what the preference matrix offers, what
- * a Workspace routing rule may name, and what a Slack message can say.
- */
-export const humanNotificationKinds = [
-  "mention",
-  "assignment",
-  /**
-   * A Gate this Human may rule on. Before docs/plans/simplify.md slice 5 a
-   * Run's Human was also asked a question of the Run's (`run_awaiting_input`);
-   * an Agent asks that on the record now, and nothing writes the kind.
-   */
-  "gate_awaiting",
-  /**
-   * A Run ended, completed or failed. Before docs/plans/simplify.md slice 6 a
-   * Sponsor also heard when an Agent's sub-issues all finished (`delegation`);
-   * the Run that wakes the Agent is that news now, and this says how it ends.
-   * A row of the old kind, or a routing rule naming it, no longer reads, as
-   * with `run_awaiting_input`; slice 12's empty database clears them.
-   */
-  "run_finished",
-] as const;
-
-/**
- * The kinds an Agent is sent. ADR-0003 says an Agent without a webhook polls
- * its inbox over MCP, and until `run_answered` existed the one thing it waits
- * for — a Human's ruling on the Gate it stopped at — never arrived there
- * (docs/plans/m3.md).
- */
-export const agentNotificationKinds = ["run_answered"] as const;
-
-/**
- * Every kind, which is those two audiences and nothing else.
+ * What an Agent is told (docs/plans/simplify.md, slice 8): the record it was
+ * assigned, a comment that mentions it, and a Ruling on the Gate it stopped
+ * at. ADR-0003 says an Agent without a webhook polls its inbox over MCP, and
+ * these are what it polls for.
  *
- * Derived from them rather than written a third time. Adding `run_answered` to
- * a single flat list broke two surfaces at once — the inbox page's labels and
- * the Slack headlines both key off every kind — and neither failure was
- * visible until the typechecker said so. A kind now has to be classified to
- * exist at all, and each surface takes the audience it actually serves.
+ * A Human is sent nothing: what needs them is the Gates they may rule on,
+ * derived for Needs me and posted in a Project's chat channel, and the
+ * tracker tells them the rest. Rows of the kinds a Human was once sent
+ * (`gate_awaiting`, `run_finished`, and before those `run_awaiting_input` and
+ * `delegation`) no longer read; slice 12's empty database clears them.
  */
-export const notificationKinds = [...humanNotificationKinds, ...agentNotificationKinds] as const;
+export const notificationKinds = ["assignment", "mention", "run_answered"] as const;
 
-export type HumanNotificationKind = (typeof humanNotificationKinds)[number];
-export type AgentNotificationKind = (typeof agentNotificationKinds)[number];
+export type NotificationKind = (typeof notificationKinds)[number];
 
 /**
- * A message to a Human derived from Events (CONTEXT.md): a mention, an
- * assignment, a Gate awaiting them. Derived rather than stored twice, so the
- * Event log stays the only source of what happened; this table is the index
- * that makes "what needs me" one query.
+ * A message to an Agent derived from Events (CONTEXT.md). Derived rather than
+ * stored twice, so the Event log stays the only source of what happened; this
+ * table is the index that makes an Agent's inbox one query.
  */
 export const notification = sqliteTable(
   "notification",

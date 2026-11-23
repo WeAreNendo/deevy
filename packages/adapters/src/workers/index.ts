@@ -8,11 +8,6 @@ export {
   type QueuedJob,
 } from "./queue.ts";
 export {
-  createCloudflareSender,
-  type CloudflareEmailBinding,
-  type CloudflareMessage,
-} from "./email.ts";
-export {
   APP_PATHS,
   APP_PREFIXES,
   isAppPath,

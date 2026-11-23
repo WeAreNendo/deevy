@@ -107,7 +107,6 @@ You are offered what you may call and nothing else:
 | `links_add`, `links_list`, `links_remove` | Point a record at a pull request or any URL.                                                  |
 | `runs_list`, `runs_get`                   | What Agents have done on a record, and one Run's feed.                                        |
 | `gates_get`                               | What a Gate is waiting for, and what has been ruled.                                          |
-| `inbox_list`                              | Your inbox.                                                                                   |
 
 What it cannot do is deliberate. It cannot open, narrate or finish a Run, ask at a Gate or open a pull
 request, because those belong to an Agent's Run and you are here for your own work. It cannot rule on a Gate,

@@ -8,8 +8,6 @@
  */
 import { agents } from "./agents.ts";
 import { allowlist } from "./allowlist.ts";
-import { channels } from "./channels.ts";
-import { email } from "./email.ts";
 import { events } from "./events.ts";
 import { checkpoints, gates } from "./gates.ts";
 import { identities } from "./identities.ts";
@@ -19,9 +17,7 @@ import { issues } from "./issues.ts";
 import { links } from "./links.ts";
 import { members } from "./members.ts";
 import { oauthClients } from "./oauth-clients.ts";
-import { preferences } from "./preferences.ts";
 import { projects } from "./projects.ts";
-import { routing } from "./routing.ts";
 import { runs } from "./runs.ts";
 import { sockets } from "./sockets.ts";
 import { health, me } from "./system.ts";
@@ -46,10 +42,6 @@ export const router = {
   issues,
   links,
   inbox,
-  channels,
-  routing,
-  preferences,
-  email,
   oauthClients,
   webhooks,
 };
@@ -58,9 +50,7 @@ export type AppRouter = typeof router;
 export {
   agents,
   allowlist,
-  channels,
   checkpoints,
-  email,
   events,
   gates,
   health,
@@ -72,10 +62,8 @@ export {
   me,
   members,
   oauthClients,
-  preferences,
   sockets,
   projects,
-  routing,
   runs,
   webhooks,
   workspace,

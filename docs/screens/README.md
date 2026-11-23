@@ -13,6 +13,6 @@ example.com, whatever the checkout's `.env` says — and run
 DEEVY_SCREENS_URL=http://localhost:3020 DEEVY_ADMIN_EMAIL=ada@example.com vp run web#screens
 ```
 
-`DEEVY_SCREENS_ONLY=gate,inbox-phone` takes some shots alone; `DEEVY_SCREENS_DEBUG=1` prints what each page
+`DEEVY_SCREENS_ONLY=gate,runs-phone` takes some shots alone; `DEEVY_SCREENS_DEBUG=1` prints what each page
 said at capture. Regenerate at a milestone, not per commit: the set is about 1.8 MB each time. The set was
 last taken when the Sockets milestone closed, on 2026-09-24.

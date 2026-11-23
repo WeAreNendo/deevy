@@ -57,6 +57,14 @@ export const project = sqliteTable(
     defaultAgentMemberId: text("default_agent_member_id").references(() => member.id, {
       onDelete: "set null",
     }),
+    /**
+     * The chat channel this Project's Gates are posted in, each with Approve and
+     * Reject and changed as Rulings land (docs/plans/simplify.md, slice 8): a
+     * chat Socket, and the channel's own id there (`C0123ABCD` in Slack). Both
+     * or neither; a Socket removed takes the binding with it.
+     */
+    chatSocketId: text("chat_socket_id").references(() => socket.id, { onDelete: "set null" }),
+    chatChannel: text("chat_channel"),
     /** How a record says which Agent it is for: a label prefix, a mention, or neither. */
     routing: text("routing", { mode: "json" })
       .$type<{ labelPrefix: string; mention: boolean }>()

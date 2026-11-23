@@ -49,8 +49,8 @@ export function NotFoundPage({
         <Link to="/" className={buttonVariants({ variant: "outline" })}>
           Home
         </Link>
-        <Link to="/inbox" className={buttonVariants({ variant: "outline" })}>
-          Inbox
+        <Link to="/runs" className={buttonVariants({ variant: "outline" })}>
+          Runs
         </Link>
       </div>
     </Empty>

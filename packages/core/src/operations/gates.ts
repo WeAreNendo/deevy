@@ -6,7 +6,7 @@ import {
   type GateRequest,
 } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { appendEvent } from "../events.ts";
 import {
@@ -16,6 +16,7 @@ import {
   loweredApprovals,
   policyFor,
   policyOf,
+  requesterAmong,
   requesterFor,
   setCheckpoints,
   type CheckpointPolicy,
@@ -118,6 +119,103 @@ function viewOf(
     origin: linkOrigin(context),
     viewer: { id: context.member.id, kind: context.member.kind },
   });
+}
+
+/**
+ * How many pages Needs me reads before it stops looking: seven hundred open
+ * Gates at the largest page, which no team keeps waiting. A page costs at most
+ * four statements after the first, so the longest look stays inside the fifty a
+ * D1 Worker may run for one request (budget.test.ts).
+ */
+export const maxMinePages = 7;
+
+/**
+ * What one list's pages share, read once however many pages it reads: the
+ * Checkpoint policies of the Projects seen so far, and who is active.
+ */
+interface ViewMemo {
+  policies: Map<string, CheckpointPolicy>;
+  projectsRead: Set<string>;
+  active?: Set<string>;
+}
+
+/**
+ * The views of one page of Gates: its Rulings, the policies of the Projects
+ * on it, and who each one waits on. A handful of statements whatever the page
+ * holds, and none of the Runs behind it unless a policy excludes the Human
+ * the work is for.
+ */
+async function viewsOf(
+  context: ContextFor<"member">,
+  rows: Array<{ gate: GateRequest; externalKey: string }>,
+  memo: ViewMemo = { policies: new Map(), projectsRead: new Set() },
+) {
+  if (rows.length === 0) return [];
+  const ids = rows.map((row) => row.gate.id);
+  const decisions = await context.db.query.gateDecision.findMany({
+    where: { gateRequestId: { in: ids } },
+    with: { socket: true },
+  });
+  const unread = [...new Set(rows.map((row) => row.gate.projectId))].filter(
+    (id) => !memo.projectsRead.has(id),
+  );
+  if (unread.length > 0) {
+    const configured = await context.db.query.checkpoint.findMany({
+      where: { projectId: { in: unread } },
+      with: { approvers: true },
+    });
+    for (const row of configured) {
+      memo.policies.set(
+        `${row.projectId}:${row.name}`,
+        policyOf(
+          row,
+          row.approvers.map((one) => one.memberId),
+        ),
+      );
+    }
+    for (const id of unread) memo.projectsRead.add(id);
+  }
+
+  // The Runs behind the page, for the Checkpoints that exclude the Human
+  // the work is for, and the Members they name: two queries, and none at all
+  // where no policy asks.
+  const excluding = rows.filter(
+    ({ gate }) =>
+      memo.policies.get(`${gate.projectId}:${gate.checkpoint}`)?.excludeRequester === true,
+  );
+  const requesters = new Map<string, string | null>();
+  if (excluding.length > 0) {
+    const runs = await context.db.query.run.findMany({
+      where: { id: { in: excluding.map(({ gate }) => gate.runId) } },
+      columns: { id: true, triggeredByMemberId: true, agentMemberId: true },
+    });
+    const named = [
+      ...new Set(runs.flatMap((one) => [one.triggeredByMemberId, one.agentMemberId])),
+    ].filter((id): id is string => id !== null);
+    const members = await context.db.query.member.findMany({
+      where: { id: { in: named } },
+      columns: { id: true, kind: true, sponsorId: true },
+    });
+    const byId = new Map(members.map((one) => [one.id, one]));
+    for (const one of runs) requesters.set(one.id, requesterAmong(one, byId));
+  }
+  // Who could still approve, for every open Gate: one more statement for the
+  // whole list, and none where it holds nothing open.
+  const open = rows.some(({ gate }) => gate.status === "open");
+  if (open && !memo.active) memo.active = await activeHumans(context.db, context.workspace.id);
+  const active = open ? (memo.active ?? null) : null;
+
+  return rows.map(({ gate, externalKey }) =>
+    viewOf(context, {
+      request: gate,
+      policy:
+        memo.policies.get(`${gate.projectId}:${gate.checkpoint}`) ?? defaultPolicy(gate.checkpoint),
+      decisions: decisions.filter((one) => one.gateRequestId === gate.id),
+      issueKey: externalKey,
+      requesterId: requesters.get(gate.runId) ?? null,
+      active,
+    }),
+  );
 }
 
 export const gates = {
@@ -359,89 +457,61 @@ export const gates = {
       const granted = context.grantedProjectIds;
 
       // One page, off `(project_id, status)`, scoped to this Workspace by the
-      // same join every other list uses. Three statements whatever it returns:
-      // the page, its Rulings, and the policies of the Projects on it.
-      const rows = await context.db
-        .select({ gate: gateRequestTable, externalKey: issueTable.externalKey })
-        .from(gateRequestTable)
-        .innerJoin(issueTable, eq(gateRequestTable.issueId, issueTable.id))
-        .innerJoin(projectTable, eq(gateRequestTable.projectId, projectTable.id))
-        .where(
-          and(
-            eq(projectTable.workspaceId, context.workspace.id),
-            granted ? inArray(gateRequestTable.projectId, granted) : undefined,
-            project ? eq(gateRequestTable.projectId, project.id) : undefined,
-            input.runId === undefined ? undefined : eq(gateRequestTable.runId, input.runId),
-            input.issueId === undefined ? undefined : eq(gateRequestTable.issueId, input.issueId),
-            input.mine ? eq(gateRequestTable.status, "open") : undefined,
-            input.status === undefined ? undefined : eq(gateRequestTable.status, input.status),
-          ),
-        )
-        .orderBy(desc(gateRequestTable.askedAt))
-        .limit(input.limit);
-      if (rows.length === 0) return { gates: [] };
+      // same join every other list uses. Each page after the first starts
+      // below the last Gate of the one before, by when it was asked and then
+      // its id, so a Gate asked or ruled while Needs me reads on neither
+      // repeats one nor skips one.
+      const pageOf = (after: { askedAt: Date; id: string } | null) =>
+        context.db
+          .select({ gate: gateRequestTable, externalKey: issueTable.externalKey })
+          .from(gateRequestTable)
+          .innerJoin(issueTable, eq(gateRequestTable.issueId, issueTable.id))
+          .innerJoin(projectTable, eq(gateRequestTable.projectId, projectTable.id))
+          .where(
+            and(
+              eq(projectTable.workspaceId, context.workspace.id),
+              granted ? inArray(gateRequestTable.projectId, granted) : undefined,
+              project ? eq(gateRequestTable.projectId, project.id) : undefined,
+              input.runId === undefined ? undefined : eq(gateRequestTable.runId, input.runId),
+              input.issueId === undefined ? undefined : eq(gateRequestTable.issueId, input.issueId),
+              input.mine ? eq(gateRequestTable.status, "open") : undefined,
+              input.status === undefined ? undefined : eq(gateRequestTable.status, input.status),
+              after
+                ? or(
+                    lt(gateRequestTable.askedAt, after.askedAt),
+                    and(
+                      eq(gateRequestTable.askedAt, after.askedAt),
+                      lt(gateRequestTable.id, after.id),
+                    ),
+                  )
+                : undefined,
+            ),
+          )
+          .orderBy(desc(gateRequestTable.askedAt), desc(gateRequestTable.id))
+          .limit(input.limit);
 
-      const ids = rows.map((row) => row.gate.id);
-      const decisions = await context.db.query.gateDecision.findMany({
-        where: { gateRequestId: { in: ids } },
-        with: { socket: true },
-      });
-      // Only the Projects on this page, and only when a policy there excludes
-      // the requester: otherwise the Runs behind the page are never read.
-      const configured = await context.db.query.checkpoint.findMany({
-        where: { projectId: { in: [...new Set(rows.map((row) => row.gate.projectId))] } },
-        with: { approvers: true },
-      });
-      const policies = new Map(
-        configured.map((row) => [
-          `${row.projectId}:${row.name}`,
-          policyOf(
-            row,
-            row.approvers.map((one) => one.memberId),
-          ),
-        ]),
-      );
-
-      // The Runs behind the page, for the Checkpoints that exclude the Human
-      // the work is for: one query, and none at all where no policy asks.
-      const excluding = rows.filter(
-        ({ gate }) =>
-          policies.get(`${gate.projectId}:${gate.checkpoint}`)?.excludeRequester === true,
-      );
-      const requesters = new Map<string, string | null>();
-      if (excluding.length > 0) {
-        const runs = await context.db.query.run.findMany({
-          where: { id: { in: excluding.map(({ gate }) => gate.runId) } },
-          columns: { id: true, triggeredByMemberId: true, agentMemberId: true },
-        });
-        for (const one of runs) requesters.set(one.id, await requesterFor(context.db, one));
-      }
-      // Who could still approve, for every open Gate on the page: one more
-      // statement, and none where the page holds nothing open.
-      const active = await activeWhileOpen(
-        context,
-        rows.map(({ gate }) => gate),
-      );
-
-      const gatesOut = [];
-      for (const { gate, externalKey } of rows) {
-        const policy =
-          policies.get(`${gate.projectId}:${gate.checkpoint}`) ?? defaultPolicy(gate.checkpoint);
-        const ruled = decisions.filter((one) => one.gateRequestId === gate.id);
-        const view = viewOf(context, {
-          request: gate,
-          policy,
-          decisions: ruled,
-          issueKey: externalKey,
-          requesterId: requesters.get(gate.runId) ?? null,
-          active,
-        });
-        // "Waiting on me" is the whole question a home page asks, and it is
-        // the same question the ruling screen answers: a Gate this Human may
-        // approve right now. The Human a Checkpoint excludes may still reject
-        // it, but it is not waiting on them, just as their inbox is not asked.
-        if (input.mine && !view.you.mayApprove) continue;
-        gatesOut.push(view);
+      // "Waiting on me" is the whole question a home page asks, and the only
+      // place a Human is told anything now (docs/plans/simplify.md, slice 8),
+      // so a page of Gates waiting on others must not hide one waiting on
+      // them: it reads on, a page at a time, until the answer is full or the
+      // open Gates run out. Bounded, because every page is.
+      // An Agent rules on nothing, so nothing waits on it.
+      if (input.mine && context.member.kind !== "human") return { gates: [] };
+      const gatesOut: Array<Awaited<ReturnType<typeof viewsOf>>[number]> = [];
+      const memo: ViewMemo = { policies: new Map(), projectsRead: new Set() };
+      let after: { askedAt: Date; id: string } | null = null;
+      for (let page = 0; page < (input.mine ? maxMinePages : 1); page += 1) {
+        const rows = await pageOf(after);
+        for (const view of await viewsOf(context, rows, memo)) {
+          // The same question the ruling screen answers: a Gate this Human
+          // may approve right now. The Human a Checkpoint excludes may still
+          // reject it, but it is not waiting on them.
+          if (input.mine && !view.you.mayApprove) continue;
+          if (gatesOut.length < input.limit) gatesOut.push(view);
+        }
+        const last = rows.at(-1)?.gate;
+        if (!last || rows.length < input.limit || gatesOut.length >= input.limit) break;
+        after = { askedAt: last.askedAt, id: last.id };
       }
       return { gates: gatesOut };
     },

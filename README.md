@@ -24,11 +24,11 @@ and agents, and between agents and agents.
 The glue between a team's tools and its Agents, on a single Docker container or on a Cloudflare Worker with D1,
 from one codebase. The work stays where the team keeps it — GitHub, Linear, GitLab or Notion — and deevy routes a
 record to an Agent by a label or a default, records the Run, holds the Gate where a Human rules on what the
-Agent proposes (in deevy, with `/approve` in a comment on the record, or with a button in Slack), records the
-pull request the Agent opened, and says what happened back where the team reads. Agents are Members with their
-own identity, keys and audit trail, working over MCP. Every change is an Event, and the inbox, Slack, the
-webhooks and what deevy writes in the tools all derive from that one log. It is also hosted, as deevy Cloud at
-app.deevy.dev, an invite-only beta.
+Agent proposes (on Needs me in deevy, with `/approve` in a comment on the record, or with a button in the
+Project's Slack channel), records the pull request the Agent opened, and says what happened back where the
+team reads. Agents are Members with their own identity, keys, inbox and audit trail, working over MCP. Every
+change is an Event, and an Agent's inbox, the webhooks, a Gate's message in Slack and what deevy writes in the
+tools all derive from that one log. It is also hosted, as deevy Cloud at app.deevy.dev, an invite-only beta.
 
 deevy never runs an agent (ADR-0003) and never owns the tracker (ADR-0024). An Agent is whatever holds its
 key — Claude Code, OpenCode, Cursor, Copilot or a program of your own — reaching deevy over MCP, with the

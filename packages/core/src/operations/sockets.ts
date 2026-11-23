@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   inboundDelivery,
+  project as projectTable,
   socket as socketTable,
   socketProviders,
   socketStatuses,
@@ -727,6 +728,46 @@ export const sockets = {
     },
   }),
 
+  channels: defineOperation({
+    name: "sockets.channels",
+    summary: "The channels a Project's Gates could be posted in, inside this chat tool",
+    method: "GET",
+    path: "/sockets/{socketId}/channels",
+    auth: "admin",
+    input: z.object({ socketId: z.string() }),
+    output: z.object({
+      /**
+       * What the tool offers, or null where it lists none: the admin types the
+       * channel's id instead, as a tracker's container is typed.
+       */
+      channels: z.array(z.object({ id: z.string(), name: z.string() })).nullable(),
+      /**
+       * Why the tool would not list them, when it could and did not: an app
+       * installed before it asked to read channels, most often. The channel
+       * is typed until it is reinstalled.
+       */
+      problem: z.string().nullable(),
+    }),
+    handler: async ({ input, context }) => {
+      const row = await requireSocket(context, input.socketId);
+      const chat = (await socketModuleFor(context as SocketFor, row)).chat;
+      if (!chat) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: `The ${row.name} Socket is not a chat tool`,
+        });
+      }
+      if (!chat.listChannels) return { channels: null, problem: null };
+      try {
+        return { channels: await chat.listChannels(), problem: null };
+      } catch (error) {
+        return {
+          channels: null,
+          problem: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  }),
+
   test: defineOperation({
     name: "sockets.test",
     summary: "Ask the tool who deevy is there, which proves the credential still works",
@@ -809,6 +850,29 @@ export const sockets = {
         subjectId: row.id,
         payload: { provider: row.provider, name: row.name },
       });
+      // A chat channel is bound through its tool, so a Project posting there
+      // posts nowhere now, and says so in its own history.
+      const posting = await context.db.query.project.findMany({
+        where: { chatSocketId: row.id },
+        columns: { id: true, chatChannel: true },
+      });
+      if (posting.length > 0) {
+        await context.db
+          .update(projectTable)
+          .set({ chatSocketId: null, chatChannel: null })
+          .where(eq(projectTable.chatSocketId, row.id));
+      }
+      for (const project of posting) {
+        await appendEvent(context, {
+          kind: "project.updated",
+          subjectType: "project",
+          subjectId: project.id,
+          projectId: project.id,
+          payload: {
+            chat: { from: { socketId: row.id, channel: project.chatChannel }, to: null },
+          },
+        });
+      }
       return socketOut(row);
     },
   }),

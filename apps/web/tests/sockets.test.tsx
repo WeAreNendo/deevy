@@ -444,7 +444,9 @@ describe("the tools this Workspace is connected to", () => {
     expect(text).not.toContain("SOCKET_ID");
     // Only the scopes a method deevy calls needs: a click names who clicked,
     // so nothing asks Slack about people (users:read).
-    expect(text).toMatch(/bot:\n\s+- chat:write\n\s+- im:write\n\s+- commands\n/);
+    expect(text).toMatch(
+      /bot:\n\s+- chat:write\n\s+- channels:read\n\s+- groups:read\n\s+- commands\n/,
+    );
     expect(text).toContain("command: /deevy");
 
     fireEvent.change(secret("Bot User OAuth Token"), {

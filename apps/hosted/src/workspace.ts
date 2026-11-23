@@ -1,5 +1,4 @@
 import { DurableObject } from "cloudflare:workers";
-import { createCloudflareSender } from "@deevy/adapters/workers";
 import {
   createAlarmJobQueue,
   createDurableDb,
@@ -11,7 +10,6 @@ import {
 import {
   createApp,
   createAuth,
-  emailsSince,
   invitationsSince,
   limitWindowStart,
   onEventAppended,
@@ -24,13 +22,11 @@ import {
   type LiveReader,
 } from "@deevy/core";
 import { fetchClientMetadataResource } from "@deevy/core/cimd";
-import type { EmailSenders } from "@deevy/core/email";
 import { member, run, socket } from "@deevy/db";
 import { migrations } from "@deevy/db/durable-migrations";
-import { emailSenders } from "@deevy/email";
 import { devTrackerView, socketModules } from "@deevy/sockets";
 import { count, eq, gte } from "drizzle-orm";
-import { readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
+import { ownLimits, readHostedEnv, type HostedBindings, type HostedEnv } from "./env.ts";
 import { betterAuthLogger, reportFor, throwDescribed } from "./log.ts";
 import { SUSPENDED, suspendedPage } from "./router.ts";
 import { workspaceSecret } from "./secrets.ts";
@@ -80,7 +76,6 @@ export interface WorkspaceStatus {
     agents: number;
     sockets: number;
     invitationsToday: number;
-    emailsToday: number;
     runsThisMonth: number;
   } | null;
   /**
@@ -226,15 +221,10 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
         limits: {
           ...passLimits,
           silenceMs: this.#hosted.runStaleMinutes * 60_000,
-          gateSilenceMs: this.#hosted.gateReminderHours * 3_600_000,
         },
         baseUrl: this.#urlOf(config),
         sockets: this.#sockets(),
         socketSecret: await workspaceSecret(this.#hosted.masterSecret, config.key, "seal"),
-        emailSenders: this.#senders(),
-        email: this.#hosted.email,
-        secret: await workspaceSecret(this.#hosted.masterSecret, config.key, "auth"),
-        workspaceLimits: this.#limits(config),
       });
     } catch (failure) {
       // Said rather than thrown, for the reason `fetch` says it: the runtime
@@ -284,7 +274,7 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       }
     }
     const limits = Object.fromEntries(
-      Object.entries({ ...this.#config.limits, ...changed }).filter(
+      Object.entries({ ...ownLimits(this.#hosted.limits, this.#config.limits), ...changed }).filter(
         ([, value]) => value !== null && value !== undefined,
       ),
     ) as WorkspaceLimits;
@@ -400,7 +390,7 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
 
   /** The platform's limits, with whatever this Workspace was given over them. */
   #limits(config: WorkspaceConfig): Required<WorkspaceLimits> {
-    return { ...this.#hosted.limits, ...config.limits };
+    return { ...this.#hosted.limits, ...ownLimits(this.#hosted.limits, config.limits) };
   }
 
   #sockets() {
@@ -415,14 +405,6 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
           }
         : {}),
     });
-  }
-
-  #senders(): EmailSenders {
-    const binding = this.env.EMAIL;
-    return {
-      ...emailSenders({ devStub: this.#hosted.devStubEmail }),
-      ...(binding ? { cloudflare: () => createCloudflareSender(binding) } : {}),
-    };
   }
 
   async #counts(): Promise<WorkspaceStatus["counts"]> {
@@ -447,7 +429,6 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       agents: agents?.n ?? 0,
       sockets: sockets?.n ?? 0,
       invitationsToday: workspace ? await invitationsSince(this.#db, workspace.id, since) : 0,
-      emailsToday: workspace ? await emailsSince(this.#db, workspace.id, since) : 0,
       runsThisMonth: runs?.n ?? 0,
     };
   }
@@ -486,8 +467,7 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       // and ends after minutes so a forgotten tab does not keep it awake. It
       // is the fallback: a tab here opens the socket below (ADR-0032).
       live: { pollMs: 1_000, maxDurationMs: this.#hosted.streamSeconds * 1_000 },
-      // Every Workspace here mails through one sender whose quota and
-      // reputation are all of theirs, so each is held to its day's share.
+      // Each Workspace is held to its day's share of invitations.
       limits: this.#limits(config),
       liveSocket: { accept: (_request, reader) => this.#accept(reader) },
       signInProviders: signInProviders(identity),
@@ -495,9 +475,6 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
       // What the stub holds, at `/dev/tracker`, wherever it is registered.
       ...(this.#hosted.devStubSockets ? { devTracker: () => devTrackerView() } : {}),
       socketSecret: await workspaceSecret(this.#hosted.masterSecret, config.key, "seal"),
-      emailSenders: this.#senders(),
-      email: this.#hosted.email,
-      ...(this.#hosted.emailProblem ? { emailProblem: this.#hosted.emailProblem } : {}),
       // What a write owes goes out on this object's alarm, set to now.
       jobs: createAlarmJobQueue(this.ctx.storage),
       onError: reportFor(config.slug),

@@ -18,32 +18,45 @@ afterEach(() => {
   for (const close of closers.splice(0)) close();
 });
 
+/**
+ * Alice, a Human admin, and two Agents she sponsors: an inbox is an Agent's
+ * own (docs/plans/simplify.md, slice 8), so these are who has one.
+ */
 async function workspace(db: MemberContext["db"]) {
   const alice = await memberContext(db, { role: "admin", name: "Alice" });
-  const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-  const carol = await memberContext(db, { name: "Carol", email: "carol@example.com" });
   const { sockets } = fakeSockets();
   const context = { ...alice, sockets };
   const seeded = await seedProject(db, alice.workspace.id);
   const issue = await seeded.record({ externalId: "1", title: "Ship it" });
+  const planner = await agentContext(db, {
+    name: "Planner",
+    email: "planner@example.com",
+    sponsor: alice.member,
+    grants: [seeded.project.id],
+  });
+  const coder = await agentContext(db, {
+    name: "Coder",
+    email: "coder@example.com",
+    sponsor: alice.member,
+    grants: [seeded.project.id],
+  });
   return {
     alice: context,
-    bob,
-    carol,
-    project: seeded.project,
+    planner,
+    coder,
     record: seeded.record,
     deliver: seeded.deliver,
     issue,
     asAlice: createRouterClient(router, { context }),
-    asBob: createRouterClient(router, { context: bob }),
-    asCarol: createRouterClient(router, { context: carol }),
+    asPlanner: createRouterClient(router, { context: planner }),
+    asCoder: createRouterClient(router, { context: coder }),
   };
 }
 
 /**
  * Alice saying something on the record in the tracker, as its delivery states
  * it. A tracker comment names a Member through deevy's own account
- * (`@deevy bob`), and deevy hears it only from the tool (ADR-0024).
+ * (`@deevy planner`), and deevy hears it only from the tool (ADR-0024).
  */
 function aliceSays(issue: { externalId: string; url: string }, body: string): InboundEvent {
   return {
@@ -77,122 +90,50 @@ async function route(
 }
 
 describe("an assignment", () => {
-  it("notifies the new Assignee and nobody else", async () => {
+  it("tells the Agent it was routed to and nobody else", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { alice, asAlice, asBob, asCarol, bob, issue } = await workspace(db);
+    const { alice, asPlanner, asCoder, planner, issue } = await workspace(db);
+
+    await route(alice, issue, planner.member.id);
+
+    const inbox = await asPlanner.inbox.list({});
+    expect(inbox.notifications.filter((n) => n.kind === "assignment")).toHaveLength(1);
+    expect((await asCoder.inbox.list({})).notifications).toEqual([]);
+  });
+
+  it("tells a Human nothing, even routed to them", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { alice, issue } = await workspace(db);
+    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
 
     await route(alice, issue, bob.member.id);
 
-    const inbox = await asBob.inbox.list({});
-    expect(inbox.notifications.filter((n) => n.kind === "assignment")).toHaveLength(1);
-    expect(
-      (await asCarol.inbox.list({})).notifications.filter((n) => n.kind === "assignment"),
-    ).toEqual([]);
-    expect(
-      (await asAlice.inbox.list({})).notifications.filter((n) => n.kind === "assignment"),
-    ).toEqual([]);
-  });
-
-  it("says nothing when someone assigns an Issue to themselves", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { alice, asAlice, issue } = await workspace(db);
-
-    await route(alice, issue, alice.member.id);
-
-    expect(
-      (await asAlice.inbox.list({})).notifications.filter((n) => n.kind === "assignment"),
-    ).toEqual([]);
+    expect(await db.query.notification.findMany()).toEqual([]);
   });
 });
 
 describe("a mention", () => {
-  it("notifies the mentioned Member but not the one who wrote it", async () => {
+  it("tells the Agent it names", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { asAlice, asBob, deliver, issue } = await workspace(db);
+    const { asPlanner, asCoder, deliver, issue } = await workspace(db);
 
-    await deliver([aliceSays(issue, "over to @deevy bob")]);
+    await deliver([aliceSays(issue, "over to @deevy planner")]);
 
-    // A delivery names its author by the tool's account, not as a Member, so
-    // what keeps Alice out of her own inbox is that the body does not name her.
     expect(
-      (await asBob.inbox.list({})).notifications.filter((n) => n.kind === "mention"),
+      (await asPlanner.inbox.list({})).notifications.filter((n) => n.kind === "mention"),
     ).toHaveLength(1);
-    expect(
-      (await asAlice.inbox.list({})).notifications.filter((n) => n.kind === "mention"),
-    ).toEqual([]);
-  });
-});
-
-describe("the inbox", () => {
-  it("counts unread, marks read for the caller only, and pages", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { alice, asBob, asCarol, bob, issue } = await workspace(db);
-    await route(alice, issue, bob.member.id);
-
-    const before = await asBob.inbox.unreadCount({});
-    expect(before.unread).toBeGreaterThan(0);
-    const carolBefore = await asCarol.inbox.unreadCount({});
-
-    const { notifications } = await asBob.inbox.list({});
-    await asBob.inbox.markRead({ ids: notifications.map((n) => n.id) });
-
-    expect((await asBob.inbox.unreadCount({})).unread).toBe(0);
-    expect((await asCarol.inbox.unreadCount({})).unread).toBe(carolBefore.unread);
-    expect((await asBob.inbox.list({ unreadOnly: true })).notifications).toEqual([]);
-  });
-
-  it("marks everything read at once", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { asBob } = await workspace(db);
-
-    await asBob.inbox.markAllRead({});
-
-    expect((await asBob.inbox.unreadCount({})).unread).toBe(0);
-  });
-
-  it("never shows one Member another's Notifications", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { alice, asCarol, bob, issue } = await workspace(db);
-    await route(alice, issue, bob.member.id);
-
-    const carol = await asCarol.inbox.list({});
-    expect(carol.notifications.every((n) => n.recipientMemberId !== bob.member.id)).toBe(true);
+    expect((await asCoder.inbox.list({})).notifications).toEqual([]);
   });
 });
 
 describe("an Agent's own inbox", () => {
-  async function agentWorkspace(db: MemberContext["db"]) {
-    const alice = await memberContext(db, { role: "admin", name: "Alice" });
-    const { sockets } = fakeSockets();
-    const context = { ...alice, sockets };
-    const seeded = await seedProject(db, alice.workspace.id);
-    const issue = await seeded.record({ externalId: "1", title: "Ship it" });
-    const planner = await agentContext(db, {
-      name: "Planner",
-      email: "planner@example.com",
-      sponsor: alice.member,
-      grants: [seeded.project.id],
-    });
-    return {
-      alice: context,
-      asAlice: createRouterClient(router, { context }),
-      record: seeded.record,
-      issue,
-      planner,
-      asPlanner: createRouterClient(router, { context: planner }),
-    };
-  }
-
   it("clears the Notifications it has taken up, so the next pass finds new work", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { alice, record, issue, planner, asPlanner } = await agentWorkspace(db);
+    const { alice, record, issue, planner, asPlanner } = await workspace(db);
     const second = await record({ externalId: "2", title: "Two" });
     await route(alice, issue, planner.member.id);
     await route(alice, second, planner.member.id);
@@ -206,30 +147,27 @@ describe("an Agent's own inbox", () => {
     expect((await asPlanner.inbox.list({})).notifications).toHaveLength(2);
   });
 
-  it("cannot read another Member's inbox by naming their ids", async () => {
+  it("cannot read or clear another Agent's by naming their ids", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { alice, record, issue, planner, asPlanner } = await agentWorkspace(db);
-    const bob = await memberContext(db, { name: "Bob", email: "bob@example.com" });
-    const asBob = createRouterClient(router, { context: bob });
+    const { alice, record, issue, planner, coder, asPlanner, asCoder } = await workspace(db);
     const second = await record({ externalId: "2", title: "Two" });
-    await route(alice, issue, bob.member.id);
+    await route(alice, issue, coder.member.id);
     await route(alice, second, planner.member.id);
-    const bobs = await asBob.inbox.list({ unreadOnly: true });
+    const coders = await asCoder.inbox.list({ unreadOnly: true });
 
-    const read = await asPlanner.inbox.markRead({ ids: bobs.notifications.map((n) => n.id) });
+    const read = await asPlanner.inbox.markRead({ ids: coders.notifications.map((n) => n.id) });
 
     expect(read.read).toBe(0);
-    expect((await asBob.inbox.list({ unreadOnly: true })).notifications).toHaveLength(
-      bobs.notifications.length,
-    );
-    expect((await asPlanner.inbox.list({ unreadOnly: true })).notifications).toHaveLength(1);
+    expect((await asCoder.inbox.list({ unreadOnly: true })).notifications).toHaveLength(1);
+    const planners = (await asPlanner.inbox.list({})).notifications;
+    expect(planners.every((n) => n.recipientMemberId === planner.member.id)).toBe(true);
   });
 
   it("is refused once its Sponsor has suspended it", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { alice, asAlice, issue, planner, asPlanner } = await agentWorkspace(db);
+    const { alice, asAlice, issue, planner, asPlanner } = await workspace(db);
     await route(alice, issue, planner.member.id);
     const waiting = await asPlanner.inbox.list({ unreadOnly: true });
 
@@ -251,16 +189,16 @@ describe("what a Notification carries", () => {
   it("names who did it and quotes the comment a mention came from", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const { alice, asBob, bob, deliver, issue } = await workspace(db);
-    await deliver([aliceSays(issue, "Look at this, @deevy bob")]);
-    await route(alice, issue, bob.member.id);
+    const { alice, asPlanner, planner, deliver, issue } = await workspace(db);
+    await deliver([aliceSays(issue, "Look at this, @deevy planner")]);
+    await route(alice, issue, planner.member.id);
 
-    const rows = (await asBob.inbox.list({})).notifications;
+    const rows = (await asPlanner.inbox.list({})).notifications;
     const mention = rows.find((row) => row.kind === "mention");
     // Alice wrote this in the tracker and deevy heard it from the tool, so the
     // Event names no Member as its actor; what she wrote is still quoted.
     expect(mention?.actor).toBeNull();
-    expect(mention?.comment?.body).toBe("Look at this, @deevy bob");
+    expect(mention?.comment?.body).toBe("Look at this, @deevy planner");
     const assignment = rows.find((row) => row.kind === "assignment");
     expect(assignment?.actor?.user.name).toBe("Alice");
     expect(assignment?.comment).toBeNull();

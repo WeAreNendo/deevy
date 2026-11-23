@@ -18,7 +18,7 @@ export interface LiveEvent {
 /**
  * The queries an Event could have changed. Every Event touches the log; what
  * else it touches follows from its subject, so a Run's Activity re-reads Runs
- * and the inbox and nothing about Members. The list errs towards re-reading:
+ * and Gates and nothing about Members. The list errs towards re-reading:
  * an Issue Event covers its Links too, because those are shown on the same
  * screen and their Events are Issue Events.
  */
@@ -26,18 +26,18 @@ export function keysFor(event: LiveEvent): QueryKey[] {
   const keys: QueryKey[] = [orpc.events.key()];
   switch (event.subjectType) {
     case "issue":
-      keys.push(orpc.issues.key(), orpc.links.key(), orpc.inbox.key());
+      keys.push(orpc.issues.key(), orpc.links.key());
       break;
     case "run":
       // A Run's own Events move the Gate it is waiting at as well: a ruling
       // resumes it, and the Gate screen is reading the same request.
-      keys.push(orpc.runs.key(), orpc.gates.key(), orpc.inbox.key());
+      keys.push(orpc.runs.key(), orpc.gates.key());
       break;
     case "gate":
       // A ruling somebody else made, from deevy, the tracker or Slack: the
       // card in front of this Human has to stop offering a decision that has
       // already been taken (ADR-0025).
-      keys.push(orpc.gates.key(), orpc.runs.key(), orpc.inbox.key());
+      keys.push(orpc.gates.key(), orpc.runs.key());
       break;
     case "socket":
       keys.push(orpc.sockets.key());
@@ -47,7 +47,7 @@ export function keysFor(event: LiveEvent): QueryKey[] {
       break;
     case "member":
       // me.get carries the caller's role and suspension, which are Member Events.
-      keys.push(orpc.members.key(), orpc.agents.key(), orpc.inbox.key(), orpc.me.key());
+      keys.push(orpc.members.key(), orpc.agents.key(), orpc.me.key());
       break;
     case "allowlist_rule":
       keys.push(orpc.allowlist.key());
@@ -57,15 +57,12 @@ export function keysFor(event: LiveEvent): QueryKey[] {
       // row and the Members list are both a screen behind until they re-read.
       keys.push(orpc.invitations.key(), orpc.members.key());
       break;
-    case "channel":
-      keys.push(orpc.channels.key(), orpc.routing.key());
-      break;
     case "webhook":
       keys.push(orpc.webhooks.key());
       break;
     case "workspace":
-      // routing.updated is a Workspace Event, and me.get carries the Workspace's name.
-      keys.push(orpc.workspace.key(), orpc.routing.key(), orpc.me.key());
+      // me.get carries the Workspace's name.
+      keys.push(orpc.workspace.key(), orpc.me.key());
       break;
     default:
       if (event.projectId) keys.push(orpc.issues.key());
@@ -133,7 +130,7 @@ type Outcome = "ended" | "failed" | "dropped" | "refused";
  * could show it, so nothing here decides what changed: the Event log does.
  *
  * Invalidations are coalesced: an Agent posting an Activity a second while a
- * list, a peek and the inbox are all mounted must cost one refetch per key per
+ * list, a Run and its Gates are all mounted must cost one refetch per key per
  * tick, not one per Event per key (docs/plans/ui-redesign.md, slice 1).
  *
  * How it hears is the deployment's to say (ADR-0032): where `health.ping`

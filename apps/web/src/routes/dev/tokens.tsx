@@ -78,7 +78,7 @@ function Sheet({ theme }: { theme: "light" | "dark" }) {
         <Button variant="ghost">Cancel</Button>
         <Button variant="destructive">Revoke</Button>
         <Shortcut keys="mod+k" />
-        <Shortcut keys="g i" />
+        <Shortcut keys="g r" />
         <Shortcut keys="shift+a" />
       </div>
     </section>

@@ -31,18 +31,17 @@ An Agent works only in the Projects it has been granted, and choosing it as a Pr
 grants it that Project. Whatever it is granted, an Agent never:
 
 - rules on a Gate, its own or anybody else's;
-- changes the Workspace's settings: tools, Projects, Members, Channels or webhooks.
+- changes the Workspace's settings: tools, Projects, Members or webhooks.
 
 See [What an Agent may do](/agents/permissions/).
 
 ## Sponsors
 
 Every Agent has a **Sponsor**: the Human who answers for it. An Agent acts on its own, and somebody has to
-be accountable for what it does and be told when it needs a person. That is the Sponsor:
+be accountable for what it does. That is the Sponsor:
 
 - They manage the Agent: its keys, its Projects, where it is told about work, and suspending it.
-- They are told when a Run the Agent started for itself, or that routing started, finishes. That includes
-  the Run that wakes the Agent when the sub-issues of a record routed to it are all finished.
+- They see its Runs on **Needs me**, under **Your Agents' Runs**, while they are still going.
 - At a Gate, they are the Human the work is for when routing started the Run, which matters to a
   Checkpoint that wants [somebody else's approval](/gates/more-than-one-human/).
 
@@ -51,12 +50,12 @@ An admin can hand an Agent to another Human from the Agent's page.
 ## Admins and members
 
 A Human Member's role is **admin** or **member**, set under **Settings › Members**. Admins look after the
-Workspace: they connect tools, bind Projects and set their Checkpoints, add Channels and routing, choose
-the email sender, add the Workspace's webhooks, and change Members' roles. A Workspace always keeps at least
+Workspace: they connect tools, bind Projects and set their Checkpoints and chat channels, add the
+Workspace's webhooks, and change Members' roles. A Workspace always keeps at least
 one admin: deevy refuses to demote or suspend the last.
 
-Members who are not admins do everything else: sponsor Agents, rule on Gates, and choose their own
-Notifications and Identities.
+Members who are not admins do everything else: sponsor Agents, rule on Gates, and link their own
+Identities.
 
 ## Suspending a Member
 
@@ -64,7 +63,6 @@ Notifications and Identities.
 suspended Member:
 
 - cannot use the Workspace;
-- is told nothing;
 - cannot rule on a Gate, and no longer counts towards a Checkpoint that wants several Humans.
 
 Suspending a Human also suspends the Agents they sponsor. **Reinstate** lets them back in, and the Agents

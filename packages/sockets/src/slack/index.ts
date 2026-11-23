@@ -1,5 +1,6 @@
 import type {
   ChatActor,
+  ChatChannel,
   ChatInteraction,
   ChatMessage,
   ChatMessageRef,
@@ -194,16 +195,30 @@ export function createSlackSocket({
   const secrets = credentials as SlackCredentials;
   const api = (settings.apiBase ?? DEFAULT_API).replace(/\/+$/, "");
 
-  /** One Web API method, answering its body or throwing Slack's own word for why not. */
-  async function call<T>(method: string, body: Record<string, unknown>): Promise<T> {
+  /**
+   * One Web API method, answering its body or throwing Slack's own word for
+   * why not. A method that writes takes JSON; one that reads takes only a form
+   * and reads a JSON body as nothing at all, so it is sent as one.
+   */
+  async function call<T>(
+    method: string,
+    body: Record<string, unknown>,
+    as: "json" | "form" = "json",
+  ): Promise<T> {
     if (!secrets.botToken) throw new Error("This Slack Socket has no bot token; connect it again.");
     const response = await fetch(`${api}/${method}`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${secrets.botToken}`,
-        "content-type": "application/json; charset=utf-8",
+        "content-type":
+          as === "form" ? "application/x-www-form-urlencoded" : "application/json; charset=utf-8",
       },
-      body: JSON.stringify(body),
+      body:
+        as === "form"
+          ? new URLSearchParams(
+              Object.entries(body).map(([key, value]) => [key, String(value)]),
+            ).toString()
+          : JSON.stringify(body),
     });
     const answer = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok || answer.ok !== true) {
@@ -307,11 +322,35 @@ export function createSlackSocket({
         await call("chat.update", { channel: ref.channel, ts: ref.ts, ...render(message) });
       },
 
-      async openDm(user: string): Promise<string> {
-        const opened = await call<{ channel: { id: string } }>("conversations.open", {
-          users: user,
-        });
-        return opened.channel.id;
+      /**
+       * The channels the app is in, public and private: the ones it can post
+       * in without an `/invite` first. Ten pages of two hundred is more than a
+       * picker can show, so a team with more types the id.
+       */
+      async listChannels(): Promise<ChatChannel[]> {
+        const found: ChatChannel[] = [];
+        let cursor = "";
+        for (let page = 0; page < 10; page += 1) {
+          const listed = await call<{
+            channels?: Array<{ id?: unknown; name?: unknown }>;
+            response_metadata?: { next_cursor?: unknown };
+          }>(
+            "users.conversations",
+            {
+              types: "public_channel,private_channel",
+              exclude_archived: true,
+              limit: 200,
+              ...(cursor ? { cursor } : {}),
+            },
+            "form",
+          );
+          for (const channel of listed.channels ?? []) {
+            if (text(channel.id)) found.push({ id: text(channel.id), name: text(channel.name) });
+          }
+          cursor = text(listed.response_metadata?.next_cursor);
+          if (!cursor) break;
+        }
+        return found;
       },
 
       async askForNote(triggerId, input): Promise<void> {

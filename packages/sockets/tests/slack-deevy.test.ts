@@ -61,8 +61,6 @@ function slackApi() {
         ts: `17586252${String(posted)}.000100`,
       });
     }
-    if (method === "conversations.open")
-      return Response.json({ ok: true, channel: { id: "D07GRACE01" } });
     if (method === "response_url") return new Response("ok");
     return Response.json({ ok: true });
   };
@@ -239,14 +237,14 @@ async function waitingInSlack(db: Db) {
     context: contextFor(db, planner, workspace, { sockets, grantedProjectIds: [projectId] }),
   });
 
-  const room = await asAda.channels.createInSocket({
-    name: "#deevy",
-    socketId: slackId,
-    conversation: "C07DEEVY01",
+  // The Project's channel, bound as an admin binds it (slice 8). Binding says
+  // hello there, which is not what these tests watch, so it is forgotten.
+  await asAda.projects.update({
+    slug: "acme-deevy",
+    chat: { socketId: slackId, channel: "C07DEEVY01" },
   });
-  await asAda.routing.set({
-    rules: [{ notificationKind: "gate_awaiting", projectId: null, channelId: room.id }],
-  });
+  expect(api.calls.map((call) => call.method)).toEqual(["chat.postMessage"]);
+  api.calls.length = 0;
   const run = await asPlanner.runs.start({ issue: issue.url });
   const gate = await asPlanner.gates.request({
     runId: run.id,
@@ -432,7 +430,8 @@ describe("a Gate in Slack", () => {
     const update = api.calls.find(
       (call) => call.method === "chat.update" && call.body.channel === "C07DEEVY01",
     );
-    expect(update?.body.ts).toBe("175862521.000100");
+    // The second message posted: the first was the binding's hello.
+    expect(update?.body.ts).toBe("175862522.000100");
     expect(JSON.stringify(update?.body.blocks)).toContain("Ada approved, in deevy");
   });
 });

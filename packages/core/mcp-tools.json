@@ -73,10 +73,10 @@
   {
     "name": "inbox_list",
     "operation": "inbox.list",
-    "summary": "The Notifications waiting for you, newest first",
+    "summary": "The Notifications waiting for this Agent, newest first",
     "readOnly": true,
     "agents": true,
-    "agentsOnly": false,
+    "agentsOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {

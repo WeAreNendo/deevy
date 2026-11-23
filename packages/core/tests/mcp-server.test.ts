@@ -642,15 +642,11 @@ describe("a Human's own client", () => {
       expect(human).not.toContain(name);
       expect(agent).toContain(name);
     }
+    // ...and so does an inbox, which only an Agent has (slice 8)...
+    expect(human).not.toContain("inbox_list");
+    expect(agent).toContain("inbox_list");
     // ...and the rest faces both.
-    for (const name of [
-      "issues_get",
-      "issues_list",
-      "projects_get",
-      "runs_list",
-      "runs_get",
-      "inbox_list",
-    ]) {
+    for (const name of ["issues_get", "issues_list", "projects_get", "runs_list", "runs_get"]) {
       expect(human).toContain(name);
       expect(agent).toContain(name);
     }

@@ -137,9 +137,12 @@ The seed (`apps/server/src/seed.ts`, a second `vp pack` entry beside the server)
 `grace@example.com` and `omar@example.com` in through the stub, connects a stub Socket, and creates the
 Agents `Planner` and `Builder` with the admin as Sponsor, printing their keys once. Then two Projects bound
 to that Socket, thirty-odd records projected from it, Runs in every status, Gates with Proposals — one open,
-one ruled in deevy, one ruled `via: socket` — Links, a Slack Channel, routing and a webhook, all through the
-operations, so the inbox and the Event log fill themselves. Point a coding agent at `/mcp` with the printed
-key and it will find Planner's pending Runs.
+one ruled in deevy, one ruled `via: socket` — Links and a webhook, all through the operations, so Needs me,
+the Agents' inboxes and the Event log fill themselves; it ends by saying how many Gates are on the admin's
+Needs me. Point a coding agent at `/mcp` with the printed key and it will find Planner's pending Runs. No
+Project binds a chat channel, because nothing stands in for Slack in a running deevy:
+`packages/core/tests/inbox-and-chat.test.ts` binds one against a fake chat tool, and
+`packages/sockets/tests/slack.test.ts` holds the Slack module to Slack's own answers.
 
 `.claude/launch.json` has a third configuration, `seeded`, for when the `.env` of the checkout you are in
 carries real addresses or a real client pair: it seeds `apps/server/data/seeded.sqlite` and serves the built
@@ -161,15 +164,6 @@ default is one container called `acme/deevy`. A store lives in the process deevy
 only way to say what the tracker contains from outside it; that is also how the acceptance walk fills one
 (`docs/acceptance.md`). `readEnv` refuses the flag under `NODE_ENV=production`, and `health.ping`
 reports it as `devSockets` the way it reports `devSignIn`.
-
-### Running without an email account
-
-`DEEVY_DEV_STUB_EMAIL=1` sends email to a stand-in in this process (`packages/email/src/stub`) when no
-`DEEVY_EMAIL_SENDER` is set. It keeps the last hundred emails, listed as JSON at `/dev/email` and each one as
-a client renders it at `/dev/email/<n>`, newest first — Gates, confirmations, invitations and the unsubscribe
-links in their headers. The `seeded` launch configuration turns it on and sweeps every five seconds, so the
-Gates its seed opens are in the outbox a moment after it starts. Refused under `NODE_ENV=production`, like
-the other stubs; on a Worker the stand-in runs, but there is no `/dev/email` to read it from.
 
 ### Walking a tool for real
 
@@ -406,15 +400,14 @@ apps/cli            the command line, generated from the operation registry
 apps/docs           docs.deevy.dev, written from docs/, CONTEXT.md and the OpenAPI snapshot
 packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory, the Socket port
 packages/sockets    one module per tool deevy speaks (github, linear, gitlab, notion, slack) and the stub
-packages/email      the email senders that speak HTTP (resend, postmark, sendgrid, mailgun, ses) and the stub
 packages/db         Drizzle schema, relations, migrations
-packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron, SMTP) and workers/ (D1, Email Service)
+packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron) and workers/ (D1, Queues)
 tools/release       the changelog fold and the commit-message rules
 tools/acceptance    the acceptance walk, a scripted Agent against every deployment (docs/acceptance.md)
 ```
 
-Rules that keep the two deployment targets honest (ADR-0006): `packages/core`, `packages/db`,
-`packages/sockets` and `packages/email` never import Node modules; anything runtime-specific lives in `packages/adapters`. The core
+Rules that keep the two deployment targets honest (ADR-0006): `packages/core`, `packages/db` and
+`packages/sockets` never import Node modules; anything runtime-specific lives in `packages/adapters`. The core
 imports the Socket port's types and never a provider: the two entries build the registry and hand it to
 `createApp`. The Worker build in CI is what catches a
 leak.
@@ -423,9 +416,10 @@ leak.
 
 Every piece of background work is a bounded function in `packages/core/src/work.ts` — one indexed SELECT with
 a LIMIT, one batched UPDATE, never a query per row — and `runDueWork` there is all of them in order, the
-whole of one trigger: stale Runs, Channel and webhook deliveries, Gate reminders, what the
-tools are owed (a Gate's comments on its record, chat messages), and forgetting old inbound deliveries. Both deployments call it and neither owns it. Node satisfies the `Cron` port in
-`packages/core/src/jobs.ts` with `createTimerCron()` from `@deevy/adapters/node`, and
+whole of one trigger: stale Runs, webhook deliveries, what the tools are owed (a Gate's comments on its
+record, its message in the Project's chat channel), and forgetting old inbound deliveries. Both deployments
+call it and neither owns it. Node satisfies the `Cron` port in `packages/core/src/jobs.ts` with
+`createTimerCron()` from `@deevy/adapters/node`, and
 `apps/server/src/runner.ts` starts that schedule beside `serve()`, drains while a pass says there is more, and
 stops it on SIGINT and SIGTERM. Cloudflare owns its own schedule, so `apps/web/src/worker.ts` has a
 `scheduled` handler instead of a `Cron`, and it asks for one tighter pass per trigger — which is why there is

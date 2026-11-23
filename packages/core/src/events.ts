@@ -3,7 +3,7 @@ import type { JobQueue } from "./jobs.ts";
 import { announceAppended } from "./live.ts";
 import { deriveNotifications } from "./notifications.ts";
 import { triggersFor } from "./triggers.ts";
-import { deriveChatUpdates } from "./sockets/chat-out.ts";
+import { deriveChatMessages } from "./sockets/chat-out.ts";
 import { deriveSocketMirrors } from "./sockets/mirror.ts";
 import { deriveWebhookDeliveries } from "./webhooks.ts";
 
@@ -139,22 +139,7 @@ export type EventKind =
    */
   | "webhook.subscribed"
   | "webhook.removed"
-  | "webhook.exhausted"
-  /**
-   * An email given up on: the sender refused it in a way waiting would not
-   * change, or refused it six times (docs/plans/email-channel.md).
-   */
-  | "email.exhausted"
-  /** An admin set the email sender under Settings › Email, or cleared it (slice 3). */
-  | "email.configured"
-  | "email.cleared"
-  /** Where Notifications go: the Channels themselves, and the rules that aim them. */
-  | "channel.created"
-  | "channel.updated"
-  | "channel.deleted"
-  /** Somebody at a team address confirmed it, so it may be routed to (docs/plans/email-channel.md). */
-  | "channel.confirmed"
-  | "routing.updated";
+  | "webhook.exhausted";
 
 export type EventPayload = Record<string, unknown>;
 
@@ -198,8 +183,8 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
     })
     .returning();
   if (!row) throw new Error("appendEvent: the insert returned no row");
-  // Notifications derive from the Event, in the same request and right after
-  // it, so nothing else has to remember to tell anyone (docs/plans/m1.md).
+  // An Agent's inbox derives from the Event, in the same request and right
+  // after it, so nothing else has to remember to tell it (docs/plans/m1.md).
   await deriveNotifications(source.db, row);
   // And so do the deliveries owed to a subscribed URL, in the same tail and
   // for the same reason: the durable row is what makes a trigger reliable
@@ -209,10 +194,10 @@ export async function appendEvent(source: EventSource, input: EventInput): Promi
   // lives (ADR-0024). Same shape, same row, same sweep: an Event that is not
   // about a Gate pays one pure check and no query at all (sockets/mirror.ts).
   await deriveSocketMirrors(source.db, row);
-  // And the messages a chat tool holds about a Gate this Event changes: the
-  // buttons on a Slack message stop being true the moment anybody rules,
-  // wherever they ruled (sockets/chat-out.ts).
-  await deriveChatUpdates(source.db, row);
+  // And what the Project's chat channel is owed: a Gate a Run waits at, and
+  // the change to it when anybody rules, wherever they ruled — the buttons on
+  // a Slack message stop being true the moment they do (sockets/chat-out.ts).
+  await deriveChatMessages(source.db, row);
 
   // Then, and only then, the nudge: a job names a row that is already durable,
   // so a deployment with a queue sends it now instead of at the next sweep and

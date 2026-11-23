@@ -125,33 +125,12 @@ for trying deevy without a real tool, and only a deevy started for development o
 | `deevy allowlist list`            | The rules that admit a sign-in to this Workspace                                      | —                                                                                                 | Admins |
 | `deevy allowlist remove <ruleId>` | Stop admitting sign-ins that only this rule matched                                   | —                                                                                                 | Admins |
 
-### channels
-
-| Command                             | What it does                                                      | Flags                                                                                                     | Who    |
-| ----------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------ |
-| `deevy channels create`             | Add a Slack incoming webhook as a Channel                         | `--name <string>` (required)<br>`--webhook-url <string>` (required)                                       | Admins |
-| `deevy channels create-email`       | Add a team email address as a Channel, and mail it a confirmation | `--name <string>` (required)<br>`--address <string>` (required)                                           | Admins |
-| `deevy channels create-in-socket`   | Add a room in a connected Slack app as a Channel                  | `--name <string>` (required)<br>`--socket-id <string>` (required)<br>`--conversation <string>` (required) | Admins |
-| `deevy channels delete <channelId>` | Remove a Channel; the routing rules aimed at it go with it        | —                                                                                                         | Admins |
-| `deevy channels list`               | The Channels this Workspace delivers Notifications to             | —                                                                                                         | Admins |
-| `deevy channels test <channelId>`   | Post a message to this Channel now, to prove it works             | —                                                                                                         | Admins |
-| `deevy channels update <channelId>` | Rename a Channel, or point it at a new webhook                    | `--name <string>`<br>`--webhook-url <string>`                                                             | Admins |
-
 ### checkpoints
 
 | Command                                | What it does                                                               | Flags                                         | Who    |
 | -------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------- | ------ |
 | `deevy checkpoints list <projectSlug>` | What a Project asks of a Run before it goes past each Checkpoint           | —                                             | Humans |
 | `deevy checkpoints set <projectSlug>`  | Set what a Project asks at each Checkpoint, replacing what it asked before | `--checkpoints <json>`, repeatable (required) | Admins |
-
-### email
-
-| Command                 | What it does                                                         | Flags                                                                                                                                                                                               | Who              |
-| ----------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `deevy email clear`     | Forget the email sender set here, so the environment's is used again | —                                                                                                                                                                                                   | Not from the CLI |
-| `deevy email configure` | Set the email sender, over the environment's                         | `--sender <cloudflare \| resend \| postmark \| sendgrid \| mailgun \| ses \| smtp>` (required)<br>`--from <string>` (required)<br>`--config <json>` (required)<br>`--credentials <json>` (required) | Not from the CLI |
-| `deevy email status`    | The email sender this Workspace sends through, and where it was set  | —                                                                                                                                                                                                   | Not from the CLI |
-| `deevy email test`      | Send a test email to yourself through the sender in force            | —                                                                                                                                                                                                   | Not from the CLI |
 
 ### events
 
@@ -190,21 +169,19 @@ for trying deevy without a real tool, and only a deevy started for development o
 
 ### inbox
 
-| Command                     | What it does                                    | Flags                                                        | Who               |
-| --------------------------- | ----------------------------------------------- | ------------------------------------------------------------ | ----------------- |
-| `deevy inbox list`          | The Notifications waiting for you, newest first | `--unread-only`<br>`--before <number>`<br>`--limit <number>` | Humans and Agents |
-| `deevy inbox mark-all-read` | Mark your whole inbox read                      | —                                                            | Humans            |
-| `deevy inbox mark-read`     | Mark some of your Notifications read            | `--ids <string>`, repeatable (required)                      | Humans and Agents |
-| `deevy inbox unread-count`  | How many Notifications you have not read        | —                                                            | Humans            |
+| Command                 | What it does                                           | Flags                                                        | Who         |
+| ----------------------- | ------------------------------------------------------ | ------------------------------------------------------------ | ----------- |
+| `deevy inbox list`      | The Notifications waiting for this Agent, newest first | `--unread-only`<br>`--before <number>`<br>`--limit <number>` | Agents only |
+| `deevy inbox mark-read` | Mark some of this Agent's Notifications read           | `--ids <string>`, repeatable (required)                      | Agents only |
 
 ### invitations
 
-| Command                                   | What it does                                                                | Flags                                                                   | Who               |
-| ----------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------- |
-| `deevy invitations accept`                | Join this Workspace with the invitation you were sent                       | `--token <string>` (required)                                           | A signed-in Human |
-| `deevy invitations create`                | Admit one person by address, and get the link to send them                  | `--email <string>` (required)<br>`--role <admin \| member>`<br>`--send` | Admins            |
-| `deevy invitations list`                  | Every invitation this Workspace has issued, spent and revoked ones included | —                                                                       | Admins            |
-| `deevy invitations revoke <invitationId>` | Stop an invitation being accepted, keeping the record that it was sent      | —                                                                       | Admins            |
+| Command                                   | What it does                                                                | Flags                                                       | Who               |
+| ----------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------------- |
+| `deevy invitations accept`                | Join this Workspace with the invitation you were sent                       | `--token <string>` (required)                               | A signed-in Human |
+| `deevy invitations create`                | Admit one person by address, and get the link to send them                  | `--email <string>` (required)<br>`--role <admin \| member>` | Admins            |
+| `deevy invitations list`                  | Every invitation this Workspace has issued, spent and revoked ones included | —                                                           | Admins            |
+| `deevy invitations revoke <invitationId>` | Stop an invitation being accepted, keeping the record that it was sent      | —                                                           | Admins            |
 
 ### issues
 
@@ -243,29 +220,15 @@ for trying deevy without a real tool, and only a deevy started for development o
 | `deevy oauth-clients list`              | The MCP clients you have let act as you            | —     | Not from the CLI |
 | `deevy oauth-clients revoke <clientId>` | Withdraw one MCP client's permission to act as you | —     | Not from the CLI |
 
-### preferences
-
-| Command                 | What it does                                                          | Flags                                         | Who    |
-| ----------------------- | --------------------------------------------------------------------- | --------------------------------------------- | ------ |
-| `deevy preferences get` | Which Notifications reach you, and in which Channels                  | —                                             | Humans |
-| `deevy preferences set` | Say which of your Notifications reach the inbox, Slack and your email | `--preferences <json>`, repeatable (required) | Humans |
-
 ### projects
 
-| Command                         | What it does                                                                  | Flags                                                                                                                                                             | Who               |
-| ------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `deevy projects archive <slug>` | Close a Project down; it stays readable and keeps what it projected           | —                                                                                                                                                                 | Admins            |
-| `deevy projects create`         | Bind a container in a Socket to a Project an Agent can be granted             | `--slug <string>` (required)<br>`--name <string>` (required)<br>`--description <string>`<br>`--tracker <json>` (required)<br>`--default-agent-member-id <string>` | Admins            |
-| `deevy projects get <slug>`     | One Project by its slug: where its Issues come from and who works them        | —                                                                                                                                                                 | Humans and Agents |
-| `deevy projects list`           | The Projects in this Workspace, and what each is bound to                     | `--include-archived`                                                                                                                                              | Humans and Agents |
-| `deevy projects update <slug>`  | Rename a Project, or change who gets its work and how a record names an Agent | `--name <string>`<br>`--description <string>`<br>`--default-agent-member-id <string>`<br>`--routing <json>`                                                       | Humans            |
-
-### routing
-
-| Command              | What it does                                               | Flags                                   | Who    |
-| -------------------- | ---------------------------------------------------------- | --------------------------------------- | ------ |
-| `deevy routing list` | Which Notifications this Workspace sends to which Channels | —                                       | Admins |
-| `deevy routing set`  | Replace the routing rules with this set                    | `--rules <json>`, repeatable (required) | Admins |
+| Command                         | What it does                                                                                         | Flags                                                                                                                                                             | Who               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `deevy projects archive <slug>` | Close a Project down; it stays readable and keeps what it projected                                  | —                                                                                                                                                                 | Admins            |
+| `deevy projects create`         | Bind a container in a Socket to a Project an Agent can be granted                                    | `--slug <string>` (required)<br>`--name <string>` (required)<br>`--description <string>`<br>`--tracker <json>` (required)<br>`--default-agent-member-id <string>` | Admins            |
+| `deevy projects get <slug>`     | One Project by its slug: where its Issues come from and who works them                               | —                                                                                                                                                                 | Humans and Agents |
+| `deevy projects list`           | The Projects in this Workspace, and what each is bound to                                            | `--include-archived`                                                                                                                                              | Humans and Agents |
+| `deevy projects update <slug>`  | Rename a Project, change who gets its work and how a record names an Agent, or bind its chat channel | `--name <string>`<br>`--description <string>`<br>`--default-agent-member-id <string>`<br>`--routing <json>`<br>`--chat <json>`                                    | Admins            |
 
 ### runs
 
@@ -280,21 +243,22 @@ for trying deevy without a real tool, and only a deevy started for development o
 
 ### sockets
 
-| Command                               | What it does                                                                       | Flags                                                                                                                                                                                                                   | Who    |
-| ------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `deevy sockets begin`                 | Start connecting a tool whose own flow has to send you back here                   | `--provider <github \| linear \| gitlab \| notion \| slack \| stub>` (required)<br>`--name <string>` (required)<br>`--config <json>`                                                                                    | Admins |
-| `deevy sockets connect`               | Connect a tool, proving the connection by asking who deevy is there                | `--provider <github \| linear \| gitlab \| notion \| slack \| stub>` (required)<br>`--name <string>` (required)<br>`--config <json>`<br>`--credentials <json>`<br>`--webhook-secret <string>`<br>`--socket-id <string>` | Admins |
-| `deevy sockets containers <socketId>` | What a Project could be bound to inside this tool                                  | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets handshake <socketId>`  | Show the token a tool sent to verify its webhook, to paste back into it            | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets inbound <socketId>`    | What this tool has said lately, and what deevy made of it                          | `--limit <number>`                                                                                                                                                                                                      | Admins |
-| `deevy sockets install <socketId>`    | Give a connected tool's app more than its credential could, on the tool's own page | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets list`                  | The tools this Workspace is connected to                                           | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets providers`             | The tools this deevy was built to speak                                            | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets remove <socketId>`     | Disconnect a tool, leaving what it projected readable                              | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets rewire <socketId>`     | Point a tool's own webhook at this deevy's address, after the address moved        | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets rotate <socketId>`     | Mint a new webhook secret for a tool whose settings take one, and say it once      | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets test <socketId>`       | Ask the tool who deevy is there, which proves the credential still works           | —                                                                                                                                                                                                                       | Admins |
-| `deevy sockets update <socketId>`     | Rename a tool, or rest it                                                          | `--name <string>`<br>`--status <pending \| active \| paused>`<br>`--identity-by-email`<br>`--webhook-secret <string>`                                                                                                   | Admins |
+| Command                               | What it does                                                                       | Flags                                                                                                                                                                                                                              | Who    |
+| ------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `deevy sockets begin`                 | Start connecting a tool whose own flow has to send you back here                   | `--provider <github \| linear \| gitlab \| notion \| slack \| generic \| stub>` (required)<br>`--name <string>` (required)<br>`--config <json>`                                                                                    | Admins |
+| `deevy sockets connect`               | Connect a tool, proving the connection by asking who deevy is there                | `--provider <github \| linear \| gitlab \| notion \| slack \| generic \| stub>` (required)<br>`--name <string>` (required)<br>`--config <json>`<br>`--credentials <json>`<br>`--webhook-secret <string>`<br>`--socket-id <string>` | Admins |
+| `deevy sockets channels <socketId>`   | The channels a Project's Gates could be posted in, inside this chat tool           | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets containers <socketId>` | What a Project could be bound to inside this tool                                  | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets handshake <socketId>`  | Show the token a tool sent to verify its webhook, to paste back into it            | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets inbound <socketId>`    | What this tool has said lately, and what deevy made of it                          | `--limit <number>`                                                                                                                                                                                                                 | Admins |
+| `deevy sockets install <socketId>`    | Give a connected tool's app more than its credential could, on the tool's own page | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets list`                  | The tools this Workspace is connected to                                           | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets providers`             | The tools this deevy was built to speak                                            | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets remove <socketId>`     | Disconnect a tool, leaving what it projected readable                              | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets rewire <socketId>`     | Point a tool's own webhook at this deevy's address, after the address moved        | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets rotate <socketId>`     | Mint a new webhook secret for a tool whose settings take one, and say it once      | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets test <socketId>`       | Ask the tool who deevy is there, which proves the credential still works           | —                                                                                                                                                                                                                                  | Admins |
+| `deevy sockets update <socketId>`     | Rename a tool, or rest it                                                          | `--name <string>`<br>`--status <pending \| active \| paused>`<br>`--identity-by-email`<br>`--webhook-secret <string>`                                                                                                              | Admins |
 
 ### webhooks
 

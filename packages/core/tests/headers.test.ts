@@ -80,8 +80,15 @@ describe("a page's policy", () => {
 
 describe("createApp's responses", () => {
   it("send a page the server writes itself with the page's headers", async () => {
-    // An unsubscribe link that was changed on the way: a page, written here.
-    const res = await testApp().request("/api/email/unsubscribe/not-a-token");
+    // A relay's callback whose state it cannot read: a page, written here.
+    const { db, close } = testDb();
+    closers.push(close);
+    const app = createApp({
+      db,
+      secret: "test-secret-that-is-at-least-32-characters",
+      signInRelay: { secret: "a-relay-secret-of-at-least-32-characters", allows: () => false },
+    });
+    const res = await app.request("/relay/callback/github?state=not-a-state");
 
     expect(res.headers.get("content-type")).toContain("text/html");
     for (const [name, value] of Object.entries(pageHeaders)) {
