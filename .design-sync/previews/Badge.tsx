@@ -7,13 +7,15 @@ export const Variants = () => (
     <Badge>Approved</Badge>
     <Badge variant="secondary">Agent</Badge>
     <Badge variant="outline">Archived</Badge>
-    <Badge variant="destructive">Suspended</Badge>
-    <Badge variant="ghost">Draft</Badge>
-    <Badge variant="link">DEV-42</Badge>
+    <Badge variant="destructive">Rejected</Badge>
+    <Badge variant="ghost">Paused</Badge>
+    <Badge variant="link" className="font-mono">
+      acme/deevy#412
+    </Badge>
   </div>
 );
 
-/** Where the app puts them: a role, a Member's kind, an API key's state, a Gate's decision. */
+/** Where the app puts them: a role, a Member's kind, a key that no longer works, a Gate and its rulings. */
 export const InContext = () => (
   <div className="flex flex-col gap-3">
     <div className="flex items-center gap-2">
@@ -21,9 +23,9 @@ export const InContext = () => (
       <Badge variant="outline">admin</Badge>
     </div>
     <div className="flex items-center gap-2">
-      <span className="font-medium">Builder</span>
+      <span className="font-medium">Reviewer</span>
       <Badge variant="secondary">Agent</Badge>
-      <Badge variant="destructive">Suspended</Badge>
+      <Badge variant="outline">Suspended</Badge>
     </div>
     <div className="flex items-center gap-2">
       <span className="font-medium">old laptop</span>
@@ -31,7 +33,9 @@ export const InContext = () => (
       <Badge variant="outline">Disabled</Badge>
     </div>
     <div className="flex items-center gap-2">
-      <span className="text-muted-foreground">Review Gate</span>
+      <Badge variant="outline" className="border-gate/50 text-gate-foreground dark:text-gate">
+        ship
+      </Badge>
       <Badge>Approved</Badge>
       <Badge variant="destructive">Rejected</Badge>
     </div>
@@ -50,8 +54,8 @@ export const WithIcon = () => (
     <Badge variant="secondary">
       <Bot data-icon="inline-start" /> Agent
     </Badge>
-    <Badge variant="outline">
-      3 <span className="text-muted-foreground">open</span>
+    <Badge variant="outline" className="tabular-nums">
+      1 <span className="text-muted-foreground">of 2</span>
     </Badge>
   </div>
 );

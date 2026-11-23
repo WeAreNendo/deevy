@@ -1,38 +1,44 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@deevy/design-system";
 
-/** An Issue's Documents: one tab per Document, the current one's text below. */
-export const Documents = () => (
-  <Tabs defaultValue="Spec">
-    <TabsList aria-label="Documents">
-      <TabsTrigger value="Spec">Spec</TabsTrigger>
-      <TabsTrigger value="Plan">Plan</TabsTrigger>
-      <TabsTrigger value="Review">Review</TabsTrigger>
+const endpoint = "https://deevy.example.com/mcp";
+
+/** Connect an Agent: one tab per coding agent, where its entry goes and what to write below. */
+export const ConnectAgent = () => (
+  <Tabs defaultValue="claude-code">
+    <TabsList aria-label="Coding agent">
+      <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
+      <TabsTrigger value="opencode">OpenCode</TabsTrigger>
+      <TabsTrigger value="cursor">Cursor CLI</TabsTrigger>
     </TabsList>
-    <TabsContent value="Spec">
-      <p className="max-w-prose text-sm text-muted-foreground">
-        A Gate names the Human who rules on it. The Run that reaches the Gate waits until that Human
-        approves or sends the Issue back.
+    <TabsContent value="claude-code" className="flex max-w-prose flex-col gap-2">
+      <p className="text-sm text-muted-foreground">
+        Run this where the Agent works, and it writes the entry itself.
+      </p>
+      <pre className="overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
+        {`claude mcp add --transport http deevy ${endpoint} \\\n  --header "Authorization: Bearer $DEEVY_AGENT_KEY"`}
+      </pre>
+    </TabsContent>
+    <TabsContent value="opencode">
+      <p className="text-sm text-muted-foreground">
+        In opencode.json, beside the repository or under ~/.config/opencode.
       </p>
     </TabsContent>
-    <TabsContent value="Plan">
-      <p className="text-sm text-muted-foreground">Planner writes the Plan on entering Todo.</p>
-    </TabsContent>
-    <TabsContent value="Review">
+    <TabsContent value="cursor">
       <p className="text-sm text-muted-foreground">
-        Nothing yet: the Issue has not reached Review.
+        In ~/.cursor/mcp.json, the same file the editor reads.
       </p>
     </TabsContent>
   </Tabs>
 );
 
-/** The editor's view switch, small, in the toolbar of a Document. */
-export const EditorView = () => (
+/** The Proposal's view switch, small, in the toolbar above it on a Gate. */
+export const ProposalView = () => (
   <div className="rounded-md border bg-card">
     <div className="flex items-center justify-end border-b px-1 py-1">
-      <Tabs defaultValue="edit">
-        <TabsList aria-label="Editor view" className="h-7">
-          <TabsTrigger value="edit" className="text-xs">
-            Edit
+      <Tabs defaultValue="source">
+        <TabsList aria-label="Proposal view" className="h-7">
+          <TabsTrigger value="rendered" className="text-xs">
+            Rendered
           </TabsTrigger>
           <TabsTrigger value="source" className="text-xs">
             Source
@@ -41,21 +47,24 @@ export const EditorView = () => (
       </Tabs>
     </div>
     <p className="px-3 py-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-      ## Ruling authority{"\n"}A Gate names the Human who rules on it.
+      ## Plan{"\n"}Page every list operation by an opaque cursor instead of an offset.
     </p>
   </div>
 );
 
 /** The line variant: an underline instead of a filled pill. */
 export const Line = () => (
-  <Tabs defaultValue="board">
-    <TabsList variant="line" aria-label="Project">
-      <TabsTrigger value="board">Board</TabsTrigger>
-      <TabsTrigger value="workflow">Workflow</TabsTrigger>
-      <TabsTrigger value="settings">Settings</TabsTrigger>
+  <Tabs defaultValue="activity">
+    <TabsList variant="line" aria-label="Run">
+      <TabsTrigger value="activity">Activity</TabsTrigger>
+      <TabsTrigger value="gates">Gates</TabsTrigger>
+      <TabsTrigger value="time">Time</TabsTrigger>
     </TabsList>
-    <TabsContent value="board">
-      <p className="text-sm text-muted-foreground">Issues by State, one column each.</p>
+    <TabsContent value="activity">
+      <p className="text-sm text-muted-foreground">
+        Planner wrote the plan for cursor paging and stopped at{" "}
+        <span className="font-mono">plan</span>.
+      </p>
     </TabsContent>
   </Tabs>
 );
@@ -64,10 +73,12 @@ export const Line = () => (
 export const Vertical = () => (
   <Tabs defaultValue="agents" orientation="vertical" className="w-64">
     <TabsList variant="line" aria-label="Settings">
-      <TabsTrigger value="workspace">Workspace</TabsTrigger>
+      <TabsTrigger value="general">General</TabsTrigger>
       <TabsTrigger value="members">Members</TabsTrigger>
+      <TabsTrigger value="sockets">Sockets</TabsTrigger>
+      <TabsTrigger value="projects">Projects</TabsTrigger>
       <TabsTrigger value="agents">Agents</TabsTrigger>
-      <TabsTrigger value="labels">Labels</TabsTrigger>
+      <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
     </TabsList>
     <TabsContent value="agents">
       <p className="text-sm text-muted-foreground">Two Agents, both sponsored by Ada.</p>
@@ -75,15 +86,15 @@ export const Vertical = () => (
   </Tabs>
 );
 
-/** A Document that is not there yet cannot be opened. */
+/** A view with nothing in it cannot be opened: this Run has asked for nothing yet. */
 export const Disabled = () => (
-  <Tabs defaultValue="Spec">
-    <TabsList aria-label="Documents">
-      <TabsTrigger value="Spec">Spec</TabsTrigger>
-      <TabsTrigger value="Plan">Plan</TabsTrigger>
-      <TabsTrigger value="Review" disabled>
-        Review
+  <Tabs defaultValue="activity">
+    <TabsList aria-label="Run">
+      <TabsTrigger value="activity">Activity</TabsTrigger>
+      <TabsTrigger value="gates" disabled>
+        Gates
       </TabsTrigger>
+      <TabsTrigger value="time">Time</TabsTrigger>
     </TabsList>
   </Tabs>
 );

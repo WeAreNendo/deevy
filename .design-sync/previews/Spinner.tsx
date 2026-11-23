@@ -14,10 +14,10 @@ export const Sizes = () => (
 export const WithLabel = () => (
   <div className="flex flex-col gap-3">
     <span className="flex items-center gap-2 text-muted-foreground">
-      <Spinner /> Loading Issues…
+      <Spinner /> Loading Runs…
     </span>
     <span className="flex items-center gap-2 text-agent">
-      <Spinner /> Builder is working on DEV-41
+      <Spinner /> Builder is working on <span className="font-mono">acme/deevy#409</span>
     </span>
   </div>
 );
@@ -26,7 +26,7 @@ export const WithLabel = () => (
 export const InButton = () => (
   <div className="flex flex-wrap items-center gap-2">
     <Button disabled>
-      <Spinner data-icon="inline-start" /> Creating Issue
+      <Spinner data-icon="inline-start" /> Connecting GitHub
     </Button>
     <Button variant="outline" disabled>
       <Spinner data-icon="inline-start" /> Reinstating

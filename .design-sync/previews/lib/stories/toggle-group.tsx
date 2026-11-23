@@ -1,24 +1,24 @@
-import { ToggleGroup, ToggleGroupItem } from "@deevy/design-system";
-import { Bot, Kanban, List, User } from "lucide-react";
+import { runStatusLabels, ToggleGroup, ToggleGroupItem } from "@deevy/design-system";
+import { Bot, Monitor, Moon, Sun, User } from "lucide-react";
 
-/** The Issues filter bar's joined toggles: who it is assigned to, one of three pressed. */
-export const AssignedTo = () => (
-  <ToggleGroup defaultValue={["human"]} aria-label="Assigned to" variant="outline" spacing={0}>
-    <ToggleGroupItem value="any" aria-label="Anyone">
-      Any
+/** Work's filter bar as joined toggles: who a record is routed to, one of three pressed. */
+export const RoutedTo = () => (
+  <ToggleGroup defaultValue={["agent"]} aria-label="Routed to" variant="outline" spacing={0}>
+    <ToggleGroupItem value="any" aria-label="Anybody">
+      Anybody
     </ToggleGroupItem>
-    <ToggleGroupItem value="human" aria-label="Humans">
+    <ToggleGroupItem value="human" aria-label="A Human">
       <User />
-      Humans
+      A Human
     </ToggleGroupItem>
-    <ToggleGroupItem value="agent" aria-label="Agents">
+    <ToggleGroupItem value="agent" aria-label="An Agent">
       <Bot />
-      Agents
+      An Agent
     </ToggleGroupItem>
   </ToggleGroup>
 );
 
-/** Open Issues, or every Issue. */
+/** Open records, or every record. */
 export const OpenOrAll = () => (
   <ToggleGroup defaultValue={["open"]} aria-label="Open or closed" variant="outline" spacing={0}>
     <ToggleGroupItem value="open">Open</ToggleGroupItem>
@@ -26,32 +26,44 @@ export const OpenOrAll = () => (
   </ToggleGroup>
 );
 
-/** Icon only: the list, or the board. */
-export const ListOrBoard = () => (
-  <ToggleGroup defaultValue={["board"]} aria-label="View" variant="outline" spacing={0}>
-    <ToggleGroupItem value="list" aria-label="List">
-      <List />
+/** Icon only: the theme, as System, Light or Dark. */
+export const Theme = () => (
+  <ToggleGroup defaultValue={["system"]} aria-label="Theme" variant="outline" spacing={0}>
+    <ToggleGroupItem value="system" aria-label="System">
+      <Monitor />
     </ToggleGroupItem>
-    <ToggleGroupItem value="board" aria-label="Board">
-      <Kanban />
+    <ToggleGroupItem value="light" aria-label="Light">
+      <Sun />
+    </ToggleGroupItem>
+    <ToggleGroupItem value="dark" aria-label="Dark">
+      <Moon />
     </ToggleGroupItem>
   </ToggleGroup>
 );
 
-/** Small, in a page header: the Inbox's All / Unread. */
+/** Small, in a page header: the Runs feed's statuses, in the kit's own words. */
 export const Small = () => (
-  <ToggleGroup defaultValue={["unread"]} aria-label="Show" variant="outline" size="sm" spacing={0}>
-    <ToggleGroupItem value="all">All</ToggleGroupItem>
-    <ToggleGroupItem value="unread">Unread</ToggleGroupItem>
+  <ToggleGroup
+    defaultValue={["awaiting_input"]}
+    aria-label="Runs"
+    variant="outline"
+    size="sm"
+    spacing={0}
+  >
+    {(["active", "awaiting_input", "completed"] as const).map((status) => (
+      <ToggleGroupItem key={status} value={status}>
+        {runStatusLabels[status]}
+      </ToggleGroupItem>
+    ))}
   </ToggleGroup>
 );
 
-/** Spaced and borderless, the default: for a set that is not one control. */
+/** Spaced and borderless, the default: for a set that is not one control — the Event log's families. */
 export const Spaced = () => (
-  <ToggleGroup defaultValue={["comments"]} aria-label="Show">
-    <ToggleGroupItem value="all">All</ToggleGroupItem>
-    <ToggleGroupItem value="comments">Comments</ToggleGroupItem>
-    <ToggleGroupItem value="changes">Changes</ToggleGroupItem>
+  <ToggleGroup defaultValue={["runs"]} aria-label="Show">
+    <ToggleGroupItem value="records">Records</ToggleGroupItem>
+    <ToggleGroupItem value="runs">Runs and Gates</ToggleGroupItem>
+    <ToggleGroupItem value="workspace">Workspace</ToggleGroupItem>
   </ToggleGroup>
 );
 

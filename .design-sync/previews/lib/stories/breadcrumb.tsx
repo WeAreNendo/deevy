@@ -8,20 +8,16 @@ import {
   BreadcrumbSeparator,
 } from "@deevy/design-system";
 
-/** The top bar's trail for an Issue: where you are, each step above it a link. */
-export const IssueTrail = () => (
+/** The top bar's trail for a Run: where you are, each step above it a link. */
+export const RunTrail = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">Projects</BreadcrumbLink>
+        <BreadcrumbLink href="#">Runs</BreadcrumbLink>
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">DEV</BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbPage>DEV-42</BreadcrumbPage>
+        <BreadcrumbPage className="font-mono">acme/deevy#412</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>
@@ -32,26 +28,26 @@ export const SinglePage = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
-        <BreadcrumbPage>Inbox</BreadcrumbPage>
+        <BreadcrumbPage>Needs me</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>
 );
 
-/** A Project's tab: the Project is named, never its key alone. */
-export const ProjectTab = () => (
+/** A Socket's page: named by its name, never its id. */
+export const SocketPage = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">Projects</BreadcrumbLink>
+        <BreadcrumbLink href="#">Settings</BreadcrumbLink>
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">Developer platform</BreadcrumbLink>
+        <BreadcrumbLink href="#">Sockets</BreadcrumbLink>
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbPage>Workflow</BreadcrumbPage>
+        <BreadcrumbPage>GitHub · acme</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>

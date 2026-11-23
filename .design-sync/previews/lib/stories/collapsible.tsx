@@ -6,12 +6,12 @@ import {
   MemberChip,
 } from "@deevy/design-system";
 import { ChevronDown } from "lucide-react";
-import { ada, builder, planner } from "../fixtures";
+import { ada, planner } from "../fixtures";
 
 const earlier = [
-  { who: planner, what: "wrote the Plan", when: "3d" },
-  { who: ada, what: "moved it to Todo", when: "3d" },
-  { who: builder, what: "started a Run", when: "2d" },
+  { who: planner, what: "started a Run", when: "3d" },
+  { who: planner, what: "stopped at plan", when: "3d" },
+  { who: ada, what: "approved at plan", when: "2d" },
 ];
 
 const Fold = ({ open }: { open: boolean }) => (
@@ -29,7 +29,7 @@ const Fold = ({ open }: { open: boolean }) => (
         data-icon="inline-start"
         className="transition-transform group-aria-expanded:rotate-180"
       />
-      3 earlier Events
+      <span className="tabular-nums">3</span> earlier Events
     </CollapsibleTrigger>
     <CollapsibleContent>
       <ul className="flex flex-col gap-2 border-t px-3 py-2">
@@ -37,7 +37,7 @@ const Fold = ({ open }: { open: boolean }) => (
           <li key={event.what} className="flex items-center gap-2 text-sm">
             <MemberChip member={event.who} size="xs" />
             <span className="text-muted-foreground">{event.what}</span>
-            <span className="ml-auto font-mono text-xs text-muted-foreground">{event.when}</span>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">{event.when}</span>
           </li>
         ))}
       </ul>
@@ -45,7 +45,7 @@ const Fold = ({ open }: { open: boolean }) => (
   </Collapsible>
 );
 
-/** The Activity stream folds what came before: open, the Events show. */
+/** A record's history folds what came before: open, the Events show. */
 export const Open = () => <Fold open />;
 
 /** Closed, only the count and the chevron. */

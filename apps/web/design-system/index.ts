@@ -1,10 +1,11 @@
 /**
  * deevy's design system, as one entry for the Claude Design sync (`/design-sync`,
  * `.design-sync/`). Everything a screen is built from that renders on its own:
- * the shadcn base-mira kit in `components/ui`, the registry pieces, and deevy's
- * own chips, badges, headers, tables and editors. Components bound to the API or
- * the router (ActivityStream, CommandPalette, the pickers, RunCard, SidePeek…)
- * are deliberately absent: a design tool has no Workspace to query.
+ * the shadcn base-mira kit in `components/ui`, and deevy's own chips, badges,
+ * headers, tables, logo and sign-in buttons. Components bound to the API or the
+ * router (AppBreadcrumb, CommandPalette, GateControls, ItemEvents, WorkFilters,
+ * the connect dialogs, the Project binding…) are deliberately absent: a design
+ * tool has no Workspace to query. Add a component here AND to families.json.
  */
 
 // The kit (shadcn base-mira, Base UI)
@@ -51,10 +52,14 @@ export * from "@/components/ui/tooltip";
 
 // deevy's own
 export * from "@/components/data-table";
+export * from "@/components/deevy-logo";
 export * from "@/components/kbd-hint";
 export * from "@/components/markdown";
 export * from "@/components/member-chip";
 export * from "@/components/page-header";
+export * from "@/components/rail-heading";
 export * from "@/components/run-status";
+export * from "@/components/secret-input";
 export * from "@/components/settings-page";
+export * from "@/components/sign-in-button";
 export { cn } from "@/lib/utils";

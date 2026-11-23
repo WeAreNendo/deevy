@@ -13,26 +13,33 @@ import {
 } from "@deevy/design-system";
 
 /** A form in a Dialog, open. The kit portals it to the body; the card keeps it inside. */
-export const NewIssue = () => (
+export const ConnectGitHub = () => (
   <Dialog open>
     <DialogContent className="sm:max-w-lg">
       <DialogHeader>
-        <DialogTitle>New Issue</DialogTitle>
-        <DialogDescription>In DEV. It starts in Backlog, unassigned.</DialogDescription>
+        <DialogTitle>Connect GitHub</DialogTitle>
+        <DialogDescription>
+          Paste the App you made under Developer settings › GitHub Apps. deevy seals its key and
+          never shows it again.
+        </DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-4">
         <Field>
-          <FieldLabel htmlFor="new-issue-title">Title</FieldLabel>
-          <Input id="new-issue-title" defaultValue="Add ruling authority to Gate" />
+          <FieldLabel htmlFor="connect-github-app-id">App id</FieldLabel>
+          <Input id="connect-github-app-id" defaultValue="1284461" className="font-mono" />
         </Field>
         <Field>
-          <FieldLabel htmlFor="new-issue-body">Description</FieldLabel>
-          <Textarea id="new-issue-body" rows={4} placeholder="What, and why. Markdown." />
+          <FieldLabel htmlFor="connect-github-key">Private key</FieldLabel>
+          <Textarea
+            id="connect-github-key"
+            rows={4}
+            placeholder="-----BEGIN RSA PRIVATE KEY-----"
+          />
         </Field>
       </div>
       <DialogFooter>
         <Button variant="ghost">Cancel</Button>
-        <Button>Create Issue</Button>
+        <Button>Connect</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

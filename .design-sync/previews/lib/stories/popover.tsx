@@ -6,38 +6,38 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  MemberChip,
   Popover,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-  StateBadge,
 } from "@deevy/design-system";
 import { ChevronDown } from "lucide-react";
-import { states } from "../fixtures";
+import { ada, grace, omar } from "../fixtures";
 
-/** `s` on an Issue: the Workflow's States in a Popover under the current one, open so the card shows it. */
-export const StatePicker = () => (
+/** An Agent's Sponsor: the Humans in a Popover under the current one, open so the card shows it. */
+export const SponsorPicker = () => (
   <div className="flex min-h-80 items-start">
     <Popover open>
       <PopoverTrigger render={<Button variant="outline" size="sm" />}>
-        <StateBadge state={states.review} />
+        <MemberChip member={ada} size="xs" />
         <ChevronDown data-icon="inline-end" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0">
-        <Command label="State">
-          <CommandInput placeholder="Change State…" />
+        <Command label="Sponsor">
+          <CommandInput placeholder="Change Sponsor…" />
           <CommandList>
-            <CommandEmpty>No State matches.</CommandEmpty>
-            <CommandGroup heading="States">
-              {Object.values(states).map((state) => (
+            <CommandEmpty>No Human by that name.</CommandEmpty>
+            <CommandGroup heading="Humans">
+              {[ada, grace, omar].map((human) => (
                 <CommandItem
-                  key={state.name}
-                  value={state.name}
-                  data-checked={state === states.review ? "true" : undefined}
+                  key={human.id}
+                  value={human.user.name}
+                  data-checked={human === ada ? "true" : undefined}
                 >
-                  <StateBadge state={state} />
+                  <MemberChip member={human} size="xs" />
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -48,26 +48,26 @@ export const StatePicker = () => (
   </div>
 );
 
-/** A header with a title and description, above plain content: what a Gate wants. */
+/** A header with a title and description, above plain content: who may rule at a Checkpoint. */
 export const WithHeader = () => (
   <div className="flex min-h-56 items-start">
     <Popover open>
       <PopoverTrigger render={<Button variant="outline" size="sm" />}>
-        What is Review waiting for?
+        Who may rule at ship?
       </PopoverTrigger>
       <PopoverContent align="start">
         <PopoverHeader>
-          <PopoverTitle>Review is a Gate</PopoverTitle>
+          <PopoverTitle>ship takes 2 approvals</PopoverTitle>
           <PopoverDescription>
-            An Issue leaves it when a Human approves the Note. Ada Lovelace and Grace Hopper can
-            rule; an Agent never decides a Gate.
+            A Run waits here until two of Ada Lovelace, Grace Hopper and Omar Haddad approve the
+            Proposal, and never the Human the work is for. An Agent never rules.
           </PopoverDescription>
         </PopoverHeader>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm">
             Later
           </Button>
-          <Button size="sm">Open the Note</Button>
+          <Button size="sm">Open the Gate</Button>
         </div>
       </PopoverContent>
     </Popover>

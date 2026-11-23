@@ -12,10 +12,10 @@ export const Statuses = () => (
   </div>
 );
 
-/** The wording overridden on a Gate. */
+/** The wording overridden where a page knows more: the Checkpoint a Run stopped at. */
 export const CustomLabel = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <RunStatus status="awaiting_input" label="Waiting for approval" />
-    <RunStatus status="active" label="Writing the spec" />
+    <RunStatus status="awaiting_input" label="Waiting at plan" />
+    <RunStatus status="active" label="Writing the plan" />
   </div>
 );

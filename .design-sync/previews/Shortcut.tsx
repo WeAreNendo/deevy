@@ -4,8 +4,8 @@ import { Button, Shortcut } from "@deevy/design-system";
 export const Kinds = () => (
   <div className="flex flex-wrap items-center gap-6">
     <Shortcut keys="mod+k" />
-    <Shortcut keys="g i" />
-    <Shortcut keys="c" />
+    <Shortcut keys="g r" />
+    <Shortcut keys="j" />
     <Shortcut keys="mod+enter" />
     <Shortcut keys="shift+a" />
   </div>
@@ -18,10 +18,10 @@ export const BesideActions = () => (
       Search <Shortcut keys="mod+k" />
     </Button>
     <Button variant="outline">
-      New Issue <Shortcut keys="c" />
+      Approve <Shortcut keys="shift+a" />
     </Button>
     <span className="flex items-center gap-2 text-sm text-muted-foreground">
-      Go to Inbox <Shortcut keys="g i" />
+      Go to Runs <Shortcut keys="g r" />
     </span>
   </div>
 );

@@ -1,90 +1,96 @@
 // The stories for ScrollArea and its parts. Kept under lib/ with a non-component
 // file name: a sibling named like an export is shimmed to the package by the
 // story-imports plugin, so `export * from "./ScrollArea"` would re-export all of it.
-import { LabelBadge, MemberChip, ScrollArea, ScrollBar, StateBadge } from "@deevy/design-system";
-import { ada, builder, grace, issues, labels, planner, states } from "./fixtures";
+import { Badge, MemberChip, RunStatus, ScrollArea, ScrollBar } from "@deevy/design-system";
+import {
+  ada,
+  builder,
+  grace,
+  omar,
+  planner,
+  records,
+  runs,
+  suspendedAgent,
+  type RecordRow,
+} from "./fixtures";
 
-// More Issues than fit, so the scrollbar has something to do.
-const backlog = [
-  ...issues,
+// More records than fit, so the scrollbar has something to do.
+const work: RecordRow[] = [
+  ...records,
   {
-    key: "DEV-36",
-    title: "Inbox keeps the read filter across reloads",
-    state: states.todo,
-    assignee: grace,
-    labels: [labels.backend],
-    updated: "6d",
+    key: "acme/deevy#397",
+    title: "Retry a delivery that timed out",
+    state: "Closed",
+    routedTo: builder,
+    gate: null,
+    changed: "6d",
   },
   {
-    key: "DEV-35",
-    title: "Agent key rotation without a restart",
-    state: states.backlog,
-    assignee: null,
-    labels: [labels.backend],
-    updated: "1w",
+    key: "acme/ops#84",
+    title: "Move the staging database to the EU",
+    state: "Open",
+    routedTo: null,
+    gate: null,
+    changed: "1w",
   },
   {
-    key: "DEV-34",
-    title: "Run log folds routine steps",
-    state: states.done,
-    assignee: builder,
-    labels: [labels.epic],
-    updated: "1w",
+    key: "acme/deevy#390",
+    title: "Fold routine steps in a Run's Activity",
+    state: "Closed",
+    routedTo: planner,
+    gate: null,
+    changed: "1w",
   },
   {
-    key: "DEV-33",
-    title: "Planner drafts the Spec from the Issue title",
-    state: states.done,
-    assignee: planner,
-    labels: [labels.epic, labels.docs],
-    updated: "2w",
-  },
-  {
-    key: "DEV-32",
+    key: "acme/deevy#386",
     title: "Suspend an Agent when its Sponsor leaves",
-    state: states.done,
-    assignee: ada,
-    labels: [],
-    updated: "2w",
+    state: "Closed",
+    routedTo: builder,
+    gate: null,
+    changed: "2w",
   },
 ];
 
-/** A list taller than its frame: the vertical scrollbar is the thumb in `border` on the right. */
-export const IssueList = () => (
+/** A list taller than its frame — Work's records — the vertical scrollbar is the thumb in `border` on the right. */
+export const WorkList = () => (
   <ScrollArea className="h-48 w-full rounded-md border bg-card">
     <ul className="flex flex-col divide-y">
-      {backlog.map((issue) => (
-        <li key={issue.key} className="flex items-center gap-3 px-3 py-2 text-sm">
-          <span className="w-14 shrink-0 font-mono text-xs text-muted-foreground">{issue.key}</span>
-          <span className="min-w-0 flex-1 truncate font-medium">{issue.title}</span>
-          <StateBadge state={issue.state} size="sm" />
+      {work.map((record) => (
+        <li key={record.key} className="flex items-center gap-3 px-3 py-2 text-sm">
+          <span className="w-28 shrink-0 font-mono text-xs text-muted-foreground">
+            {record.key}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-medium">{record.title}</span>
+          <Badge
+            variant="outline"
+            className={record.state === "Closed" ? "text-muted-foreground" : ""}
+          >
+            {record.state}
+          </Badge>
         </li>
       ))}
     </ul>
   </ScrollArea>
 );
 
-/** A row wider than its frame — the Board's columns — with the horizontal ScrollBar along the bottom. */
+/** A row wider than its frame — your Agents' Runs as cards — with the horizontal ScrollBar along the bottom. */
 export const Horizontal = () => (
   <ScrollArea className="w-full rounded-md border bg-muted/30">
     <div className="flex w-max gap-3 p-3">
-      {[states.backlog, states.todo, states.inProgress, states.review, states.done].map((state) => (
+      {runs.map((run) => (
         <div
-          key={state.name}
-          className="flex w-56 shrink-0 flex-col gap-2 rounded-md border bg-card p-2"
+          key={run.id}
+          className="flex w-56 shrink-0 flex-col gap-2 rounded-md border bg-card p-2 text-sm"
         >
-          <StateBadge state={state} />
-          {issues
-            .filter((issue) => issue.state === state)
-            .map((issue) => (
-              <div
-                key={issue.key}
-                className="flex flex-col gap-1 rounded-md border bg-background p-2 text-sm"
-              >
-                <span className="font-mono text-xs text-muted-foreground">{issue.key}</span>
-                <span className="line-clamp-2 font-medium">{issue.title}</span>
-              </div>
-            ))}
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-xs text-muted-foreground">{run.record}</span>
+            <MemberChip member={run.agent} size="xs" avatarOnly />
+          </div>
+          <span className="line-clamp-2 font-medium">{run.summary}</span>
+          <div className="flex items-center justify-between gap-2">
+            <RunStatus status={run.status} />
+            <span className="text-xs tabular-nums text-muted-foreground">{run.last}</span>
+          </div>
         </div>
       ))}
     </div>
@@ -92,17 +98,25 @@ export const Horizontal = () => (
   </ScrollArea>
 );
 
-/** The Members list in the sidebar: a short frame with avatars, scrolling. */
+/** Settings › Members in a short frame: avatars, an Agent's Sponsor on hover, scrolling. */
 export const Members = () => (
   <ScrollArea className="h-32 w-64 rounded-md border bg-card">
     <ul className="flex flex-col gap-0.5 p-2">
-      {[ada, grace, planner, builder, ada, grace, planner, builder].map((member, index) => (
+      {[ada, grace, omar, planner, builder, suspendedAgent].map((member) => (
         <li
-          key={`${member.id}-${String(index)}`}
+          key={member.id}
           className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
         >
-          <MemberChip member={member} size="sm" />
-          {member.kind === "agent" ? <LabelBadge label={labels.epic} className="ml-auto" /> : null}
+          <MemberChip
+            member={member}
+            size="sm"
+            sponsorName={member.kind === "agent" ? "Ada Lovelace" : undefined}
+          />
+          {"suspendedAt" in member ? (
+            <Badge variant="outline" className="ml-auto">
+              Suspended
+            </Badge>
+          ) : null}
         </li>
       ))}
     </ul>

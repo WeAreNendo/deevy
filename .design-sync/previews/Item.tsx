@@ -13,70 +13,76 @@ import {
   MemberChip,
   RunStatus,
 } from "@deevy/design-system";
-import { ada, builder, grace, planner } from "./lib/fixtures";
+import { builder, grace, planner } from "./lib/fixtures";
 
-const Unread = () => <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-gate" />;
+const Waiting = () => <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-gate" />;
 
-/** One inbox row: who did what on which Issue, the Issue's title under it, and Mark read beside it. */
-export const InboxRow = () => (
+/** One Gate on Needs me: who stopped at which Checkpoint on which record, its title under it, the way in beside it. */
+export const GateRow = () => (
   <Item variant="outline" className="max-w-lg">
     <ItemMedia>
-      <MemberChip member={builder} avatarOnly size="md" />
+      <MemberChip member={planner} avatarOnly size="md" />
     </ItemMedia>
     <ItemContent>
       <ItemTitle>
-        Builder finished a Run on <span className="font-mono text-xs">DEV-41</span>
+        <span>
+          Planner stopped at plan on <span className="font-mono text-xs">acme/deevy#412</span>
+        </span>
       </ItemTitle>
-      <ItemDescription>Stream Events to the inbox without polling</ItemDescription>
+      <ItemDescription>Cursor-based paging on every list operation</ItemDescription>
     </ItemContent>
     <ItemActions>
-      <span className="font-mono text-xs text-muted-foreground">2h</span>
-      <Unread />
+      <span className="font-mono text-xs text-muted-foreground tabular-nums">12m</span>
+      <Waiting />
       <Button variant="ghost" size="xs">
-        Mark read
+        Open Gate
       </Button>
     </ItemActions>
   </Item>
 );
 
-/** The inbox: rows in an ItemGroup, a separator between days. */
-export const Inbox = () => (
+/** Needs me: rows in an ItemGroup, a separator between the Gates and your Agents' Runs. */
+export const NeedsMe = () => (
   <ItemGroup className="max-w-lg">
-    <Item variant="outline">
-      <ItemMedia>
-        <MemberChip member={ada} avatarOnly size="md" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          Ada Lovelace mentioned you on <span className="font-mono text-xs">DEV-42</span>
-        </ItemTitle>
-        <ItemDescription>
-          “@grace can you rule on the Gate before the schema lands?”
-        </ItemDescription>
-      </ItemContent>
-      <ItemActions>
-        <span className="font-mono text-xs text-muted-foreground">35m</span>
-        <Unread />
-        <Button variant="ghost" size="xs">
-          Mark read
-        </Button>
-      </ItemActions>
-    </Item>
     <Item variant="outline">
       <ItemMedia>
         <MemberChip member={planner} avatarOnly size="md" />
       </ItemMedia>
       <ItemContent>
         <ItemTitle>
-          Planner assigned you <span className="font-mono text-xs">DEV-39</span>
+          <span>
+            Planner stopped at plan on <span className="font-mono text-xs">acme/deevy#412</span>
+          </span>
         </ItemTitle>
-        <ItemDescription>Issue key is not monospace in the side peek</ItemDescription>
+        <ItemDescription>Cursor-based paging on every list operation</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <span className="font-mono text-xs text-muted-foreground">4h</span>
-        <Unread />
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">12m</span>
+        <Waiting />
         <Button variant="ghost" size="xs">
-          Mark read
+          Open Gate
+        </Button>
+      </ItemActions>
+    </Item>
+    <Item variant="outline">
+      <ItemMedia>
+        <MemberChip member={grace} avatarOnly size="md" />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>
+          <span>
+            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
+          </span>
+        </ItemTitle>
+        <ItemDescription>
+          Sign the delivery id · <span className="tabular-nums">1 of 2</span>
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">2h</span>
+        <Waiting />
+        <Button variant="ghost" size="xs">
+          Open Gate
         </Button>
       </ItemActions>
     </Item>
@@ -87,14 +93,14 @@ export const Inbox = () => (
       </ItemMedia>
       <ItemContent>
         <ItemTitle>
-          Builder failed a Run on <span className="font-mono text-xs">DEV-40</span>
+          <span>
+            Builder failed on <span className="font-mono text-xs">acme/ops#88</span>
+          </span>
         </ItemTitle>
-        <ItemDescription>
-          “The migration check failed: member.suspended_at is not NOT NULL.”
-        </ItemDescription>
+        <ItemDescription>“The registry refused the new key.”</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <span className="font-mono text-xs text-muted-foreground">1d</span>
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">5h</span>
       </ItemActions>
     </Item>
   </ItemGroup>
@@ -108,7 +114,11 @@ export const Variants = () => (
         <MemberChip member={grace} avatarOnly size="md" />
       </ItemMedia>
       <ItemContent>
-        <ItemTitle>Grace Hopper approved the Gate on DEV-37</ItemTitle>
+        <ItemTitle>
+          <span>
+            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
+          </span>
+        </ItemTitle>
         <ItemDescription>default</ItemDescription>
       </ItemContent>
     </Item>
@@ -117,7 +127,11 @@ export const Variants = () => (
         <MemberChip member={grace} avatarOnly size="md" />
       </ItemMedia>
       <ItemContent>
-        <ItemTitle>Grace Hopper approved the Gate on DEV-37</ItemTitle>
+        <ItemTitle>
+          <span>
+            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
+          </span>
+        </ItemTitle>
         <ItemDescription>outline</ItemDescription>
       </ItemContent>
     </Item>
@@ -126,7 +140,11 @@ export const Variants = () => (
         <MemberChip member={grace} avatarOnly size="md" />
       </ItemMedia>
       <ItemContent>
-        <ItemTitle>Grace Hopper approved the Gate on DEV-37</ItemTitle>
+        <ItemTitle>
+          <span>
+            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
+          </span>
+        </ItemTitle>
         <ItemDescription>muted</ItemDescription>
       </ItemContent>
     </Item>
@@ -137,25 +155,29 @@ export const Variants = () => (
 export const WithHeaderAndFooter = () => (
   <Item variant="outline" className="max-w-lg">
     <ItemHeader>
-      <span className="font-mono text-xs text-muted-foreground">run_9k2m4x7p1q0z</span>
+      <span className="font-mono text-xs text-muted-foreground">run_3n7p0w5d8e2f</span>
       <RunStatus status="active" />
     </ItemHeader>
     <ItemMedia>
       <MemberChip member={builder} avatarOnly size="md" />
     </ItemMedia>
     <ItemContent>
-      <ItemTitle>Builder is working on DEV-41</ItemTitle>
+      <ItemTitle>
+        <span>
+          Builder is working on <span className="font-mono text-xs">acme/deevy#409</span>
+        </span>
+      </ItemTitle>
       <ItemDescription>
-        Replacing the poll with the SSE Event stream; a test for the reconnect path is next.
+        Adding the delivery id to the signed payload; a test for a replayed delivery is next.
       </ItemDescription>
     </ItemContent>
     <ItemActions>
       <Button variant="outline" size="xs">
-        Stop
+        Open Run
       </Button>
     </ItemActions>
     <ItemFooter>
-      <span className="text-muted-foreground">Started 6 min ago</span>
+      <span className="text-muted-foreground tabular-nums">Working for 41m</span>
       <span className="text-muted-foreground">Sponsored by Ada Lovelace</span>
     </ItemFooter>
   </Item>

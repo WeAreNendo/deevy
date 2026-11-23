@@ -1,34 +1,42 @@
-import { Button, PageHeader, StateBadge, ToggleGroup, ToggleGroupItem } from "@deevy/design-system";
+import {
+  Button,
+  PageHeader,
+  runStatusLabels,
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@deevy/design-system";
 import { Plus } from "lucide-react";
-import { states } from "./lib/fixtures";
 
 export const WithActions = () => (
   <PageHeader
-    title="All Issues"
-    description="Every Issue in the Workspace, newest change first."
+    title="Agents"
+    description="The Agents in this Workspace, and the Humans who sponsor them."
     actions={
       <Button>
-        <Plus data-icon="inline-start" /> New Issue
+        <Plus data-icon="inline-start" /> New Agent
       </Button>
     }
   />
 );
 
-/** A row under the title: a strip of States, a view toggle. */
+/** A row under the title: the Runs feed's filters. */
 export const WithChildren = () => (
-  <PageHeader title="DEV" description="The product, from intent to shipped.">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-4">
-        {Object.values(states).map((state) => (
-          <StateBadge key={state.name} state={state} />
+  <PageHeader title="Runs" description="What your Agents have been doing.">
+    <div role="group" aria-label="Filters" className="flex flex-wrap items-center gap-2">
+      <ToggleGroup defaultValue={["active"]} variant="outline" spacing={0}>
+        {(["active", "awaiting_input", "completed"] as const).map((status) => (
+          <ToggleGroupItem key={status} value={status}>
+            {runStatusLabels[status]}
+          </ToggleGroupItem>
         ))}
-      </div>
-      <ToggleGroup defaultValue={["list"]} variant="outline" spacing={0}>
-        <ToggleGroupItem value="list">List</ToggleGroupItem>
-        <ToggleGroupItem value="board">Board</ToggleGroupItem>
       </ToggleGroup>
+      <Button size="sm" variant="outline">
+        Mine
+      </Button>
     </div>
   </PageHeader>
 );
 
-export const TitleOnly = () => <PageHeader title="Inbox" />;
+export const TitleOnly = () => (
+  <PageHeader title="Needs me" description="Rulings, and what your Agents are doing." />
+);

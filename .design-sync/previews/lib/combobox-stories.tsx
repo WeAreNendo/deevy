@@ -16,26 +16,26 @@ import {
   MemberChip,
   useComboboxAnchor,
 } from "@deevy/design-system";
-import { ada, builder, grace, planner } from "./fixtures";
+import { ada, builder, grace, omar, planner } from "./fixtures";
 
 type Member = typeof ada;
 
-const humans: Member[] = [ada, grace];
+const humans: Member[] = [ada, grace, omar];
 const agents: Member[] = [planner, builder];
 const memberGroups = [
   { value: "Humans", items: humans },
   { value: "Agents", items: agents },
 ];
 const projects = [
-  { key: "DEV", name: "deevy" },
-  { key: "DOCS", name: "Docs" },
-  { key: "OPS", name: "Operations" },
+  { slug: "deevy", name: "deevy", container: "acme/deevy" },
+  { slug: "ops", name: "Operations", container: "acme/ops" },
+  { slug: "site", name: "Site", container: "acme/site" },
 ];
 
 const byId = (a: Member, b: Member) => a.id === b.id;
 const memberName = (member: Member) => member.user.name;
 
-/** The Gate's approvers: chosen Humans as chips, one box to add more. Closed. */
+/** Who may rule on ship: chosen Humans as chips, one box to add more. Closed. */
 export const Chips = () => {
   const anchor = useComboboxAnchor();
   return (
@@ -57,7 +57,7 @@ export const Chips = () => {
               ))
             }
           </ComboboxValue>
-          <ComboboxChipsInput aria-label="Approvers" placeholder="Add…" />
+          <ComboboxChipsInput aria-label="Who may rule" placeholder="Add…" />
         </ComboboxChips>
         <ComboboxContent anchor={anchor}>
           <ComboboxEmpty>No Human by that name.</ComboboxEmpty>
@@ -97,7 +97,7 @@ export const ChipsOpen = () => {
               ))
             }
           </ComboboxValue>
-          <ComboboxChipsInput aria-label="Approvers" placeholder="Add…" />
+          <ComboboxChipsInput aria-label="Who may rule" placeholder="Add…" />
         </ComboboxChips>
         <ComboboxContent anchor={anchor}>
           <ComboboxEmpty>No Human by that name.</ComboboxEmpty>
@@ -114,7 +114,7 @@ export const ChipsOpen = () => {
   );
 };
 
-/** One choice typed into: a Project, with the trigger chevron and a clear button. */
+/** One choice typed into: a Project to grant an Agent, with the trigger chevron and a clear button. */
 export const SingleInput = () => (
   <div className="w-64">
     <Combobox
@@ -122,17 +122,17 @@ export const SingleInput = () => (
       defaultValue={projects[0]}
       itemToStringLabel={(project: (typeof projects)[number]) => project.name}
       isItemEqualToValue={(a: (typeof projects)[number], b: (typeof projects)[number]) =>
-        a.key === b.key
+        a.slug === b.slug
       }
     >
-      <ComboboxInput aria-label="Project" placeholder="Choose a Project" showClear />
+      <ComboboxInput aria-label="Grant a Project" placeholder="Choose a Project…" showClear />
       <ComboboxContent>
         <ComboboxEmpty>No Project matches.</ComboboxEmpty>
         <ComboboxList>
           {(project: (typeof projects)[number]) => (
-            <ComboboxItem key={project.key} value={project}>
+            <ComboboxItem key={project.slug} value={project}>
               {project.name}
-              <span className="font-mono text-muted-foreground">{project.key}</span>
+              <span className="font-mono text-muted-foreground">{project.container}</span>
             </ComboboxItem>
           )}
         </ComboboxList>
@@ -141,7 +141,7 @@ export const SingleInput = () => (
   </div>
 );
 
-/** Open, grouped: Members under Humans / Agents with a separator between, the way the Assignee list reads. */
+/** Open, grouped: Members under Humans / Agents with a separator between, as a filter by who did it reads. */
 export const GroupedOpen = () => (
   <div className="flex h-72 w-64 flex-col">
     <Combobox
@@ -151,7 +151,7 @@ export const GroupedOpen = () => (
       itemToStringLabel={memberName}
       isItemEqualToValue={byId}
     >
-      <ComboboxInput aria-label="Assignee" placeholder="Assign to…" />
+      <ComboboxInput aria-label="Who did it" placeholder="Anybody…" />
       <ComboboxContent>
         <ComboboxEmpty>No Member by that name.</ComboboxEmpty>
         <ComboboxList>
@@ -183,12 +183,12 @@ export const NoMatch = () => (
       defaultInputValue="Billing"
       itemToStringLabel={(project: (typeof projects)[number]) => project.name}
     >
-      <ComboboxInput aria-label="Project" placeholder="Choose a Project" />
+      <ComboboxInput aria-label="Grant a Project" placeholder="Choose a Project…" />
       <ComboboxContent>
         <ComboboxEmpty>No Project matches.</ComboboxEmpty>
         <ComboboxList>
           {(project: (typeof projects)[number]) => (
-            <ComboboxItem key={project.key} value={project}>
+            <ComboboxItem key={project.slug} value={project}>
               {project.name}
             </ComboboxItem>
           )}
@@ -229,7 +229,7 @@ export const Disabled = () => {
               ))
             }
           </ComboboxValue>
-          <ComboboxChipsInput aria-label="Approvers" placeholder="Saving…" disabled />
+          <ComboboxChipsInput aria-label="Who may rule" placeholder="Saving…" disabled />
         </ComboboxChips>
         <ComboboxContent anchor={anchor}>
           <ComboboxList>

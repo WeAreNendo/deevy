@@ -1,56 +1,57 @@
 import {
+  Badge,
   Button,
   ButtonGroup,
   ButtonGroupSeparator,
   ButtonGroupText,
-  StateBadge,
 } from "@deevy/design-system";
 import { ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
-import { states } from "../fixtures";
 
-/** Two actions on one thing, joined: the Workflow editor's Move up / Move down for a State. */
+/** Two actions on one thing, joined: a Project's Checkpoints, Move up / Move down for one of them. */
 export const Reorder = () => (
   <div className="flex w-80 items-center gap-2 rounded-md border bg-card px-3 py-2">
-    <StateBadge state={states.review} size="md" />
-    <span className="font-mono text-xs text-muted-foreground">Step 4</span>
+    <Badge variant="outline" className="border-gate/50 text-gate-foreground dark:text-gate">
+      ship
+    </Badge>
+    <span className="text-xs tabular-nums text-muted-foreground">2 approvals</span>
     <span className="flex-1" />
-    <ButtonGroup aria-label="Reorder Review">
-      <Button variant="outline" size="icon" aria-label="Move Review up">
+    <ButtonGroup aria-label="Reorder ship">
+      <Button variant="outline" size="icon" aria-label="Move ship up">
         <ArrowUp />
       </Button>
-      <Button variant="outline" size="icon" aria-label="Move Review down">
+      <Button variant="outline" size="icon" aria-label="Move ship down">
         <ArrowDown />
       </Button>
     </ButtonGroup>
   </div>
 );
 
-/** The first State cannot move up; the last cannot move down. */
+/** The first Checkpoint cannot move up; the last cannot move down. */
 export const AtTheEnds = () => (
   <div className="flex flex-wrap items-center gap-6">
-    <ButtonGroup aria-label="Reorder Backlog">
-      <Button variant="outline" size="icon" aria-label="Move Backlog up" disabled>
+    <ButtonGroup aria-label="Reorder plan">
+      <Button variant="outline" size="icon" aria-label="Move plan up" disabled>
         <ArrowUp />
       </Button>
-      <Button variant="outline" size="icon" aria-label="Move Backlog down">
+      <Button variant="outline" size="icon" aria-label="Move plan down">
         <ArrowDown />
       </Button>
     </ButtonGroup>
-    <ButtonGroup aria-label="Reorder Done">
-      <Button variant="outline" size="icon" aria-label="Move Done up">
+    <ButtonGroup aria-label="Reorder ship">
+      <Button variant="outline" size="icon" aria-label="Move ship up">
         <ArrowUp />
       </Button>
-      <Button variant="outline" size="icon" aria-label="Move Done down" disabled>
+      <Button variant="outline" size="icon" aria-label="Move ship down" disabled>
         <ArrowDown />
       </Button>
     </ButtonGroup>
   </div>
 );
 
-/** A label inside the group: the text is joined to the buttons it describes. */
+/** Text inside the group, joined to the buttons it describes. */
 export const WithText = () => (
-  <ButtonGroup aria-label="Step">
-    <ButtonGroupText>Step 4 of 5</ButtonGroupText>
+  <ButtonGroup aria-label="Checkpoint">
+    <ButtonGroupText className="tabular-nums">Checkpoint 2 of 3</ButtonGroupText>
     <Button variant="outline" size="icon" aria-label="Move up">
       <ArrowUp />
     </Button>
@@ -60,12 +61,12 @@ export const WithText = () => (
   </ButtonGroup>
 );
 
-/** A split button: the ruling, and a menu of the other rulings behind a separator. */
+/** A split button: Approve, and the other Ruling behind a separator. */
 export const WithSeparator = () => (
   <ButtonGroup aria-label="Rule on the Gate">
     <Button>Approve</Button>
     <ButtonGroupSeparator />
-    <Button size="icon" aria-label="Other rulings">
+    <Button size="icon" aria-label="Reject instead">
       <ChevronDown />
     </Button>
   </ButtonGroup>
@@ -73,11 +74,11 @@ export const WithSeparator = () => (
 
 /** Stacked, where the row has no room. */
 export const Vertical = () => (
-  <ButtonGroup orientation="vertical" aria-label="Reorder Review">
-    <Button variant="outline" size="icon" aria-label="Move Review up">
+  <ButtonGroup orientation="vertical" aria-label="Reorder ship">
+    <Button variant="outline" size="icon" aria-label="Move ship up">
       <ArrowUp />
     </Button>
-    <Button variant="outline" size="icon" aria-label="Move Review down">
+    <Button variant="outline" size="icon" aria-label="Move ship down">
       <ArrowDown />
     </Button>
   </ButtonGroup>

@@ -12,29 +12,31 @@ import {
   MemberChip,
   RunStatus,
 } from "@deevy/design-system";
-import { ada, builder, planner } from "./lib/fixtures";
+import { ada, planner } from "./lib/fixtures";
 
-const summary = `Moved **DEV-41** to Review and opened a pull request.
+const summary = `Opened **acme/deevy#406** with the signature change.
 
-- Replaced the poll with the SSE Event stream
-- Added a test for the reconnect path`;
+- Signed the delivery id along with the payload
+- Added a test for a replayed delivery`;
 
-/** A Run: what the Agent did on an Issue, its status in the corner, and the Agent who ran it. */
+/** A Run: what the Agent did on a record, where it stands in the corner, and the Agent who ran it. */
 export const Run = () => (
   <Card className="max-w-md">
     <CardHeader>
-      <CardTitle>Run on DEV-41</CardTitle>
-      <CardDescription>Started 2h ago · finished in 14 min</CardDescription>
+      <CardTitle>
+        Run on <span className="font-mono">acme/deevy#405</span>
+      </CardTitle>
+      <CardDescription className="tabular-nums">Started 3h ago · worked 22m</CardDescription>
       <CardAction>
         <RunStatus status="completed" />
       </CardAction>
     </CardHeader>
     <CardContent className="flex flex-col gap-3">
-      <MemberChip member={builder} size="sm" sponsorName="Ada Lovelace" />
+      <MemberChip member={planner} size="sm" sponsorName="Ada Lovelace" />
       <Markdown>{summary}</Markdown>
     </CardContent>
     <CardFooter className="justify-between border-t">
-      <span className="font-mono text-xs text-muted-foreground">run_9k2m4x7p1q0z</span>
+      <span className="font-mono text-xs text-muted-foreground">run_6t1v9b4h0j3k</span>
       <Button variant="ghost" size="sm">
         Open Run
       </Button>
@@ -42,53 +44,59 @@ export const Run = () => (
   </Card>
 );
 
-/** A Run still going, with a Gate waiting on a Human. */
+/** A Run stopped at a Gate, waiting on a Human's Ruling: the card leads to the Gate. */
 export const RunAwaitingInput = () => (
   <Card className="max-w-md">
     <CardHeader>
-      <CardTitle>Run on DEV-42</CardTitle>
-      <CardDescription>Started 20 min ago</CardDescription>
+      <CardTitle>
+        Run on <span className="font-mono">acme/deevy#412</span>
+      </CardTitle>
+      <CardDescription className="tabular-nums">Started 16 min ago · worked 14m</CardDescription>
       <CardAction>
-        <RunStatus status="awaiting_input" label="Waiting for approval" />
+        <RunStatus status="awaiting_input" label="Waiting at plan" />
       </CardAction>
     </CardHeader>
     <CardContent className="flex flex-col gap-3">
       <MemberChip member={planner} size="sm" sponsorName="Ada Lovelace" />
       <Markdown>
         {
-          "Drafted the spec for *ruling authority* on a Gate. Needs a Human to approve before I touch the schema."
+          "Wrote the plan for *cursor paging*. It waits at `plan` for a Human to approve before I touch a list operation."
         }
       </Markdown>
     </CardContent>
     <CardFooter className="gap-2 border-t">
-      <Button size="sm">Approve</Button>
-      <Button variant="outline" size="sm">
-        Send back
-      </Button>
+      {/* A Ruling is made on the Gate's own page; a card only leads there. */}
+      <Button size="sm">Open the Gate</Button>
+      <span className="ml-auto font-mono text-xs text-muted-foreground tabular-nums">0 of 1</span>
     </CardFooter>
   </Card>
 );
 
-/** A Channel: where the Workspace's Events go out, and whether it is reachable. */
-export const Channel = () => (
+/** A Socket: the tool deevy is connected to, and whether it is delivering. */
+export const Socket = () => (
   <Card className="max-w-md">
     <CardHeader>
-      <CardTitle>#deevy-runs</CardTitle>
-      <CardDescription>Slack · Runs, Gates and mentions</CardDescription>
+      <CardTitle>GitHub · acme</CardTitle>
+      <CardDescription>
+        A GitHub App on <span className="font-mono">acme/deevy</span> and{" "}
+        <span className="font-mono">acme/ops</span>
+      </CardDescription>
       <CardAction>
         <Badge variant="secondary">Connected</Badge>
       </CardAction>
     </CardHeader>
     <CardContent className="flex flex-col gap-1">
-      <span>Last delivery 4 min ago, from a Run by Builder.</span>
-      <span className="text-muted-foreground">Set up by</span>
+      <span>
+        Last delivery 4 min ago, about <span className="font-mono text-xs">acme/deevy#409</span>.
+      </span>
+      <span className="text-muted-foreground">Connected by</span>
       <MemberChip member={ada} size="xs" />
     </CardContent>
     <CardFooter className="gap-2">
       <Button variant="outline" size="sm">
-        Send a test
+        Pause
       </Button>
-      <Button variant="ghost" size="sm">
+      <Button variant="destructive" size="sm">
         Disconnect
       </Button>
     </CardFooter>
@@ -99,14 +107,16 @@ export const Channel = () => (
 export const Small = () => (
   <Card size="sm" className="max-w-sm">
     <CardHeader>
-      <CardTitle>Run on DEV-40</CardTitle>
-      <CardDescription>1d ago · failed after 3 min</CardDescription>
+      <CardTitle>
+        Run on <span className="font-mono">acme/ops#88</span>
+      </CardTitle>
+      <CardDescription className="tabular-nums">5h ago · failed after 6m</CardDescription>
       <CardAction>
         <RunStatus status="failed" />
       </CardAction>
     </CardHeader>
     <CardContent>
-      <Markdown>{"The migration check failed: `member.suspended_at` is not `NOT NULL`."}</Markdown>
+      <Markdown>{"The registry refused the new key: `401` on `docker push`."}</Markdown>
     </CardContent>
   </Card>
 );

@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@deevy/design-system";
-import { ada, builder, grace, planner, suspendedAgent } from "./lib/fixtures";
+import { ada, builder, grace, planner, records, suspendedAgent } from "./lib/fixtures";
 
 const rows = [
   { member: ada, role: "admin", suspended: false },
@@ -38,7 +38,9 @@ export const Members = () => (
           <TableCell>
             <MemberChip member={member} />
           </TableCell>
-          <TableCell className="text-muted-foreground">@{member.handle}</TableCell>
+          <TableCell className="font-mono text-xs text-muted-foreground">
+            @{member.handle}
+          </TableCell>
           <TableCell>
             <span className="flex items-center gap-2">
               {role}
@@ -48,7 +50,7 @@ export const Members = () => (
           <TableCell className="text-right">
             {suspended ? (
               <span className="flex items-center justify-end gap-2">
-                <Badge variant="destructive">Suspended</Badge>
+                <Badge variant="outline">Suspended</Badge>
                 <Button variant="outline" size="sm">
                   Reinstate
                 </Button>
@@ -106,9 +108,9 @@ export const ApiKeys = () => (
 );
 
 const runs = [
-  { agent: planner, completed: 14, failed: 1 },
-  { agent: builder, completed: 23, failed: 3 },
-  { agent: suspendedAgent, completed: 4, failed: 2 },
+  { agent: planner, finished: 14, failed: 1 },
+  { agent: builder, finished: 23, failed: 3 },
+  { agent: suspendedAgent, finished: 4, failed: 2 },
 ];
 
 /** Runs per Agent this week, with the Workspace total in a footer. */
@@ -117,7 +119,7 @@ export const WithFooter = () => (
     <TableHeader>
       <TableRow>
         <TableHead>Agent</TableHead>
-        <TableHead className="text-right">Completed</TableHead>
+        <TableHead className="text-right">Finished</TableHead>
         <TableHead className="text-right">Failed</TableHead>
       </TableRow>
     </TableHeader>
@@ -127,43 +129,39 @@ export const WithFooter = () => (
           <TableCell>
             <MemberChip member={row.agent} size="xs" />
           </TableCell>
-          <TableCell className="text-right font-mono text-xs">{row.completed}</TableCell>
-          <TableCell className="text-right font-mono text-xs">{row.failed}</TableCell>
+          <TableCell className="text-right font-mono text-xs tabular-nums">
+            {row.finished}
+          </TableCell>
+          <TableCell className="text-right font-mono text-xs tabular-nums">{row.failed}</TableCell>
         </TableRow>
       ))}
     </TableBody>
     <TableFooter>
       <TableRow>
         <TableCell>All Agents</TableCell>
-        <TableCell className="text-right font-mono text-xs">41</TableCell>
-        <TableCell className="text-right font-mono text-xs">6</TableCell>
+        <TableCell className="text-right font-mono text-xs tabular-nums">41</TableCell>
+        <TableCell className="text-right font-mono text-xs tabular-nums">6</TableCell>
       </TableRow>
     </TableFooter>
   </Table>
 );
 
-/** The row the keyboard is on, marked with `data-state="selected"`. */
+/** Work, with the row the keyboard is on marked by `data-state="selected"`. */
 export const SelectedRow = () => (
-  <Table aria-label="Issues">
+  <Table aria-label="Work">
     <TableHeader>
       <TableRow>
-        <TableHead className="w-24">Key</TableHead>
+        <TableHead className="w-36">Key</TableHead>
         <TableHead>Title</TableHead>
       </TableRow>
     </TableHeader>
     <TableBody>
-      <TableRow>
-        <TableCell className="font-mono text-xs text-muted-foreground">DEV-42</TableCell>
-        <TableCell className="font-medium">Add ruling authority to Gate</TableCell>
-      </TableRow>
-      <TableRow data-state="selected">
-        <TableCell className="font-mono text-xs text-muted-foreground">DEV-41</TableCell>
-        <TableCell className="font-medium">Stream Events to the inbox without polling</TableCell>
-      </TableRow>
-      <TableRow>
-        <TableCell className="font-mono text-xs text-muted-foreground">DEV-40</TableCell>
-        <TableCell className="font-medium">Sponsor can suspend an Agent from its page</TableCell>
-      </TableRow>
+      {records.slice(0, 3).map((record, index) => (
+        <TableRow key={record.key} data-state={index === 1 ? "selected" : undefined}>
+          <TableCell className="font-mono text-xs text-muted-foreground">{record.key}</TableCell>
+          <TableCell className="font-medium">{record.title}</TableCell>
+        </TableRow>
+      ))}
     </TableBody>
   </Table>
 );

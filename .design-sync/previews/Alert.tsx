@@ -6,10 +6,10 @@ export const Default = () => (
   <Alert className="max-w-lg">
     <Info />
     <AlertTitle>Builder has no API key</AlertTitle>
-    <AlertDescription>It cannot start a Run until its Sponsor creates one.</AlertDescription>
+    <AlertDescription>It cannot reach deevy until its Sponsor generates one.</AlertDescription>
     <AlertAction>
       <Button variant="outline" size="xs">
-        Create key
+        Generate
       </Button>
     </AlertAction>
   </Alert>
@@ -19,9 +19,10 @@ export const Default = () => (
 export const Destructive = () => (
   <Alert variant="destructive" className="max-w-lg">
     <CircleAlert />
-    <AlertTitle>Builder is suspended</AlertTitle>
+    <AlertTitle>Reviewer is suspended</AlertTitle>
     <AlertDescription>
-      Its Runs stopped and its keys are refused. Reinstate it to let it pick up DEV-41 again.
+      Its Runs stopped and its keys are refused. Reinstate it to let it pick up{" "}
+      <span className="font-mono">acme/deevy#409</span> again.
     </AlertDescription>
     <AlertAction>
       <Button variant="outline" size="xs">
@@ -42,8 +43,8 @@ export const Plain = () => (
       </AlertDescription>
     </Alert>
     <Alert>
-      <AlertTitle>The Workflow has unsaved changes</AlertTitle>
-      <AlertDescription>Save it before leaving the page, or they are lost.</AlertDescription>
+      <AlertTitle>The policy has unsaved changes</AlertTitle>
+      <AlertDescription>Save policy before leaving the page, or they are lost.</AlertDescription>
     </Alert>
   </div>
 );

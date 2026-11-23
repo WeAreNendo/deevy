@@ -16,7 +16,7 @@ export function PageHeader({
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
-  /** A row under the title: filters, tabs, a strip of States. */
+  /** A row under the title: filters or tabs. */
   children?: ReactNode;
   className?: string;
 }) {

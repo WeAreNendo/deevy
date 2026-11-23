@@ -13,7 +13,7 @@ export const Rows = () => (
   </div>
 );
 
-/** A Run card before it has loaded: title and status, chip, three lines of body. */
+/** A Run card before it has loaded: title and where it stands, chip, three lines of body. */
 export const RunCard = () => (
   <div
     className="flex max-w-md flex-col gap-4 rounded-lg bg-card p-4 ring-1 ring-foreground/10"
@@ -38,8 +38,8 @@ export const RunCard = () => (
   </div>
 );
 
-/** An inbox row: avatar, two lines, a time. */
-export const InboxRow = () => (
+/** A row on Needs me: avatar, two lines, a time. */
+export const NeedsMeRow = () => (
   <div className="flex max-w-lg items-start gap-2.5 px-3 py-2.5" aria-busy="true">
     <Skeleton className="size-8 shrink-0 rounded-full" />
     <div className="flex flex-1 flex-col gap-2">

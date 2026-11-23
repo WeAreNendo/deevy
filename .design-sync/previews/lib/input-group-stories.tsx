@@ -9,7 +9,7 @@ import {
   Kbd,
   Label,
 } from "@deevy/design-system";
-import { Copy, Link2, Search, Send, X } from "lucide-react";
+import { Check, Copy, Link2, Search, X } from "lucide-react";
 
 /** A search with the shortcut that opens it at the end. */
 export const SearchWithShortcut = () => (
@@ -18,7 +18,7 @@ export const SearchWithShortcut = () => (
       <InputGroupAddon>
         <Search />
       </InputGroupAddon>
-      <InputGroupInput placeholder="Search Issues…" aria-label="Search Issues" />
+      <InputGroupInput placeholder="A key or a word of the title…" aria-label="Search Work" />
       <InputGroupAddon align="inline-end">
         <Kbd>/</Kbd>
       </InputGroupAddon>
@@ -34,7 +34,7 @@ export const UrlPrefix = () => (
       <InputGroupAddon>
         <InputGroupText>https://</InputGroupText>
       </InputGroupAddon>
-      <InputGroupInput id="ig-webhook" defaultValue="hooks.example.com/deevy/events" />
+      <InputGroupInput id="ig-webhook" defaultValue="agent.example.com/deevy" />
       <InputGroupAddon align="inline-end">
         <InputGroupButton size="icon-xs" aria-label="Copy">
           <Copy />
@@ -44,19 +44,21 @@ export const UrlPrefix = () => (
   </div>
 );
 
-/** A textarea with the send button below: a comment on an Issue. */
-export const CommentWithSend = () => (
+/** A textarea with the ruling below it: the Note on a Gate, and Approve. */
+export const NoteWithApprove = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
       <InputGroupTextarea
         rows={3}
-        placeholder="Comment on DEV-42… @mention a Member to notify them."
-        aria-label="Comment"
+        placeholder="Why, in a sentence. Optional on an approval."
+        aria-label="Note"
       />
       <InputGroupAddon align="block-end">
-        <InputGroupText>Markdown</InputGroupText>
+        <InputGroupText>
+          <Kbd>⌘↵</Kbd> commits
+        </InputGroupText>
         <InputGroupButton className="ml-auto" variant="default" size="sm">
-          Send <Send data-icon="inline-end" />
+          Approve <Check data-icon="inline-end" />
         </InputGroupButton>
       </InputGroupAddon>
     </InputGroup>
@@ -67,7 +69,7 @@ export const CommentWithSend = () => (
 export const ClearAndInvalid = () => (
   <div className="flex w-full max-w-sm flex-col gap-3">
     <InputGroup>
-      <InputGroupInput defaultValue="assignee:planner state:review" aria-label="Filter" />
+      <InputGroupInput defaultValue="cursor paging" aria-label="Search Work" />
       <InputGroupAddon align="inline-end">
         <InputGroupButton size="icon-xs" aria-label="Clear">
           <X />
@@ -78,7 +80,7 @@ export const ClearAndInvalid = () => (
       <InputGroupAddon>
         <Link2 />
       </InputGroupAddon>
-      <InputGroupInput defaultValue="not a url" aria-invalid aria-label="Repository URL" />
+      <InputGroupInput defaultValue="not a url" aria-invalid aria-label="Webhook URL" />
     </InputGroup>
   </div>
 );
@@ -88,16 +90,16 @@ export const BlockStart = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
       <InputGroupAddon align="block-start" className="border-b">
-        <InputGroupText>API key</InputGroupText>
+        <InputGroupText>Signing secret</InputGroupText>
         <Button variant="ghost" size="xs" className="ml-auto" type="button">
-          Regenerate
+          Generate
         </Button>
       </InputGroupAddon>
       <InputGroupInput
         readOnly
-        defaultValue="dvy_k3f9a2…c8e1"
+        defaultValue="whsec_7Hq2…Lm4x"
         className="font-mono"
-        aria-label="API key"
+        aria-label="Signing secret"
       />
     </InputGroup>
   </div>

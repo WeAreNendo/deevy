@@ -21,8 +21,8 @@ export const RevokeKey = () => (
         </AlertDialogMedia>
         <AlertDialogTitle>Revoke this API key?</AlertDialogTitle>
         <AlertDialogDescription>
-          The key <span className="font-mono">dvk_…8f2a</span> for Builder stops working at once.
-          Runs it has already started finish; the next one fails to sign in.
+          The key <span className="font-mono">deevy_sk_…8f2a</span> for Builder stops working at
+          once. Runs it has already started finish; the next one fails to sign in.
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>

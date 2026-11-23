@@ -11,9 +11,9 @@ const read = (file: string): Promise<string> => readFile(path.join(root, file), 
  * The record of what deevy is — the glossary, the plan, CLAUDE.md, the
  * internal and public docs, and the code's own words — after
  * docs/plans/simplify.md made it simpler (slice 13). History says what was:
- * the plans, the ADRs, the changelog and the changesets that become it, the
- * tests, which name a removed thing to prove it is gone, and the UI kit's last
- * sync. Everything else says what is.
+ * the plans, the ADRs, the changelog and the changesets that become it, and
+ * the tests, which name a removed thing to prove it is gone. Everything else
+ * says what is, the UI kit synced to Claude Design (.design-sync/) included.
  */
 const history = [
   /^docs\/plans\//,
@@ -23,9 +23,6 @@ const history = [
   /(^|\/)tests?\//,
   /\.test\.tsx?$/,
   /^pnpm-lock\.yaml$/,
-  // The UI kit as it was last synced to Claude Design, a snapshot of the
-  // components of its day that the next sync replaces whole.
-  /^\.design-sync\//,
 ];
 
 /** What simplify.md took out, by the names it went by. */

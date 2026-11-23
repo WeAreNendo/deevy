@@ -3,6 +3,7 @@ import {
   Input,
   Label,
   MemberChip,
+  SecretInput,
   SettingsPage,
   SettingsSection,
   Table,
@@ -12,94 +13,100 @@ import {
   TableHeader,
   TableRow,
 } from "@deevy/design-system";
-import { ada, builder, grace, planner } from "./lib/fixtures";
+import { ada, planner } from "./lib/fixtures";
 
-/** Settings › Members: a header, a list section, a form section and a danger zone. */
-export const Members = () => (
+const keys = [
+  { name: "laptop", prefix: "deevy_sk_7f3k", lastUsed: "2m ago" },
+  { name: "ci", prefix: "deevy_sk_q81z", lastUsed: "yesterday" },
+];
+
+/** An Agent's Settings page: a header, list sections, a form section and a danger zone. */
+export const AgentPage = () => (
   <SettingsPage
-    title="Members"
-    description="Humans and the Agents they sponsor."
-    actions={<Button>Invite a Human</Button>}
+    title={<MemberChip member={planner} size="lg" showHandle />}
+    description={
+      <span>
+        Sponsored by <span className="text-foreground">{ada.user.name}</span>
+      </span>
+    }
   >
-    <SettingsSection title="Humans" aria-label="Humans">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Member</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {[ada, grace].map((human) => (
-            <TableRow key={human.id}>
-              <TableCell>
-                <MemberChip member={human} showHandle />
-              </TableCell>
-              <TableCell>{human === ada ? "Admin" : "Member"}</TableCell>
-              <TableCell className="text-right">
-                <Button variant="outline" size="sm">
-                  Suspend
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <SettingsSection title="Projects" aria-label="Projects">
+      <ul className="flex flex-col divide-y text-sm">
+        {["deevy", "Operations"].map((project) => (
+          <li key={project} className="flex items-center justify-between py-2">
+            <span>{project}</span>
+            <Button variant="destructive" size="sm" aria-label={`Revoke ${project}`}>
+              Revoke
+            </Button>
+          </li>
+        ))}
+      </ul>
     </SettingsSection>
-    <SettingsSection
-      title="Agents"
-      description="Each Agent has a Human Sponsor who is accountable for it."
-      aria-label="Agents"
-    >
+    <SettingsSection title="API keys" aria-label="API keys">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Agent</TableHead>
-            <TableHead>Sponsor</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Key</TableHead>
+            <TableHead>Last used</TableHead>
+            <TableHead className="text-right">
+              <span className="sr-only">Revoke</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {[planner, builder].map((agent) => (
-            <TableRow key={agent.id}>
-              <TableCell>
-                <MemberChip member={agent} showHandle />
+          {keys.map((key) => (
+            <TableRow key={key.prefix}>
+              <TableCell>{key.name}</TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">
+                {key.prefix}…
               </TableCell>
-              <TableCell>
-                <MemberChip member={ada} size="xs" />
-              </TableCell>
+              <TableCell className="text-muted-foreground">{key.lastUsed}</TableCell>
               <TableCell className="text-right">
                 <Button variant="destructive" size="sm">
-                  Revoke key
+                  Revoke
                 </Button>
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      <form className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="key-name">Name</Label>
+          <Input id="key-name" placeholder="laptop" className="w-56" />
+        </div>
+        <Button type="submit">Generate</Button>
+      </form>
     </SettingsSection>
-    <SettingsSection title="Add an Agent" aria-label="Add an Agent">
-      <div className="flex flex-wrap items-end gap-3">
+    <SettingsSection
+      title="Webhook"
+      description="deevy posts to this URL the moment there is work in the Projects this Agent was granted, signed with a secret you choose."
+      aria-label="Webhook"
+    >
+      <div className="grid gap-3 @lg:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="agent-name">Name</Label>
-          <Input id="agent-name" placeholder="Reviewer" className="w-56" />
+          <Label htmlFor="webhook-url">Webhook URL</Label>
+          <Input id="webhook-url" defaultValue="https://agents.example.com/deevy" />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="agent-handle">Handle</Label>
-          <Input id="agent-handle" placeholder="reviewer" className="w-40 font-mono" />
+          <Label htmlFor="webhook-secret">Signing secret</Label>
+          <SecretInput id="webhook-secret" defaultValue="whsec_5b1f0c9e2a" />
         </div>
-        <Button>Create Agent</Button>
+      </div>
+      <div className="flex gap-2">
+        <Button>Start deliveries</Button>
+        <Button variant="outline">Generate</Button>
       </div>
     </SettingsSection>
     <SettingsSection
-      title="Danger zone"
-      description="Archiving the Workspace signs everyone out."
+      title="Suspend this Agent"
+      description="A suspended Agent's keys stop working and nothing is routed to it. Reinstate it to undo."
       tone="danger"
-      aria-label="Danger zone"
+      aria-label="Suspend this Agent"
     >
       <div>
-        <Button variant="destructive">Archive Workspace</Button>
+        <Button variant="outline">Suspend</Button>
       </div>
     </SettingsSection>
   </SettingsPage>

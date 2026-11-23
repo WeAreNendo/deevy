@@ -8,7 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@deevy/design-system";
-import { Bot, Plus } from "lucide-react";
+import { Bot, Keyboard } from "lucide-react";
 
 /** A chip says what kind of Member it is on hover; open here so the card shows both. */
 export const OnMembers = () => (
@@ -43,11 +43,13 @@ export const WithShortcut = () => (
   <TooltipProvider>
     <div className="flex min-h-24 items-start">
       <Tooltip open>
-        <TooltipTrigger render={<Button size="icon-sm" variant="outline" aria-label="New Issue" />}>
-          <Plus />
+        <TooltipTrigger
+          render={<Button size="icon-sm" variant="outline" aria-label="Keyboard shortcuts" />}
+        >
+          <Keyboard />
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          New Issue <Kbd>C</Kbd>
+          Keyboard shortcuts <Kbd>?</Kbd>
         </TooltipContent>
       </Tooltip>
     </div>

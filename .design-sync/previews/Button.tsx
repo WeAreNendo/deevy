@@ -4,12 +4,12 @@ import { ArrowRight, Check, Plus, Trash2 } from "lucide-react";
 /** The six looks. `default` is the one action colour; `destructive` is for what does not undo. */
 export const Variants = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <Button>New Issue</Button>
-    <Button variant="secondary">Save draft</Button>
+    <Button>Bind a Project</Button>
+    <Button variant="secondary">Generate</Button>
     <Button variant="outline">Reinstate</Button>
     <Button variant="ghost">Cancel</Button>
     <Button variant="destructive">Revoke key</Button>
-    <Button variant="link">All Issues</Button>
+    <Button variant="link">All Runs</Button>
   </div>
 );
 
@@ -25,7 +25,7 @@ export const Sizes = () => (
 export const WithIcon = () => (
   <div className="flex flex-wrap items-center gap-2">
     <Button>
-      <Plus data-icon="inline-start" /> New Issue
+      <Plus data-icon="inline-start" /> Bind a Project
     </Button>
     <Button variant="outline">
       Continue <ArrowRight data-icon="inline-end" />
@@ -38,16 +38,16 @@ export const WithIcon = () => (
 
 export const IconOnly = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <Button size="icon-xs" variant="ghost" aria-label="Add">
+    <Button size="icon-xs" variant="ghost" aria-label="Add a Checkpoint">
       <Plus />
     </Button>
-    <Button size="icon-sm" variant="outline" aria-label="Add">
+    <Button size="icon-sm" variant="outline" aria-label="Add rule">
       <Plus />
     </Button>
-    <Button size="icon" variant="outline" aria-label="Add">
+    <Button size="icon" variant="outline" aria-label="Invite someone">
       <Plus />
     </Button>
-    <Button size="icon-lg" variant="destructive" aria-label="Delete">
+    <Button size="icon-lg" variant="destructive" aria-label="Remove ship">
       <Trash2 />
     </Button>
   </div>
@@ -55,7 +55,7 @@ export const IconOnly = () => (
 
 export const Disabled = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <Button disabled>New Issue</Button>
+    <Button disabled>Bind a Project</Button>
     <Button variant="outline" disabled>
       Reinstate
     </Button>

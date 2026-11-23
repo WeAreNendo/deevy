@@ -1,50 +1,39 @@
 import { Markdown } from "@deevy/design-system";
+import { proposal } from "./lib/fixtures";
 
-const spec = `# Add ruling authority to Gate
+const plan = `${proposal}
 
-A Gate is left by a decision, never by a drag. Today **any Human** can decide one, which is not what a Sponsor signed up for when they let an Agent loose on \`DEV\` — see [ADR-0012](https://example.com/adr/0012).
+## Who it touches
 
-## Acceptance
-
-- [x] The Gate carries \`rulingAuthority\`: \`any-human\`, or a list of Member ids
-- [x] The Board's **Decide** button is offered only to those Members
-- [ ] \`gates.approve\` refuses anyone else with a 403 and a word
-
-> An Agent never decides a Gate — not even the one that asked for it.
-
-\`\`\`ts
-export const approveGate = defineOperation({
-  name: "gates.approve",
-  auth: "member",
-  input: z.object({ key: IssueKey, note: z.string().nullable() }),
-  handler: async ({ input, context }) => rule(context.member, input, "approved"),
-});
-\`\`\`
-
-| State | Gate | Who decides |
+| Operation | Today | After |
 | --- | --- | --- |
-| Review | yes | @ada, @grace |
-| Ship | yes | any Human |`;
+| \`runs.list\` | \`offset\` | \`cursor\` |
+| \`events.list\` | \`before\` | \`cursor\` |
 
-/** A Document: headings, a task list, code coloured by lowlight, a table, a quote — the prose the editor shares. */
-export const Document = () => <Markdown>{spec}</Markdown>;
+- [x] the cursor encodes the last \`seq\`
+- [ ] the SPA reads \`next\` instead of counting rows
 
-/** A comment: short, a mention, a little inline code. */
-export const Comment = () => (
+See [ADR-0015](https://example.com/adr/0015) for why ids are not sequential.`;
+
+/** A Proposal: headings, a list, code coloured by lowlight, a quote, a table, a task list. */
+export const Proposal = () => <Markdown>{plan}</Markdown>;
+
+/** A Ruling's note: short, a little inline code. */
+export const RulingNote = () => (
   <div className="max-w-md rounded-md border bg-card px-3 py-2">
-    <Markdown>{`@planner the Spec reads well — one thing: \`rulingAuthority\` should default to \`any-human\`, or every old Gate stops working the moment we deploy. Can you add that to the migration note?`}</Markdown>
+    <Markdown>{`Approved. Keep \`offset\` working for one release, and say so in the changeset — somebody's script pages by it.`}</Markdown>
   </div>
 );
 
-/** A Run's answer to a question: a numbered list and emphasis, no headings. */
-export const Answer = () => (
+/** A record's body, as its tracker wrote it: a numbered list and emphasis, no headings. */
+export const RecordBody = () => (
   <div className="max-w-md">
-    <Markdown>{`Three files touch it:
+    <Markdown>{`Every list operation pages by offset, which skips rows when one arrives mid-read.
 
-1. \`packages/core/src/operations/gates.ts\` — the check itself
-2. \`packages/db/src/schema/states.ts\` — the new column, *nullable* until the migration backfills
-3. \`apps/web/src/routes/projects/workflow.tsx\` — the approvers picker
+1. \`runs.list\` — the feed
+2. \`events.list\` — the Event log
+3. \`issues.list\` — Work
 
-I would start with the schema, since the other two read from it.`}</Markdown>
+*Cursor* paging fixes all three at once.`}</Markdown>
   </div>
 );

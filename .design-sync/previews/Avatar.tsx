@@ -54,7 +54,7 @@ export const Group = () => (
         <AvatarFallback>GH</AvatarFallback>
       </Avatar>
       <Avatar>
-        <AvatarFallback>ML</AvatarFallback>
+        <AvatarFallback>OH</AvatarFallback>
       </Avatar>
       <AvatarGroupCount>+2</AvatarGroupCount>
     </AvatarGroup>

@@ -9,6 +9,7 @@
   },
   "Forms": {
     "Input": [],
+    "SecretInput": [],
     "Textarea": [],
     "Checkbox": [],
     "Switch": [],
@@ -57,10 +58,7 @@
       "ComboboxSeparator",
       "ComboboxTrigger",
       "ComboboxValue"
-    ],
-    "StateFields": [],
-    "ApproversPicker": [],
-    "IssueFilters": []
+    ]
   },
   "Overlays": {
     "Dialog": [
@@ -207,34 +205,20 @@
     "Separator": [],
     "ScrollArea": ["ScrollBar"],
     "ResizablePanelGroup": ["ResizableHandle", "ResizablePanel"],
-    "Markdown": [],
-    "MarkdownEditor": [],
-    "Timeline": [
-      "TimelineContent",
-      "TimelineDate",
-      "TimelineHeader",
-      "TimelineIndicator",
-      "TimelineItem",
-      "TimelineSeparator",
-      "TimelineTitle"
-    ],
-    "Kanban": [
-      "KanbanBoard",
-      "KanbanColumn",
-      "KanbanColumnContent",
-      "KanbanColumnHandle",
-      "KanbanItem",
-      "KanbanItemHandle",
-      "KanbanOverlay"
-    ],
-    "Sortable": ["SortableContent", "SortableItem", "SortableItemHandle", "SortableOverlay"]
+    "Markdown": []
   },
-  "Members, States and Runs": {
+  "Members and Runs": {
     "MemberChip": [],
-    "StateBadge": [],
-    "LabelBadge": ["LabelText"],
-    "RunStatus": [],
+    "RunStatus": []
+  },
+  "Pages": {
     "PageHeader": [],
-    "SettingsPage": ["SettingsSection"]
+    "SettingsPage": ["SettingsRow", "SettingsSection"],
+    "RailHeading": []
+  },
+  "Brand": {
+    "DeevyLogo": [],
+    "DeevyMark": [],
+    "SignInButton": []
   }
 }

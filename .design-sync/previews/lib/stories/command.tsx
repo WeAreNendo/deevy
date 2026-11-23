@@ -9,63 +9,74 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@deevy/design-system";
-import { CircleUser, Copy, Inbox, Link2, ListTodo, Maximize2, Plus, Settings } from "lucide-react";
+import {
+  BellRing,
+  ClipboardList,
+  FolderKanban,
+  Keyboard,
+  PlayCircle,
+  Settings,
+} from "lucide-react";
 
-/** ⌘K: the Issue in front of you, what you can make, and everywhere by name, from one box. Open so the card shows it. */
+const settingsPages = [
+  { group: "Workspace", label: "General" },
+  { group: "Workspace", label: "Members" },
+  { group: "Workspace", label: "Event log" },
+  { group: "Work", label: "Sockets" },
+  { group: "Work", label: "Projects" },
+  { group: "Agents and delivery", label: "Agents" },
+  { group: "Agents and delivery", label: "Webhooks" },
+];
+
+/** ⌘K: everywhere by name from one box, each Settings page with its group. Open so the card shows it. */
 export const Palette = () => (
-  <CommandDialog
-    open
-    title="Search or jump"
-    description="Type an Issue, where to go, or what to make"
-  >
-    <Command label="Search or jump">
-      <CommandInput placeholder="Search Issues, or jump to…" />
+  <CommandDialog open title="Jump to" description="Jump to a page">
+    <Command>
+      <CommandInput placeholder="Jump to…" />
       <CommandList>
         <CommandEmpty>Nothing matches.</CommandEmpty>
-        <CommandGroup heading="DEV-42">
-          <CommandItem value="DEV-42 open full page">
-            <Maximize2 />
-            Open full page
-            <CommandShortcut>o</CommandShortcut>
-          </CommandItem>
-          <CommandItem value="DEV-42 copy key">
-            <Copy />
-            Copy key
-          </CommandItem>
-          <CommandItem value="DEV-42 copy link">
-            <Link2 />
-            Copy link
-          </CommandItem>
-        </CommandGroup>
-        <CommandSeparator />
-        <CommandGroup heading="Create">
-          <CommandItem value="new issue">
-            <Plus />
-            New Issue
-            <CommandShortcut>c</CommandShortcut>
-          </CommandItem>
-        </CommandGroup>
-        <CommandSeparator />
         <CommandGroup heading="Go to">
-          <CommandItem value="inbox">
-            <Inbox />
-            Inbox
-            <CommandShortcut>g i</CommandShortcut>
+          <CommandItem value="needs me">
+            <BellRing />
+            Needs me
           </CommandItem>
-          <CommandItem value="my issues">
-            <CircleUser />
-            My Issues
-            <CommandShortcut>g m</CommandShortcut>
+          <CommandItem value="runs">
+            <PlayCircle />
+            Runs
+            <CommandShortcut>g r</CommandShortcut>
           </CommandItem>
-          <CommandItem value="all issues">
-            <ListTodo />
-            All Issues
-            <CommandShortcut>g a</CommandShortcut>
+          <CommandItem value="work">
+            <ClipboardList />
+            Work
+            <CommandShortcut>g w</CommandShortcut>
+          </CommandItem>
+          <CommandItem value="projects">
+            <FolderKanban />
+            Projects
+            <CommandShortcut>g p</CommandShortcut>
           </CommandItem>
           <CommandItem value="settings">
             <Settings />
             Settings
             <CommandShortcut>g s</CommandShortcut>
+          </CommandItem>
+        </CommandGroup>
+        <CommandSeparator />
+        <CommandGroup heading="Settings">
+          {settingsPages.map((page) => (
+            <CommandItem key={page.label} value={`${page.group} ${page.label} settings`}>
+              <Settings />
+              {page.label}
+              <span className="ml-auto text-xs text-muted-foreground">{page.group}</span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+        <CommandSeparator />
+        <CommandGroup heading="Help">
+          <CommandItem value="keyboard shortcuts">
+            <Keyboard />
+            Keyboard shortcuts
+            <CommandShortcut>?</CommandShortcut>
           </CommandItem>
         </CommandGroup>
       </CommandList>

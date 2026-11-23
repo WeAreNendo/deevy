@@ -1,18 +1,18 @@
 import { Checkbox, Label } from "@deevy/design-system";
 
-/** 16px box beside a Label; the Workflow editor's "Gate" toggle. */
+/** 16px box beside a Label; a Checkpoint's "Not the Human the work is for". */
 export const WithLabel = () => (
   <div className="flex items-center gap-2">
-    <Checkbox id="checkbox-gate" />
-    <Label htmlFor="checkbox-gate">Gate</Label>
+    <Checkbox id="checkbox-exclude" />
+    <Label htmlFor="checkbox-exclude">Not the Human the work is for</Label>
   </div>
 );
 
 /** Checked fills in the action colour with a white check. */
 export const Checked = () => (
   <div className="flex items-center gap-2">
-    <Checkbox id="checkbox-inbox" defaultChecked />
-    <Label htmlFor="checkbox-inbox">Deliver to the inbox</Label>
+    <Checkbox id="checkbox-code" defaultChecked />
+    <Label htmlFor="checkbox-code">Its code is here too, so its Agents push to it</Label>
   </div>
 );
 
@@ -20,33 +20,33 @@ export const Disabled = () => (
   <div className="flex flex-col gap-3">
     <div className="flex items-center gap-2">
       <Checkbox id="checkbox-off" disabled />
-      <Label htmlFor="checkbox-off">Post to Slack</Label>
+      <Label htmlFor="checkbox-off">Omar Haddad</Label>
     </div>
     <div className="flex items-center gap-2">
       <Checkbox id="checkbox-on" disabled defaultChecked />
-      <Label htmlFor="checkbox-on">Deliver to the inbox</Label>
+      <Label htmlFor="checkbox-on">Ada Lovelace</Label>
     </div>
   </div>
 );
 
-/** A column of choices, as the notification settings lay them out. */
+/** A column of choices, as a Checkpoint names who may rule on it. */
 export const Group = () => (
   <div className="flex flex-col gap-3">
     <div className="flex items-center gap-2">
-      <Checkbox id="checkbox-assigned" defaultChecked />
-      <Label htmlFor="checkbox-assigned">An Issue is assigned to me</Label>
+      <Checkbox id="checkbox-ada" defaultChecked />
+      <Label htmlFor="checkbox-ada">Ada Lovelace</Label>
     </div>
     <div className="flex items-center gap-2">
-      <Checkbox id="checkbox-gate-open" defaultChecked />
-      <Label htmlFor="checkbox-gate-open">A Gate waits for my ruling</Label>
+      <Checkbox id="checkbox-grace" defaultChecked />
+      <Label htmlFor="checkbox-grace">Grace Hopper</Label>
     </div>
     <div className="flex items-center gap-2">
-      <Checkbox id="checkbox-run-failed" />
-      <Label htmlFor="checkbox-run-failed">A Run of my Agent fails</Label>
+      <Checkbox id="checkbox-omar" />
+      <Label htmlFor="checkbox-omar">Omar Haddad</Label>
     </div>
     <div className="flex items-center gap-2">
-      <Checkbox id="checkbox-mention" aria-invalid />
-      <Label htmlFor="checkbox-mention">A Member mentions me</Label>
+      <Checkbox id="checkbox-requester" aria-invalid />
+      <Label htmlFor="checkbox-requester">Not the Human the work is for</Label>
     </div>
   </div>
 );

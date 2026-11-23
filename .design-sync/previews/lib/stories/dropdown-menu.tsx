@@ -15,10 +15,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   MemberChip,
-  StateBadge,
 } from "@deevy/design-system";
 import { ChevronsUpDown, Keyboard, LogOut, Monitor, Moon, MoreHorizontal, Sun } from "lucide-react";
-import { ada, labels, states } from "../fixtures";
+import { ada, grace, omar } from "../fixtures";
 
 /** The Member menu at the foot of the sidebar: who you are, the theme, the way out. Open so the card shows it. */
 export const MemberMenu = () => (
@@ -68,47 +67,51 @@ export const MemberMenu = () => (
   </div>
 );
 
-/** An Issue's row menu: Labels as checkboxes, the State in a submenu (open too), and the one destructive item last. */
-export const IssueMenu = () => (
+/** An Agent's row menu: its Projects as checkboxes, its Sponsor in a submenu (open too), the one destructive item last. */
+export const AgentMenu = () => (
   <div className="flex min-h-80 items-start">
     <DropdownMenu open>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" aria-label="More for DEV-42" />}
+        render={<Button variant="ghost" size="icon-sm" aria-label="More for Builder" />}
       >
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="start" className="w-52">
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="font-mono">DEV-42</DropdownMenuLabel>
+          <DropdownMenuLabel className="font-mono">@builder</DropdownMenuLabel>
           <DropdownMenuItem>
-            Copy key
+            Copy handle
             <DropdownMenuShortcut>⌘C</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem>
-            Open full page
-            <DropdownMenuShortcut>O</DropdownMenuShortcut>
+            Open its Runs
+            <DropdownMenuShortcut>↵</DropdownMenuShortcut>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Labels</DropdownMenuLabel>
-          <DropdownMenuCheckboxItem checked>{labels.epic.name}</DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem checked>{labels.backend.name}</DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem>{labels.docs.name}</DropdownMenuCheckboxItem>
+          <DropdownMenuLabel>Projects</DropdownMenuLabel>
+          <DropdownMenuCheckboxItem checked className="font-mono">
+            acme/deevy
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem checked className="font-mono">
+            acme/ops
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem className="font-mono">acme/site</DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuSub open>
-          <DropdownMenuSubTrigger>Move to</DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger>Change Sponsor</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            {Object.values(states).map((state) => (
-              <DropdownMenuItem key={state.name}>
-                <StateBadge state={state} />
+            {[ada, grace, omar].map((human) => (
+              <DropdownMenuItem key={human.id}>
+                <MemberChip member={human} size="xs" />
               </DropdownMenuItem>
             ))}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">Delete Issue</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive">Revoke every API key</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   </div>
