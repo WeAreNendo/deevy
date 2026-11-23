@@ -1,20 +1,12 @@
 import { apiKey } from "@better-auth/api-key";
-import { cimd } from "@better-auth/cimd";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
-import { mcp } from "@better-auth/mcp";
 import { allowlistRule, invitation, member, workspace, type Db } from "@deevy/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { allocateHandle, slugify } from "./handles.ts";
-import {
-  betterAuth,
-  type AuthContext,
-  type BetterAuthOptions,
-  type BetterAuthPlugin,
-} from "better-auth";
-import { createAuthMiddleware, isAPIError } from "better-auth/api";
+import { betterAuth, type AuthContext, type BetterAuthOptions } from "better-auth";
+import { isAPIError } from "better-auth/api";
 import { symmetricDecrypt } from "better-auth/crypto";
-import { genericOAuth, jwt, lastLoginMethod } from "better-auth/plugins";
-import { fetchClientMetadataResource, type MetadataResourceFetch } from "./cimd.ts";
+import { genericOAuth, lastLoginMethod } from "better-auth/plugins";
 import { appendEvent } from "./events.ts";
 import { authId, newId } from "./ids.ts";
 import { basePathOf } from "./base-path.ts";
@@ -184,12 +176,6 @@ export interface AuthEnv {
   /** The first sign-in with this email creates the Workspace and becomes admin. */
   adminEmail?: string;
   workspaceName?: string;
-  /**
-   * How a Client ID Metadata Document is dereferenced. Defaults to the
-   * web-standard transport in `cimd.ts`; a deployment that can pin a resolved
-   * address supplies a stricter one here.
-   */
-  fetchClientMetadataResource?: MetadataResourceFetch;
 }
 
 export interface CreateAuthOptions {
@@ -262,9 +248,13 @@ export function createAuth({ db, env, logger, rethrowUnexpected = false }: Creat
       ...(base ? { defaultCookieAttributes: { path: base } } : {}),
     },
     emailAndPassword: { enabled: false },
+    // An Agent's key is issued by its Sponsor through `agents.keys.*`, which
+    // calls the plugin from the server, and never over HTTP: the plugin's own
+    // routes would let a signed-in Human mint a key that stands for them, a
+    // delegated credential deevy no longer has (ADR-0035).
+    disabledPaths: apiKeyRoutes,
     plugins: [
       ...apiKeyPlugins(),
-      ...oauthServerPlugins(env),
       ...oidcPlugins(env.providers ?? {}),
       // Which provider this browser signed in with last, in a cookie of its
       // own (no account, no address), so the sign-in page can offer it first
@@ -338,9 +328,8 @@ export function createAuth({ db, env, logger, rethrowUnexpected = false }: Creat
   // inside a request, long after `$context` settled.
   const readToken = async (stored: string) =>
     plainOAuthToken(stored, (await auth.$context).secretConfig);
-  // Better Auth starts initialising the moment it is constructed, and the
-  // OAuth provider seeds its resource rows there, so the context is a promise
-  // that touches the database before anyone has awaited it. This handler only
+  // Better Auth starts initialising the moment it is constructed, so the
+  // context is a promise that may fail before anyone has awaited it. This handler only
   // marks that promise as observed: every real `await auth.$context` still
   // sees a failure, but a caller that builds an instance and never uses it
   // does not turn one into an unhandled rejection.
@@ -606,139 +595,28 @@ export function apiKeyPlugins() {
   ];
 }
 
-/** Where the MCP endpoint is mounted. RFC 8707 and RFC 9728 both build on it. */
-export const MCP_PATH = "/mcp";
 /**
- * Where the operation API is mounted, and the second protected resource this
- * server issues tokens for. `/api` and `/rpc` are two transports for one API,
- * so they share one resource identifier: the resource names what a token may
- * reach, not how it gets there.
- *
- * It is a separate resource from MCP rather than a widened one because that
- * separation is the whole point of RFC 8707. A Human who consents to some MCP
- * client is consenting to the tools deevy projects, not to the ninety-four
- * operations behind them, and a token minted for one is refused at the other
- * (principal.ts).
+ * The api-key plugin's own routes, closed to HTTP (`disabledPaths` above). The
+ * plugin still verifies a key, and deevy still issues and revokes one, through
+ * `auth.api`, which no browser reaches.
  */
+const apiKeyRoutes = [
+  "/api-key/create",
+  "/api-key/get",
+  "/api-key/update",
+  "/api-key/delete",
+  "/api-key/list",
+  "/api-key/verify",
+  "/api-key/delete-all-expired-api-keys",
+];
+
+/** Where the MCP endpoint is mounted, which only an Agent's key reaches (ADR-0035). */
+export const MCP_PATH = "/mcp";
+/** Where the operation API is mounted; `/rpc` is a second transport for the same operations. */
 export const API_PATH = "/api";
 
-/**
- * Which protected resource a request is reaching, as a path under the issuer.
- * A union rather than a string, so a surface cannot invent an audience by
- * typo and quietly accept nothing.
- */
-export type ResourcePath = typeof API_PATH | typeof MCP_PATH;
-
-/** Where Better Auth's own routes are mounted, and so where `/jwks` lives. */
+/** Where Better Auth's own routes are mounted. */
 export const AUTH_BASE_PATH = "/api/auth";
-
-/** The SPA route the OAuth provider sends a Human to for consent. */
-export const CONSENT_PATH = "/consent";
-
-/**
- * deevy as an OAuth 2.1 authorization server for a Human's own MCP client
- * (ADR-0007, docs/plans/m2.md). `mcp()` *is* the provider, so no separate
- * `oauthProvider` sits beside it, and `jwt()` supplies the signing keys the
- * access tokens and the JWKS come from.
- *
- * The issuer is pinned to the instance origin rather than left to default to
- * Better Auth's base path. RFC 8414 builds a metadata URL by inserting the
- * well-known segment after the issuer's host, so an issuer of `…/api/auth`
- * would publish the document at `/.well-known/oauth-authorization-server/api/auth`
- * and nowhere a client looking at the origin would find it. A deployment under
- * a path is its own issuer, `…/acme`, described at
- * `/.well-known/oauth-authorization-server/acme`: one segment longer, by the
- * same rule, and the provider answers both forms (docs/plans/hosted.md).
- *
- * Nothing is enabled without a configured `baseURL`: a resource identifier is
- * an absolute URL (RFC 8707) and guessing it per request would mint tokens
- * bound to whatever host the caller sent (docs/OPERATIONS.md).
- *
- * Mirrored in packages/db/auth.generate.config.ts, which the schema generator
- * reads; only the plugin list shapes the schema, and `cimd()` adds no tables.
- */
-export function oauthServerPlugins(env: AuthEnv) {
-  const baseURL = env.baseURL?.replace(/\/+$/, "");
-  if (!baseURL) return [];
-  // The SPA's pages, under the path the deployment lives under (base-path.ts).
-  const base = basePathOf(baseURL);
-  return [
-    jwt({ jwt: { issuer: baseURL } }),
-    mcp({
-      loginPage: `${base}/`,
-      consentPage: `${base}${CONSENT_PATH}`,
-      // RFC 8707: every token this server mints is bound to this audience, and
-      // one minted for anything else is refused at /mcp (principal.ts).
-      resource: `${baseURL}${MCP_PATH}`,
-      // The API beside it. `mcp()` appends its own resource to this list, so
-      // the server issues for both.
-      resources: [`${baseURL}${API_PATH}`],
-      // Allowed, deliberately not default. `clientRegistrationDefaultResources`
-      // links a resource to every client that registers, which would have given
-      // the whole operation API to any MCP client that asked for nothing — the
-      // opposite of what the second resource is for. This way a client is
-      // linked to the API only if it names it in its registration, so an MCP
-      // client that does not ask holds a token for the tools and nothing else.
-      clientRegistrationAllowedResources: [`${baseURL}${API_PATH}`],
-      // MCP 2026-07-28 prefers a Client ID Metadata Document and deprecates
-      // dynamic registration, but the clients that only speak DCR are the ones
-      // deevy cannot ask to change, so both stay open.
-      allowDynamicClientRegistration: true,
-      allowUnauthenticatedClientRegistration: true,
-    }),
-    nativeRegistrations(),
-    cimd({
-      fetchClientMetadataResource: env.fetchClientMetadataResource ?? fetchClientMetadataResource,
-      // The revision pins CIMD draft-00, which the profile enforces on top of
-      // the plugin's generic draft-02 validation.
-      metadataProfile: "mcp-2026-07-28",
-    }),
-  ];
-}
-
-/** A redirect only an app on the Human's own machine can receive (RFC 8252 §7). */
-function isNativeRedirect(uri: unknown): boolean {
-  if (typeof uri !== "string" || !URL.canParse(uri)) return false;
-  const { protocol, hostname } = new URL(uri);
-  if (protocol === "https:") return false;
-  if (protocol !== "http:") return true;
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-}
-
-/**
- * A client that registers without an `application_type` is a web client to
- * Better Auth, as OpenID Connect registration defaults it, and a web client may
- * only be called back over https on a host that is not this machine. That
- * refuses every MCP client that registers itself the way MCP describes, which
- * never mentions the field: VS Code's `http://127.0.0.1:33418`, the MCP
- * Inspector's and the SDK's `http://localhost`, an app's own scheme. Each is a
- * native app by RFC 8252's definition, and saying so is all this does: a native
- * client is still refused http on any other host, https on a loopback one, and
- * a scheme that is not a reverse-domain name without an authority (§7.1), so
- * nothing is accepted that names somebody else's server. A client that does
- * state its type keeps it.
- *
- * It shapes no table, so packages/db/auth.generate.config.ts leaves it out.
- */
-function nativeRegistrations(): BetterAuthPlugin {
-  return {
-    id: "deevy-native-registrations",
-    hooks: {
-      before: [
-        {
-          matcher: (ctx) => ctx.path === "/oauth2/register",
-          handler: createAuthMiddleware(async (ctx) => {
-            const body = ctx.body as Record<string, unknown> | undefined;
-            const uris = body?.redirect_uris;
-            if (!body || body.application_type !== undefined || !Array.isArray(uris)) return;
-            if (!uris.some(isNativeRedirect)) return;
-            return { context: { body: { ...body, application_type: "native" } } };
-          }),
-        },
-      ],
-    },
-  };
-}
 
 /** The Authorization bearer of a request, whatever kind of credential it is. */
 export function bearerToken(headers: Headers | undefined): string | null {
@@ -748,9 +626,8 @@ export function bearerToken(headers: Headers | undefined): string | null {
 }
 
 /**
- * The bearer, only when it is a deevy API key. A Human MCP client's OAuth
- * access token arrives on the same header, and the plugin must not try to look
- * it up as a key.
+ * The bearer, only when it is a deevy API key: anything else on the header is
+ * nobody, and the plugin need not look it up.
  */
 export function bearerApiKey(headers: Headers | undefined): string | null {
   const token = bearerToken(headers);

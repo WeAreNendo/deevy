@@ -47,11 +47,7 @@ describe("a suspended Workspace", () => {
   };
 
   it("sends the visitor to its owner, and its owner to the console or support", async () => {
-    for (const path of [
-      "/acme/",
-      "/acme/api/auth/get-session",
-      "/.well-known/openid-configuration/acme",
-    ]) {
+    for (const path of ["/acme/", "/acme/api/auth/get-session"]) {
       const response = await route(
         new Request(`https://app.example.com${path}`),
         suspended,

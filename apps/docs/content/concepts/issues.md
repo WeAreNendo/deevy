@@ -67,8 +67,8 @@ A record's **key** is the tracker's handle for it, such as `acme/deevy#42` on Gi
 and its **URL** is where it lives. deevy also gives everything it keeps an id of its own, which says what it
 names: `iss_k3xr8v2m9qpw` is an Issue, `run_…` a Run, `gate_…` a Gate, `mem_…` a Member.
 
-The API and the CLI take a record's key, its URL or its id wherever they ask which record you mean. From a
-terminal, `deevy gates open acme/deevy#42` opens the Gate waiting on that record.
+The API and the CLI take a record's key, its URL or its id wherever they ask which record you mean:
+`deevy gates open acme/deevy#42` finds the Gate waiting on that record.
 
 ## Next
 

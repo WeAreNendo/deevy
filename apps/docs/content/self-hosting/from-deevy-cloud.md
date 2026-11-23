@@ -70,9 +70,6 @@ What the import does, in order:
   rows all fit together, and only then moves it into place, so a failure leaves nothing behind.
 - **It migrates it**, exactly as an upgrade would, if the dump is from an older release, and names each
   migration it applied.
-- **It forgets what was tied to the old address.** What deevy issued to MCP clients and the CLI names the
-  address it lived at, so it isn't accepted at the new one, and the import removes it. Registered clients
-  and their consents stay.
 - **It checks `DEEVY_SECRET`** by opening everything sealed with it, and says plainly which values it
   could not open.
 - **It prints what it imported**, and what to point at the new address, with each Socket's own address
@@ -113,17 +110,16 @@ daily allowance of rows written, which a large Workspace can use up.
 Your Workspace's address changes from `https://app.deevy.dev/<address>` to your `BETTER_AUTH_URL`, and
 deevy can't tell the rest of the world. In this order:
 
-| What                    | What to change                                                                                                                                                                                                                                                                     |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signing in              | deevy Cloud's sign-in apps call back to app.deevy.dev only. Register your own for each provider you offer, with `${BETTER_AUTH_URL}/api/auth/callback/<provider>`; see [Sign-in providers](/self-hosting/sign-in-providers/). Everybody signs in again and finds their own Member. |
-| Agents                  | Each one's `DEEVY_URL`, to the new address. Their API keys keep working.                                                                                                                                                                                                           |
-| The CLI and MCP clients | `deevy login <your address>`, and the new address in each MCP client: what they held was issued by the old one.                                                                                                                                                                    |
-| A GitHub Socket         | Choose **Point GitHub at this address** on the Socket's page in **Settings › Sockets**. In the GitHub App's own settings, set the **Setup URL** to `${BETTER_AUTH_URL}/hooks/<socket>/setup`.                                                                                      |
-| A Linear Socket         | In the OAuth application: the webhook URL, `${BETTER_AUTH_URL}/hooks/<socket>`, and both callback URLs, `${BETTER_AUTH_URL}/api/identities/linear/callback` and `${BETTER_AUTH_URL}/hooks/<socket>/setup`.                                                                         |
-| A GitLab Socket         | On every project or group it is bound to, the webhook's URL, `${BETTER_AUTH_URL}/hooks/<socket>`. The secret token stays.                                                                                                                                                          |
-| A Notion Socket         | On the connection's **Webhooks** tab, a new subscription to `${BETTER_AUTH_URL}/hooks/<socket>`, verified with the token the Socket's page shows. Then delete the old one.                                                                                                         |
-| A Slack Socket          | In the app, the **Interactivity** request URL and the `/deevy` command's URL, both `${BETTER_AUTH_URL}/hooks/<socket>`.                                                                                                                                                            |
-| Outgoing webhooks       | Nothing: they name other services' addresses, not deevy's.                                                                                                                                                                                                                         |
+| What              | What to change                                                                                                                                                                                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing in        | deevy Cloud's sign-in apps call back to app.deevy.dev only. Register your own for each provider you offer, with `${BETTER_AUTH_URL}/api/auth/callback/<provider>`; see [Sign-in providers](/self-hosting/sign-in-providers/). Everybody signs in again and finds their own Member. |
+| Agents            | Each one's MCP endpoint and `DEEVY_URL`, to the new address. Their API keys keep working.                                                                                                                                                                                          |
+| A GitHub Socket   | Choose **Point GitHub at this address** on the Socket's page in **Settings › Sockets**. In the GitHub App's own settings, set the **Setup URL** to `${BETTER_AUTH_URL}/hooks/<socket>/setup`.                                                                                      |
+| A Linear Socket   | In the OAuth application: the webhook URL, `${BETTER_AUTH_URL}/hooks/<socket>`, and both callback URLs, `${BETTER_AUTH_URL}/api/identities/linear/callback` and `${BETTER_AUTH_URL}/hooks/<socket>/setup`.                                                                         |
+| A GitLab Socket   | On every project or group it is bound to, the webhook's URL, `${BETTER_AUTH_URL}/hooks/<socket>`. The secret token stays.                                                                                                                                                          |
+| A Notion Socket   | On the connection's **Webhooks** tab, a new subscription to `${BETTER_AUTH_URL}/hooks/<socket>`, verified with the token the Socket's page shows. Then delete the old one.                                                                                                         |
+| A Slack Socket    | In the app, the **Interactivity** request URL and the `/deevy` command's URL, both `${BETTER_AUTH_URL}/hooks/<socket>`.                                                                                                                                                            |
+| Outgoing webhooks | Nothing: they name other services' addresses, not deevy's.                                                                                                                                                                                                                         |
 
 The import prints this list for your own Sockets, with their addresses filled in. Only GitHub lets deevy
 move its webhook itself; every other tool keeps it in its own settings. Until a tool is pointed at the new

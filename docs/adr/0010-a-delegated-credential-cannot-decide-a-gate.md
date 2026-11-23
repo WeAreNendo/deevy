@@ -1,5 +1,9 @@
 # A delegated credential cannot decide a Gate
 
+> Amended by [ADR-0035](./0035-only-agents-speak-mcp.md): no delegated credential is minted any more, and a
+> key stands only for an Agent, so `sessionOnly` went with the credentials it refused. The rule stands for
+> any that comes back.
+
 Amends [ADR-0004](./0004-agents-never-approve-gates.md), which says an Agent never approves a Gate. M2 built
 that rule as `assertHuman`, a check on the Member's kind, and then found it was not the whole rule. Once deevy
 mints OAuth access tokens for a Human's own MCP client (ADR-0007), a Gate decision arriving from an agent loop

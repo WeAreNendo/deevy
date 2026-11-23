@@ -19,15 +19,16 @@ import type { WorkspaceLimits } from "../limits.ts";
 export type AuthRule = "public" | "session" | "member" | "admin";
 
 /**
- * How the caller authenticated. An Agent's API key and a Human MCP client's
- * OAuth token arrive on the same header at the same endpoint, so the three are
- * told apart once, in resolvePrincipal, and carried from there (docs/plans/m2.md).
+ * How the caller authenticated, told apart once, in resolvePrincipal, and
+ * carried from there. A Human arrives only by the session cookie of deevy's own
+ * pages and an Agent only by its key (ADR-0035), so which way an operation
+ * faces is said by `agents` and `agentsOnly` alone: no credential a Human holds
+ * reaches deevy from anywhere but a browser.
  */
 export type Principal =
   | { kind: "anonymous" }
   | { kind: "cookie" }
-  | { kind: "api_key"; keyId: string }
-  | { kind: "oauth"; clientId: string; scopes: string[] };
+  | { kind: "api_key"; keyId: string };
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface AppContext {
@@ -144,19 +145,9 @@ export interface OperationMeta {
    * Only an Agent Member may call this: the operation is one side of a Run,
    * which is one Agent's attempt on an Issue, so a Human is refused with the
    * same middleware that refuses an Agent an unmarked operation (ADR-0016).
-   * Sayable only beside `agents: true` on a `member` operation. The MCP
-   * `tools/list` filter reads it, so a Human's own client is never offered a
-   * tool it cannot call.
+   * Sayable only beside `agents: true` on a `member` operation.
    */
   agentsOnly?: true;
-  /**
-   * Only a cookie session may call this: a Human present in deevy's own UI. A
-   * delegated credential, an Agent's API key or a Human MCP client's OAuth
-   * token, is refused. assertHuman checks the Member's kind, which would let a
-   * Human's own MCP client approve on their behalf; this checks how they
-   * arrived (docs/plans/m2.md).
-   */
-  sessionOnly?: true;
   /**
    * The handler returns an async generator rather than a value: the Event
    * stream, and anything that joins it. Set by `defineStreamOperation` rather
@@ -168,10 +159,10 @@ export interface OperationMeta {
    */
   stream?: true;
   /**
-   * This operation is projected as an MCP tool. Independent of `agents`:
-   * authorization is who may call it, this is which surface carries it. The
-   * list stays curated because a seventy-tool list costs an agent its context
-   * window, and it is snapshotted in CI (ADR-0009, docs/plans/m2.md).
+   * This operation is projected as an MCP tool. Only an Agent speaks MCP
+   * (ADR-0035), so a tool faces an Agent: `mcp` is sayable only beside
+   * `agents: true`. The list stays curated because a seventy-tool list costs an
+   * agent its context window, and it is snapshotted in CI (ADR-0009).
    */
   mcp?: true;
 }
@@ -180,13 +171,18 @@ export interface OperationMeta {
  * `agents` is sayable on the rungs an Agent could reach, and never on `admin`:
  * ADR-0004's "never administer" is a compile error rather than a test.
  * `agentsOnly` is sayable only beside `agents: true` on a `member` operation,
- * so an operation cannot be an Agent's alone without first being an Agent's.
+ * so an operation cannot be an Agent's alone without first being an Agent's,
+ * and so is `mcp`, because a tool faces an Agent.
  */
 export type AgentAccess<TAuth extends AuthRule> = TAuth extends "member"
-  ? { agents?: true; agentsOnly?: never } | { agents: true; agentsOnly?: true }
+  ?
+      | { agents?: true; agentsOnly?: never; mcp?: never }
+      | { agents: true; agentsOnly?: true; mcp?: true }
   : TAuth extends "session"
-    ? { agents?: true; agentsOnly?: never }
-    : { agents?: never; agentsOnly?: never };
+    ?
+        | { agents?: true; agentsOnly?: never; mcp?: never }
+        | { agents: true; agentsOnly?: never; mcp?: true }
+    : { agents?: never; agentsOnly?: never; mcp?: never };
 
 /**
  * A streaming operation: the same shape, but its handler returns an async
@@ -239,24 +235,18 @@ export const base = os.$context<AppContext>();
  * deciding it a second time.
  */
 export function refusal(
-  meta: Pick<OperationMeta, "auth" | "agents" | "agentsOnly" | "sessionOnly">,
+  meta: Pick<OperationMeta, "auth" | "agents" | "agentsOnly">,
   context: AppContext,
 ): ORPCError<string, unknown> | null {
   const rule = meta.auth;
   if (rule === "public") return null;
   if (!context.session) return new ORPCError("UNAUTHORIZED");
-  // These two are about who is asking, not how much authority the operation
-  // wants, so they are checked for every rule above `public`. Returning at
-  // the `session` rung first would make it a side door: an Agent's key would
-  // reach an operation nobody marked for it, and `sessionOnly` would be
-  // quietly ignored on the rung where a Human's own MCP client shows up.
+  // This is about who is asking, not how much authority the operation wants,
+  // so it is checked for every rule above `public`. Returning at the `session`
+  // rung first would make it a side door: an Agent's key would reach an
+  // operation nobody marked for it.
   if (context.member?.kind === "agent" && !meta.agents) {
     return new ORPCError("FORBIDDEN", { message: "An Agent cannot do that" });
-  }
-  if (meta.sessionOnly && context.principal && context.principal.kind !== "cookie") {
-    return new ORPCError("FORBIDDEN", {
-      message: "Only a Human signed in to deevy can do that",
-    });
   }
   if (rule === "session") return null;
   // A suspended Member keeps their row so the SPA can say why, but is no
@@ -296,7 +286,6 @@ export function defineOperation<
     auth: def.auth,
     ...(def.agents ? { agents: def.agents } : {}),
     ...(def.agentsOnly ? { agentsOnly: def.agentsOnly } : {}),
-    ...(def.sessionOnly ? { sessionOnly: def.sessionOnly } : {}),
     ...(def.mcp ? { mcp: def.mcp } : {}),
   };
   return base
@@ -326,7 +315,6 @@ export function defineStreamOperation<TAuth extends AuthRule, TInput extends z.Z
     auth: def.auth,
     ...(def.agents ? { agents: def.agents } : {}),
     ...(def.agentsOnly ? { agentsOnly: def.agentsOnly } : {}),
-    ...(def.sessionOnly ? { sessionOnly: def.sessionOnly } : {}),
     ...(def.mcp ? { mcp: def.mcp } : {}),
     stream: true,
   };

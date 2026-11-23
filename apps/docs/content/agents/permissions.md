@@ -1,6 +1,6 @@
 ---
 title: What an Agent may do
-description: What an Agent can do in deevy, what it is refused by default, why it can never rule on a Gate, and what a credential a Human delegates may not do either.
+description: What an Agent can do in deevy, what it is refused by default, why it can never rule on a Gate, and why a key is only ever an Agent's.
 sidebar:
   order: 4
 ---
@@ -50,25 +50,18 @@ A suspended Agent is refused everything, and is given no new work.
 ## A Gate is a Human's, in deevy
 
 Approving and rejecting a Gate in deevy needs a Human signed in to deevy in a browser. An Agent's key is
-refused, and so is any credential a Human delegated, which is told "Only a Human signed in to deevy can do
-that". The party that proposes never has a route to approve.
+refused with "An Agent cannot do that". The party that proposes never has a route to approve.
 
 A Human can also rule from a tool, by commenting `/approve` in the tracker or clicking **Approve** in Slack.
 That counts only when the tool vouches for which Human it was, through their own account there. A comment by
 a bot, deevy's own included, rules nothing. See [Ruling from your tools](/gates/ruling-from-your-tools/).
 
-## What a delegated credential may not do
+## A key is an Agent's
 
-A Human can let software act as them: their own [MCP client](/mcp-and-cli/your-own-mcp-client/), such as
-Claude Code on their laptop, or the [CLI](/mcp-and-cli/cli/) after `deevy login`. What it does is theirs, in
-their name, and it can do what they can, except what only a Human present in deevy may do:
-
-- rule on a Gate;
-- list or revoke the MCP clients they consented to;
-- link an account under **Settings › Identities**.
-
-Those happen in deevy's own pages, in a browser. Nothing a Human drives this way is ever an Agent: the
-credential decides who is acting, not the software.
+An API key always stands for an Agent. deevy issues keys only to Agents, and takes one only as an Agent's:
+there is no key, token or MCP client that acts as a Human. A Human works in deevy's own pages, in the
+tracker and in the chat channel, signed in as themselves. So nothing that runs while a Human is away can
+rule as them, link an account for them or act in their name.
 
 ## Untrusted input
 

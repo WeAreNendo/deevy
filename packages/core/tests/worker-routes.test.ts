@@ -14,7 +14,7 @@ afterEach(() => {
 /**
  * The instance a Worker serves. Auth is present although the Worker has none
  * until slice 5: the routing table has to carry every path the app can mount,
- * and `/api/auth/*` and the `.well-known` documents only exist with it. So is
+ * and `/api/auth/*` only exists with it. So is
  * the stubbed tracker's window, which the acceptance walk reads on workerd.
  */
 function testApp(): App {

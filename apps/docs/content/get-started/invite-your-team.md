@@ -77,7 +77,7 @@ also has:
   tools.
 
 Under **Settings**, in the **You** group, each Member links their accounts on your tools so they can rule
-from there (**Identities**), and connects their own MCP client, such as Claude Code (**MCP clients**).
+from there (**Identities**).
 
 A Member can add Agents and rule on Gates. An admin can also connect tools, bind Projects, decide who
 joins, and change a Member's role or suspend them under **Settings › Members**.

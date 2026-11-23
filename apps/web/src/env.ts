@@ -1,7 +1,6 @@
 import type { AssetFetcher } from "@deevy/adapters/workers";
 import { MISSING_AUTH_SECRET, providersFromEnv, signInRelayFromEnv } from "@deevy/core";
 import type { AuthEnv, AuthProviders, LiveOptions } from "@deevy/core";
-import { fetchClientMetadataResource } from "@deevy/core/cimd";
 import type { createDb, QueueProducer } from "@deevy/adapters/workers";
 
 /**
@@ -195,15 +194,7 @@ export function readWorkerEnv(env: WorkerBindings): WorkerEnv {
   };
 }
 
-/**
- * The identity configuration this entry hands Better Auth, beside
- * `apps/server`'s `authEnv` and different in exactly one thing. Node resolves
- * a Client ID Metadata Document's name and connects to the address it
- * checked; workerd has no primitive that pins an address while keeping the
- * name for SNI and certificate validation, so the Worker takes the core's
- * transport — a shape check with a DNS-over-HTTPS pre-resolution in front of
- * it — and the residual race is written down instead (docs/OPERATIONS.md).
- */
+/** The identity configuration this entry hands Better Auth, the same as `apps/server`'s `authEnv`. */
 export function workerAuthEnv(env: WorkerEnv): AuthEnv {
   return {
     baseURL: env.baseURL,
@@ -214,7 +205,6 @@ export function workerAuthEnv(env: WorkerEnv): AuthEnv {
     adminEmail: env.adminEmail,
     workspaceName: env.workspaceName,
     ...(env.signInRelay.client ? { signInRelay: env.signInRelay.client } : {}),
-    fetchClientMetadataResource,
   };
 }
 

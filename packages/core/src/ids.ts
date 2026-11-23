@@ -34,16 +34,6 @@ export const idPrefixes = {
   account: "acct",
   verification: "ver",
   apikey: "key",
-  jwks: "jwk",
-  oauthClient: "oacl",
-  oauthResource: "oars",
-  oauthClientResource: "oacr",
-  oauthAccessToken: "oaat",
-  oauthRefreshToken: "oart",
-  oauthConsent: "oacs",
-  // Reserved, never minted: the oauth-provider plugin gives a client
-  // assertion its own jti as the id, and Better Auth keeps that one.
-  oauthClientAssertion: "oaca",
 } as const;
 
 export type IdKind = keyof typeof idPrefixes;
@@ -82,14 +72,6 @@ const authModels: Record<string, IdKind> = {
   account: "account",
   verification: "verification",
   apikey: "apikey",
-  jwks: "jwks",
-  oauthClient: "oauthClient",
-  oauthResource: "oauthResource",
-  oauthClientResource: "oauthClientResource",
-  oauthAccessToken: "oauthAccessToken",
-  oauthRefreshToken: "oauthRefreshToken",
-  oauthConsent: "oauthConsent",
-  oauthClientAssertion: "oauthClientAssertion",
 };
 
 export function authId(model: string): string {

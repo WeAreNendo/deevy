@@ -1336,7 +1336,7 @@
     "/me": {
       "get": {
         "operationId": "me.get",
-        "summary": "The signed-in Human, their Member row, and the Workspace",
+        "summary": "Who is asking: the signed-in Human or the Agent whose key it is, its Member row, and the Workspace",
         "responses": {
           "200": {
             "description": "OK",
@@ -1507,8 +1507,7 @@
                       "enum": [
                         "anonymous",
                         "cookie",
-                        "api_key",
-                        "oauth"
+                        "api_key"
                       ]
                     }
                   },
@@ -13482,134 +13481,6 @@
                   },
                   "required": [
                     "read"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/oauth-clients": {
-      "get": {
-        "operationId": "oauthClients.list",
-        "summary": "The MCP clients you have let act as you",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "clients": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "clientId": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "uri": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "icon": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "scopes": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "consentedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "format": "date-time",
-                                "x-native-type": "date"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        },
-                        "required": [
-                          "clientId",
-                          "name",
-                          "uri",
-                          "icon",
-                          "scopes",
-                          "consentedAt"
-                        ],
-                        "additionalProperties": false
-                      }
-                    }
-                  },
-                  "required": [
-                    "clients"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/oauth-clients/{clientId}": {
-      "delete": {
-        "operationId": "oauthClients.revoke",
-        "summary": "Withdraw one MCP client's permission to act as you",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "clientId",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "revoked": {
-                      "type": "boolean",
-                      "const": true
-                    }
-                  },
-                  "required": [
-                    "revoked"
                   ],
                   "additionalProperties": false
                 }

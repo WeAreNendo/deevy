@@ -13,7 +13,6 @@ a few things from the proxy to work.
 
 - **Forward everything under deevy's address**, unchanged. That includes `/api`, `/rpc` and `/mcp`, and
   `/hooks/…`, where your tools deliver: it has to be reachable from the internet, over HTTPS, for them.
-  It also includes `/.well-known/…`, where MCP clients and the CLI discover how to sign in.
 - **Set `BETTER_AUTH_URL` to the public address**, the one the browser visits, not the address the proxy
   forwards to. deevy builds sign-in, cookies and links from it, never from the request.
 - **Let a response stream.** An open deevy page keeps one long-lived request that streams what changes, so
@@ -36,17 +35,12 @@ BETTER_AUTH_URL=https://example.com/deevy
 - **Every route is under the path**: the web app at `/deevy/`, and `/deevy/api`, `/deevy/rpc`,
   `/deevy/mcp` and `/deevy/hooks/…`. The proxy forwards `/deevy/…` as it is, without stripping `/deevy`.
 - **Each sign-in callback carries the path**: `https://example.com/deevy/api/auth/callback/github`.
-- **Discovery lives at the root of the host**, outside the path. The standards for it put the well-known
-  segment straight after the host, so MCP clients look for
-  `/.well-known/oauth-authorization-server/deevy` and `/.well-known/oauth-protected-resource/deevy/mcp`.
-  A proxy that forwards only `/deevy/…` has to forward `/.well-known/*/deevy*` to deevy too, or a Human's
-  MCP client finds nowhere to sign in.
 - **`/healthz` answers at the root of the host** as well as under the path, so a container's health check
   needs no change.
 - **The session cookie is scoped to the path**, so two deevys on one host never share a sign-in.
-- **Agents and the CLI take the whole address**: an Agent's `DEEVY_URL` is `https://example.com/deevy`,
-  and so is `deevy login https://example.com/deevy`. Use a current CLI: older ones cut the address down to
-  its host.
+- **Agents and the CLI take the whole address**: an Agent's MCP endpoint is
+  `https://example.com/deevy/mcp`, and the CLI's `DEEVY_URL` is `https://example.com/deevy`. Use a current
+  CLI: older ones cut the address down to its host.
 
 ### On a Worker
 
@@ -84,10 +78,10 @@ A change made with a browser's session, any `POST`, `PUT`, `PATCH` or `DELETE` t
 come from deevy's own page. deevy takes it when the browser sends `Sec-Fetch-Site: same-origin`, or an
 `Origin` that is `BETTER_AUTH_URL`'s origin or `DEEVY_WEB_ORIGIN`. Anything else is refused with
 `403 FORBIDDEN` and the message "deevy only takes a change signed in with your session from its own
-pages. Use deevy itself, or an API key or access token from a script."
+pages. Make it in deevy itself; a script acts as an Agent, with that Agent's key."
 
 A proxy that strips both headers, or rewrites `Origin`, makes every change in the web app fail that way.
-An Agent's key, or a CLI's or MCP client's token, is unaffected.
+An Agent's key is unaffected, from an MCP client, the CLI or a script.
 
 ## The web app on an address of its own
 

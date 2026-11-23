@@ -17,9 +17,9 @@ vp run --parallel dev
 `vp run -r --parallel dev` starts two tasks: the Node server on `DEEVY_PORT` (3000 by default, and 3010 in the
 launch configurations, because 3000 is a port everything wants; rebuilt and restarted by `vp pack --watch` on
 every change) and the Vite dev server on http://localhost:5173, which serves the SPA and proxies `/api`,
-`/rpc`, `/healthz`, `/mcp` and `/.well-known` to it. Open http://localhost:5173. The last two are there so an
-MCP client can be pointed at the dev origin: discovery has to answer from the same origin as the endpoint it
-describes, or a client looks for the authorization server in the wrong place.
+`/rpc`, `/healthz`, `/mcp` and `/.well-known` to it. Open http://localhost:5173. `/mcp` is there so an
+Agent's MCP client can be pointed at the dev origin, and `/.well-known` so a client probing it for an
+authorization server gets deevy's 404 rather than the SPA's page (ADR-0035).
 
 **One port, both halves.** The proxy reads `DEEVY_PORT` too, so moving the server moves the proxy with it —
 which is what a machine already running something on 3000, or a second checkout of deevy, needs.
@@ -331,10 +331,10 @@ vp run core#snapshot:mcp-tools
 ```
 
 They answer different questions. `openapi.json` is the whole HTTP surface, every operation in the registry.
-`mcp-tools.json` is the curated list an agent's context window has to hold: name, operation, summary,
-`readOnly`, `agents`, and the input schema, for the operations that say `mcp: true`. Neither the `agents` nor
-the `sessionOnly` flag touches the OpenAPI meta, so an authorization change shows up in the MCP snapshot and
-in the tests, and never as noise in the HTTP one.
+`mcp-tools.json` is the curated list an Agent's context window has to hold: name, operation, summary,
+`readOnly` and the input schema, for the operations that say `mcp: true`, every one of them an Agent's
+(ADR-0035). Neither records who may call an operation: `auth`, `agents` and `agentsOnly` touch neither
+snapshot, so an authorization change shows up in the tests, and never as noise in either.
 
 ## What CI replays
 
@@ -357,21 +357,9 @@ The options that shape Better Auth's tables live twice: `packages/core/src/auth.
 `packages/db/auth.generate.config.ts` is what the generator reads. Change both, keeping them readable side by
 side, and never hand-edit `packages/db/src/schema/auth.ts` — it is generated.
 
-Regenerating is three commands rather than one, because of a chicken-and-egg problem in the adapter. Better
-Auth's Drizzle adapter resolves every model and field a plugin declares against the schema object before it
-will generate anything, and the `mcp` plugin queries its own `oauth_resource` table as it initialises. A
-plugin's tables therefore cannot be generated while they do not yet exist. `packages/db/scripts/bootstrap-auth-schema.ts`
-is how you get past it: it reads the shapes off the plugin itself and writes a throwaway
-`packages/db/auth.bootstrap.ts` with stub table definitions plus the DDL to create them in the generator's
-in-memory database. `auth.generate.config.ts` imports it through a variable, so the file is inert — and the
-typechecker does not look for it — unless a regeneration is in progress.
-
-```bash
-cd packages/db
-node scripts/bootstrap-auth-schema.ts   # writes auth.bootstrap.ts
-vp run db#generate:auth                 # rewrites src/schema/auth.ts
-rm auth.bootstrap.ts                    # never committed
-```
+Regenerating is one command, `vp run db#generate:auth`, which rewrites `src/schema/auth.ts`. Until slice 9 of
+[simplify.md](./plans/simplify.md) it took three, because the `mcp` plugin queried its own tables as it
+initialised; that plugin is gone, and so is the bootstrap script that worked around it.
 
 Then the ordinary migration steps: `vp run db#generate`, hand-patch `NOT NULL` onto every `text PRIMARY KEY`
 in the new `migration.sql` (a drizzle-kit rc regression), and `vp run db#check:migrations`.
@@ -445,39 +433,6 @@ Which operations become tools is opt-in: `mcp: true` in the registry. `vp run co
 `packages/core/mcp-tools.json` and CI fails on a stale one, so the tool set an agent sees cannot drift without
 review, and an oRPC bump that reshapes a schema shows up as a diff.
 
-### As yourself, over OAuth
-
-A Human's own client needs no header: deevy is the authorization server (ADR-0007, docs/OPERATIONS.md). It is
-all built from `BETTER_AUTH_URL`, and everything in the dance has to happen on one origin, so in development
-that has to name the Vite dev server rather than the Node server. The `dev:stub` launch configuration sets
-`BETTER_AUTH_URL=http://localhost:${PORT:-5173}` itself, over whatever `.env` says — the port the launcher
-picked, so `autoPort` and sign-in agree. With a real GitHub OAuth App, set
-it in `.env` and move the App's callback URL to `http://localhost:5173/api/auth/callback/github` for as long
-as it stays there.
-
-The proxy sends `/api`, `/mcp` and `/.well-known` back to the Node server, and `/consent` — where the OAuth
-provider sends the browser mid-authorization — resolves to the SPA route that serves it. Then, from a
-directory that is not this repository, since the server lands in that directory's local Claude Code
-configuration:
-
-```bash
-claude mcp add --transport http deevy http://localhost:5173/mcp
-claude mcp login deevy
-```
-
-`login` opens a browser on deevy's consent page — one that is signed in to deevy, or sign in there first —
-and Settings, MCP clients lists the client once you allow it. `claude mcp get deevy` then says `Connected`,
-and a `claude -p` session run from that directory acts as you. This was walked on 2026-09-06 with Claude
-Code 2.1.261; what it found, and why Better Auth 1.7.3 is the floor, is in OPERATIONS.md under "A Human's
-own MCP client".
-
-Left pointing at `http://localhost:3000`, the dance still runs but the consent page 404s: the Node server only
-serves the SPA when `DEEVY_WEB_DIST` names a built one, which is how the Docker image runs it and not how
-`vp run --parallel dev` does.
-
-Unset `BETTER_AUTH_URL` and the OAuth server is simply not there — a resource identifier is an absolute URL
-and there is nothing to build one from. Everything else, an Agent's API key included, works unchanged.
-
 ## The acceptance walk
 
 `tools/acceptance` walks a record through every deployment with a scripted Agent that holds only its key
@@ -499,7 +454,7 @@ has one page of its own, the landing (`apps/docs/content/index.mdx`). Every othe
 `apps/docs/scripts/sync.ts` from the repository before Astro starts, into directories git ignores:
 
 - `docs/OPERATIONS.md` becomes a page per `##` section under Running deevy, each `###` raised to that page's `##`;
-- `docs/agent-loop.md` and `docs/as-yourself.md` are the worked examples, `CONTEXT.md` is the Glossary, this
+- `docs/agent-loop.md` is the worked example, `CONTEXT.md` is the Glossary, this
   file is Developing deevy, and each ADR is a page under Design decisions;
 - the API reference is `packages/core/openapi.json`, grouped by the first part of each operation's id.
 

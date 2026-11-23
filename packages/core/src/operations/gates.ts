@@ -50,9 +50,10 @@ import {
  * arrive from the tracker or from Slack as well as from here and all three
  * doors have to mean the same thing (ADR-0025).
  *
- * `gates.approve` and `gates.reject` are `sessionOnly`: a Human present in
- * deevy, not a token they delegated to something else. ADR-0010's rule, on the
- * operation that now carries it.
+ * `gates.approve` and `gates.reject` are a Human's, so an Agent is refused
+ * them, and a Human reaches deevy only signed in to its own pages (ADR-0035):
+ * no credential they could delegate exists, which is ADR-0010's rule kept by
+ * there being nothing to delegate.
  */
 
 /** Everything a Gate's view needs, read once. */
@@ -523,9 +524,6 @@ export const gates = {
     method: "POST",
     path: "/gates/{requestId}/approve",
     auth: "member",
-    // A Human present in deevy, not a token they delegated to a client
-    // (ADR-0010). The middleware refuses the credential before the handler.
-    sessionOnly: true,
     input: z.object({ requestId: z.string(), note: z.string().trim().max(10_000).optional() }),
     output: GateRequestSchema,
     handler: async ({ input, context }) => {
@@ -546,7 +544,6 @@ export const gates = {
     method: "POST",
     path: "/gates/{requestId}/reject",
     auth: "member",
-    sessionOnly: true,
     input: z.object({ requestId: z.string(), note: z.string().trim().max(10_000).optional() }),
     output: GateRequestSchema,
     handler: async ({ input, context }) => {

@@ -182,10 +182,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
         principal: "cookie",
       }),
     },
-    oauthClients: {
-      list: async () => ({ clients: [] }),
-      revoke: async () => ({ revoked: true }),
-    },
     identities: {
       list: async () => ({ identities: [], signIns: [], linkable: [], tools: [] }),
     },

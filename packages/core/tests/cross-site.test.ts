@@ -238,6 +238,6 @@ describe("/mcp", () => {
     });
 
     expect(res.status).toBe(401);
-    expect(res.headers.get("www-authenticate") ?? "").toContain("resource_metadata=");
+    expect(res.headers.get("www-authenticate")).toBe('Bearer realm="deevy"');
   });
 });
