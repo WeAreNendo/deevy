@@ -958,3 +958,54 @@ Worker leg's Cron poke used to cover. Two pending changesets from `main` still m
 (`auth-secret-required.md` and `hosted-logs-no-row-values.md`); they are left as they are, because a release
 cut from `main` before this stack lands would publish them as true. The README still said a Human rules
 with `/approve` or a Slack button, which slice 10 made untrue, and now says a Human rules in deevy.
+
+**Slice 12, the clean break.** The migration history is one migration, `20261120154129_init`, of 440
+lines, where it was fourteen. It creates 27 tables, not the 29 the plan counted, because slice 10 cut
+Identities too: fifteen tables and seventeen columns went. Source lost 673 lines and gained 145, and 587
+and 44 of them were the schema's. drizzle-kit's snapshots went from 95,194 lines to 4,562, and the SQL from 749 to 442 lines, the
+Durable Object's module included. Tests and the N-1 smoke lost 126 lines and gained 297. The acceptance test is
+`packages/db/tests/clean-break.test.ts`, which was red on all four of its cases first: fourteen migrations,
+42 tables against the 28 the relations name, the fifteen cut tables, and the seventeen cut columns. The walk
+passes from an empty database on the image, the image under `/deevy` and a hosted Workspace, with 122
+checks, and `hosted#test:hosted` provisions its two Workspaces fresh.
+
+Two things went past the plan. A database from before the break would have failed confusingly: drizzle
+decides what is pending by name, so the image took `init` as pending on a 0.11 volume and stopped on the
+first table that already existed, and the import called a 0.11 dump "written by a newer deevy". So the
+image, a hosted Workspace and the import each ask `unrelatedHistory` (`packages/db/src/history.ts`) whether
+the database shares any migration with the release, and refuse one that shares none, saying it is from
+before 0.12. And CI's `previous` job is not skipped in the workflow, since only git knows the previous tag.
+The smoke skips itself instead: `cleanBreak` in `expand-only.ts` names the break, and `beforeTheBreak`
+excuses a previous release with none of the history that begins there, and no other. It says so and passes
+until 0.12 is tagged, and runs again after. The list of thirteen grandfathered migrations went with the
+history it named, so every migration is judged now, the first included.
+
+What waited for the break went with it. That was the `.omit()` of eleven cut columns in the API's row
+schemas, the allowlist's filter of organisation rules and its test, and the enums' dead values: a Socket's
+`docs` capability, a mirror's `label`, and a Ruling's `via`. Nine tests wrote or read a cut column, most of
+them to show that an old value changed nothing: a mirror level, a poll interval, a schedule, the opener of
+a record, and a delivery's recipient. They lost that line, or the whole case where nothing else was left. The
+import test that brought an older dump forward had used the history's second-to-last migration, so it now
+adds a later migration to a copy of the folder. ADR-0031 gains its one exception. OPERATIONS.md, DEVELOPMENT.md
+and the public pages on upgrading, backups and leaving deevy Cloud say how to start 0.12 on an empty
+database, and that 0.11 does not run on what it writes. A hosted Workspace from before it answers 503 with
+no retry, since no release will migrate it, and OPERATIONS.md says to deploy 0.12 whole rather than
+gradually. deevy-cloud's companion change is owed as a pull request of its own in its own repository: it
+destroys and provisions the Workspaces again, drops the email binding, and takes GitLab, Linear, Slack and
+Atlassian out of the relay.
+
+The review built both histories and compared every column, foreign key and index. The new schema is the
+old one less the fifteen tables and seventeen columns, and nothing else changed. It found eight small
+things.
+
+- The acceptance test held the history to one migration and 27 tables, so the next migration added would
+  have failed it. It now holds the history to begin at `cleanBreak` and the tables to be the ones the
+  relations name.
+- A hosted Workspace refused for its history answered "being upgraded" with a retry in a minute, which
+  never comes true. It now answers 503 with no retry, and the refusal is marked `unrelated`.
+- The image's refusal pointed at OPERATIONS.md, which the image does not carry. It now points at the
+  public Upgrading page, and the public page on health lists the refusal.
+- OPERATIONS.md now says to deploy 0.12 whole rather than gradually.
+- The secrets test stopped naming three columns of tables that are gone.
+- The example tag in DEVELOPMENT.md was one the smoke now excuses.
+- Two sentences spoke in the past tense of deevy-cloud's change, which is still owed.

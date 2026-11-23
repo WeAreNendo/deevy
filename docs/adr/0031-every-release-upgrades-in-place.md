@@ -1,5 +1,9 @@
 # Every release upgrades in place
 
+> Amended by [simplify.md](../plans/simplify.md), slice 12: one exception. The release that carries that
+> plan, 0.12, starts its migration history afresh at `20261120154129_init`, and starts on an empty database
+> ([The one exception](#the-one-exception)). Every release after it upgrades in place again.
+
 Until now a minor release could break what came before it, as long as its release notes said so, and one
 did: 0.9 started its migration history afresh ([ADR-0024](./0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)).
 That was a promise made to a person, who reads the notes and decides when to upgrade. A deployment that
@@ -41,8 +45,8 @@ backup.
 __new_x`, copy, `DROP TABLE x`, `RENAME`), which is how it changes a column's type, nullability, default
   or foreign key on SQLite, and a unique index on a table the migration did not create. Each refusal names
   the file and the line and says what to do instead. An annotated migration passes when the migration it
-  names exists and comes before it. The thirteen migrations written before this are named in
-  `packages/db/scripts/expand-only.ts` and not judged.
+  names exists and comes before it. Every migration is judged: the thirteen written before this decision,
+  which it named and passed over, went with the history before the clean break (below).
 - **`vp run server#test:previous`**, its own CI job, runs the claim. It builds the previous release's server
   from its tag — the newest `v*` tag behind the commit, or the one before when the commit is a release —
   with the tag's own lockfile, migrates a new database with this tree, and starts the previous release on
@@ -54,6 +58,35 @@ __new_x`, copy, `DROP TABLE x`, `RENAME`), which is how it changes a column's ty
   one migrated. It did so silently; from this release it says so in its log, naming the migrations, because
   only one release back is promised. wrangler's D1 journal and drizzle's durable-sqlite migrator also
   decide by name, so an object waking on the older version finds nothing of its own left to apply.
+
+## The one exception
+
+0.12 is the release that carries docs/plans/simplify.md: deevy stopped running agents, taking Rulings from
+the tools, sending email and being an OAuth server. Each slice of that plan stopped reading what it cut and
+left it in the schema, as this decision says, so that no migration in the stack removed anything. Then slice
+12 started the migration history afresh, with one migration, `20261120154129_init`, that holds only what
+deevy reads: fifteen tables and seventeen columns fewer.
+
+That breaks this decision once, on purpose. 0.12 cannot upgrade a database 0.11 wrote, and 0.11 cannot run
+on one 0.12 wrote. It was taken because no Workspace needed upgrading: deevy Cloud's were its own test
+Workspaces, which it destroys and provisions again for 0.12, and no self-hosted deployment was known. The
+alternative was a release of contractions after 0.12, each dropping what a slice stopped using, with a
+table rebuild for every column that has a foreign key, which the Durable Object's migrator cannot run with
+foreign keys off.
+
+What holds it in place:
+
+- **The break is named.** `cleanBreak` in `packages/db/scripts/expand-only.ts` is the first migration. The
+  N-1 smoke does not run a previous release that has none of the history that begins there, so it says
+  so and stops until 0.12 is tagged, and runs again for every release after. A history that loses its shared
+  root any other way is not excused, and fails the smoke.
+- **A database from before it is refused, not half-migrated.** drizzle decides what is pending by name, so
+  it would take 0.12's one migration as pending on a 0.11 database and fail on the first table that already
+  exists. The image, a hosted Workspace and the import each ask first whether the database shares any
+  migration with the release (`unrelatedHistory` in `packages/db/src/history.ts`), and refuse one that
+  shares none, saying it is from before 0.12.
+- **The release notes say to start on an empty database**, and docs/OPERATIONS.md, "Coming from 0.11 or
+  before: start again", says how.
 
 ## Why not the alternatives
 

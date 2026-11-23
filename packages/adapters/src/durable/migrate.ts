@@ -1,3 +1,4 @@
+import { unrelatedHistory } from "@deevy/db";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import {
   createDurableDb,
@@ -23,11 +24,18 @@ export type DurableMigrationResult =
       applied: [];
       error: {
         /**
-         * The migration that failed, or null when what failed was drizzle's own
-         * bookkeeping (its journal table) rather than a migration.
+         * The migration that failed, or null when no migration did: drizzle's
+         * own bookkeeping (its journal table) failed, or the database was
+         * refused before anything ran.
          */
         migration: string | null;
         message: string;
+        /**
+         * Set when the database is from before deevy's migration history
+         * started afresh (`unrelatedHistory`): no release will migrate it, so
+         * waiting does not help.
+         */
+        unrelated?: true;
       };
     };
 
@@ -42,18 +50,33 @@ const journalInsert = /^\s*insert\s+into\s+"__drizzle_migrations"/i;
  * database opens under `openDatabase` with nothing to apply. Every pending
  * migration runs in one `transactionSync`: all of them land or none does.
  *
- * Two things are added around drizzle's migrator. A chunk between statement
- * breakpoints that holds no statement is dropped, because a Durable Object
- * refuses to exec one where a Node connection shrugs. And a failure is caught
- * and said: the migrator answers any failure with drizzle's bare "Rollback",
- * so the statement that failed, and the migration it belongs to, are watched
- * for on the way past.
+ * Three things are added around drizzle's migrator. A database whose journal
+ * shares nothing with `migrations` is refused before anything runs, because
+ * it is from before deevy's history started afresh (`unrelatedHistory`). A
+ * chunk between statement breakpoints that holds no statement is dropped,
+ * because a Durable Object refuses to exec one where a Node connection shrugs.
+ * And a failure is caught and said: the migrator answers any failure with
+ * drizzle's bare "Rollback", so the statement that failed, and the migration
+ * it belongs to, are watched for on the way past.
  */
 export function migrateDurable(
   db: DurableDb,
   migrations: Record<string, string>,
 ): DurableMigrationResult {
   const storage = db.$client;
+  const unrelated = unrelatedHistory(journalNames(storage), Object.keys(migrations));
+  if (unrelated !== null) {
+    return {
+      applied: [],
+      error: {
+        migration: null,
+        message:
+          `This Workspace's database ${unrelated}. Nothing from before it is upgraded in ` +
+          "place: destroy the Workspace and provision it again.",
+        unrelated: true,
+      },
+    };
+  }
   const runnable = withoutEmptyChunks(migrations);
   const journaled: string[] = [];
   let failed: { query: string; error: unknown } | undefined;

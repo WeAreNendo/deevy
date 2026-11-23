@@ -379,7 +379,14 @@ with the release that stopped using it:
 
 `vp run server#test:previous` checks the rest: it builds the previous tag's server (once per tag, kept in
 `node_modules/.cache/deevy-previous`), runs it on a database this tree migrated, and checks that the
-migration an annotation names is one that release carried. `DEEVY_PREVIOUS_TAG=v0.9.0` picks another.
+migration an annotation names is one that release carried. `DEEVY_PREVIOUS_TAG=<tag>` picks another. It
+runs nothing while the previous tag is from before the clean break, when the migration history started
+afresh (`cleanBreak` in `packages/db/scripts/expand-only.ts`): until 0.12 is tagged, the previous release is
+0.11, which shares no migration with this tree, and the smoke says so and stops.
+
+A database from before the clean break is refused rather than migrated, by the image, by a hosted Workspace
+and by the import (`unrelatedHistory` in `packages/db/src/history.ts`). If a local database of yours from
+before it stops the server, move it aside and seed again.
 
 ## Layout
 

@@ -174,6 +174,13 @@ export class WorkspaceObject extends DurableObject<HostedBindings> {
     // What the router says too, for the minute its cached directory entry may
     // still say active after the platform suspended the Workspace here first.
     if (this.#config.status === "suspended") return suspendedPage();
+    if (this.#migrations.error?.unrelated) {
+      // No release will migrate it, so there is no minute to wait for; the
+      // platform reads why in `status()`.
+      return new Response("This Workspace can't be opened by this version of deevy.", {
+        status: 503,
+      });
+    }
     if (this.#migrations.error) {
       return new Response("This Workspace is being upgraded. Try again in a minute.", {
         status: 503,

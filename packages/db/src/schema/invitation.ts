@@ -39,13 +39,6 @@ export const invitation = sqliteTable(
       onDelete: "set null",
     }),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
-    /**
-     * Unused since deevy stopped emailing invitations (docs/plans/simplify.md,
-     * slice 8): it held the token, sealed, while the email that carried it was
-     * owed. An admin copies the link now, and nothing writes or reads this;
-     * it goes when the migration history starts afresh (slice 12).
-     */
-    sealedToken: text("sealed_token"),
   },
   (table) => [
     // Live is "neither accepted nor revoked". Expiry is not in it: a partial

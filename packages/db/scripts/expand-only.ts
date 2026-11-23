@@ -4,11 +4,11 @@
  * rollback runs the older one on whatever the newer one migrated, so the
  * previous release's code has to keep working on this release's schema.
  *
- * This reads every drizzle migration that is not grandfathered and refuses the
- * statements that take something away from code that may still be running:
- * dropping or renaming a table or a column, drizzle-kit's table rebuild (how
- * it changes a column's type, nullability, default or foreign key on SQLite),
- * and a unique index on a table that already holds rows. A migration may still
+ * This reads every drizzle migration and refuses the statements that take
+ * something away from code that may still be running: dropping or renaming a
+ * table or a column, drizzle-kit's table rebuild (how it changes a column's
+ * type, nullability, default or foreign key on SQLite), and a unique index on
+ * a table that already holds rows. A migration may still
  * do any of those when it is the later release, and says so on a line of its
  * own, naming an earlier migration that shipped with the release that stopped
  * using what this one removes:
@@ -24,27 +24,34 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * Every migration written before ADR-0031, when a minor release could still
- * break in place. None of them takes anything away, but they are not judged:
- * they shipped, and a rule that changes later should not reopen them. Named
- * rather than cut off at a timestamp, so a folder a skewed clock dated into
- * the past is still checked.
+ * Where the migration history begins. The release that carries
+ * docs/plans/simplify.md started it afresh, the one exception ADR-0031 makes,
+ * because no real Workspace had to be upgraded across it: every table and
+ * column the plan's slices stopped reading went with the history before it.
+ *
+ * Named, so that the N-1 smoke excuses this break and no other: a previous
+ * release that has none of this history is from before it, and is not run on
+ * this schema. A history that loses its shared root any other way fails there,
+ * as it should.
  */
-export const grandfathered: ReadonlySet<string> = new Set([
-  "20260921073003_init",
-  "20260921085855_absent_mattie_franklin",
-  "20260921090407_large_triathlon",
-  "20260921093619_fuzzy_agent_brand",
-  "20260921115301_glorious_makkari",
-  "20260923080356_brief_corsair",
-  "20260923124622_wild_iron_fist",
-  "20260923132322_tiresome_richard_fisk",
-  "20260926102028_reflective_ezekiel",
-  "20260926103001_watery_prodigy",
-  "20261009064016_good_ironclad",
-  "20261009070210_chief_squadron_sinister",
-  "20261009073317_loose_vulcan",
-]);
+export const cleanBreak = "20261120154129_init";
+
+/**
+ * Why the previous release is not run on this schema, or null when it is.
+ * Only a previous release from before the clean break is excused, and only
+ * while this history begins at it.
+ */
+export function beforeTheBreak(
+  previous: { release: string; migrations: ReadonlySet<string> },
+  folders: readonly string[],
+): string | null {
+  if (folders[0] !== cleanBreak || previous.migrations.has(cleanBreak)) return null;
+  return (
+    `${previous.release} has none of the history that began at ${cleanBreak}, when deevy's ` +
+    `migrations started afresh in 0.12, a release that upgrades nothing in place (ADR-0031's ` +
+    `one exception). This runs again once 0.12 is the previous release`
+  );
+}
 
 export interface ExpandOnlyOptions {
   /**
@@ -66,7 +73,6 @@ export async function checkExpandOnly(
     .sort();
   const problems: string[] = [];
   for (const [index, folder] of folders.entries()) {
-    if (grandfathered.has(folder)) continue;
     const sql = await readFile(join(drizzleDir, folder, "migration.sql"), "utf8").catch(() => null);
     if (sql === null) continue;
     const source = `drizzle/${folder}/migration.sql`;

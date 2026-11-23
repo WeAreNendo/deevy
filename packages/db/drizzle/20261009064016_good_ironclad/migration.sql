@@ -1,1 +1,0 @@
-ALTER TABLE `notification_preference` ADD `email` integer;

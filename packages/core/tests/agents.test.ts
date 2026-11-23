@@ -288,9 +288,9 @@ describe("agents.update", () => {
     } as never);
 
     expect(updated).not.toHaveProperty("scheduleMinutes");
-    expect(await db.query.agent.findFirst({ where: { memberId: created.id } })).toMatchObject({
-      scheduleMinutes: null,
-    });
+    expect(await db.query.agent.findFirst({ where: { memberId: created.id } })).not.toHaveProperty(
+      "scheduleMinutes",
+    );
   });
 
   it("refuses a Human who neither sponsors the Agent nor administers the Workspace", async () => {

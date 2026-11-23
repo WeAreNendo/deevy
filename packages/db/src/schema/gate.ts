@@ -120,16 +120,8 @@ export const gateRequest = sqliteTable(
 export const gateDecisions = ["approved", "rejected"] as const;
 
 /**
- * Which door a Ruling came through, when there were three (ADR-0025). Every
- * Ruling is made in deevy since docs/plans/simplify.md, slice 10 (ADR-0036), so
- * `via` is always `web` and `socket_id` and `external_ref` are never written;
- * the three go when the migration history starts afresh (slice 12).
- */
-export const rulingVias = ["web", "socket", "slack"] as const;
-
-/**
- * One Human's decision on one request. One row per Human per request, so
- * nobody counts twice.
+ * One Human's decision on one request, made in deevy (ADR-0036). One row per
+ * Human per request, so nobody counts twice.
  */
 export const gateDecision = sqliteTable(
   "gate_decision",
@@ -143,23 +135,13 @@ export const gateDecision = sqliteTable(
       .references(() => member.id, { onDelete: "cascade" }),
     decision: text("decision", { enum: gateDecisions }).notNull(),
     note: text("note"),
-    /** Unused since slice 10: always `web`. */
-    via: text("via", { enum: rulingVias }).notNull().default("web"),
-    /** Unused since slice 10: the Socket a Ruling from outside arrived through. */
-    socketId: text("socket_id").references(() => socket.id, { onDelete: "set null" }),
-    /** Unused since slice 10: what a Ruling from outside pointed at there. */
-    externalRef: text("external_ref", { mode: "json" }).$type<Record<string, unknown>>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(now).notNull(),
   },
   (table) => [uniqueIndex("gate_decision_uidx").on(table.gateRequestId, table.memberId)],
 );
 
-/**
- * What a mirrored thing is: a comment on the record or a message in a room. A
- * label on the record is a value deevy no longer writes (docs/plans/simplify.md,
- * slice 4), kept until the clean break.
- */
-export const socketMirrorKinds = ["comment", "label", "message"] as const;
+/** What a mirrored thing is: a comment on the record or a message in a room. */
+export const socketMirrorKinds = ["comment", "message"] as const;
 
 /**
  * What deevy posted where (ADR-0024).

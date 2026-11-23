@@ -217,6 +217,13 @@ jobs:
   # own tree and lockfile, on a database this tree migrated, and this tree again
   # on what that release wrote. Its own job because it is a second install and a
   # second build — about half a minute warm — that nothing else here needs.
+  #
+  # It runs nothing while the previous tag is from before the clean break, when
+  # deevy's migration history started afresh (ADR-0031's one exception): until
+  # 0.12 is tagged, the previous release is 0.11, which shares no migration
+  # with this tree. The script names the break (`cleanBreak` in
+  # packages/db/scripts/expand-only.ts), says so and passes, and the job runs
+  # again for every release after it.
   previous:
     name: The previous release on this schema
     runs-on: ubuntu-latest

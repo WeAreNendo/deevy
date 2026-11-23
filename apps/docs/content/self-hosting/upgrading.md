@@ -7,7 +7,8 @@ sidebar:
 
 From 0.11 on, every release of deevy upgrades in place: start the new one on the data the old one left,
 and it brings the schema forward. And every release still runs on the schema the next one leaves, so going
-back one release needs no restore.
+back one release needs no restore. The one exception is 0.12, which starts on an empty database
+([below](#from-011-or-earlier)).
 
 ## Where releases come from
 
@@ -52,12 +53,26 @@ Start the previous image on the same volume. It finds the newer migrations appli
 says so in its log, and runs. Starting the newer image again later picks up where it was.
 
 One release back, not two: a release may remove what the one before it stopped using, which the one
-before that still used. To go further back, restore the backup you took before upgrading.
+before that still used. To go further back, restore the backup you took before upgrading. From 0.12, going
+back to 0.11 is starting 0.11 on the volume you kept, since 0.11 does not run on what 0.12 writes.
 
 ## Open pages
 
 A browser picks up the new web app on its next page load. Nobody runs the old app against the new server
 for longer than a tab stays open.
+
+## From 0.11 or earlier
+
+0.12 starts on an empty database: there is no upgrade from 0.11 or anything before it. That release made
+deevy simpler, and the data the parts it removed had kept went with them.
+
+Start 0.12 on a new volume. Started on the volume an older release wrote, it stops before changing
+anything, and its log says the database is from before 0.12. Keep that volume: it is your backup, and the
+way back to 0.11.
+
+On the new volume, sign in as the admin address, which makes the Workspace again. Then connect your tools,
+set up your Projects, create your Agents and give each its new key, and let your team in with the allowlist
+or an invitation. Your records arrive from the tools themselves, each the next time it changes.
 
 ## From 0.8 or earlier
 

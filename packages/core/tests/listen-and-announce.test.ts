@@ -1,6 +1,4 @@
-import { issue as issueTable, socket as socketTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
-import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createApp } from "../src/app.ts";
 import { router } from "../src/operations/index.ts";
@@ -165,11 +163,10 @@ describe("what deevy no longer does to a tool", () => {
       sponsor: ada.member,
       grants: [seeded.project.id],
     });
-    // A record the tracker holds and never delivered, on a Socket that once
-    // had a schedule: polling would have found it.
+    // A record the tracker holds and never delivered: polling would have
+    // found it.
     const held = externalIssue({ externalId: "1", labels: ["agent:planner"] });
     const { sockets } = fakeSockets(new Map([[held.externalId, held]]));
-    await db.update(socketTable).set({ pollMinutes: 5 }).where(eq(socketTable.id, seeded.socketId));
 
     const result = await runDueWork({
       db,
@@ -233,11 +230,6 @@ describe("what deevy no longer does to a tool", () => {
     const asAda = createRouterClient(router, { context: { ...ada, sockets } });
     const seeded = await seedProject(db, ada.workspace.id);
     const record = await seeded.record({ externalId: "42", title: "Checkout rewrite" });
-    // Left behind until the clean break (schema/issue.ts), from before.
-    await db
-      .update(issueTable)
-      .set({ createdBy: ada.member.id })
-      .where(eq(issueTable.id, record.id));
 
     const got = await asAda.issues.get({ issue: record.url });
     const listed = await asAda.issues.list({});

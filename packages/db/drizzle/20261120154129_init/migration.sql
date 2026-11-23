@@ -40,149 +40,6 @@ CREATE TABLE `apikey` (
 	`metadata` text
 );
 --> statement-breakpoint
-CREATE TABLE `jwks` (
-	`id` text PRIMARY KEY NOT NULL,
-	`public_key` text NOT NULL,
-	`private_key` text NOT NULL,
-	`created_at` integer NOT NULL,
-	`expires_at` integer,
-	`alg` text,
-	`crv` text
-);
---> statement-breakpoint
-CREATE TABLE `oauth_access_token` (
-	`id` text PRIMARY KEY NOT NULL,
-	`token` text UNIQUE,
-	`client_id` text NOT NULL,
-	`session_id` text,
-	`user_id` text,
-	`reference_id` text,
-	`authorization_code_id` text,
-	`resources` text,
-	`requested_user_info_claims` text,
-	`refresh_id` text,
-	`expires_at` integer,
-	`created_at` integer,
-	`revoked` integer,
-	`confirmation` text,
-	`scopes` text NOT NULL,
-	CONSTRAINT `fk_oauth_access_token_client_id_oauth_client_client_id_fk` FOREIGN KEY (`client_id`) REFERENCES `oauth_client`(`client_id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_oauth_access_token_session_id_session_id_fk` FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON DELETE SET NULL,
-	CONSTRAINT `fk_oauth_access_token_user_id_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_oauth_access_token_refresh_id_oauth_refresh_token_id_fk` FOREIGN KEY (`refresh_id`) REFERENCES `oauth_refresh_token`(`id`) ON DELETE CASCADE
-);
---> statement-breakpoint
-CREATE TABLE `oauth_client` (
-	`id` text PRIMARY KEY NOT NULL,
-	`client_id` text NOT NULL UNIQUE,
-	`client_secret` text,
-	`client_discovery_id` text,
-	`disabled` integer DEFAULT false,
-	`skip_consent` integer,
-	`enable_end_session` integer,
-	`subject_type` text,
-	`scopes` text,
-	`client_credentials_scopes` text DEFAULT '[]',
-	`user_id` text,
-	`created_at` integer,
-	`updated_at` integer,
-	`name` text,
-	`uri` text,
-	`icon` text,
-	`contacts` text,
-	`tos` text,
-	`policy` text,
-	`software_id` text,
-	`software_version` text,
-	`software_statement` text,
-	`redirect_uris` text NOT NULL,
-	`post_logout_redirect_uris` text,
-	`backchannel_logout_uri` text,
-	`backchannel_logout_session_required` integer,
-	`token_endpoint_auth_method` text,
-	`application_type` text,
-	`jwks` text,
-	`jwks_uri` text,
-	`grant_types` text,
-	`response_types` text,
-	`require_pkce` integer,
-	`dpop_bound_access_tokens` integer DEFAULT false,
-	`reference_id` text,
-	`metadata` text,
-	CONSTRAINT `fk_oauth_client_user_id_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON DELETE CASCADE
-);
---> statement-breakpoint
-CREATE TABLE `oauth_client_assertion` (
-	`id` text PRIMARY KEY NOT NULL,
-	`expires_at` integer NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE `oauth_client_resource` (
-	`id` text PRIMARY KEY NOT NULL,
-	`client_id` text NOT NULL,
-	`resource_id` text NOT NULL,
-	`metadata` text,
-	`created_at` integer,
-	CONSTRAINT `fk_oauth_client_resource_client_id_oauth_client_client_id_fk` FOREIGN KEY (`client_id`) REFERENCES `oauth_client`(`client_id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_oauth_client_resource_resource_id_oauth_resource_identifier_fk` FOREIGN KEY (`resource_id`) REFERENCES `oauth_resource`(`identifier`) ON DELETE CASCADE
-);
---> statement-breakpoint
-CREATE TABLE `oauth_consent` (
-	`id` text PRIMARY KEY NOT NULL,
-	`client_id` text NOT NULL,
-	`user_id` text,
-	`reference_id` text,
-	`resources` text,
-	`requested_user_info_claims` text,
-	`scopes` text NOT NULL,
-	`created_at` integer,
-	`updated_at` integer,
-	CONSTRAINT `fk_oauth_consent_client_id_oauth_client_client_id_fk` FOREIGN KEY (`client_id`) REFERENCES `oauth_client`(`client_id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_oauth_consent_user_id_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON DELETE CASCADE
-);
---> statement-breakpoint
-CREATE TABLE `oauth_refresh_token` (
-	`id` text PRIMARY KEY NOT NULL,
-	`token` text NOT NULL UNIQUE,
-	`client_id` text NOT NULL,
-	`session_id` text,
-	`user_id` text NOT NULL,
-	`reference_id` text,
-	`authorization_code_id` text,
-	`resources` text,
-	`requested_user_info_claims` text,
-	`expires_at` integer,
-	`created_at` integer,
-	`revoked` integer,
-	`rotated_at` integer,
-	`rotation_replay_response` text,
-	`rotation_replay_expires_at` integer,
-	`auth_time` integer,
-	`confirmation` text,
-	`scopes` text NOT NULL,
-	CONSTRAINT `fk_oauth_refresh_token_client_id_oauth_client_client_id_fk` FOREIGN KEY (`client_id`) REFERENCES `oauth_client`(`client_id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_oauth_refresh_token_session_id_session_id_fk` FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON DELETE SET NULL,
-	CONSTRAINT `fk_oauth_refresh_token_user_id_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON DELETE CASCADE
-);
---> statement-breakpoint
-CREATE TABLE `oauth_resource` (
-	`id` text PRIMARY KEY NOT NULL,
-	`identifier` text NOT NULL UNIQUE,
-	`name` text NOT NULL,
-	`access_token_ttl` integer,
-	`refresh_token_ttl` integer,
-	`signing_algorithm` text,
-	`signing_key_id` text,
-	`allowed_scopes` text,
-	`custom_claims` text,
-	`dpop_bound_access_tokens_required` integer DEFAULT false,
-	`disabled` integer DEFAULT false,
-	`created_at` integer,
-	`updated_at` integer,
-	`policy_version` integer DEFAULT 1,
-	`metadata` text
-);
---> statement-breakpoint
 CREATE TABLE `session` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
@@ -233,9 +90,7 @@ CREATE TABLE `workspace` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`slug` text NOT NULL UNIQUE,
-	`max_children_per_issue` integer DEFAULT 20 NOT NULL,
 	`max_delegation_depth` integer DEFAULT 3 NOT NULL,
-	`max_open_descendants` integer DEFAULT 50 NOT NULL,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
 --> statement-breakpoint
@@ -281,6 +136,17 @@ CREATE TABLE `invitation` (
 	CONSTRAINT `fk_invitation_accepted_member_id_member_id_fk` FOREIGN KEY (`accepted_member_id`) REFERENCES `member`(`id`) ON DELETE SET NULL
 );
 --> statement-breakpoint
+CREATE TABLE `inbound_delivery` (
+	`id` text PRIMARY KEY NOT NULL,
+	`socket_id` text NOT NULL,
+	`delivery_id` text NOT NULL,
+	`event_name` text NOT NULL,
+	`status` text DEFAULT 'received' NOT NULL,
+	`error` text,
+	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	CONSTRAINT `fk_inbound_delivery_socket_id_socket_id_fk` FOREIGN KEY (`socket_id`) REFERENCES `socket`(`id`) ON DELETE CASCADE
+);
+--> statement-breakpoint
 CREATE TABLE `socket` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
@@ -291,10 +157,11 @@ CREATE TABLE `socket` (
 	`config` text NOT NULL,
 	`credentials` text,
 	`webhook_secret` text,
+	`previous_webhook_secret` text,
+	`webhook_secret_changed_at` integer,
 	`installed_by` text,
 	`status` text DEFAULT 'active' NOT NULL,
 	`last_inbound_at` integer,
-	`poll_minutes` integer,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	CONSTRAINT `fk_socket_workspace_id_workspace_id_fk` FOREIGN KEY (`workspace_id`) REFERENCES `workspace`(`id`) ON DELETE CASCADE,
@@ -310,26 +177,20 @@ CREATE TABLE `project` (
 	`tracker_socket_id` text NOT NULL,
 	`tracker_scope` text NOT NULL,
 	`tracker_scope_key` text NOT NULL,
-	`forge_socket_id` text,
-	`forge_scope` text,
-	`docs_socket_id` text,
-	`docs_scope` text,
 	`default_agent_member_id` text,
+	`chat_socket_id` text,
+	`chat_channel` text,
 	`routing` text DEFAULT '{"labelPrefix":"agent:","mention":true}' NOT NULL,
-	`mirror` text DEFAULT 'gates' NOT NULL,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`archived_at` integer,
 	CONSTRAINT `fk_project_workspace_id_workspace_id_fk` FOREIGN KEY (`workspace_id`) REFERENCES `workspace`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_project_tracker_socket_id_socket_id_fk` FOREIGN KEY (`tracker_socket_id`) REFERENCES `socket`(`id`) ON DELETE RESTRICT,
-	CONSTRAINT `fk_project_forge_socket_id_socket_id_fk` FOREIGN KEY (`forge_socket_id`) REFERENCES `socket`(`id`) ON DELETE SET NULL,
-	CONSTRAINT `fk_project_docs_socket_id_socket_id_fk` FOREIGN KEY (`docs_socket_id`) REFERENCES `socket`(`id`) ON DELETE SET NULL,
-	CONSTRAINT `fk_project_default_agent_member_id_member_id_fk` FOREIGN KEY (`default_agent_member_id`) REFERENCES `member`(`id`) ON DELETE SET NULL
+	CONSTRAINT `fk_project_default_agent_member_id_member_id_fk` FOREIGN KEY (`default_agent_member_id`) REFERENCES `member`(`id`) ON DELETE SET NULL,
+	CONSTRAINT `fk_project_chat_socket_id_socket_id_fk` FOREIGN KEY (`chat_socket_id`) REFERENCES `socket`(`id`) ON DELETE SET NULL
 );
 --> statement-breakpoint
 CREATE TABLE `agent` (
 	`member_id` text PRIMARY KEY NOT NULL,
-	`schedule_minutes` integer,
-	`schedule_ran_at` integer,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	CONSTRAINT `fk_agent_member_id_member_id_fk` FOREIGN KEY (`member_id`) REFERENCES `member`(`id`) ON DELETE CASCADE
 );
@@ -367,9 +228,73 @@ CREATE TABLE `run` (
 	`last_activity_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`finished_at` integer,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	`waiting_ms` integer DEFAULT 0 NOT NULL,
+	`waiting_since` integer,
 	CONSTRAINT `fk_run_issue_id_issue_id_fk` FOREIGN KEY (`issue_id`) REFERENCES `issue`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_run_agent_member_id_member_id_fk` FOREIGN KEY (`agent_member_id`) REFERENCES `member`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_run_triggered_by_member_id_member_id_fk` FOREIGN KEY (`triggered_by_member_id`) REFERENCES `member`(`id`) ON DELETE SET NULL
+);
+--> statement-breakpoint
+CREATE TABLE `checkpoint` (
+	`id` text PRIMARY KEY NOT NULL,
+	`project_id` text NOT NULL,
+	`name` text NOT NULL,
+	`approvals_required` integer DEFAULT 1 NOT NULL,
+	`exclude_requester` integer DEFAULT false NOT NULL,
+	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	CONSTRAINT `fk_checkpoint_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE `checkpoint_approver` (
+	`checkpoint_id` text NOT NULL,
+	`member_id` text NOT NULL,
+	CONSTRAINT `checkpoint_approver_pk` PRIMARY KEY(`checkpoint_id`, `member_id`),
+	CONSTRAINT `fk_checkpoint_approver_checkpoint_id_checkpoint_id_fk` FOREIGN KEY (`checkpoint_id`) REFERENCES `checkpoint`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_checkpoint_approver_member_id_member_id_fk` FOREIGN KEY (`member_id`) REFERENCES `member`(`id`) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE `gate_decision` (
+	`id` text PRIMARY KEY NOT NULL,
+	`gate_request_id` text NOT NULL,
+	`member_id` text NOT NULL,
+	`decision` text NOT NULL,
+	`note` text,
+	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	CONSTRAINT `fk_gate_decision_gate_request_id_gate_request_id_fk` FOREIGN KEY (`gate_request_id`) REFERENCES `gate_request`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_gate_decision_member_id_member_id_fk` FOREIGN KEY (`member_id`) REFERENCES `member`(`id`) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE `gate_request` (
+	`id` text PRIMARY KEY NOT NULL,
+	`run_id` text NOT NULL,
+	`issue_id` text NOT NULL,
+	`project_id` text NOT NULL,
+	`checkpoint` text NOT NULL,
+	`checkpoint_id` text,
+	`proposal` text NOT NULL,
+	`links` text DEFAULT '[]' NOT NULL,
+	`requested_by` text NOT NULL,
+	`visit` integer DEFAULT 1 NOT NULL,
+	`status` text DEFAULT 'open' NOT NULL,
+	`asked_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	`decided_at` integer,
+	CONSTRAINT `fk_gate_request_run_id_run_id_fk` FOREIGN KEY (`run_id`) REFERENCES `run`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_gate_request_issue_id_issue_id_fk` FOREIGN KEY (`issue_id`) REFERENCES `issue`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_gate_request_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_gate_request_checkpoint_id_checkpoint_id_fk` FOREIGN KEY (`checkpoint_id`) REFERENCES `checkpoint`(`id`) ON DELETE SET NULL,
+	CONSTRAINT `fk_gate_request_requested_by_member_id_fk` FOREIGN KEY (`requested_by`) REFERENCES `member`(`id`) ON DELETE CASCADE
+);
+--> statement-breakpoint
+CREATE TABLE `socket_mirror` (
+	`id` text PRIMARY KEY NOT NULL,
+	`gate_request_id` text,
+	`socket_id` text NOT NULL,
+	`kind` text NOT NULL,
+	`external_ref` text,
+	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	CONSTRAINT `fk_socket_mirror_gate_request_id_gate_request_id_fk` FOREIGN KEY (`gate_request_id`) REFERENCES `gate_request`(`id`) ON DELETE CASCADE,
+	CONSTRAINT `fk_socket_mirror_socket_id_socket_id_fk` FOREIGN KEY (`socket_id`) REFERENCES `socket`(`id`) ON DELETE CASCADE
 );
 --> statement-breakpoint
 CREATE TABLE `issue` (
@@ -388,7 +313,6 @@ CREATE TABLE `issue` (
 	`assignee_member_id` text,
 	`parent_external_id` text,
 	`parent_id` text,
-	`created_by` text,
 	`external_updated_at` integer NOT NULL,
 	`last_synced_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
@@ -396,8 +320,7 @@ CREATE TABLE `issue` (
 	`closed_at` integer,
 	CONSTRAINT `fk_issue_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_issue_socket_id_socket_id_fk` FOREIGN KEY (`socket_id`) REFERENCES `socket`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_issue_assignee_member_id_member_id_fk` FOREIGN KEY (`assignee_member_id`) REFERENCES `member`(`id`) ON DELETE SET NULL,
-	CONSTRAINT `fk_issue_created_by_member_id_fk` FOREIGN KEY (`created_by`) REFERENCES `member`(`id`) ON DELETE SET NULL
+	CONSTRAINT `fk_issue_assignee_member_id_member_id_fk` FOREIGN KEY (`assignee_member_id`) REFERENCES `member`(`id`) ON DELETE SET NULL
 );
 --> statement-breakpoint
 CREATE TABLE `issue_link` (
@@ -428,46 +351,12 @@ CREATE TABLE `notification` (
 	CONSTRAINT `fk_notification_issue_id_issue_id_fk` FOREIGN KEY (`issue_id`) REFERENCES `issue`(`id`) ON DELETE CASCADE
 );
 --> statement-breakpoint
-CREATE TABLE `channel` (
-	`id` text PRIMARY KEY NOT NULL,
-	`workspace_id` text NOT NULL,
-	`kind` text NOT NULL,
-	`name` text NOT NULL,
-	`config` text,
-	`created_by` text,
-	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
-	CONSTRAINT `fk_channel_workspace_id_workspace_id_fk` FOREIGN KEY (`workspace_id`) REFERENCES `workspace`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_channel_created_by_member_id_fk` FOREIGN KEY (`created_by`) REFERENCES `member`(`id`) ON DELETE SET NULL
-);
---> statement-breakpoint
-CREATE TABLE `notification_preference` (
-	`member_id` text NOT NULL,
-	`kind` text NOT NULL,
-	`inbox` integer DEFAULT true NOT NULL,
-	`slack` integer DEFAULT true NOT NULL,
-	CONSTRAINT `notification_preference_pk` PRIMARY KEY(`member_id`, `kind`),
-	CONSTRAINT `fk_notification_preference_member_id_member_id_fk` FOREIGN KEY (`member_id`) REFERENCES `member`(`id`) ON DELETE CASCADE
-);
---> statement-breakpoint
-CREATE TABLE `routing_rule` (
-	`id` text PRIMARY KEY NOT NULL,
-	`workspace_id` text NOT NULL,
-	`notification_kind` text,
-	`project_id` text,
-	`channel_id` text NOT NULL,
-	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
-	CONSTRAINT `fk_routing_rule_workspace_id_workspace_id_fk` FOREIGN KEY (`workspace_id`) REFERENCES `workspace`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_routing_rule_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_routing_rule_channel_id_channel_id_fk` FOREIGN KEY (`channel_id`) REFERENCES `channel`(`id`) ON DELETE CASCADE
-);
---> statement-breakpoint
 CREATE TABLE `delivery` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`target` text NOT NULL,
 	`target_id` text NOT NULL,
 	`event_seq` integer NOT NULL,
-	`recipient_member_id` text,
 	`attempts` integer DEFAULT 0 NOT NULL,
 	`next_attempt_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`locked_until` integer,
@@ -476,8 +365,7 @@ CREATE TABLE `delivery` (
 	`delivered_at` integer,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	CONSTRAINT `fk_delivery_workspace_id_workspace_id_fk` FOREIGN KEY (`workspace_id`) REFERENCES `workspace`(`id`) ON DELETE CASCADE,
-	CONSTRAINT `fk_delivery_event_seq_event_seq_fk` FOREIGN KEY (`event_seq`) REFERENCES `event`(`seq`) ON DELETE CASCADE,
-	CONSTRAINT `fk_delivery_recipient_member_id_member_id_fk` FOREIGN KEY (`recipient_member_id`) REFERENCES `member`(`id`) ON DELETE CASCADE
+	CONSTRAINT `fk_delivery_event_seq_event_seq_fk` FOREIGN KEY (`event_seq`) REFERENCES `event`(`seq`) ON DELETE CASCADE
 );
 --> statement-breakpoint
 CREATE TABLE `webhook_subscription` (
@@ -501,21 +389,6 @@ CREATE INDEX `account_userId_idx` ON `account` (`user_id`);--> statement-breakpo
 CREATE INDEX `apikey_configId_idx` ON `apikey` (`config_id`);--> statement-breakpoint
 CREATE INDEX `apikey_referenceId_idx` ON `apikey` (`reference_id`);--> statement-breakpoint
 CREATE INDEX `apikey_key_idx` ON `apikey` (`key`);--> statement-breakpoint
-CREATE INDEX `oauthAccessToken_clientId_idx` ON `oauth_access_token` (`client_id`);--> statement-breakpoint
-CREATE INDEX `oauthAccessToken_sessionId_idx` ON `oauth_access_token` (`session_id`);--> statement-breakpoint
-CREATE INDEX `oauthAccessToken_userId_idx` ON `oauth_access_token` (`user_id`);--> statement-breakpoint
-CREATE INDEX `oauthAccessToken_authorizationCodeId_idx` ON `oauth_access_token` (`authorization_code_id`);--> statement-breakpoint
-CREATE INDEX `oauthAccessToken_refreshId_idx` ON `oauth_access_token` (`refresh_id`);--> statement-breakpoint
-CREATE INDEX `oauthClient_userId_idx` ON `oauth_client` (`user_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `oauthClientResource_clientId_resourceId_uidx` ON `oauth_client_resource` (`client_id`,`resource_id`);--> statement-breakpoint
-CREATE INDEX `oauthClientResource_clientId_idx` ON `oauth_client_resource` (`client_id`);--> statement-breakpoint
-CREATE INDEX `oauthClientResource_resourceId_idx` ON `oauth_client_resource` (`resource_id`);--> statement-breakpoint
-CREATE INDEX `oauthConsent_clientId_idx` ON `oauth_consent` (`client_id`);--> statement-breakpoint
-CREATE INDEX `oauthConsent_userId_idx` ON `oauth_consent` (`user_id`);--> statement-breakpoint
-CREATE INDEX `oauthRefreshToken_clientId_idx` ON `oauth_refresh_token` (`client_id`);--> statement-breakpoint
-CREATE INDEX `oauthRefreshToken_sessionId_idx` ON `oauth_refresh_token` (`session_id`);--> statement-breakpoint
-CREATE INDEX `oauthRefreshToken_userId_idx` ON `oauth_refresh_token` (`user_id`);--> statement-breakpoint
-CREATE INDEX `oauthRefreshToken_authorizationCodeId_idx` ON `oauth_refresh_token` (`authorization_code_id`);--> statement-breakpoint
 CREATE INDEX `session_userId_idx` ON `session` (`user_id`);--> statement-breakpoint
 CREATE INDEX `verification_identifier_idx` ON `verification` (`identifier`);--> statement-breakpoint
 CREATE UNIQUE INDEX `member_userId_uidx` ON `member` (`user_id`);--> statement-breakpoint
@@ -530,6 +403,8 @@ CREATE INDEX `allowlist_rule_workspaceId_idx` ON `allowlist_rule` (`workspace_id
 CREATE UNIQUE INDEX `invitation_live_uidx` ON `invitation` (`workspace_id`,`email`) WHERE accepted_at is null and revoked_at is null;--> statement-breakpoint
 CREATE UNIQUE INDEX `invitation_tokenHash_uidx` ON `invitation` (`token_hash`);--> statement-breakpoint
 CREATE INDEX `invitation_workspaceId_idx` ON `invitation` (`workspace_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `inbound_delivery_uidx` ON `inbound_delivery` (`socket_id`,`delivery_id`);--> statement-breakpoint
+CREATE INDEX `inbound_delivery_createdAt_idx` ON `inbound_delivery` (`created_at`);--> statement-breakpoint
 CREATE INDEX `socket_workspaceId_status_idx` ON `socket` (`workspace_id`,`status`);--> statement-breakpoint
 CREATE UNIQUE INDEX `project_slug_uidx` ON `project` (`workspace_id`,`slug`);--> statement-breakpoint
 CREATE UNIQUE INDEX `project_tracker_uidx` ON `project` (`tracker_socket_id`,`tracker_scope_key`);--> statement-breakpoint
@@ -537,9 +412,16 @@ CREATE INDEX `project_workspaceId_idx` ON `project` (`workspace_id`);--> stateme
 CREATE INDEX `project_grant_projectId_idx` ON `project_grant` (`project_id`);--> statement-breakpoint
 CREATE INDEX `activity_runId_idx` ON `activity` (`run_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `run_issueId_idx` ON `run` (`issue_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `run_createdAt_idx` ON `run` (`created_at`,`id`);--> statement-breakpoint
 CREATE INDEX `run_agent_status_idx` ON `run` (`agent_member_id`,`status`);--> statement-breakpoint
 CREATE INDEX `run_status_lastActivityAt_idx` ON `run` (`status`,`last_activity_at`);--> statement-breakpoint
 CREATE UNIQUE INDEX `run_open_per_issue_agent_uidx` ON `run` (`issue_id`,`agent_member_id`) WHERE "run"."status" in ('pending', 'active', 'awaiting_input', 'stale');--> statement-breakpoint
+CREATE UNIQUE INDEX `checkpoint_uidx` ON `checkpoint` (`project_id`,`name`);--> statement-breakpoint
+CREATE UNIQUE INDEX `gate_decision_uidx` ON `gate_decision` (`gate_request_id`,`member_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `gate_request_open_uidx` ON `gate_request` (`run_id`,`checkpoint`) WHERE "gate_request"."status" = 'open';--> statement-breakpoint
+CREATE INDEX `gate_request_issue_idx` ON `gate_request` (`issue_id`);--> statement-breakpoint
+CREATE INDEX `gate_request_status_idx` ON `gate_request` (`project_id`,`status`);--> statement-breakpoint
+CREATE INDEX `socket_mirror_gate_idx` ON `socket_mirror` (`gate_request_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `issue_external_uidx` ON `issue` (`socket_id`,`external_id`);--> statement-breakpoint
 CREATE INDEX `issue_externalKey_idx` ON `issue` (`external_key`);--> statement-breakpoint
 CREATE INDEX `issue_url_idx` ON `issue` (`url`);--> statement-breakpoint
@@ -551,8 +433,6 @@ CREATE INDEX `issue_link_issueId_idx` ON `issue_link` (`issue_id`,`created_at`);
 CREATE INDEX `notification_recipient_idx` ON `notification` (`recipient_member_id`,`read_at`);--> statement-breakpoint
 CREATE INDEX `notification_eventId_idx` ON `notification` (`event_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `notification_event_uidx` ON `notification` (`recipient_member_id`,`kind`,`event_id`);--> statement-breakpoint
-CREATE INDEX `channel_workspaceId_idx` ON `channel` (`workspace_id`);--> statement-breakpoint
-CREATE INDEX `routing_rule_workspaceId_idx` ON `routing_rule` (`workspace_id`);--> statement-breakpoint
 CREATE INDEX `delivery_due_idx` ON `delivery` (`delivered_at`,`next_attempt_at`);--> statement-breakpoint
 CREATE INDEX `delivery_target_idx` ON `delivery` (`target_id`,`event_seq`);--> statement-breakpoint
 CREATE UNIQUE INDEX `delivery_event_uidx` ON `delivery` (`target`,`target_id`,`event_seq`);--> statement-breakpoint
