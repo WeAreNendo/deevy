@@ -20,36 +20,28 @@ export const workspace = {
 
   update: defineOperation({
     name: "workspace.update",
-    summary: "Rename the Workspace this instance serves, and set what an Agent may not go past",
+    summary: "Rename the Workspace this instance serves, and set how deep sub-issues may go",
     method: "PATCH",
     path: "/workspace",
     auth: "admin",
     input: z.object({
       name: z.string().trim().min(1).max(120).optional(),
       /**
-       * The three ceilings on delegation (docs/plans/sub-issue-delegation.md).
-       * Left out, each keeps what it has: a client written before they existed
-       * cannot widen one by saving the Workspace, the way a Gate's threshold is
-       * kept from widening by accident.
+       * How deep a tree of sub-issues may go before deevy stops routing its
+       * records to Agents (docs/plans/simplify.md, slice 6). Left out, it
+       * keeps what it has: a client that does not know it cannot widen it by
+       * saving the Workspace, the way a Gate's threshold is kept from widening
+       * by accident.
        */
-      maxChildrenPerIssue: z.number().int().min(1).max(500).optional(),
       maxDelegationDepth: z.number().int().min(1).max(20).optional(),
-      maxOpenDescendants: z.number().int().min(1).max(2_000).optional(),
     }),
     output: WorkspaceSchema,
     handler: async ({ input, context }) => {
       const renamed = input.name !== undefined && input.name !== context.workspace.name;
-      const limits = {
-        ...(input.maxChildrenPerIssue === undefined
+      const limits =
+        input.maxDelegationDepth === undefined
           ? {}
-          : { maxChildrenPerIssue: input.maxChildrenPerIssue }),
-        ...(input.maxDelegationDepth === undefined
-          ? {}
-          : { maxDelegationDepth: input.maxDelegationDepth }),
-        ...(input.maxOpenDescendants === undefined
-          ? {}
-          : { maxOpenDescendants: input.maxOpenDescendants }),
-      };
+          : { maxDelegationDepth: input.maxDelegationDepth };
       if (!renamed && Object.keys(limits).length === 0) return context.workspace;
 
       const [row] = await context.db

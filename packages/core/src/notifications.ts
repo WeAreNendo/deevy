@@ -351,9 +351,6 @@ export function notificationKindOf(event: Event): Notification["kind"] | null {
   if (event.kind === "issue.assigned") return "assignment";
   if (gateRequestIdOf(event)) return "gate_awaiting";
   if (event.kind === "comment.created") return "mention";
-  // A parent's sub-issues all finishing is its Sponsor's business and not
-  // everybody's (docs/plans/sub-issue-delegation.md).
-  if (event.kind === "issue.children_closed") return "delegation";
   if (event.kind === AGENT_ANSWERED) return "run_answered";
   return runNotificationKinds[event.kind] ?? null;
 }
@@ -371,14 +368,6 @@ async function recipientsFor(db: Db, event: Event): Promise<Recipient[]> {
       memberId,
       kind: "assignment" as const,
     }));
-  }
-
-  if (event.kind === "issue.children_closed") {
-    // Once per wave by its nature — the last sub-issue closes once. And it is
-    // addressed to the Sponsor of the Agent holding the parent, not of whoever
-    // happened to close the last piece of it.
-    const routed = (event.payload as { routedTo?: unknown } | null)?.routedTo;
-    return typeof routed === "string" ? sponsorOf(db, event, routed) : [];
   }
 
   if (event.kind === "comment.created") {
@@ -474,20 +463,6 @@ async function humanBehind(db: Db, memberId: string | null): Promise<string | nu
   });
   if (!found) return null;
   return found.kind === "human" ? memberId : found.sponsorId;
-}
-
-/** Who hears that an Agent's sub-issues are finished: the Human accountable for it. */
-async function sponsorOf(db: Db, event: Event, agent: string): Promise<Recipient[]> {
-  const found = await db.query.member.findFirst({
-    where: { id: agent },
-    columns: { sponsorId: true, kind: true },
-  });
-  const sponsor = found?.kind === "agent" ? found.sponsorId : null;
-  if (!sponsor) return [];
-  return (await active(db, [sponsor], event)).map((memberId) => ({
-    memberId,
-    kind: "delegation" as const,
-  }));
 }
 
 /** Of the given Members, those still able to act. Suspension silences an inbox. */

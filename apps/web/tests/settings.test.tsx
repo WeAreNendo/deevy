@@ -56,9 +56,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
         id: "w1",
         name: "deevy",
         slug: "deevy",
-        maxChildrenPerIssue: 20,
         maxDelegationDepth: 3,
-        maxOpenDescendants: 50,
         createdAt: new Date("2026-09-06"),
       }),
       update: async (input: Record<string, unknown>) => {
@@ -67,9 +65,7 @@ vi.mock("../src/lib/orpc.ts", async () => {
           id: "w1",
           name: "deevy",
           slug: "deevy",
-          maxChildrenPerIssue: 20,
           maxDelegationDepth: 3,
-          maxOpenDescendants: 50,
           createdAt: new Date("2026-09-06"),
           ...input,
         };
@@ -182,17 +178,16 @@ describe("the Allowlist row of Workspace › General", () => {
   });
 });
 
-describe("how far an Agent may split work", () => {
-  it("shows the three ceilings this Workspace is set to", async () => {
+describe("how deep sub-issues may go", () => {
+  it("shows the one ceiling left, and says what a record past it gets", async () => {
     mount(<DelegationRow />);
 
-    expect(await screen.findByLabelText("Sub-issues each")).toHaveProperty("value", "20");
-    expect(screen.getByLabelText("Levels deep")).toHaveProperty("value", "3");
-    expect(screen.getByLabelText("Open in one tree")).toHaveProperty("value", "50");
-    // deevy opens no sub-issue any more (docs/plans/simplify.md, slice 4), so
-    // nothing checks them, and the page must not say an Agent is refused.
-    expect(screen.getByText(/bound nothing/)).toBeTruthy();
-    expect(screen.queryByText(/refused/)).toBeNull();
+    expect(await screen.findByLabelText("Levels deep")).toHaveProperty("value", "3");
+    // The other two went in slice 6 (docs/plans/simplify.md): an Agent opens
+    // sub-issues in the tracker, where deevy can count none of them.
+    expect(screen.queryByLabelText("Sub-issues each")).toBeNull();
+    expect(screen.queryByLabelText("Open in one tree")).toBeNull();
+    expect(screen.getByText(/isn't handed to any Agent/)).toBeTruthy();
   });
 
   it("saves the one that changed, and only that one", async () => {

@@ -16,7 +16,10 @@ import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { socketCapabilities } from "./sockets/port.ts";
 
-export const WorkspaceSchema = createSelectSchema(workspace);
+export const WorkspaceSchema = createSelectSchema(workspace)
+  // Left behind until the clean break (schema/workspace.ts): one ceiling on
+  // sub-issues is left, how deep a tree may go.
+  .omit({ maxChildrenPerIssue: true, maxOpenDescendants: true });
 export const MemberSchema = createSelectSchema(member);
 export const UserSchema = createSelectSchema(user).pick({
   id: true,
