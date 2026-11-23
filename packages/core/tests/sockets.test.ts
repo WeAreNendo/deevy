@@ -1,4 +1,6 @@
+import { socket as socketTable } from "@deevy/db";
 import { createRouterClient } from "@orpc/server";
+import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { router } from "../src/operations/index.ts";
 import { openSecret } from "../src/secrets.ts";
@@ -153,6 +155,27 @@ describe("connecting a tool", () => {
 });
 
 describe("a connected tool", () => {
+  /**
+   * A GitHub, GitLab or stub Socket connected before ADR-0034 stored `forge`
+   * among what it can do. Nothing asks for it now, and the row must still
+   * read: Settings › Sockets lists it, and an update answers with it.
+   */
+  it("still reads when it was stored as a forge, and says what it can still do", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { asAda } = await admin(db);
+    const connected = await asAda.sockets.connect({ provider: "stub", name: "Example tracker" });
+    await db
+      .update(socketTable)
+      .set({ capabilities: ["tracker", "forge"] as unknown as ["tracker"] })
+      .where(eq(socketTable.id, connected.id));
+
+    const listed = (await asAda.sockets.list({})).sockets.find((one) => one.id === connected.id);
+    expect(listed?.capabilities).toEqual(["tracker"]);
+    const renamed = await asAda.sockets.update({ socketId: connected.id, name: "acme's tracker" });
+    expect(renamed.capabilities).toEqual(["tracker"]);
+  });
+
   it("can be rested and woken, and says so in the log", async () => {
     const { db, close } = testDb();
     closers.push(close);
@@ -491,7 +514,7 @@ describe("what this deevy can speak", () => {
       {
         id: "stub",
         label: "the stub tracker",
-        capabilities: ["tracker", "forge", "docs"],
+        capabilities: ["tracker", "docs"],
         webhookSecretFrom: "either",
         beginRefusal: null,
       },

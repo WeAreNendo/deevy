@@ -125,6 +125,46 @@ describe("links.add", () => {
     }
     expect((await client.links.list({ issue: issue.externalKey })).links).toEqual([]);
   });
+
+  /**
+   * deevy opens no pull request (ADR-0034): the Agent opens its own with the
+   * access its operator gave it, and says so with a Link. That Link is the
+   * whole of deevy's part, attributed to the attempt that produced it, and
+   * nothing is owed to the tracker for it.
+   */
+  it("is how an Agent hands over the pull request it opened itself", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    const { admin, client, project, issue } = await withIssue(db);
+    // A Project that says the most it can on the record, which once included a
+    // comment for every pull request deevy was told of.
+    await client.projects.update({ slug: project.slug, mirror: "runs" });
+    const context = await agentContext(db, {
+      sponsor: admin.member,
+      name: "Builder",
+      grants: [project.id],
+    });
+    const asAgent = createRouterClient(router, { context });
+    const run = await asAgent.runs.start({ issue: issue.externalKey });
+    const before = (await db.query.delivery.findMany({ where: { target: "socket" } })).length;
+
+    const link = await asAgent.links.add({
+      issue: issue.externalKey,
+      url: "https://github.com/acme/deevy/pull/7",
+      kind: "pull_request",
+      title: "Cap the coupon",
+      runId: run.id,
+    });
+
+    expect(link).toMatchObject({ kind: "pull_request", ref: "7", runId: run.id });
+    expect((await client.links.list({ issue: issue.externalKey })).links).toEqual([link]);
+    const added = (await client.events.list({ subjectType: "issue" })).events.findLast(
+      (event) => event.kind === "issue.link_added",
+    );
+    expect(added?.actorMemberId).toBe(context.member.id);
+    // Nothing more owed to the tracker than the Run starting already was.
+    expect(await db.query.delivery.findMany({ where: { target: "socket" } })).toHaveLength(before);
+  });
 });
 
 describe("links.remove", () => {

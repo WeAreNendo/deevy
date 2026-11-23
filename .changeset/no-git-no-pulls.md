@@ -1,0 +1,5 @@
+---
+"@deevy/core": minor
+---
+
+deevy no longer holds a Run's code. `runs.checkout` (`POST /api/runs/{runId}/checkout`) and `pulls.open` (`POST /api/runs/{runId}/pull`, the MCP tool `pulls_open`, and `deevy pulls open`) are gone, and so are a Project's **Repository** and **Base branch** settings and the `forge` field of `projects.create` and `projects.update`, which is now ignored. Give your Agent access to its repository yourself, with a deploy key, a fine-grained token or an App of its own; it opens its own pull request and attaches it to its Run with `links_add` and `kind: "pull_request"`, and one that says `Closes <the issue's URL>` still closes a GitHub or GitLab issue when it merges. A GitHub App created from Settings › Sockets now asks for issues and metadata only; an App you already have keeps the contents and pull-request permissions it was given, and you can remove them on GitHub. The Event log no longer gains `run.checkout_issued` or `run.pull_request_opened`, and a Project that mirrors Runs no longer comments when a pull request is linked.

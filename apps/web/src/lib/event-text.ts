@@ -228,19 +228,6 @@ export function describeEvent(event: EventLike, context: EventContext = {}): Eve
     }
     case "project.archived":
       return say(`archived ${str(p.slug) ?? "the Project"}`, null, "destructive");
-    case "run.checkout_issued":
-      // What it cloned and where it will push. Never the credential: the log
-      // says one was issued and nothing more (ADR-0014).
-      return say(
-        `took a checkout of ${str(p.cloneUrl) ?? "the repository"} on ${str(p.headBranch) ?? "a branch"}`,
-        null,
-        agentTone,
-        true,
-      );
-    case "run.pull_request_opened": {
-      const number = typeof p.number === "number" ? `#${String(p.number)}` : "";
-      return say(`opened pull request ${number}`.trim(), str(p.url), agentTone);
-    }
     case "run.usage_reported": {
       // The Run's totals after the report, in its client's words: a cost is
       // what the harness estimated, and absent where it priced nothing.

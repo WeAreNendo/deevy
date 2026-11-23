@@ -48,8 +48,8 @@ export interface GithubManifest {
 
 /**
  * What deevy asks GitHub for, and nothing more. Issues to read and write the
- * records, contents and pull requests for the forge an Agent pushes through,
- * metadata because GitHub requires it.
+ * records, and metadata because GitHub requires it. Code is not deevy's: an
+ * Agent reaches it with access its operator gives it (ADR-0034).
  */
 export function githubManifest(input: {
   name: string;
@@ -68,8 +68,6 @@ export function githubManifest(input: {
     default_permissions: {
       issues: "write",
       metadata: "read",
-      contents: "write",
-      pull_requests: "write",
     },
   };
 }

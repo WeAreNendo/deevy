@@ -134,13 +134,6 @@ export type EventKind =
   /** Silence, not a decision: the sweep said so, and an Activity undoes it. */
   | "run.went_stale"
   /**
-   * The code half of a Run (ADR-0014, ADR-0024). `run.checkout_issued` says a
-   * credential was minted and never what it was; `run.pull_request_opened`
-   * says where the work went.
-   */
-  | "run.checkout_issued"
-  | "run.pull_request_opened"
-  /**
    * What a session of the Run spent, as its client reported it, with the
    * Run's new totals (docs/plans/run-usage.md). Nobody is told: it is not
    * something anybody waits on, and it is the Run's page that moves.

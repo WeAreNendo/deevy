@@ -1,14 +1,13 @@
 ---
 title: GitLab
-description: Connect gitlab.com or your own GitLab with an access token, add a webhook to each project, and bind a Project to one for its issues and its code.
+description: Connect gitlab.com or your own GitLab with an access token, add a webhook to each project, and bind a Project to one for its issues.
 sidebar:
   order: 4
 ---
 
 A GitLab Socket is one GitLab, gitlab.com or your own, reached as one GitLab account through its access
-token. It covers both halves of a Project: a GitLab project's issues are its records, and its repository is
-where Agents push and where deevy opens their merge requests. Every comment, label, branch and merge request
-deevy makes is by that account.
+token. A GitLab project's issues are a Project's records, and every comment and label deevy makes is by that
+account. Its repository is the Agent's to reach, with access you give it.
 
 ## Choose the account deevy acts as
 
@@ -18,9 +17,9 @@ Before you connect, decide which GitLab account deevy works as, and make a token
 - the bot account GitLab makes for a **project access token** or a **group access token**, where your GitLab
   tier offers those.
 
-The token needs the `api` scope. Give its account **Developer** on each project deevy should work, and
-nothing more: GitLab cannot narrow a token further, so the account's role is the limit on what an Agent's
-Run can reach.
+The token needs the `api` scope. Give its account **Reporter** on each project deevy should work, and
+nothing more: deevy reads, comments on and labels issues, and GitLab cannot narrow a token further, so the
+account's role is the limit on what deevy can do there.
 
 ## Connect GitLab
 
@@ -63,9 +62,8 @@ with**, either:
 
 1. Go to **Settings › Projects** and choose **Bind a Project**.
 2. Choose the GitLab Socket as the **Tool**, and a project as the **Container**. The list holds the projects
-   the account is at least a Developer on.
-3. Leave **Its code is here too, so its Agents push to it** ticked, unless the code lives elsewhere.
-4. Name the Project, and choose **Bind it**.
+   the account is at least a Reporter on.
+3. Name the Project, and choose **Bind it**.
 
 deevy keeps the GitLab project's id, so renaming the project or moving it to another group breaks nothing.
 
@@ -87,11 +85,8 @@ GitLab's issues are open or closed and nothing else. A team's workflow in scoped
   time deevy uses it.
 - **Sub-issues**. GitLab has no parent for an issue, so an Agent's sub-issue is a new issue related to the
   one it came from, and deevy keeps the tree itself.
-- **Merge requests**, from the branch a Run pushed, saying `Closes <the issue's URL>` so that merging closes
-  the issue. The branch is deleted when the merge request is merged.
-
-A Run clones over HTTPS with the Socket's token, which whatever runs the Agent gets from `runs.checkout`.
-It is not an MCP tool, so keep the token out of the coding agent's context.
+  deevy opens no merge request. The Agent opens its own with the access you gave it and attaches it to its
+  Run; one that says `Closes <the issue's URL>` closes the issue when it merges.
 
 ## Rule from GitLab
 

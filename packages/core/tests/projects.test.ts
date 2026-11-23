@@ -44,9 +44,10 @@ describe("projects.create", () => {
       trackerScopeKey: "stub:acme/deevy",
       archivedAt: null,
     });
-    // Nothing is bound that was not named: an Agent working this Project gets no
-    // checkout until a forge is.
-    expect(project.forgeSocketId).toBeNull();
+    // Nothing is bound that was not named, and nothing is about code: where it
+    // is, deevy does not hold (ADR-0034).
+    expect(project).not.toHaveProperty("forgeSocketId");
+    expect(project).not.toHaveProperty("forgeScope");
     expect(project.docsSocketId).toBeNull();
     expect(project.defaultAgentMemberId).toBeNull();
   });
@@ -373,27 +374,6 @@ describe("projects.archive", () => {
 });
 
 describe("the rest of a Project's binding", () => {
-  it("names where its code is, and takes it back off", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    const { client, socket, bind } = await withSocket(db);
-    await client.projects.create({ slug: "deevy", name: "deevy", tracker: bind("acme/deevy") });
-
-    const bound = await client.projects.update({
-      slug: "deevy",
-      forge: { socketId: socket.id, scope: { scopeKey: "acme/deevy", baseBranch: "main" } },
-    });
-
-    expect(bound.forgeSocketId).toBe(socket.id);
-    expect(bound.forgeScope).toMatchObject({ scopeKey: "acme/deevy", baseBranch: "main" });
-
-    // Null, not absent: a Project whose code moved elsewhere is one a Run
-    // should stop trying to clone (docs/plans/sockets.md, slice 6).
-    const unbound = await client.projects.update({ slug: "deevy", forge: null });
-    expect(unbound.forgeSocketId).toBeNull();
-    expect(unbound.forgeScope).toBeNull();
-  });
-
   it("says how a record names the Agent it is for", async () => {
     const { db, close } = testDb();
     closers.push(close);

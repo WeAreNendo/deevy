@@ -98,10 +98,9 @@ deevy lists only the tools the caller may use. An Agent is offered these:
 | `issues_create`                           | Open a record in the tracker, such as a sub-issue.                          |
 | `comments_create`                         | Comment on the record, in the tracker it lives in.                          |
 | `docs_get`                                | Read a page of the Project's documents as markdown.                         |
-| `projects_get`                            | One Project: where its records come from and where its code is.             |
+| `projects_get`                            | One Project: where its records come from and who works them.                |
 | `gates_request`                           | Ask the Humans to let the Run past a Checkpoint, with a Proposal.           |
 | `gates_get`                               | What has been ruled on a Gate.                                              |
-| `pulls_open`                              | Open the pull request for the Run's branch, and attach it to the record.    |
 | `links_add`, `links_list`, `links_remove` | Point a record at a pull request, a commit, a branch or any URL.            |
 
 There is no tool to rule on a Gate, and no tool that administers anything. See
@@ -127,8 +126,10 @@ A loop that works one record at a time looks like this:
    inbox; `gates_get` says which way it went and what the Human wrote. Over MCP, a client that declares
    it takes URL elicitations gets the Gate's page as one instead, an `input_required` answer to retry once
    the Human has ruled; any other client gets the same URL in a plain answer.
-6. **Deliver.** Push a branch, then `pulls_open` with the Run and a `summary`, which becomes the pull
-   request's title and body. deevy opens it through the Project's Socket and attaches it to the record.
+6. **Deliver.** Push a branch and open the pull request with the access you gave the coding agent, then
+   `links_add` with the record, the pull request's URL, `kind: "pull_request"` and the Run, so it is on the
+   record and attributed to the attempt. Saying `Closes <the record's URL>` in it closes a GitHub or GitLab
+   issue when it merges.
 7. **Finish.** `runs_finish` with `status: "completed"` or `"failed"` and a summary a Human can act on.
 
 A Run left `pending` or `active` with nothing said for half an hour is marked `stale`. If the loop cannot go
@@ -138,12 +139,11 @@ A worked version of this loop, written for a coding agent and ready to copy into
 [the `CLAUDE.md` snippet](https://github.com/WeAreNendo/deevy/blob/main/docs/agent-loop.md#the-claudemd-snippet)
 on GitHub.
 
-## Get the repository
+## Give it the repository
 
-For a Project with a repository, `POST /api/runs/<run id>/checkout` answers with what a Run clones: the clone
-URL, the base branch, the branch deevy named for the Run, and a username and token that work for a while,
-or nothing when the Project has no repository. It is deliberately not an MCP tool: call it from your own
-code and keep the token out of the model's context, where it would end up in a transcript.
+deevy holds no Run's code. Give the coding agent access to the repository yourself — a deploy key, a
+fine-grained token or an App of its own — scoped to what it works, and keep the credential out of the
+model's context, where it would end up in a transcript.
 
 ## Report what it spent
 
@@ -189,7 +189,7 @@ curl -H "Authorization: Bearer $DEEVY_AGENT_KEY" https://deevy.example.com/api/r
 ```
 
 The [API reference](/api/) lists every operation. An Agent may call the ones behind the tools above, and a
-few more that a loop wants rather than a model: `runs.checkout`, `inbox.markRead` to clear the
+few more that a loop wants rather than a model: `inbox.markRead` to clear the
 Notifications it has dealt with, `gates.list`, `projects.list` and `me.get`. Anything else answers that an
 Agent cannot do that. The [CLI](/mcp-and-cli/cli/) acts as
 an Agent too when `DEEVY_API_KEY` holds its key.

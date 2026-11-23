@@ -36,9 +36,6 @@ const runKinds: ReadonlySet<string> = new Set<EventKind>([
   "run.started",
   "run.completed",
   "run.failed",
-  // A pull request, where the tracker cannot see one for itself: see
-  // `deriveSocketMirrors` for which trackers those are.
-  "issue.link_added",
 ]);
 
 /**
@@ -71,22 +68,11 @@ export async function deriveSocketMirrors(db: Db, event: Event): Promise<string[
   // telling the record's tracker too would say it to everybody else
   // (sockets/chat.ts).
   if (event.kind === "gate.ruling_refused" && payloadVia(event) === "slack") return [];
-  // Evidence is said only when it is a pull request: the rest of what an Agent
-  // links is already on the Run, and a comment per link would be noise.
-  if (event.kind === "issue.link_added" && payloadText(event, "kind") !== "pull_request") return [];
-
   const project = await db.query.project.findFirst({
     where: { id: event.projectId },
-    columns: { mirror: true, trackerSocketId: true, forgeSocketId: true },
+    columns: { mirror: true, trackerSocketId: true },
   });
   if (!project || !mirrorsKind(event.kind, project.mirror)) return [];
-  // A tracker that is also where the code is shows the pull request on the
-  // record already — GitHub does, from the `Closes` line deevy writes into
-  // its body — so saying so again would be the same thing twice. Linear and
-  // Notion know nothing about a repository they are not.
-  if (event.kind === "issue.link_added" && project.forgeSocketId === project.trackerSocketId) {
-    return [];
-  }
 
   const [row] = await db
     .insert(deliveryTable)
@@ -277,19 +263,6 @@ export function mirrorFor(
     return {
       comment: paragraphs(`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "— deevy"),
       // Nothing changed, so nothing about the record's labels does either.
-      labels: { add: [], remove: [] },
-    };
-  }
-
-  if (event.kind === "issue.link_added") {
-    const url = text("url");
-    if (!url) return null;
-    const title = text("title");
-    return {
-      comment: paragraphs(
-        `Opened a pull request: ${title ? `[${title}](${url})` : url}`,
-        signature(subject),
-      ),
       labels: { add: [], remove: [] },
     };
   }

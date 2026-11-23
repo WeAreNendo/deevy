@@ -14,6 +14,7 @@ import {
 } from "@deevy/db";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
+import { socketCapabilities } from "./sockets/port.ts";
 
 export const WorkspaceSchema = createSelectSchema(workspace);
 export const MemberSchema = createSelectSchema(member);
@@ -66,7 +67,7 @@ export const SocketSchema = createSelectSchema(socket)
   })
   .extend({
     identity: z.object({ login: z.string(), id: z.string(), mentionHandle: z.string() }),
-    capabilities: z.array(z.enum(["tracker", "forge", "docs", "chat"])),
+    capabilities: z.array(z.enum(socketCapabilities)),
     /**
      * Whether each sealed column holds something. A settings page has to be
      * able to say "this tool has a webhook secret" without being told what it
@@ -80,15 +81,18 @@ export const SocketSchema = createSelectSchema(socket)
 /** One delivery, as a settings page lists what a tool has said lately. */
 export const InboundDeliverySchema = createSelectSchema(inboundDelivery);
 
-export const ProjectSchema = createSelectSchema(project).extend({
-  /**
-   * How a record says which Agent it is for. Declared rather than left as
-   * loose JSON, because every reader of a Project asks for these two fields
-   * and a screen should not have to narrow a column deevy itself wrote
-   * (schema/project.ts).
-   */
-  routing: z.object({ labelPrefix: z.string(), mention: z.boolean() }),
-});
+export const ProjectSchema = createSelectSchema(project)
+  // Columns left behind until the clean break (schema/project.ts): not part of a Project.
+  .omit({ forgeSocketId: true, forgeScope: true })
+  .extend({
+    /**
+     * How a record says which Agent it is for. Declared rather than left as
+     * loose JSON, because every reader of a Project asks for these two fields
+     * and a screen should not have to narrow a column deevy itself wrote
+     * (schema/project.ts).
+     */
+    routing: z.object({ labelPrefix: z.string(), mention: z.boolean() }),
+  });
 
 export const IssueSchema = createSelectSchema(issue);
 

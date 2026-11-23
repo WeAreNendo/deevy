@@ -47,7 +47,7 @@ export const sealingSecret = "acceptance-sealing-acceptance-sealing-32";
 
 export interface StartOptions {
   /**
-   * What the stubbed tracker holds: `name[=cloneUrl]`, separated by commas.
+   * What the stubbed tracker holds: container names, separated by commas.
    * A store lives inside the deevy process, so this is the only way a walk
    * outside it can say what the tracker contains (packages/sockets/src/stub).
    */
