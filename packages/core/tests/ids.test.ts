@@ -81,6 +81,7 @@ describe("the rows deevy creates", () => {
     // where this one comes from (ADR-0024).
     const row = (await db.query.socket.findFirst({ where: { id: socket.id } })) as Socket;
     await applyInbound({
+      vouches: true,
       db,
       workspace: alice.workspace,
       socket: row,

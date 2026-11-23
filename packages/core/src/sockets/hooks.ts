@@ -179,6 +179,7 @@ async function applyDelivery(
       tracker,
       ...(options.jobs ? { jobs: options.jobs } : {}),
       ...(module.identityScope ? { identityScope: module.identityScope } : {}),
+      vouches: module.vouches !== false,
       now: options.now,
     });
     return {

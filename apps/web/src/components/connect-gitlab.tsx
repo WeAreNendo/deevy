@@ -129,8 +129,8 @@ export function ConnectGitlab({ onConnected }: { onConnected: () => void }) {
         />
         <FieldDescription>
           A personal, project or group access token with the <code>api</code> scope, for the user
-          deevy should comment, push and open merge requests as. Give that user Developer on the
-          projects it works. deevy seals the token and never shows it again.
+          deevy comments as when a Gate waits and when it is ruled on. Give that user Reporter on
+          the projects it works, and nothing more. deevy seals the token and never shows it again.
         </FieldDescription>
       </Field>
       {connect.error ? <p className="text-sm text-destructive">{connect.error.message}</p> : null}

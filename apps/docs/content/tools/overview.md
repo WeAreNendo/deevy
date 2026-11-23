@@ -1,6 +1,6 @@
 ---
 title: Connecting your tools
-description: Connect GitHub, Linear, GitLab, Notion or Slack to deevy as a Socket, bind a Project to what is in it, and see what deevy says back.
+description: Connect GitHub, Linear, GitLab, Notion, Slack or any other tool to deevy as a Socket, bind a Project to what is in it, and see what deevy says back.
 sidebar:
   order: 1
 ---
@@ -15,16 +15,21 @@ or a Linear team, and that is where deevy takes records from and hands them to A
 
 ## Which tools
 
-| Tool                     | What deevy uses it for                                     | What you set up there                                    |
-| ------------------------ | ---------------------------------------------------------- | -------------------------------------------------------- |
-| [GitHub](/tools/github/) | A repository's issues as records                           | A GitHub App, which deevy writes for you                 |
-| [Linear](/tools/linear/) | Issues in a team as records                                | An OAuth application of your own                         |
-| [GitLab](/tools/gitlab/) | A project's issues as records                              | An access token for the account deevy acts as, a webhook |
-| [Notion](/tools/notion/) | A database's rows as records                               | An internal connection, and a webhook subscription       |
-| [Slack](/tools/slack/)   | Gates in a channel or a direct message, ruled with buttons | An app made from deevy's manifest                        |
+| Tool                              | What deevy uses it for                                     | What you set up there                                    |
+| --------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------- |
+| [GitHub](/tools/github/)          | A repository's issues as records                           | A GitHub App, which deevy writes for you                 |
+| [Linear](/tools/linear/)          | Issues in a team as records                                | An OAuth application of your own                         |
+| [GitLab](/tools/gitlab/)          | A project's issues as records                              | An access token for the account deevy acts as, a webhook |
+| [Notion](/tools/notion/)          | A database's rows as records                               | An internal connection, and a webhook subscription       |
+| [Slack](/tools/slack/)            | Gates in a channel or a direct message, ruled with buttons | An app made from deevy's manifest                        |
+| [Any other tool](/tools/generic/) | Whatever records your adapter sends                        | An adapter of yours that posts deevy's format, signed    |
 
-GitHub, Linear, GitLab and Notion hold records, so a Project can be bound to them. Slack holds none: it is
-where deevy asks a Human to rule, and you route Notifications to it as a Channel.
+GitHub, Linear, GitLab, Notion and any other tool hold records, so a Project can be bound to them. Slack
+holds none: it is where deevy asks a Human to rule, and you route Notifications to it as a Channel.
+
+**Preview** beside a tool, in Settings and in this section, means deevy is built and tested against that
+tool's recorded deliveries, and has not yet been tried against the tool itself. It works the same; it is
+newer.
 
 ## Connect one
 
@@ -32,7 +37,7 @@ Connecting a tool is an admin's job, because it is where a credential enters dee
 
 1. Go to **Settings › Sockets**.
 2. Under **Connect a tool**, choose **Connect GitHub**, **Connect Linear**, **Connect GitLab**,
-   **Connect Notion** or **Connect Slack**.
+   **Connect Notion**, **Connect Slack** or **Connect another tool**.
 3. Follow the dialog. Each tool's page in this section walks through it step by step.
 
 Before deevy keeps a credential, it uses it to ask the tool who deevy is there. A credential that cannot
@@ -94,7 +99,8 @@ in the tool, and deevy follows.
 
 ## What deevy writes back
 
-deevy writes on a record about its Gates and nothing else, for every Project, with no setting to change it:
+deevy writes on a record about its Gates and nothing else, for every Project bound to a tool deevy knows,
+with no setting to change it:
 
 - a comment when an Agent asks at a Gate, with its Proposal, its links and how to rule: reply `/approve` or
   `/reject <why>`, or open it in deevy;
@@ -102,7 +108,9 @@ deevy writes on a record about its Gates and nothing else, for every Project, wi
   approved or rejected;
 - a reply when a comment in the tool ruled nothing, saying why.
 
-Nothing is written about a Run starting, working or finishing, and deevy sets no label.
+Nothing is written about a Run starting, working or finishing, and deevy sets no label. In
+[any other tool](/tools/generic/) deevy writes nothing at all: what it would say goes out as Events on your
+webhooks, each naming the record, for your adapter to say there.
 
 ## What an Agent does in the tool
 
@@ -141,7 +149,8 @@ Choose a Socket under **Settings › Sockets** to see how it is doing:
   secret** makes one instead and shows it once, for you to paste into the tool. Either way deevy keeps
   accepting the old one for a day, so you can change the two in either order. Slack and Linear make their
   own, so deevy mints none for them, and a Notion Socket has no such section: Notion signs with the token
-  under **Verifying the webhook**.
+  under **Verifying the webhook**. Any other tool has only **Mint a webhook secret**, since deevy is the
+  only one that makes its secret.
 - **What it has said lately** lists each delivery and what deevy made of it.
 - **Disconnect** is at the bottom.
 

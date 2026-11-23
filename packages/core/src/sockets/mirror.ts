@@ -207,7 +207,13 @@ export function mirrorFor(
         ? `This account isn't linked to anybody in deevy yet: link it at ${origin}/settings/identities, then say it again.`
         : text("reason") === "nothing_waiting"
           ? "Nothing on this record is waiting on a ruling."
-          : text("message") || "deevy would not take it.";
+          : text("reason") === "unvouched"
+            ? // Said for a tool that takes deevy's comments at all; the generic
+              // Socket takes none, and its adapter hears the Event instead.
+              [text("message"), url ? `Rule on it in deevy: ${url}` : ""]
+                .filter((part) => part !== "")
+                .join(" ")
+            : text("message") || "deevy would not take it.";
     return paragraphs(`${who ? `@${who}, that` : "That"} ruled nothing. ${why}`, "— deevy");
   }
 

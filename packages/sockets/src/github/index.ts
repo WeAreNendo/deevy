@@ -372,6 +372,8 @@ export function createGithubSocket({
     // The manifest conversion hands GitHub's own back, and the App's settings
     // take any typed in, so deevy may mint one too.
     webhookSecretFrom: "either",
+    // Walked against github.com itself (docs/plans/sockets.md, "What it found").
+    walked: true,
     identityScope,
     // The manifest is a form the browser posts from deevy's page, whose policy
     // lets a form go only to github.com (packages/core/src/headers.ts): posted

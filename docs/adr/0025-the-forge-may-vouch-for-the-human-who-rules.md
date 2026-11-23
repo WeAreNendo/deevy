@@ -98,3 +98,10 @@ acknowledged within three seconds on a cold Worker, so the handler writes the de
 everything Slack-facing after that is the outbox. Signing secrets rotate, and the previous one is accepted
 for a day. And one more table, one more page, and one more sentence in the operator's guide about who can
 hold your account.
+
+## A tool may vouch for nobody (2026-11-01)
+
+Amended by [docs/plans/simplify.md](../plans/simplify.md), slice 7. A module may say `vouches: false`, as the
+generic Socket does ([ADR-0024](./0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)), whose
+deliveries are written by whoever holds its secret. A Ruling through it is refused before any Identity or
+verified address is looked up, so neither an account id nor an address it carries can make one count.

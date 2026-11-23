@@ -5,11 +5,21 @@ import { member, workspace } from "./workspace.ts";
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
 /**
- * The tools deevy can be connected to. `stub` is not a tool: it is the
- * in-process provider the tests and the seed play, so every rule about inbound,
- * routing and mirroring is proved without a network (docs/plans/sockets.md).
+ * The tools deevy can be connected to. `generic` is any tool at all, through
+ * an adapter that sends deevy's own format (docs/plans/simplify.md, slice 7).
+ * `stub` is not a tool: it is the in-process provider the tests and the seed
+ * play, so every rule about inbound, routing and mirroring is proved without a
+ * network (docs/plans/sockets.md).
  */
-export const socketProviders = ["github", "linear", "gitlab", "notion", "slack", "stub"] as const;
+export const socketProviders = [
+  "github",
+  "linear",
+  "gitlab",
+  "notion",
+  "slack",
+  "generic",
+  "stub",
+] as const;
 
 /**
  * What a Socket can be asked for. A provider module implements whichever it

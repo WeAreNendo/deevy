@@ -11,6 +11,7 @@ const names: Record<string, string> = {
   gitlab: "GitLab",
   notion: "Notion",
   slack: "Slack",
+  generic: "Generic",
   stub: "the stub tracker",
 };
 

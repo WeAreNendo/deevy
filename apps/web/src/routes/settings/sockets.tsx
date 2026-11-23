@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Cable, ChevronRight } from "lucide-react";
+import { ConnectGeneric } from "@/components/connect-generic";
 import { ConnectGithub } from "@/components/connect-github";
 import { ConnectGitlab } from "@/components/connect-gitlab";
 import { ConnectLinear } from "@/components/connect-linear";
@@ -57,7 +58,14 @@ export function SocketsPage() {
   const [connecting, setConnecting] = useState<string | null>(null);
 
   const rows = sockets.data?.sockets ?? [];
-  const offered = (providers.data?.providers ?? []).filter((provider) => provider.id !== "stub");
+  // Any other tool comes last, after the tools deevy knows by name.
+  const offered = (providers.data?.providers ?? [])
+    .filter((provider) => provider.id !== "stub")
+    .sort((a, b) => Number(a.id === "generic") - Number(b.id === "generic"));
+  // A tool nobody has walked yet is a Preview, wherever it is named here.
+  const preview = new Set(
+    (providers.data?.providers ?? []).filter((one) => !one.walked).map((one) => one.id),
+  );
 
   return (
     <SettingsPage title="Sockets" description="The tools deevy is connected to, and works through.">
@@ -87,6 +95,9 @@ export function SocketsPage() {
                     className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent"
                   >
                     <Badge variant="outline">{providerLabel(socket.provider)}</Badge>
+                    {preview.has(socket.provider) ? (
+                      <Badge variant="secondary">Preview</Badge>
+                    ) : null}
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate text-sm font-medium">{socket.name}</span>
                       <span className="text-xs text-muted-foreground">
@@ -106,7 +117,15 @@ export function SocketsPage() {
         </SettingsSection>
       )}
 
-      <SettingsSection aria-label="Connect a tool" title="Connect a tool">
+      <SettingsSection
+        aria-label="Connect a tool"
+        title="Connect a tool"
+        description={
+          offered.some((provider) => preview.has(provider.id))
+            ? "Preview means deevy is built and tested against that tool's recorded deliveries, and has not yet been tried against the tool itself."
+            : undefined
+        }
+      >
         <div role="group" aria-label="Connect a tool" className="flex flex-wrap gap-2">
           {/* Only once the server has said: while the list is on its way, "no
               tools" is a claim about a deevy built with five. */}
@@ -115,11 +134,26 @@ export function SocketsPage() {
               This deevy was built with no tools it can connect.
             </p>
           ) : null}
-          {offered.map((provider) => (
-            <Button key={provider.id} variant="outline" onClick={() => setConnecting(provider.id)}>
-              Connect {provider.label}
-            </Button>
-          ))}
+          {offered.map((provider) => {
+            // The label is the button's description, not its name: the name
+            // is what a screen reader and a test find it by.
+            const described = preview.has(provider.id) ? `preview-${provider.id}` : undefined;
+            return (
+              <Button
+                key={provider.id}
+                variant="outline"
+                aria-describedby={described}
+                onClick={() => setConnecting(provider.id)}
+              >
+                {provider.id === "generic" ? "Connect another tool" : `Connect ${provider.label}`}
+                {described ? (
+                  <Badge id={described} variant="secondary" aria-hidden>
+                    Preview
+                  </Badge>
+                ) : null}
+              </Button>
+            );
+          })}
         </div>
       </SettingsSection>
 
@@ -128,12 +162,25 @@ export function SocketsPage() {
             addresses and three secrets, which is taller than a laptop screen. */}
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Connect {providerLabel(connecting ?? undefined)}</DialogTitle>
+            <DialogTitle>
+              {connecting === "generic"
+                ? "Connect another tool"
+                : `Connect ${providerLabel(connecting ?? undefined)}`}
+            </DialogTitle>
             <DialogDescription>
-              deevy holds one identity in each tool, and every Agent works through it.
+              {connecting === "generic"
+                ? "Any tool deevy has no Socket for, through an adapter you write that tells deevy what happens there."
+                : "deevy holds one identity in each tool, and every Agent works through it."}
             </DialogDescription>
           </DialogHeader>
-          {connecting === "github" ? (
+          {connecting === "generic" ? (
+            <ConnectGeneric
+              onConnected={() => {
+                setConnecting(null);
+                void client.invalidateQueries({ queryKey: orpc.sockets.key() });
+              }}
+            />
+          ) : connecting === "github" ? (
             <ConnectGithub
               onConnected={() => {
                 setConnecting(null);

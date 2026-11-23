@@ -37,7 +37,9 @@ export function WorkItemPage({ issueId }: { issueId: string }) {
 
   const record = issue.data;
   const asked = gates.data?.gates ?? [];
-  const where = providerLabel(record.project?.trackerScopeKey?.split(":")[0]);
+  const provider = record.project?.trackerScopeKey?.split(":")[0];
+  // Any other tool has no name of its own here, only the one its Socket was given.
+  const where = provider === "generic" ? "its own tool" : providerLabel(provider);
 
   return (
     <div className="@container flex flex-1 flex-col gap-6">
