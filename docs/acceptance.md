@@ -50,7 +50,7 @@ comments there. It is mounted only where the stub is, which the Docker image and
 ## What is real, and what is scripted
 
 **deevy is real**: the Human's surface, the hooks, `/mcp` and `/api` as an Agent's key reaches them, the
-Gates and their Checkpoints, the Rulings from the tracker, and what deevy says back there.
+Gates and their Checkpoints, the Rulings made in deevy, and what deevy says on the record.
 
 **Whatever runs the Agent is scripted.** deevy runs no Agent and manages no access
 ([simplify.md](./plans/simplify.md)), so the scripted Agent does exactly what any harness does: it finds its
@@ -142,7 +142,7 @@ supervisor gone, four kinds of Event left it, each one appended by deevy for a c
 made: `run.checkout_issued` (its checkout), `run.pull_request_opened` (it opened the pull request through
 deevy), `run.usage_reported` (it reported each session's spend) and a `comment.created` (it commented on the
 record when it delivered), along with the Activity it wrote for each ref a session moved. Slice 2 then
-removed the checkout and `pulls.open` themselves, and slice 3 removed Usage. And the old walk proved one thing
+removed the checkout and the call that opened a pull request themselves, and slice 3 removed Usage. And the old walk proved one thing
 about deevy only in passing: that a Ruling puts its Run back to `active`, because the supervisor resumed
 nothing else. The new walk checks it after each Ruling.
 
@@ -155,10 +155,10 @@ Rewriting it around a Socket found five things, and each was a defect rather tha
 - **And it was said twice.** `run.awaiting_input` was appended whenever an Activity left a Run waiting,
   including one that was already waiting, so a Human got a second Notification about one question.
 - **Two pull requests for one attempt.** The instructions tell the Agent to open it and the supervisor opens
-  one for any branch a session pushed and left. `pulls.open` answered with the one the Run already had, until
-  slice 2 removed it.
+  one for any branch a session pushed and left. deevy's pull-request call answered with the one the Run
+  already had, until slice 2 removed it.
 - **A Project with no repository cost a 404 a pass.** The supervisor asks for a checkout on every Run it
-  takes up, and a Project bound to a tracker and nothing else is ordinary; `runs.checkout` answered null
+  takes up, and a Project bound to a tracker and nothing else is ordinary; the checkout answered null
   rather than refusing, so nothing lands in an operator's log on nothing going wrong.
 - **The stub handed deliveries back without their clocks.** `normalize` reads a parsed body and answers
   deevy's own types, two of which are Dates; a string reached `getTime` on the first record deevy was told

@@ -1,12 +1,14 @@
 name: Prose
 
 # What a change to Markdown is checked for, since CI (ci.yml) does not run for
-# Markdown alone: that every file is formatted, and that the docs site still
+# Markdown alone: that every file is formatted, that the docs site still
 # builds from its pages, every link landing, and passes its own tests
 # (apps/docs/tests: frontmatter, and no environment variable on a page for a
-# deevy Cloud team). One job, about half a minute, where the full CI is a dozen
-# runner-minutes. A pull request that also changes code runs CI as well,
-# which checks the same among the rest.
+# deevy Cloud team), and that the repository's own tests in tools/release
+# pass, since they read the record (the-record.test.ts: no page names what
+# deevy removed) and OPERATIONS.md. One job, about half a minute, where the
+# full CI is a dozen runner-minutes. A pull request that also changes code runs
+# CI as well, which checks the same among the rest.
 on:
   pull_request:
     paths:
@@ -48,3 +50,6 @@ jobs:
 
       - name: The docs site's own tests
         run: vp run -F docs test
+
+      - name: The repository's own tests, which read the record
+        run: vp run -F release test

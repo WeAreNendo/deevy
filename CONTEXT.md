@@ -1,11 +1,12 @@
 # deevy
 
-Project management where humans and agents collaborate as peers on the same work, in the tools the team
-already uses. This glossary defines the terms used across the product, the API, and the code.
+The glue between a team's tools and its Agents: Humans and Agents work as peers on the records the team
+already keeps in its tracker, and deevy routes them, records the Runs, and holds the Gates only a Human may
+rule on. This glossary defines the terms used across the product, the API, and the code.
 
-The Sockets plan (`docs/plans/sockets.md`, ADR-0024) redefined several of these on 2026-09-19. Until its
-first slice lands, the code still carries the retired words listed at the end; a new line of code uses the
-words here.
+The Sockets milestone (`docs/plans/sockets.md`, ADR-0024) redefined several of these in September 2026, and
+making deevy simpler (`docs/plans/simplify.md`) settled them in November. The words it retired are listed at
+the end; the code and new writing use the words here.
 
 ## Language
 
@@ -116,7 +117,7 @@ A message to an Agent derived from Events, in its inbox: the record it was assig
 it, a Ruling on the Gate it stopped at. A Human is sent none: what waits on a Human is the Gates they may
 rule on, listed on Needs me and posted, one message each, in the chat channel the Project binds; the tracker
 tells them the rest.
-_Avoid_: alert, ping, message; Channel and Sender (deevy delivers to no Channel and sends no email)
+_Avoid_: alert, ping, message
 
 ### Record
 
@@ -149,6 +150,12 @@ code and new writing do not.
 - **Key** as `DEV-42` — deevy's own numbering. An Issue's key is the tracker's.
 - **Usage** — the tokens and cost a Run's client reported. deevy says how long a Run worked and waited,
   which it saw itself.
+- **Channel** — a place outside deevy a Workspace's Events went out to: a Slack room, an incoming
+  webhook or a team's address, with routing rules saying which kinds went where. A Project now binds one
+  chat channel, told hello when it is bound and then only of the Project's Gates, and Events go out to a
+  webhook subscription.
+- **Sender** — the email provider a Workspace sent through. deevy sends no email: an invitation is a link
+  an admin copies, and what waits on a Human is on Needs me and in the chat channel.
 - **Identity** — a Human's account on a tool, linked to their Member so that a Ruling made there was
   theirs. A Ruling is made in deevy (ADR-0036), so a Human is who they sign in as, and their accounts on
   the tools mean nothing to deevy. A Socket's own account in a tool is still its identity there.

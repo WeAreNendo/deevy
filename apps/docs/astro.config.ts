@@ -24,10 +24,11 @@ export default defineConfig({
   site: "https://docs.deevy.dev",
   // Pages that went away, sent where their readers should go now. The runtime's
   // page was linked from earlier release notes and the landing's old prompt;
-  // the inbox, Channels and email went when deevy stopped telling Humans
+  // the inbox, the team deliveries and email went when deevy stopped telling Humans
   // anything but a Gate (docs/plans/simplify.md, slice 8), a Human's own
-  // MCP client when only Agents spoke MCP (slice 9), and ruling from a tool
-  // when every Ruling came to be made in deevy (slice 10).
+  // MCP client when only Agents spoke MCP (slice 9), ruling from a tool when
+  // every Ruling came to be made in deevy (slice 10), and the Worker on D1 when
+  // the image and the hosted Worker became the two deployments (slice 11).
   redirects: {
     "/agents/reference-runtime/": "/agents/your-own-harness/",
     "/mcp-and-cli/your-own-mcp-client/": "/agents/your-own-harness/",

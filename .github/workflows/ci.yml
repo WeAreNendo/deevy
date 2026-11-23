@@ -1,12 +1,12 @@
 name: CI
 
-# Not for a change that is only prose. Markdown builds nothing and no suite
-# reads it, so a pull request (or a push to main) that touches nothing else runs
-# none of the jobs below: about a dozen runner-minutes saved each time. The
-# exceptions are the Markdown something does read: docs/OPERATIONS.md, which
-# tests in apps/server and tools/release check against the code, and Markdown
-# under a package's src/, which a build may ship. prose.yml checks a Markdown
-# change instead, formatting and the docs site's build and tests, in one job.
+# Not for a change that is only prose. Markdown builds nothing, so a pull
+# request (or a push to main) that touches nothing else runs none of the jobs
+# below: about a dozen runner-minutes saved each time. The exceptions are
+# docs/OPERATIONS.md, which tests in apps/server and tools/release check against
+# the code, and Markdown under a package's src/, which a build may ship.
+# prose.yml checks a Markdown change instead, in one job: formatting, the docs
+# site's build and tests, and tools/release's tests, which read the record.
 # Order matters in `paths`: a later pattern wins, so the exceptions come after
 # the exclusions; the list is written once and named.
 #

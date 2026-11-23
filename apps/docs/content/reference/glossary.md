@@ -47,7 +47,10 @@ with it, while its approvals still meet the Checkpoint. See
 
 ### Human
 
-A Member who is a person. See [Humans, Agents and Sponsors](/concepts/humans-and-agents/#humans).
+A Member who is a person, and who they sign in as: their GitHub, Google or Microsoft account, or your
+organization's single sign-on, and the verified address it carries. Two sign-ins on the same verified address
+are one Human. Their accounts on the tools a Socket connects mean nothing to deevy: nothing they write there
+rules on a Gate. See [Humans, Agents and Sponsors](/concepts/humans-and-agents/#humans).
 
 ### Id
 
@@ -57,13 +60,6 @@ Socket, `gate_…` a Gate, `chk_…` a Checkpoint. An Issue's **key**, such as
 `acme/deevy#42` or `ENG-12`, is the tracker's handle for it, and its **URL** is where it really lives;
 neither is its id. An Event's **seq** is a number: its place in the log. See
 [Issues](/concepts/issues/#keys-urls-and-ids).
-
-### Identity
-
-Who a Human is in deevy: the sign-in they come in with, such as their GitHub or Google account, and the
-verified address it carries. Two sign-ins on the same verified address are one Human. A Human's accounts on
-the tools a Socket connects are not Identities: nothing they write there rules on a Gate. See
-[Humans, Agents and Sponsors](/concepts/humans-and-agents/#your-accounts-on-your-tools).
 
 ### Issue
 
@@ -84,8 +80,8 @@ it, the Ruling on a Gate it asked at. A Human has none: what waits on a Human is
 
 ### Project
 
-A scope of work bound to a Socket: where its Issues live, which Agents may work it, its Default Agent and
-routing label, and its Checkpoints. See [Sockets and Projects](/concepts/sockets-and-projects/#projects).
+A scope of work bound to a Socket's container: where its Issues live, which Agents may work it, its Default
+Agent and routing label, its Checkpoints, and the chat channel its Gates are posted in, if any. See [Sockets and Projects](/concepts/sockets-and-projects/#projects).
 
 ### Proposal
 
@@ -108,8 +104,10 @@ the Member whose action started it. See [Runs and Checkpoints](/concepts/runs/).
 ### Socket
 
 One connected tool under one identity of deevy's own there: a GitHub App, a Linear application, a GitLab
-account, a Notion connection, a Slack app. A Socket listens and announces: it takes what the tool delivers,
-and says on a record when a Gate is waiting and how it was ruled. It holds records or chat, and the
+account, a Notion connection, a Slack app, or a [generic Socket](/tools/generic/) that any other tool reaches
+through an adapter of yours. A Socket listens and announces: it takes what the tool delivers, and says on the
+record, or in the Project's chat channel, when a Gate is waiting and how it was ruled. A generic Socket's
+adapter says that for it, from deevy's Events. It holds records or chat, and the
 credential deevy uses to act there. See [Sockets and Projects](/concepts/sockets-and-projects/#sockets).
 
 ### Sponsor
@@ -124,7 +122,7 @@ tracker's own parent field. See [Issues](/concepts/issues/#sub-issues).
 
 ### Working time and waiting time
 
-How long a Run was active, and how long it waited on a Human at a Gate or for an answer. With the time before
+How long a Run was active, and how long it waited on a Human at a Gate. With the time before
 it started, they make up the whole of a Run's life, and deevy works them out rather than being told. See
 [Runs and Checkpoints](/concepts/runs/#time).
 

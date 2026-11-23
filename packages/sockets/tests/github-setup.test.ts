@@ -107,19 +107,17 @@ describe("the App an operator just made", () => {
     expect(asked).toEqual([
       { method: "POST", url: "https://api.github.com/app-manifests/abc123/conversions" },
     ]);
-    // The App's id and slug are configuration; the key and the client secret
-    // are credentials and are sealed by the route (secrets.ts).
+    // The App's id and slug are configuration; the key is its one credential,
+    // sealed by the route (secrets.ts).
     expect(result.config).toMatchObject({
       appId: "1284461",
       slug: "deevy-acme",
       // Where the App lives on GitHub, for the Socket's page to link to.
       htmlUrl: "https://github.com/apps/deevy-acme",
     });
-    expect(result.credentials).toMatchObject({
-      privateKey,
-      clientId: "Iv1.9f8e7d6c5b4a",
-      clientSecret: "0123456789abcdef0123456789abcdef01234567",
-    });
+    // Only the key: the App's client pair is for signing in through it, which
+    // deevy never does (ADR-0036), so its secret is not kept.
+    expect(result.credentials).toEqual({ privateKey });
     expect(result.webhookSecret).toBe("whsec_github_made_this_one");
     // Who deevy is there, settled without a second call: the App's own bot.
     expect(result.identity).toEqual({

@@ -219,8 +219,9 @@ export async function recordOutcomes(
 }
 
 /**
- * Retires deliveries that can never be sent — the Channel or the subscription
- * they were owed to is gone — rather than retrying them to no purpose.
+ * Retires deliveries that can never be sent — the subscription, the Socket or
+ * the chat binding they were owed to is gone — rather than retrying them to no
+ * purpose.
  */
 export async function retireDeliveries(db: Db, ids: string[], reason: string, maxAttempts: number) {
   if (ids.length === 0) return;

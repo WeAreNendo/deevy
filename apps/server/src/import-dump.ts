@@ -288,9 +288,9 @@ async function openEverySealed(
       sealed.push({ what: `the ${row.name} Socket's webhook secret`, value: row.webhook_secret });
     }
   }
-  // An email sender's credentials and an invitation's sealed link were sealed
-  // too, until deevy stopped sending email (docs/plans/simplify.md, slice 8):
-  // nothing reads them now, so whether they open is nobody's concern.
+  // Nothing else in a dump is sealed: the email senders' credentials and the
+  // invitations' sealed links went with 0.12 (docs/plans/simplify.md, slices
+  // 8 and 12), and a dump from before it is refused above.
   const failed: string[] = [];
   for (const { what, value } of sealed) {
     try {
