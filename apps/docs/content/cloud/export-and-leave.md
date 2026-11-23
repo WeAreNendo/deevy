@@ -44,9 +44,8 @@ The file is your Workspace and the keys to it. Keep it as safe as a password.
 
 ## Take it home
 
-A deevy you host yourself, on the Docker image or a Cloudflare Worker of your own, imports the file's
-dump and runs with its two secrets. [Bringing a Workspace from deevy Cloud](/self-hosting/from-deevy-cloud/)
-walks through it.
+A deevy you host yourself imports the file's dump and runs with its two secrets.
+[Bringing a Workspace from deevy Cloud](/self-hosting/from-deevy-cloud/) walks through it.
 
 Your Workspace then has a new address, which deevy can't announce to the rest of the world for you. So
 after the import you point everything at it:

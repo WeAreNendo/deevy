@@ -1,4 +1,4 @@
-import { isAppPath, underBase } from "@deevy/adapters/workers";
+import { isAppPath, underBase } from "@deevy/adapters/spa";
 import { isSlug, RESERVED_SLUGS } from "./directory.ts";
 
 /**

@@ -175,7 +175,6 @@ A delivery goes out as soon as its Event is written.
 :::
 
 :::note[Self-hosted]
-Deliveries go out on deevy's background pass: every `DEEVY_SWEEP_INTERVAL_SECONDS` (60 by default) for the
-Docker image, and every minute on a Cloudflare Worker, or at once where the Worker has a Queue. See
+Deliveries go out on deevy's background pass, every `DEEVY_SWEEP_INTERVAL_SECONDS` (60 by default). See
 [Configuration](/self-hosting/configuration/).
 :::

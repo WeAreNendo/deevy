@@ -60,8 +60,9 @@ export interface AppOptions {
   /**
    * What this runtime allows an Event stream: how often it polls, and how long
    * it may live. Omitted, a stream runs until the request is aborted, which is
-   * what a Node process wants; a Worker passes both, because each poll is one
-   * D1 query against a per-invocation cap (docs/plans/m3.md slice 7).
+   * what a Node process wants; a hosted Workspace passes both, so that a tab on
+   * the stream rather than its socket lets go of the object in time
+   * (apps/hosted/src/workspace.ts, ADR-0032).
    */
   live?: LiveOptions;
   /**
@@ -246,8 +247,8 @@ export function createApp({
   // Before everything else, and outside every middleware that builds a
   // session: the caller here is a tool with a signature over the raw body, and
   // a framework that read the body first would have changed what it signed
-  // (ADR-0024). `/hooks/*` is in the Worker's `run_worker_first` list, which
-  // `worker-routes.test.ts` holds.
+  // (ADR-0024). `/hooks/` is one of the paths a hosted Workspace hands the
+  // app, which `app-paths.test.ts` holds.
   routes.post("/hooks/:socketId", (c) =>
     handleInbound(c.req.raw, {
       db,
@@ -529,7 +530,7 @@ function refuseCrossSiteWrites(
       // Read and dropped before the refusal goes out: a request answered with
       // its body still unread left the connection it came on unusable under
       // workerd on Linux, and the next request on it was "Network connection
-      // lost" (apps/web/scripts/smoke-workers.ts).
+      // lost", which the Worker smoke of the time found.
       await options.request.resolveBody().catch(() => undefined);
       throw refused;
     }

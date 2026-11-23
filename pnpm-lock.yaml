@@ -223,9 +223,6 @@ catalogs:
     '@changesets/cli':
       specifier: ^3.0.2
       version: 3.0.2
-    '@cloudflare/vite-plugin':
-      specifier: 1.54.3
-      version: 1.54.3
     '@cloudflare/workers-types':
       specifier: 5.20260903.1
       version: 5.20260903.1
@@ -590,18 +587,12 @@ importers:
       '@base-ui/react':
         specifier: 'catalog:'
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@deevy/adapters':
-        specifier: workspace:*
-        version: link:../../packages/adapters
       '@deevy/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@deevy/design':
         specifier: workspace:*
         version: link:../../packages/design
-      '@deevy/sockets':
-        specifier: workspace:*
-        version: link:../../packages/sockets
       '@orpc/client':
         specifier: 'catalog:'
         version: 2.0.0-beta.32
@@ -663,12 +654,6 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@cloudflare/vite-plugin':
-        specifier: 'catalog:'
-        version: 1.54.3(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(wrangler@4.128.0(@cloudflare/workers-types@5.20260903.1))
-      '@cloudflare/workers-types':
-        specifier: 'catalog:'
-        version: 5.20260903.1
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.3(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
@@ -708,9 +693,6 @@ importers:
       vite-plus:
         specifier: 'catalog:'
         version: 0.3.0(@types/node@26.4.1)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.1)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.4.0))(typescript@7.0.2)(yaml@2.9.1)
-      wrangler:
-        specifier: 'catalog:'
-        version: 4.128.0(@cloudflare/workers-types@5.20260903.1)
 
   packages/adapters:
     dependencies:
@@ -727,9 +709,6 @@ importers:
         specifier: 'catalog:'
         version: 4.13.5
     devDependencies:
-      '@cloudflare/workers-types':
-        specifier: 'catalog:'
-        version: 5.20260903.1
       '@types/node':
         specifier: 'catalog:'
         version: 26.4.1
@@ -834,9 +813,6 @@ importers:
       vite-plus:
         specifier: 'catalog:'
         version: 0.3.0(@types/node@26.4.1)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.1)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.4.0))(typescript@7.0.2)(yaml@2.9.1)
-      wrangler:
-        specifier: 'catalog:'
-        version: 4.128.0(@cloudflare/workers-types@5.20260903.1)
 
   packages/design:
     dependencies:
@@ -1499,13 +1475,6 @@ packages:
     peerDependenciesMeta:
       workerd:
         optional: true
-
-  '@cloudflare/vite-plugin@1.54.3':
-    resolution: {integrity: sha512-L0+deDYHxnRSUjCSv9A8ryjH8auz86b+w3qLZ5gAvcyndxpwx5MHbLfDH/71Y1GPiTbsDjMhKGfK9xQu2jefQw==}
-    hasBin: true
-    peerDependencies:
-      vite: ^6.1.0 || ^7.0.0 || ^8.0.0
-      wrangler: ^4.128.0
 
   '@cloudflare/workerd-darwin-64@1.20260831.1':
     resolution: {integrity: sha512-oyZ8xhu+gYTvoxV/sn6NRmTHK95RhEO1Dk54/6oPb0Uu70w7ZeRoCjkJ5aNmfS8Vrkdu6+oL0HNg6EcC61uQ2Q==}
@@ -7677,19 +7646,6 @@ snapshots:
       unenv: 2.0.0-rc.24
     optionalDependencies:
       workerd: 1.20260831.1
-
-  '@cloudflare/vite-plugin@1.54.3(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(wrangler@4.128.0(@cloudflare/workers-types@5.20260903.1))':
-    dependencies:
-      '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260831.1)
-      miniflare: 5.20260831.0-alpha
-      unenv: 2.0.0-rc.24
-      vite: '@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
-      workerd: 1.20260831.1
-      wrangler: 4.128.0(@cloudflare/workers-types@5.20260903.1)
-      ws: 8.21.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   '@cloudflare/workerd-darwin-64@1.20260831.1':
     optional: true

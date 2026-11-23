@@ -1,7 +1,7 @@
 /**
  * Serving the SPA for a deployment that lives under a path, the same way on
- * every runtime (docs/plans/hosted.md). Web-standard, so the Node entry, the
- * Worker and the many-Workspaces Worker share it.
+ * every runtime (docs/plans/hosted.md). Web-standard, so the Node entry and the
+ * many-Workspaces Worker share it.
  *
  * The built index carries `<base href="/" />` and names its assets relative to
  * it (apps/web/vite.config.ts), so one build serves the root of a host as it
@@ -18,9 +18,9 @@ export function withBaseHref(html: string, base: string): string {
 }
 
 /**
- * What the app answers rather than the SPA, as paths under the base. The same
- * list as the Worker's `run_worker_first`, which `worker-routes.test.ts` holds
- * against the routes `createApp` mounts. `/.well-known/` mounts nothing since
+ * What the app answers rather than the SPA, as paths under the base, which
+ * packages/core/tests/app-paths.test.ts holds against the routes `createApp`
+ * mounts. `/.well-known/` mounts nothing since
  * deevy stopped being an OAuth server (ADR-0035), and stays here so that the
  * app answers it with a 404 rather than the SPA with a page.
  */

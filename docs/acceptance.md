@@ -1,9 +1,9 @@
 # Acceptance: a record in somebody else's tracker, worked end to end
 
 deevy is done with a change when a record a team keeps in their own tracker still becomes a Run, a Proposal,
-a ruling, a branch, a pull request and a finish — with an Agent holding nothing but its key, on the Node
-deployment, and then on a Cloudflare Worker and in a hosted Workspace built from the same commit, with
-nothing changing but the URL. That last part is the strongest evidence for
+a ruling, a branch, a pull request and a finish — with an Agent holding nothing but its key, in the image,
+and then in the image under a path and in a hosted Workspace built from the same commit, with nothing
+changing but the URL. That last part is the strongest evidence for
 [ADR-0006](./adr/0006-runtime-agnostic-core-node-first.md) anyone has produced: a client that cannot tell the
 deployments apart.
 
@@ -11,22 +11,22 @@ deployments apart.
 Cloudflare account, no GitHub OAuth App, no GitHub App, no tunnel and no repository on the internet:
 
 ```bash
-vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#build:hosted
+vp run -F '!@deevy/docs' build && vp run hosted#build:hosted
 vp run acceptance#walk
 ```
 
-A hundred and sixty-seven checks: forty-one against each of four deployments, and three comparing each Event
-log with Node's. The four are the image, the Worker, the image again under a path (`/deevy`), and a hosted
-Workspace at `/acme` behind the many-Workspaces Worker, provisioned through `Platform` and signed in through
-the relay at the root of the host (ADR-0028, ADR-0030). CI runs it after the Workers and hosted smokes,
-which leave both Workers built. The walk is `tools/acceptance`: `src/walk.ts` is the walk and `src/boot.ts`
-starts each deployment.
+A hundred and twenty-two checks: forty against each of three deployments, and two comparing the Event log
+each leaves with Node's. The three are the image, the image again under a path (`/deevy`), and a hosted Workspace at `/acme`
+behind the many-Workspaces Worker, provisioned through `Platform` and signed in through the relay at the root
+of the host (ADR-0028, ADR-0030): both shapes deevy runs in (ADR-0037). CI runs it after the hosted smoke,
+which leaves the hosted Worker built. The walk is `tools/acceptance`: `src/walk.ts` is the walk and
+`src/boot.ts` starts each deployment.
 
 ## Why it needs nothing outside this machine
 
 | What the walk needs                         | What it uses instead                                                                                               |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| A deployed Worker                           | `wrangler dev --local` — miniflare with a real local D1, no account                                                |
+| A deployed hosted Worker                    | `wrangler dev --local` — workerd with real Durable Objects, KV and assets, no account                              |
 | The Docker image                            | The packed Node bundle, on a port it picks                                                                         |
 | An OAuth App, so a Human can sign in        | `apps/web/scripts/stub-oauth.js`, prepended to whichever bundle is under test: the OAuth code is the email address |
 | A GitHub App, so deevy has a tracker        | The Socket provider that is not a tool (`packages/sockets/src/stub`), registered by `DEEVY_DEV_STUB_SOCKETS=1`     |
@@ -34,7 +34,7 @@ starts each deployment.
 | A repository the Agent may push to          | A bare git repository in a temporary directory, and real `git`                                                     |
 | A model, and whatever runs it               | A scripted Agent — see below                                                                                       |
 
-Nothing is mocked on deevy's side. The Worker is the built Worker with its own bindings and asset routing;
+Nothing is mocked on deevy's side. The hosted Worker is the built Worker with its own bindings and router;
 the Node server is the bundle the Docker image runs; sign-in is Better Auth's real OAuth dance with only the
 far end replaced; the delivery goes through the real `/hooks` route, the real signature check and the real
 `applyInbound`; and everything the Agent does goes over `/mcp` and `/api` on a socket.

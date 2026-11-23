@@ -1,10 +1,10 @@
-// Generated from packages/db/drizzle by `vp run db#generate:d1`; edit packages/db/src/schema instead.
+// Generated from packages/db/drizzle by `vp run db#generate:durable`; edit packages/db/src/schema instead.
 //
 // A Durable Object cannot read files, so this is the form drizzle's durable-sqlite migrator takes:
 // each drizzle folder's name and its migration.sql, verbatim, in journal order, as
 // `migrate(db, { migrations })` from "drizzle-orm/durable-sqlite/migrator". It is reached only
 // through `@deevy/db/durable-migrations`, so nothing else bundles it. `vp run db#check:migrations`
-// fails when it is stale (packages/db/scripts/emit-d1-migrations.ts).
+// fails when it is stale (packages/db/scripts/emit-durable-migrations.ts).
 
 export const migrations: Record<string, string> = {
   "20260921073003_init":

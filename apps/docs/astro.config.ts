@@ -36,6 +36,7 @@ export default defineConfig({
     "/notifications/channels/": "/needs-me/",
     "/notifications/email/": "/needs-me/",
     "/self-hosting/email/": "/needs-me/",
+    "/self-hosting/cloudflare-workers/": "/self-hosting/overview/",
   },
   // The port the preview launcher hands over (.claude/launch.json), as the SPA's vite.config does.
   server: { port: Number(process.env.PORT) || 4321 },

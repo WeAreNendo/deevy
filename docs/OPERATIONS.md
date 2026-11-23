@@ -4,11 +4,11 @@ This is the internal, complete account of how deevy runs, which the code's comme
 deevy Cloud and people hosting deevy read [docs.deevy.dev](https://docs.deevy.dev) instead, written for
 them from the same facts (`apps/docs/content`); a change that alters what they see updates both.
 
-deevy is one container and one volume, or one Cloudflare Worker and one D1 database. Either serves one
-Workspace (CONTEXT.md), so there is nothing to partition: the first sign-in with `DEEVY_ADMIN_EMAIL` creates
-the Workspace and becomes its admin, and everyone else joins through the allowlist or an invitation. A third
-shape, the many-Workspaces Worker, serves many on one host, each in a database of its own; it is what hosted
-deevy runs.
+deevy runs in two shapes from one codebase ([ADR-0037](adr/0037-two-deployment-shapes.md)). The image is one
+container and one volume, and serves one Workspace (CONTEXT.md), so there is nothing to partition: the first
+sign-in with `DEEVY_ADMIN_EMAIL` creates the Workspace and becomes its admin, and everyone else joins through
+the allowlist or an invitation. The many-Workspaces Worker serves many on one host, each in a Durable Object
+of its own; it is what hosted deevy runs. There is no single-Workspace Worker on D1 (ADR-0037).
 
 ## Hosted deevy
 
@@ -38,8 +38,8 @@ about running deevy applies to a hosted Workspace too; what differs is this.
 - **What one Workspace may do in a day**, during the beta: 50 invitations. The next one in the same 24 hours
   is refused with when it can be made.
 - **Leaving.** The console exports your Workspace: its database as SQL and the two secrets it was sealed
-  and signed with. "Taking a hosted Workspace home" below loads it into the image or a Worker of your own,
-  and says what to point at the new address.
+  and signed with. "Taking a hosted Workspace home" below loads it into the image, and says what to point
+  at the new address.
 - **Deleting.** A Workspace you delete is suspended at once and removed after 30 days, during which you can
   bring it back; its final backup is kept 30 days more, then nothing is.
 
@@ -190,160 +190,9 @@ Nothing should be put back in `NPM_TOKEN` as a fallback. pnpm prefers a token wh
 a failed exchange as a warning, so a trusted publisher that has stopped working would look exactly like one
 that works. The rehearsal fails on that warning for the same reason.
 
-## The Worker
-
-The second deployment shape: the same codebase on Cloudflare, with D1 instead of the volume and a Cron
-Trigger instead of the timer (ADR-0006, ADR-0012). Everything below fits a free account except where it says
-otherwise, and none of it needs CI — there is no deploy-on-tag workflow for the Worker, because publishing one
-needs an account and the project keeps the deploy in a person's hands.
-
-**The deploy artifact is the build's output.** `vp run web#build:workers` emits two directories:
-`apps/web/dist/deevy` — the bundled Worker and `wrangler.json`, the committed `wrangler.jsonc` with the built
-entry and the built asset directory filled in — and `apps/web/dist/client`, the SPA those assets are. The
-committed `wrangler.jsonc` is a source, not a deploy artifact: it names `src/worker.ts` and an `assets` block
-with no `directory`, so wrangler refuses it on its own. The Cloudflare plugin writes
-`apps/web/.wrangler/deploy/config.json` pointing at the built file, which is how a bare `wrangler deploy` finds
-it, and `vp run web#check:workers` names that same file rather than trusting the note — a dry run of anything
-else is a typecheck of a configuration nobody ships.
-
-So: **build, then check, then deploy, in that order**, and a deploy that follows no build uploads the last
-build's bundle.
-
-### Deploying to a free account
-
-Run steps 3 onward from `apps/web`, so wrangler finds its own configuration.
-
-1. **Build and validate.** From the repository root:
-
-   ```bash
-   vp install
-   vp run web#build:workers
-   vp run web#check:workers
-   ```
-
-   The check ends with `--dry-run: exiting now.` and the bindings it found — `env.DB (deevy)`, a D1 Database.
-   A failure here is a configuration that would have failed on upload.
-
-2. **Sign in to Cloudflare.** `wrangler login` opens a browser and ends with `Successfully logged in.`
-   `wrangler whoami` names the account everything below lands in.
-
-3. **Deploy once**, which provisions the database and tells you the origin. `wrangler deploy` finds a
-   `d1_databases` entry with a name and no id, says so, and creates it before it uploads anything:
-
-   ```
-   The following bindings need to be provisioned:
-   Binding        Resource
-   env.DB         D1 Database
-
-   Provisioning DB (D1 Database)...
-   Resource name found in config: deevy
-   🌀 Creating new D1 Database "deevy"...
-   ✨ DB provisioned 🎉
-   ```
-
-   There is no `wrangler d1 create` step and no `database_id` to paste anywhere: wrangler remembers which
-   database it made, so the next deploy finds the same one, and nothing account-specific is ever committed. It
-   then prints the `workers.dev` URL — `https://deevy.<subdomain>.workers.dev` — and the Cron Trigger it
-   registered. Sign-in does not work yet and nothing else has to:
-   `curl https://deevy.<subdomain>.workers.dev/healthz` answers `{"ok":true,"version":"<the version>"}`, and
-   the SPA loads and says nobody is signed in.
-
-4. **Build the schema.** The database exists now but is empty, so this follows the first deploy rather than
-   preceding it.
-
-   ```bash
-   wrangler d1 migrations apply deevy --remote
-   wrangler d1 migrations list deevy --remote
-   wrangler d1 execute deevy --remote --command "select name from sqlite_master where type='table' order by name"
-   ```
-
-   The first lists every file in `packages/db/migrations`, asks to confirm, and reports each as applied. The second then says there is nothing left to apply. The third lists deevy's tables plus
-   wrangler's own `d1_migrations`. Applying twice is a no-op. Nothing here touches the local D1 that
-   `vp run web#test:workers` uses; `--remote` is the whole difference.
-
-5. **Create a client with a sign-in provider** — at least one, and any of the four does. For GitHub that is
-   an OAuth App at <https://github.com/settings/developers>, with that origin as the homepage and
-   `https://deevy.<subdomain>.workers.dev/api/auth/callback/github` as the Authorization callback URL; for
-   Google, Microsoft or an OpenID Connect IdP it is the same origin with `/api/auth/callback/<provider>`. The table under [Signing in](#signing-in-and-the-origin-better_auth_url-names) is the full set of
-   origins and callbacks; the rule is that `BETTER_AUTH_URL` and the callback change together or sign-in
-   breaks.
-
-6. **Put the secrets in.** Each command prompts for the value and answers `Success! Uploaded secret <name>`:
-
-   ```bash
-   wrangler secret put BETTER_AUTH_URL          # https://deevy.<subdomain>.workers.dev
-   wrangler secret put BETTER_AUTH_SECRET       # openssl rand -base64 32
-   wrangler secret put DEEVY_SECRET             # openssl rand -base64 32, and not the same value
-   wrangler secret put GITHUB_CLIENT_ID
-   wrangler secret put GITHUB_CLIENT_SECRET
-   ```
-
-   Offering Google or Microsoft as well, or instead, is `wrangler secret put GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`, or `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`, beside them; the sign-in
-   page draws whichever pairs are complete. Offering an OpenID Connect IdP is `DEEVY_OIDC_CLIENT_ID` and
-   `DEEVY_OIDC_CLIENT_SECRET` the same way. Microsoft may also want `MICROSOFT_TENANT_ID`, and an OIDC
-   provider wants `DEEVY_OIDC_ISSUER` and `DEEVY_OIDC_NAME`; none of those three is a credential, so they can
-   go in the `vars` block below.
-
-   `wrangler secret list` shows the names you put in and no values. The rest are not credentials, so they can go in
-   a `vars` block in `apps/web/wrangler.jsonc`, where a reviewer can see them:
-
-   ```jsonc
-   "vars": { "DEEVY_ADMIN_EMAIL": "you@example.com", "DEEVY_WORKSPACE_NAME": "Acme" },
-   ```
-
-   Deploying a public fork, put `DEEVY_ADMIN_EMAIL` in with `wrangler secret put` instead. It is not a
-   credential, but it is somebody's personal address, and a `vars` block is committed. A secret and a var
-   reach the Worker identically — `readWorkerEnv` cannot tell them apart — so this costs nothing but the
-   reviewer's view of it.
-
-7. **Deploy again**, if the `vars` block changed: step 1 again from the repository root, because that block is
-   part of the source the build projects, then `wrangler deploy` from `apps/web`. The output names the Cron
-   Trigger it registered alongside the bindings. A secret needs no deploy — `wrangler secret put` publishes a
-   new version by itself, live within a few seconds — so a deployment configured entirely through secrets
-   skips this step.
-
-8. **Check the trigger fires**, once you are signed in (the next step), by giving it something to do rather
-   than by watching the log. `wrangler tail` does not reliably surface `scheduled` invocations — ten minutes
-   of it on a working deployment showed request traffic and no scheduled event at all, which reads exactly
-   like a dead schedule and is not one. So ask the sweep for a visible effect instead: under Settings,
-   Webhooks, add one to any URL, then rename the Workspace under Settings, General. The rename is an Event
-   the webhook is owed, and with no `JOBS` queue bound, as the committed configuration has none, only the
-   sweep sends what is owed, so the delivery is attempted within two minutes whether or not anything answers
-   at that URL. That is `runDueWork`, one bounded pass (ADR-0012),
-   driven by Cloudflare's own timer. Remove the webhook afterwards.
-
-   ```bash
-   # two minutes after the rename:
-   wrangler d1 execute deevy --remote --command "select attempts, last_status, delivered_at from delivery"
-   ```
-
-9. **Sign in** at the `workers.dev` origin with the GitHub account whose email is `DEEVY_ADMIN_EMAIL`. The
-   first sign-in creates the Workspace and makes you its admin, and nothing else ever creates a second one.
-   Settings, Members lists exactly one Member — you, `admin`, `human`. Settings, Event log is the whole
-   Workspace log, newest first (a record's page under Work is the same log read per record); it opens with
-   `member.joined` over `workspace.created`, both with a null actor because deevy did the writing. The raw
-   document is `GET /api/events`, which a signed-in browser can simply visit.
-
-### What a free account does not give you
-
-- **Queues are paid.** The `JOBS` binding is optional in the `Env` type and absent from the committed
-  configuration for exactly this reason: `wrangler deploy` must not fail on a queue the account may not
-  create. Without it a webhook goes out at the next Cron pass instead of the moment it is owed, and nothing
-  else differs — see [Queues, when the account has them](#queues-when-the-account-has-them).
-- **A Cron Trigger comes round once a minute at the finest.** That is Cloudflare's floor, not deevy's, and it
-  is why `DEEVY_SWEEP_INTERVAL_SECONDS` is a Node-only knob. A backlog drains twenty rows a minute.
-- **D1 caps the queries one invocation may run**, which is what bounds a live stream's life and what
-  `DEEVY_STREAM_SECONDS` divides up. The design assumes the free tier's 50 queries per invocation and 100k
-  rows written per day; Cloudflare's own limits pages are the current numbers, and a busy Workspace outgrows
-  the daily one long before it outgrows the per-invocation one.
-- **Nothing deploys the Worker from CI.** `vp run web#check:workers` proves the artifact on every pull
-  request; uploading it is `wrangler deploy` by a person. The Docker image is the half CI does publish, on a
-  version tag.
-
 ## The many-Workspaces Worker
 
-`apps/hosted` is a third way to run deevy, beside the image and the Worker: one Worker that serves many
+`apps/hosted` is the second way to run deevy, beside the image: one Worker that serves many
 Workspaces on one host, each under its own path — `https://app.example.com/acme` — with each Workspace's
 SQLite database in a Durable Object of its own, where deevy runs ([ADR-0028](adr/0028-a-hosted-workspace-is-a-durable-object.md),
 [hosted.md](plans/hosted.md)). It is what hosted deevy runs, and it is open source like the rest: an agency or
@@ -353,9 +202,12 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
 - **The router** reads the first path segment: a Workspace's slug, the sign-in relay at `/auth`
   ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)), or anything else,
   which goes to a `CONSOLE` service binding when one is bound. A slug the `DIRECTORY` KV namespace does not
-  know is a 404 and never an object.
+  know is a 404 and never an object. Under a Workspace's path, `isAppPath` in `@deevy/adapters/spa` says what
+  goes to its object, and the rest is the SPA. That list is part of the routing table, not configuration: a
+  path the app mounts that is missing from it is answered with the SPA's `index.html` — a 200 with the wrong
+  body — so `packages/core/tests/app-paths.test.ts` asserts it against the app's own routes.
 - **A Workspace's object** reads who it is from its own storage, migrates, and runs the app; its alarm runs
-  the background work every `DEEVY_HOSTED_PASS_SECONDS` (60), in place of a Cron Trigger and a Queue.
+  the background work every `DEEVY_HOSTED_PASS_SECONDS` (60), in place of the image's timer.
 - **An open tab** holds a WebSocket its Workspace's object pushes each new Event's seq to, and the object
   sleeps in between ([ADR-0032](adr/0032-a-hosted-workspace-pushes-its-events.md), "Live updates" below).
 - **`Platform`** is a `WorkerEntrypoint` reached only over a service binding: `available`, `provision`,
@@ -368,18 +220,18 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
   `Platform.configure(slug, { limits: { invitationsPerDay: 5 } })`; `null` gives it back, and `{ name }`
   renames the Workspace. `Platform.status` reports the limits in force and the counts a console shows:
   Humans, Agents, Sockets, `invitationsToday` (the last 24 hours, the window the limit counts) and
-  `runsThisMonth` (the calendar month in UTC). These are the core's `limits` option, which the image and
-  the Worker never pass, so a self-hosted deevy is limited by nothing. They are a beta's guardrails, not a
+  `runsThisMonth` (the calendar month in UTC). These are the core's `limits` option, which the image never
+  passes, so a self-hosted deevy is limited by nothing. They are a beta's guardrails, not a
   plan: a plan's limits come with billing, set through the same `Platform.configure`.
 - **A Workspace's two secrets** are derived from `DEEVY_HOSTED_MASTER_SECRET` and the object's key, never
   stored. `Platform.secrets` hands them over with a `Platform.dump` when a team takes its Workspace to the
-  image or a Worker of its own: [Taking a hosted Workspace home](#taking-a-hosted-workspace-home).
+  image: [Taking a hosted Workspace home](#taking-a-hosted-workspace-home).
 
 | Binding or variable                | What                                                                                                                                                      |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WORKSPACES`                       | The Durable Object namespace, `WorkspaceObject`, a SQLite class.                                                                                          |
 | `DIRECTORY`                        | A KV namespace: slug → object key and status, written by `Platform` only.                                                                                 |
-| `ASSETS`                           | The SPA `vp run web#build:workers` builds into `apps/web/dist/client`.                                                                                    |
+| `ASSETS`                           | The SPA `vp run web#build` builds into `apps/web/dist`.                                                                                                   |
 | `CONSOLE`                          | Optional: the service that answers the host's root and its own paths.                                                                                     |
 | `ANALYTICS`                        | Optional: a Workers Analytics Engine dataset, one data point per request indexed by Workspace slug — kind, method, status and duration, nothing personal. |
 | `DEEVY_HOSTED_ORIGIN`              | The host every Workspace lives on, `https://app.example.com`. An origin, no path.                                                                         |
@@ -388,8 +240,11 @@ upgrades them all; a Workspace applies its own migrations when it next wakes.
 | `DEEVY_SIGN_IN_RELAY_SECRET`       | 32 or more random characters, signing where a sign-in's callback may go. Secret.                                                                          |
 | `DEEVY_HOSTED_CONSOLE_AUTH_URL`    | Optional: the console's Better Auth URL, the one place besides a Workspace the relay sends a sign-in back to.                                             |
 | `DEEVY_HOSTED_INVITATIONS_PER_DAY` | Invitations each Workspace may make in any 24 hours (50). `0` turns invitations off.                                                                      |
+| `DEEVY_HOSTED_PASS_SECONDS`        | How often a Workspace's alarm runs its background work when nothing asks sooner (60).                                                                     |
+| `DEEVY_STREAM_SECONDS`             | How long an Event stream lives before it signs off with its cursor (300), for a tab whose WebSocket is refused ("Live updates").                          |
 
-Sign-in providers and the timings are the variables every deevy reads. Each provider's App is registered once,
+Sign-in providers, `DEEVY_RUN_STALE_MINUTES` and `DEEVY_GITHUB_API` are the variables every deevy reads
+([Environment](#environment)). Each provider's App is registered once,
 with `${DEEVY_HOSTED_ORIGIN}/auth/callback/<provider>`. The development stubs run only when the origin is a
 loopback address.
 
@@ -415,7 +270,7 @@ the SHA-256 of every file. Fill the blanks, set the secrets (`wrangler versions 
 extracted directory; a Workspace migrates when it next wakes, and `Platform.status` says which version it
 runs.
 
-To build it from a checkout: `vp run web#build:workers`, then `vp run hosted#build:hosted`, which bundles
+To build it from a checkout: `vp run web#build`, then `vp run hosted#build:hosted`, which bundles
 `dist/hosted/worker.js` with package.json's version in it, then `vp run hosted#package`, which writes the
 archive into `apps/hosted/dist`; the same commit gives the same files, so a rebuild can be held against a
 release through the manifest's hashes. `vp run hosted#check:hosted` takes it
@@ -427,7 +282,7 @@ minute apart and checks that an open tab is pushed to while its Workspace's obje
 
 ## Taking a hosted Workspace home
 
-A hosted Workspace can leave for the image or for a Worker of its own whenever its team likes, with
+A hosted Workspace can leave for the image whenever its team likes, with
 everything in it: its Members and their accounts, its Agents and their keys, its Sockets and their
 credentials, its Projects, Runs and Gates, and its Event log, which carries on numbering from where it was.
 
@@ -488,45 +343,6 @@ What the import does, in order:
 From a checkout instead of the image: `vp run server#build`, then
 `DEEVY_DATABASE_PATH=./data/deevy.sqlite node apps/server/dist/import.mjs workspace.sql`.
 
-### Into a Worker of your own
-
-D1 keeps wrangler's journal of what it applied, `d1_migrations`, and never drizzle's, and it runs a file in
-a transaction of its own with foreign keys enforced. So the dump is converted first, by the same script:
-
-```bash
-docker run --rm -i ghcr.io/wearenendo/deevy:latest dist/import.mjs --for-d1 - \
-  < workspace.sql > workspace.d1.sql
-# or, from a checkout after vp run server#build:
-node apps/server/dist/import.mjs --for-d1 workspace.sql > workspace.d1.sql
-```
-
-The SQL goes to standard output and everything said to you to standard error. The conversion leaves out
-the dump's transaction and its `PRAGMA foreign_keys`, loads the rows under `PRAGMA defer_foreign_keys` so
-their keys are checked once at the end, and records each migration the dump had applied in `d1_migrations`
-under the name of its file in `packages/db/migrations`. It refuses a row that would make a statement over
-D1's 100 KB limit, naming the table, rather than leaving D1 to refuse it halfway: such a Workspace can go to
-the image, which has no such limit. Convert with the release you deploy.
-
-Then follow [Deploying to a free account](#deploying-to-a-free-account) with step 4 replaced: the database
-the first deploy provisioned is empty, and the converted file takes the place of the first
-`migrations apply`, so it goes into that database **before any `migrations apply`** has built tables there.
-
-```bash
-wrangler d1 execute deevy --remote --file workspace.d1.sql
-wrangler d1 migrations list deevy --remote    # nothing, or what this release added since the dump
-wrangler d1 migrations apply deevy --remote   # only if it listed something
-```
-
-In step 6, `BETTER_AUTH_SECRET` and `DEEVY_SECRET` are the two values the export handed over, not
-`openssl rand`. Every row the import writes counts against D1's rows written, which on a free account is
-a daily allowance a large Workspace can use up. `vp run server#check:d1-import` applies a converted dump to a
-local D1 and asks wrangler the same questions, as CI does on every commit; a remote D1 has not been walked
-yet.
-
-wrangler's _local_ `d1 execute --file` deletes the first `BEGIN TRANSACTION;` and `COMMIT;` it finds in a
-file, inside a value or not. The conversion warns when a value contains the first; `--remote` does not do
-this.
-
 ### Pointing everything at the new address
 
 The Workspace's address changes from `https://app.deevy.dev/<slug>` to yours, and deevy cannot tell the rest
@@ -553,117 +369,65 @@ the old address — an Agent somebody forgot — goes on working against the cop
 
 ## Environment
 
-One name per knob on both runtimes: an environment variable on Node, a `var` or a secret on Workers. On
-Workers a secret is `wrangler secret put NAME`, a var is a `vars` entry in `apps/web/wrangler.jsonc`, and
-locally both come from `apps/web/.dev.vars` — copy `apps/web/.dev.vars.example`. wrangler reads it from
-beside `wrangler.jsonc`, so run `wrangler dev` from `apps/web` and let it find its own configuration;
-`.gitignore` keeps the file itself out of the repository. Nothing on the Worker reads `process.env`; the
-bindings arrive with the request.
+One name per knob. The image reads each as an environment variable (`apps/server/src/env.ts`). The
+many-Workspaces Worker reads the sign-in providers, `DEEVY_RUN_STALE_MINUTES`, `DEEVY_GITHUB_API`,
+`DEEVY_DEV_STUB_SOCKETS` and `DEEVY_DEV_STUB_CONTAINERS` under the same names, as vars and secrets of its own (`apps/hosted/src/env.ts`); what is a
+Workspace's own — its URL, its two secrets, its admin and its name — comes from `Platform`, and the rest is in
+[its table](#the-many-workspaces-worker).
 
-| Variable                       | Node        | Workers            | Default                  | Without it                                                                                                                                                                                                                                                                                                     |
-| ------------------------------ | ----------- | ------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_URL`              | env         | secret             | the request's origin     | Sign-in callbacks are wrong, and Gate messages to Slack wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                                              |
-| `BETTER_AUTH_SECRET`           | env         | secret             | —                        | deevy does not run: the Node server refuses to start, and the Worker answers every request that reaches its code (the API and `/healthz`; the SPA's assets are served before it) with a 503 naming it, because Better Auth would otherwise fall back to a key it publishes. Changing it signs everyone out.    |
-| `DEEVY_SECRET`                 | env         | secret             | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume. |
-| `DEEVY_GITHUB_API`             | env         | var                | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                            |
-| `DEEVY_DEV_STUB_SOCKETS`       | env         | var                | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on.  |
-| `DEEVY_DEV_STUB_CONTAINERS`    | env         | var                | `acme/deevy`             | That stub offers one container. Container names, separated by commas, say what it holds. Read only when the flag above is set.                                                                                                                                                                                 |
-| `GITHUB_CLIENT_ID`             | env         | secret             | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                             |
-| `GITHUB_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `GOOGLE_CLIENT_ID`             | env         | secret             | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                         |
-| `GOOGLE_CLIENT_SECRET`         | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `DEEVY_OIDC_ISSUER`            | env         | var                | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                      |
-| `DEEVY_OIDC_CLIENT_ID`         | env         | secret             | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                         |
-| `DEEVY_OIDC_CLIENT_SECRET`     | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `DEEVY_OIDC_NAME`              | env         | var                | `Single sign-on`         | The button says "Continue with Single sign-on". Set it to what your teammates call the IdP.                                                                                                                                                                                                                    |
-| `MICROSOFT_CLIENT_ID`          | env         | secret             | —                        | Microsoft is neither registered nor offered. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/microsoft`.                                                                                                                                                                            |
-| `MICROSOFT_CLIENT_SECRET`      | env         | secret             | —                        | As above.                                                                                                                                                                                                                                                                                                      |
-| `MICROSOFT_TENANT_ID`          | env         | var                | `common`                 | Work, school and personal Microsoft accounts all sign in. Set `organizations` for work and school only, or a tenant's id for that tenant only.                                                                                                                                                                 |
-| `DEEVY_SIGN_IN_ORDER`          | env         | var                | —                        | Providers are offered GitHub, Google, Microsoft, then your IdP. Name ids, comma-separated, to offer those first (`oidc,github`); an id deevy does not offer is ignored.                                                                                                                                        |
-| `DEEVY_ADMIN_EMAIL`            | env         | var                | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                           |
-| `DEEVY_WORKSPACE_NAME`         | env         | var                | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                           |
-| `DEEVY_WEB_ORIGIN`             | env         | var                | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                            |
-| `DEEVY_RUN_STALE_MINUTES`      | env         | var                | 30                       | Nothing: 30 minutes of silence makes a Run `stale`, which its next Activity undoes.                                                                                                                                                                                                                            |
-| `DEEVY_SWEEP_INTERVAL_SECONDS` | env         | — the Cron Trigger | 60                       | Nothing: the sweep looks every minute. Node-only, because on Workers the schedule is `triggers.crons` in `apps/web/wrangler.jsonc`.                                                                                                                                                                            |
-| `DEEVY_STREAM_SECONDS`         | — unbounded | var                | 60                       | Nothing: a live stream on Workers ends after a minute and the browser resumes from the cursor it signed off with. Workers-only, because a Node process holds a connection for as long as the browser does.                                                                                                     |
-| `JOBS`                         | — the sweep | optional binding   | — no queue               | Nothing: a webhook delivery goes out at the next Cron pass instead of the moment it is owed. Workers-only, and absent from the committed `apps/web/wrangler.jsonc` because Queues are a paid feature.                                                                                                          |
-| `DEEVY_DATABASE_PATH`          | env         | — the `DB` binding | `/data/deevy.sqlite`     | Node writes to `./data/deevy.sqlite`. On Workers the rows are D1's and the path means nothing.                                                                                                                                                                                                                 |
-| `DEEVY_PORT`                   | env         | —                  | 3000                     | Node listens on 3000. Workers has no port: the platform routes to the Worker.                                                                                                                                                                                                                                  |
-| `DEEVY_WEB_DIST`               | env         | —                  | —                        | Node answers the API and serves no pages. On Workers the SPA is the asset handler's, not the app's.                                                                                                                                                                                                            |
-
-The Worker serves the SPA, the API, the reference at `/api/docs`, the MCP challenge and, since M3 slice 5,
-signing in: `BETTER_AUTH_*`, `GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*`, `DEEVY_OIDC_*`, `DEEVY_ADMIN_EMAIL` and
-`DEEVY_WORKSPACE_NAME` do on Workers exactly what they do on Node, bootstrap and allowlist included.
+| Variable                       | Default                  | Without it                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_URL`              | the request's origin     | Sign-in callbacks are wrong, and Gate messages to Slack wait. A path in it is where deevy lives ("Under a path").                                                                                                                                                                                              |
+| `BETTER_AUTH_SECRET`           | —                        | deevy does not run: the server refuses to start, because Better Auth would otherwise fall back to a key it publishes. Changing it signs everyone out.                                                                                                                                                          |
+| `DEEVY_SECRET`                 | —                        | A tool that holds a credential cannot be connected: deevy refuses rather than storing one in the clear. Not the same value as `BETTER_AUTH_SECRET` — rotating that one signs everybody out, and must not also mean connecting every tool again. Losing this one does mean that, so back it up with the volume. |
+| `DEEVY_GITHUB_API`             | `https://api.github.com` | Every GitHub Socket talks to github.com. Set it to a GitHub Enterprise Server's API root (`https://github.example.com/api/v3`); a Socket may still carry its own, which is what an instance with one of each needs.                                                                                            |
+| `DEEVY_DEV_STUB_SOCKETS`       | —                        | The only tools deevy can speak are the real ones. Set to `1` and it also registers the provider that is not a tool — a tracker in this process, for trying deevy out with no App and no tunnel (docs/DEVELOPMENT.md). `readEnv` refuses it under `NODE_ENV=production`, and `health.ping` says when it is on.  |
+| `DEEVY_DEV_STUB_CONTAINERS`    | `acme/deevy`             | That stub offers one container. Container names, separated by commas, say what it holds. Read only when the flag above is set.                                                                                                                                                                                 |
+| `GITHUB_CLIENT_ID`             | —                        | GitHub is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Callback `${BETTER_AUTH_URL}/api/auth/callback/github`.                                                                                                                             |
+| `GITHUB_CLIENT_SECRET`         | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `GOOGLE_CLIENT_ID`             | —                        | Google is neither registered nor offered, and with no other provider set the sign-in page says so. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/google`.                                                                                                                         |
+| `GOOGLE_CLIENT_SECRET`         | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `DEEVY_OIDC_ISSUER`            | —                        | The generic OpenID Connect provider is neither registered nor offered. It is where the IdP's `/.well-known/openid-configuration` hangs off, and everything else is discovered from it, so it counts as a third half of the pair: without it there is nothing to register.                                      |
+| `DEEVY_OIDC_CLIENT_ID`         | —                        | As above. All three or none. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/oidc`.                                                                                                                                                                                                                         |
+| `DEEVY_OIDC_CLIENT_SECRET`     | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `DEEVY_OIDC_NAME`              | `Single sign-on`         | The button says "Continue with Single sign-on". Set it to what your teammates call the IdP.                                                                                                                                                                                                                    |
+| `MICROSOFT_CLIENT_ID`          | —                        | Microsoft is neither registered nor offered. Both halves or neither. Redirect URI `${BETTER_AUTH_URL}/api/auth/callback/microsoft`.                                                                                                                                                                            |
+| `MICROSOFT_CLIENT_SECRET`      | —                        | As above.                                                                                                                                                                                                                                                                                                      |
+| `MICROSOFT_TENANT_ID`          | `common`                 | Work, school and personal Microsoft accounts all sign in. Set `organizations` for work and school only, or a tenant's id for that tenant only.                                                                                                                                                                 |
+| `DEEVY_SIGN_IN_ORDER`          | —                        | Providers are offered GitHub, Google, Microsoft, then your IdP. Name ids, comma-separated, to offer those first (`oidc,github`); an id deevy does not offer is ignored.                                                                                                                                        |
+| `DEEVY_ADMIN_EMAIL`            | —                        | No Workspace is ever created, so nobody is a Member.                                                                                                                                                                                                                                                           |
+| `DEEVY_WORKSPACE_NAME`         | `deevy`                  | Nothing: renameable later under Settings, Workspace.                                                                                                                                                                                                                                                           |
+| `DEEVY_WEB_ORIGIN`             | —                        | Nothing, unless the SPA is deployed on its own origin; then its calls are refused by CORS, and every link deevy hands a Human — a Gate, an invitation, a Slack message — points at the API rather than at the page.                                                                                            |
+| `DEEVY_RUN_STALE_MINUTES`      | 30                       | Nothing: 30 minutes of silence makes a Run `stale`, which its next Activity undoes.                                                                                                                                                                                                                            |
+| `DEEVY_SWEEP_INTERVAL_SECONDS` | 60                       | Nothing: the sweep looks every minute. A hosted Workspace's alarm has `DEEVY_HOSTED_PASS_SECONDS` instead.                                                                                                                                                                                                     |
+| `DEEVY_DATABASE_PATH`          | `/data/deevy.sqlite`     | deevy writes to `./data/deevy.sqlite`, relative to where it started; the image sets `/data/deevy.sqlite`.                                                                                                                                                                                                      |
+| `DEEVY_PORT`                   | 3000                     | deevy listens on 3000.                                                                                                                                                                                                                                                                                         |
+| `DEEVY_WEB_DIST`               | —                        | deevy answers the API and serves no pages. The image sets it to the SPA it carries.                                                                                                                                                                                                                            |
 
 `GITLAB_*`, `LINEAR_*`, `SLACK_*` and `ATLASSIAN_*` named sign-in providers until slice 10 of
 [simplify.md](./plans/simplify.md) and are read as nothing now
 ([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)): a deployment that still sets them offers the
 providers above and no others, and can remove them.
 
-### Background work, on a timer or on a Cron Trigger
+### Background work, on a timer or an alarm
 
-The stale sweep and the delivery loops are one function,
-`runDueWork` in `packages/core/src/work.ts`, and each runtime brings its own schedule to it. Node's
-`startRunner` brings a timer every `DEEVY_SWEEP_INTERVAL_SECONDS` and drains: it goes again while a pass says
-there is more. Cloudflare owns its own schedule, so the Worker has no interval to configure — `triggers.crons`
-in `apps/web/wrangler.jsonc` runs it every minute, the finest Cloudflare offers, and the `scheduled` handler
-takes one bounded pass of twenty rows and lets the next trigger find the rest. A backlog therefore drains a
-minute at a time on Workers rather than in one tick, which is the trade a CPU budget and a per-invocation D1
-query cap buy.
+The stale sweep and the delivery loops are one function, `runDueWork` in `packages/core/src/work.ts`, and
+each shape brings its own schedule to it. The image's `startRunner` brings a timer every
+`DEEVY_SWEEP_INTERVAL_SECONDS` and drains: it goes again while a pass says there is more. A hosted
+Workspace's object brings its alarm, every `DEEVY_HOSTED_PASS_SECONDS`, with up to five passes while each
+finds more; a write that owes a webhook delivery sets the alarm to now, so it goes out at once rather than
+at the next pass. `DEEVY_RUN_STALE_MINUTES` means the same thing in both.
 
-`DEEVY_RUN_STALE_MINUTES` means the same thing on both. `wrangler dev --local`
-fires a trigger by hand at `/cdn-cgi/handler/scheduled?cron=*+*+*+*+*`, and the response waits for the pass, so
-a 500 there is the sweep's own error. `--test-scheduled`'s `/__scheduled` does not work on a Worker that also
-serves assets: the path is not one `createApp` mounts, so it is not in `assets.run_worker_first` and the asset
-handler answers it with the SPA's `index.html`.
+A webhook delivery is a durable row before it is a request: `appendEvent` writes what a subscribed URL is
+owed in the same handler as the write, and the next pass finds it whether or not anything else does.
+`deliverWebhook` claims the row before it sends and will not claim one that has already landed, and it is the
+row's own attempt count that decides when deevy gives up and appends `webhook.exhausted`.
 
-Which paths the Worker answers rather than the asset handler is `assets.run_worker_first` in
-`apps/web/wrangler.jsonc`. It is part of the routing table, not configuration: a path the app mounts that is
-missing from it is answered with the SPA's `index.html` — a 200 with the wrong body — so
-`packages/core/tests/worker-routes.test.ts` asserts the list against the app's own routes, and
-`vp run web#test:workers` drives the built Worker on `wrangler dev --local` to prove it over HTTP.
-
-### Queues, when the account has them
-
-A webhook delivery is a durable row before it is a message: `appendEvent` writes what a subscribed URL is owed
-in the same handler as the write, and the sweep above finds it whether or not anything else does. A Queue only
-changes when. On an account that has one, the write's tail hands the row's id to the `JOBS` binding, a
-consumer picks it up in the next second and the POST goes out at once instead of at the next trigger; on an
-account without one there is no binding, `createApp` discards the job, and the trigger is the whole delivery
-path. Nothing else differs, which is why the binding is optional in the `Env` type and absent from the
-committed `apps/web/wrangler.jsonc` — Queues are paid, and `wrangler deploy` must not fail on a queue a free
-account is not allowed to create.
-
-Adding one is two blocks and a name:
-
-```jsonc
-"queues": {
-  "producers": [{ "binding": "JOBS", "queue": "deevy-jobs" }],
-  "consumers": [{ "queue": "deevy-jobs", "max_batch_size": 10, "max_retries": 10 }],
-}
-```
-
-then `wrangler queues create deevy-jobs` before the deploy that first names it. Queues are at-least-once, so
-the same message can arrive twice; that costs one POST rather than two, because `deliverWebhook` claims the
-row before it sends and will not claim one that has already landed. A consumer failure is retried by the
-queue, and it is the row's own attempt count — not the queue's — that decides when deevy gives up and appends
-`webhook.exhausted`, exactly as it would in a sweep. `max_retries` below eight therefore ends a delivery's
-life early on a receiver that is down; the Cron pass still finds the row afterwards, so nothing is lost, but
-setting it at or above eight keeps the two paths saying the same thing.
-
-### Live updates, and why a stream on Workers ends
+### Live updates
 
 The board keeps itself in step by reading the Event log as it happens, over one long-lived request per
-browser: `events.subscribe` polls the log and sends what it finds, plus a heartbeat carrying its cursor. On
-Node that request lives as long as the browser holds it and `DEEVY_STREAM_SECONDS` means nothing there.
-
-On Workers it cannot. Each poll is one D1 query and D1 caps the queries one invocation may run — 50 on the
-free plan — so a stream's life is that cap divided by its poll interval, and a stream that overran it would be
-cut off mid-message. deevy ends it first instead: the Worker polls every two seconds and, after
-`DEEVY_STREAM_SECONDS`, sends one last heartbeat carrying the cursor it reached and returns. The SPA treats a
-clean end as an invitation rather than a failure, reconnecting at once from that cursor, so nothing is missed
-and nobody sees the seam. Raising the value raises the query count with it — one every two seconds — so a
-value much over 90 spends the whole cap on polling and leaves none for signing the request in.
+browser: `events.subscribe` polls the log and sends what it finds, plus a heartbeat carrying its cursor. In
+the image that request lives as long as the browser holds it.
 
 On every deployment, a tab hidden for 30 seconds lets go of its connection, and reconnects from its cursor
 when it is shown again: a glance at another tab costs nothing, a tab left behind all afternoon holds no
@@ -676,10 +440,13 @@ Member's session, from the deployment's own origin — and the object accepts it
 hibernation API, sleeps between Events with it open, and on each Event appended tells it the newest seq and
 nothing else; the tab reads the Events with `events.list`, under its own session. The tab says `ping` every
 30 seconds and the runtime answers `pong` without waking the object. A socket is closed when its session
-ends, when the Workspace is suspended and when it is destroyed, and the tab opens another if it may. The
-stream is still there, ending after `DEEVY_STREAM_SECONDS` (300 in an object, where a poll costs no query
-budget), for a tab whose socket is refused — a proxy that drops upgrades — and that tab tries the socket
-again each time the stream ends. The image and the self-hosted Worker offer no socket: `health.ping` says
+ends, when the Workspace is suspended and when it is destroyed, and the tab opens another if it may.
+
+The stream is still there for a tab whose socket is refused — a proxy that drops upgrades. In an object it
+ends itself after `DEEVY_STREAM_SECONDS` (300), sending one last heartbeat carrying the cursor it reached, so
+that it lets go of the object in time and ends cleanly rather than being cut off mid-message. The SPA treats
+a clean end as an invitation rather than a failure, reconnecting at once from that cursor and trying the
+socket again, so nothing is missed and nobody sees the seam. The image offers no socket: `health.ping` says
 `stream` and `/api/live` answers 501.
 
 ### Signing in, and the origin `BETTER_AUTH_URL` names
@@ -744,7 +511,7 @@ Two things to know about pointing it at an IdP. The discovery document is fetche
 starts**: an IdP that cannot be reached at that moment is skipped with a line in the log and no error. The
 sign-in page draws what `health.ping` reports, which is the configured providers Better Auth actually
 registered (its context's social providers, read in `createApp`), so the button is not offered until the
-process (on Workers, the isolate; for a hosted Workspace, its Durable Object) is replaced and the fetch is
+process (for a hosted Workspace, its Durable Object) is replaced and the fetch is
 tried again. Because that fetch is awaited before the instance says what it offers, an issuer pointed at an
 address that hangs holds up the whole sign-in page, GitHub's and Google's buttons included, for as long as
 the runtime's own connect timeout. Point `DEEVY_OIDC_ISSUER` at something reachable, or leave it unset. And an IdP that sends no `email_verified` claim — Microsoft Entra
@@ -771,8 +538,9 @@ an OpenID Connect IdP that omits `email_verified`, or any provider that lets som
 account they do not own — would otherwise let anybody claim `you@example.com` and be let in by it (the
 "nOAuth" hole). Such a sign-in still works by invitation, since the link is the proof.
 
-The link points where a browser finds deevy, which is `BETTER_AUTH_URL` in the image and on the Worker,
-since both serve the SPA themselves. Where the SPA has an origin of its own, that is `DEEVY_WEB_ORIGIN`, and
+The link points where a browser finds deevy, which is `BETTER_AUTH_URL` in the image and a hosted
+Workspace's own URL, since both serve the SPA themselves. Where the SPA has an origin of its own, that is
+`DEEVY_WEB_ORIGIN`, and
 setting it is what keeps an invitation link, a Gate link and a Slack message pointing at the page rather than
 at the API beside it.
 
@@ -812,12 +580,11 @@ sends every provider's callback to that host and sets a cookie the browser never
 
 Every provider's callback follows from it, and each ends in the provider's own id:
 
-| Where deevy runs          | `BETTER_AUTH_URL`                       | Authorization callback URL                                           |
-| ------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| `wrangler dev --local`    | `http://localhost:8787`                 | `http://localhost:8787/api/auth/callback/<provider>`                 |
-| a `workers.dev` subdomain | `https://deevy.<subdomain>.workers.dev` | `https://deevy.<subdomain>.workers.dev/api/auth/callback/<provider>` |
-| a custom domain           | `https://deevy.example.com`             | `https://deevy.example.com/api/auth/callback/<provider>`             |
-| the Docker image          | `https://deevy.example.com`             | `https://deevy.example.com/api/auth/callback/<provider>`             |
+| Where deevy runs       | `BETTER_AUTH_URL`                   | Authorization callback URL                                       |
+| ---------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| the dev server         | `http://localhost:3000`             | `http://localhost:3000/api/auth/callback/<provider>`             |
+| the Docker image       | `https://deevy.example.com`         | `https://deevy.example.com/api/auth/callback/<provider>`         |
+| the image under a path | `https://company.example.com/deevy` | `https://company.example.com/deevy/api/auth/callback/<provider>` |
 
 `<provider>` is `github` for the GitHub OAuth App's Authorization callback URL, `google` for the Authorized
 redirect URI of the Google OAuth client (an OAuth 2.0 Client ID of type "Web application" in a Google Cloud
@@ -825,11 +592,10 @@ project's Credentials, with the consent screen's scopes left at email and profil
 web redirect URI of the Entra application (App registrations › Authentication), and `oidc` for the Redirect URI of the OpenID Connect client — deevy's own name for the provider,
 whatever the IdP is, so `DEEVY_OIDC_NAME` changes the button and never the URL.
 
-A GitHub OAuth App holds one callback URL, so a Worker reachable both on its `workers.dev` subdomain and on a
-custom domain needs an App for each, or a decision that sign-in happens on one of them; a Google client and an
-Entra application each hold a list, so one of those can carry both. Move between origins by changing `wrangler secret put BETTER_AUTH_URL`
-and the callbacks together: either one alone leaves sign-in refused by the provider or the session cookie set
-for an origin nobody is on.
+A GitHub OAuth App holds one callback URL, so a deevy reachable on two origins needs an App for each, or a
+decision that sign-in happens on one of them; a Google client and an Entra application each hold a list, so
+one of those can carry both. Move between origins by changing `BETTER_AUTH_URL` and the callbacks together:
+either one alone leaves sign-in refused by the provider or the session cookie set for an origin nobody is on.
 
 ### What a page may run, and where a change may come from
 
@@ -839,9 +605,9 @@ another host — with `frame-ancestors 'none'`, `object-src 'none'` and `base-ur
 `<base href>` is how it finds its bundle wherever it lives), beside
 `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy:
 strict-origin-when-cross-origin`; everything that is not a page is sent as something never to render
-(`packages/core/src/headers.ts`). The image sets them in the app. On the Worker the asset handler answers the
-SPA before deevy's code runs, so they ride in `apps/web/public/_headers`, which the build copies beside the
-SPA and a test holds to the same policy. Styles may be inline, because the libraries the SPA is built from
+(`packages/core/src/headers.ts`). The image sets them in the app. A hosted Workspace's SPA comes from the
+Worker's static assets, which the app never answers, so they ride in `apps/web/public/_headers`, which the
+build copies beside the SPA and a test holds to the same policy. Styles may be inline, because the libraries the SPA is built from
 write `<style>` elements as they run; images may come from any `https:` host, because avatars do; a form may
 post to `https://github.com`, because creating a GitHub App is one. `/api/docs` is the one exception: it
 loads Scalar from jsDelivr and names that script and its own inline one, by hash, in a policy of its own.
@@ -898,9 +664,6 @@ path of `BETTER_AUTH_URL`, and everything follows it.
 - The session cookie is scoped to the path, so two deevys on one host never share a sign-in.
 - The SPA's built files are the same; the index is served with `<base href="/deevy/">`, and everything the
   page loads and calls is relative to it.
-- On the Worker, set `assets.run_worker_first` to `true` in `wrangler.jsonc`: the platform's asset handler
-  knows nothing of the path, so every request under it has to reach the Worker, which serves the SPA itself
-  through the `ASSETS` binding.
 - An Agent's `DEEVY_URL` names the whole URL, path included, and so does the CLI's: with
   `DEEVY_URL=https://company.example.com/deevy` every command talks to the deevy under the path.
 
@@ -1580,57 +1343,48 @@ the database, and names the command that fixes it when it cannot, rather than st
 first write. The healthcheck and `docker exec` run as the image's user, root, either way: neither goes
 through the entrypoint.
 
-## The schema, on either runtime
+## The schema, in either shape
 
-One schema, two appliers, two journals (ADR-0008). Nothing is shared between them, because nothing needs to
-be: a D1 database is only ever migrated by wrangler, and a SQLite file only ever by the Node migrator.
+One schema, one generator, two appliers (ADR-0008). drizzle-kit writes `packages/db/drizzle/<folder>/`; the
+image applies those folders and a hosted Workspace's object applies the same SQL, each with drizzle's own
+migrator for it.
 
-| What                | Node                                 | Workers                                       |
-| ------------------- | ------------------------------------ | --------------------------------------------- |
-| Where the rows live | `DEEVY_DATABASE_PATH`, a SQLite file | the `DB` binding, a D1 database               |
-| What is applied     | `packages/db/drizzle/<folder>/`      | `packages/db/migrations/NNNN_<folder>.sql`    |
-| Who applies it      | the migrator, at startup             | `wrangler d1 migrations apply deevy`, by hand |
-| Record of what ran  | `__drizzle_migrations`               | wrangler's own `d1_migrations`                |
-| If it never runs    | the server exits at startup          | every request fails on a missing table        |
+| What                | The image                            | A hosted Workspace                                       |
+| ------------------- | ------------------------------------ | -------------------------------------------------------- |
+| Where the rows live | `DEEVY_DATABASE_PATH`, a SQLite file | its Durable Object's SQLite storage                      |
+| What is applied     | `packages/db/drizzle/<folder>/`      | `packages/db/src/durable-migrations.ts`, the same SQL    |
+| Who applies it      | the Node migrator, at startup        | drizzle's durable-sqlite migrator, when the object wakes |
+| Record of what ran  | `__drizzle_migrations`               | `__drizzle_migrations`                                   |
+| If it fails         | the server exits at startup          | the Workspace answers 503 and runs no background work    |
 
-`packages/db/migrations` is a build artifact, not a source: `vp run db#generate:d1` writes it from
-`packages/db/drizzle`, `vp run db#generate` chains the two, and `vp run db#check:migrations` fails CI on a
-stale one exactly as a stale `openapi.json` does. `apps/web/wrangler.jsonc` points the `DB` binding at it
-through `migrations_dir`, and `vp run db#check:d1` applies it to an empty local D1 and checks that what
-wrangler built is the schema `packages/db/src/schema` describes. None of that needs a Cloudflare account.
+An object cannot read files, so `packages/db/src/durable-migrations.ts` holds each folder's `migration.sql`
+verbatim under the folder's name, the record drizzle's durable-sqlite migrator takes. It is a build artifact,
+not a source: `vp run db#generate:durable` writes it from `packages/db/drizzle`, `vp run db#generate` chains
+it after drizzle-kit, and `vp run db#check:migrations` fails CI on a stale one exactly as a stale
+`openapi.json` does. Only `@deevy/db/durable-migrations` reaches it, so the image's bundle does not carry it.
+Both migrators journal by name in `__drizzle_migrations`, so a database migrated in an object opens under the
+Node migrator with nothing left to apply, and the other way round, which is what lets a hosted Workspace go
+home; `packages/adapters/tests/durable-migrations.test.ts` shows both.
 
 The same check refuses a migration that takes something away — a dropped or renamed table or column, a table
 rebuild, a unique index on a table with rows — unless it says it is the later release that may
 ([Upgrading](#upgrading)), and `vp run server#test:previous` runs the previous release on the schema this
 tree migrates.
 
-The projection is not a copy. drizzle separates statements with `--> statement-breakpoint`; the emitter turns
-those into plain statement separation and refuses, naming the file and the line, anything D1 will not honour:
-transaction control, `ATTACH`, `DETACH`, `VACUUM`, and every `PRAGMA`. The PRAGMA is the one that matters.
-D1 runs a batch inside a transaction, where SQLite ignores `PRAGMA foreign_keys` outright — so the
-`PRAGMA foreign_keys=OFF` that drizzle wraps around a table rebuild, and that the Node migrator honours at
-the connection, does nothing on D1, the rebuild's `DROP TABLE` cascades the children away, and wrangler
-reports success. Better to fail while generating.
-
-`vp run db#generate:d1` also writes a third rendering, for a database kept in a Durable Object, which cannot
-read files: `packages/db/src/durable-migrations.ts`, each folder's `migration.sql` verbatim under the folder's
-name, the record drizzle's durable-sqlite migrator takes. Only `@deevy/db/durable-migrations` reaches it, so neither the
-Node nor the Workers bundle carries it. That migrator journals by name in `__drizzle_migrations` as the Node
-migrator does, so a database migrated in an object opens under the Node migrator with nothing left to apply,
-and the other way round; `packages/adapters/tests/durable-migrations.test.ts` shows both. The refusals above
-hold for it too: a local Durable Object answered each of them as D1 does. `check:migrations` diffs it like the
-D1 files.
-
-`apps/web/wrangler.jsonc` names the database and deliberately gives no `database_id`. Local D1 works from the
-name alone, and the first `wrangler deploy` provisions a database of that name and remembers which one it is,
-so there is nothing to paste back into the configuration and nothing account-specific in an open-source
-repository — step 3 of [Deploying to a free account](#deploying-to-a-free-account).
+The emitter also refuses, naming the file and the line, anything a Durable Object will not honour, as
+measured against a local one: transaction control, `ATTACH`, `DETACH`, `VACUUM`, and every `PRAGMA`. The
+PRAGMA is the one that matters. An object runs a migration inside a transaction, where SQLite ignores
+`PRAGMA foreign_keys` outright — so the `PRAGMA foreign_keys=OFF` that drizzle wraps around a table rebuild,
+and that the Node migrator honours at the connection, does nothing there, the rebuild's `DROP TABLE` cascades
+the children away, and the migration reports success. Better to fail while generating. The image would have
+applied such a migration safely, but every migration is applied in both shapes, so the rule holds for all of
+them.
 
 ## Upgrading
 
-Pull the new image and start it on the same volume; the Node migrator applies what is new at startup. On
-Workers, run `wrangler d1 migrations apply deevy --remote` **before** deploying the new Worker, so the code
-never runs ahead of its schema.
+Pull the new image and start it on the same volume; the Node migrator applies what is new at startup. A
+hosted Workspace applies what is new itself, when it next wakes on the new version of the many-Workspaces
+Worker.
 
 ```bash
 docker pull ghcr.io/wearenendo/deevy:<version>
@@ -1641,15 +1395,15 @@ docker run -d --name deevy ... ghcr.io/wearenendo/deevy:<version>   # same -v de
 From 0.11 on, every release upgrades in place, and the release before it still runs on the schema it leaves
 ([ADR-0031](./adr/0031-every-release-upgrades-in-place.md)). A release's migrations only add — a table, a
 column that is nullable or has a default, an index — and whatever it stops using stays in the schema until a
-later release removes it. That is what makes applying D1 migrations ahead of the deploy safe, what lets a
-gradual deployment run two versions side by side, and what lets you go back one release without restoring
-anything:
+later release removes it. That is what lets a gradual deployment of the many-Workspaces Worker run two
+versions side by side, and what lets you go back one release without restoring anything:
 
 - **Docker**: start the previous image on the same volume. It finds the newer release's migrations applied,
   leaves them alone — a release from 0.11 on also names them in its log — and runs on that schema. Starting
   the newer image again later picks up where it was.
-- **Workers**: roll the Worker back to its previous version (`wrangler rollback`, or the dashboard's
-  Deployments tab). Leave the D1 database as it is; there is nothing to undo.
+- **The many-Workspaces Worker**: roll it back to its previous version (`wrangler rollback`, or the
+  dashboard's Deployments tab). Every Workspace that migrated stays migrated, and the previous version runs
+  on that schema; there is nothing to undo.
 
 One release back, not two: a release may remove what the one before it stopped using and the one before
 that still used. Take a backup before every upgrade (below). Migrations only ever move forward — there is no
@@ -1666,7 +1420,7 @@ new server for longer than a tab stays open.
 
 0.9, the release that made deevy glue between your tools rather than a tracker of its own, is a clean break
 ([ADR-0024](./adr/0024-an-issue-is-a-projection-of-a-record-in-a-socket.md)). Its migration history starts
-afresh, so it runs on an **empty** database — a new volume, or a new D1 database on Workers — and there is no
+afresh, so it runs on an **empty** database — a new volume — and there is no
 upgrade path from 0.8 or anything before it. Nothing is exported: the Issues, Documents and comments a 0.x
 instance kept stay in its volume, which a backup keeps for as long as you want them. Connect your tools, bind
 your Projects, and create your Agents again; their records arrive from the tools themselves.

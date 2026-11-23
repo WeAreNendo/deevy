@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: Move a self-hosted deevy to a new release, on the Docker image or a Worker, and go back one release if you need to.
+description: Move a self-hosted deevy to a new release, and go back one release if you need to.
 sidebar:
   order: 8
 ---
@@ -17,14 +17,14 @@ Each release is a version tag on [deevy's repository](https://github.com/WeAreNe
 before you upgrade.
 
 The same release publishes the Docker image, tagged `0.11.2`, `v0.11.2` and, unless it is a pre-release,
-`latest`. A Worker you build yourself from the release's tag.
+`latest`.
 
 ## Before you upgrade
 
 Take a backup. Migrations only ever move forward, so a backup is how you go back more than one release, or
 undo anything else. See [Backup and restore](/self-hosting/backup-and-restore/).
 
-## The Docker image
+## The new image
 
 Start the new image on the same volume. deevy applies the new release's migrations when it starts, before
 it answers `/healthz`.
@@ -42,41 +42,14 @@ With Compose, change the `image:` tag, then run `docker compose pull` and `docke
 If a migration fails, the server exits rather than run on a schema it doesn't expect, and its log says
 why.
 
-## A Worker
-
-On a Worker, apply the migrations **before** you deploy, so the new code never runs ahead of its schema.
-That is safe because the release you are leaving runs on the new schema too.
-
-1. Check out the new release and build it, from the repository's root:
-
-   ```bash
-   git fetch --tags
-   git checkout v<version>
-   vp install
-   vp run web#build:workers
-   vp run web#check:workers
-   ```
-
-   If you changed `apps/web/wrangler.jsonc`, with a `vars` block or a Queue, carry your changes onto the
-   new release's copy before you build.
-
-2. From `apps/web`, apply the migrations, then deploy:
-
-   ```bash
-   wrangler d1 migrations apply deevy --remote
-   wrangler deploy
-   ```
-
 ## Going back one release
 
 A release's migrations only add: a table, a column that is optional or has a default, an index. What a
 release stops using stays in the schema until a later release removes it. So the release before still runs
 on the schema the new one leaves.
 
-- **Docker**: start the previous image on the same volume. It finds the newer migrations applied, leaves
-  them alone, says so in its log, and runs. Starting the newer image again later picks up where it was.
-- **Workers**: roll the Worker back to its previous version, with `wrangler rollback` or the Worker's
-  **Deployments** in Cloudflare's dashboard. Leave the D1 database as it is; there is nothing to undo.
+Start the previous image on the same volume. It finds the newer migrations applied, leaves them alone,
+says so in its log, and runs. Starting the newer image again later picks up where it was.
 
 One release back, not two: a release may remove what the one before it stopped using, which the one
 before that still used. To go further back, restore the backup you took before upgrading.
@@ -89,7 +62,7 @@ for longer than a tab stays open.
 ## From 0.8 or earlier
 
 0.9 starts on an empty database: there is no upgrade from 0.8 or anything before it. Start 0.9 or later on
-a new volume, or a new D1 database, then connect your tools, set up your Projects and create your Agents
+a new volume, then connect your tools, set up your Projects and create your Agents
 again; your records arrive from the tools themselves, each the next time it changes. Keep the old volume
 for as long as you want what it held.
 

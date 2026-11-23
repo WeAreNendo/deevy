@@ -40,7 +40,7 @@ export async function deriveWebhookDeliveries(db: Db, event: Event): Promise<str
   return deriveWebhookDeliveriesForMany(db, event.workspaceId, [event]);
 }
 
-/** How many delivery rows one insert carries; D1 caps bound parameters at 100. */
+/** How many delivery rows one insert carries; a Durable Object caps bound parameters at 100. */
 const deliveryRowsPerInsert = 16;
 
 /**
@@ -113,7 +113,7 @@ export async function deriveWebhookDeliveriesForMany(
  * The Projects each Agent among the subscriptions was granted, in one read
  * whatever the batch holds. Joined through the subscriptions rather than
  * listing the Agents' ids, so the statement binds the Workspace and nothing
- * that grows with it (D1 caps bound parameters at 100).
+ * that grows with it (a Durable Object caps bound parameters at 100).
  *
  * Every Agent that holds a subscription has an entry, an empty one when it was
  * granted nothing, so that "no grants" reads as "sees nothing" and never as

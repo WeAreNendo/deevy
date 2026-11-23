@@ -402,7 +402,7 @@ export const TRAILING_ACTIVITIES = 3;
  * The last few Activities of each Run, and how many there are, in one query:
  * a window over `activity` ranks each Run's rows newest first and counts
  * them, and only the top of each partition comes back. One statement for the
- * whole page, since D1 budgets per statement (docs/plans/m3.md).
+ * whole page, since a request is budgeted per statement (budget.test.ts).
  */
 async function trailingActivities(
   db: Parameters<typeof requireRun>[0]["db"],

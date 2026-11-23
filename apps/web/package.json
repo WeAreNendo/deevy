@@ -6,18 +6,13 @@
   "scripts": {
     "dev": "vp dev",
     "build": "vp build",
-    "build:workers": "DEEVY_TARGET=workers vp build",
-    "check:workers": "wrangler deploy --dry-run --config dist/deevy/wrangler.json --outdir dist/wrangler-dry-run",
-    "test:workers": "node scripts/smoke-workers.ts",
     "screens": "node --env-file-if-exists=../../.env scripts/screens.ts",
     "preview": "vp preview"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
-    "@deevy/adapters": "workspace:*",
     "@deevy/core": "workspace:*",
     "@deevy/design": "workspace:*",
-    "@deevy/sockets": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "catalog:",
@@ -40,8 +35,6 @@
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "catalog:",
-    "@cloudflare/workers-types": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@testing-library/react": "^16.3.3",
     "@types/node": "catalog:",
@@ -54,7 +47,6 @@
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:",
-    "wrangler": "catalog:"
+    "vite-plus": "catalog:"
   }
 }

@@ -20,7 +20,6 @@ dist-ssr
 # wrangler's local secrets, which the .env lines above do not match
 .dev.vars
 .dev.vars.*
-!.dev.vars.example
 
 # Editor directories and files
 .vscode/*

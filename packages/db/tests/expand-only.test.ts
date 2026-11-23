@@ -10,7 +10,6 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vite-plus/test";
 import { checkMigrations } from "../scripts/check-migrations.ts";
-import { projectMigrations } from "../scripts/emit-d1-migrations.ts";
 import { checkExpandOnly, grandfathered } from "../scripts/expand-only.ts";
 
 const run = promisify(execFile);
@@ -218,13 +217,12 @@ describe("migrations written before ADR-0031", () => {
 });
 
 describe("check:migrations", () => {
-  it("says what to do about a rebuild, rather than only that D1 will not take its PRAGMA", async () => {
+  it("says what to do about a rebuild, rather than only that an object ignores its PRAGMA", async () => {
     const dir = await drizzleFolder({ ...before, "20261011000000_next": rebuild });
     const empty = await mkdtemp(join(tmpdir(), "deevy-migrations-"));
 
     const problems = await checkMigrations({
       drizzleDir: dir,
-      migrationsDir: empty,
       // Never read: a removal is said first and alone.
       durableMigrationsFile: join(empty, "durable-migrations.ts"),
     });
@@ -235,13 +233,9 @@ describe("check:migrations", () => {
 
   it("exits non-zero on a migration that takes something away", async () => {
     const dir = await drizzleFolder({ ...before, "20261011000000_next": "DROP TABLE `issue`;" });
-    const projected = await mkdtemp(join(tmpdir(), "deevy-migrations-"));
-    for (const { name, sql } of await projectMigrations(dir)) {
-      await writeFile(join(projected, name), sql);
-    }
     const script = new URL("../scripts/check-migrations.ts", import.meta.url).pathname;
 
-    const failed = await run(process.execPath, [script, dir, projected]).catch(
+    const failed = await run(process.execPath, [script, dir]).catch(
       (error: { code: number; stderr: string }) => error,
     );
 

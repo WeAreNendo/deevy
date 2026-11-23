@@ -1,5 +1,9 @@
 # Runtime-agnostic core, Node first, Cloudflare Workers second
 
+> Amended by [ADR-0037](./0037-two-deployment-shapes.md): the two shapes are the image and the hosted Worker
+> (ADR-0028). The single-Workspace Worker on D1 is gone, and the hosted Worker's build is what keeps the core
+> free of `node:`.
+
 deevy ships as two deployment shapes and the operator picks one: a single Node process with SQLite in a Docker
 image, and a Cloudflare Worker with D1. To keep that one codebase, the core uses only web-standard APIs (Request,
 Response, WebCrypto, fetch) and Drizzle on the SQLite dialect, which both better-sqlite3/libsql and D1 speak.
