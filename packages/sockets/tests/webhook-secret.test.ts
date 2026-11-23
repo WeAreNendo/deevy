@@ -9,7 +9,8 @@ import { socketModules } from "../src/index.ts";
  * Socket's page whether to offer Mint, a field for the tool's own, or neither.
  * Until 2026-10-16 the page offered Mint for every tool and the API minted for
  * any: a secret Slack or Linear can never be given, and one that replaced
- * Notion's verification token.
+ * Notion's verification token. A chat tool delivers nothing since ADR-0036, so
+ * it has no secret at all.
  */
 describe("who makes a tool's webhook secret", () => {
   const modules = socketModules({ devStub: true });
@@ -26,8 +27,7 @@ describe("who makes a tool's webhook secret", () => {
     expect(declared("gitlab")).toBe("either");
   });
 
-  it("is only the tool's for Slack and Linear, which make it and take none typed in", () => {
-    expect(declared("slack")).toBe("tool");
+  it("is only the tool's for Linear, which makes it and takes none typed in", () => {
     expect(declared("linear")).toBe("tool");
   });
 
@@ -37,6 +37,10 @@ describe("who makes a tool's webhook secret", () => {
 
   it("is deevy's alone for the generic Socket, whose sender has it from nowhere else", () => {
     expect(declared("generic")).toBe("deevy");
+  });
+
+  it("is nobody's for Slack, which deevy only posts to and which sends deevy nothing to sign", () => {
+    expect(declared("slack")).toBe("none");
   });
 
   it("is said by every module this build registers", () => {

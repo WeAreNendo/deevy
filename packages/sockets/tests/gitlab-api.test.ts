@@ -18,10 +18,7 @@ interface Asked {
 }
 
 /** A GitLab that answers what each `METHOD /path` is recorded to answer. */
-function gitlabReturning(
-  answers: Record<string, unknown>,
-  options: { baseUrl?: string; signInIssuer?: string } = {},
-) {
+function gitlabReturning(answers: Record<string, unknown>, options: { baseUrl?: string } = {}) {
   const asked: Asked[] = [];
   const base = `${options.baseUrl ?? "https://gitlab.com"}/api/v4`;
   const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -47,15 +44,12 @@ function gitlabReturning(
     return Response.json(answer, { status: method === "POST" ? 201 : 200 });
   }) as typeof fetch;
 
-  const module = createGitlabSocket(
-    {
-      config: options.baseUrl ? { baseUrl: options.baseUrl } : {},
-      credentials: { token: "glpat-deevy-bot-token" },
-      fetch: fetchImpl,
-      now: () => new Date("2026-09-24T10:00:00Z"),
-    },
-    options.signInIssuer ? { signInIssuer: options.signInIssuer } : {},
-  );
+  const module = createGitlabSocket({
+    config: options.baseUrl ? { baseUrl: options.baseUrl } : {},
+    credentials: { token: "glpat-deevy-bot-token" },
+    fetch: fetchImpl,
+    now: () => new Date("2026-09-24T10:00:00Z"),
+  });
   const { tracker } = module;
   if (!tracker?.listContainers) {
     throw new Error("a GitLab Socket is a tracker that offers projects");
@@ -142,26 +136,16 @@ describe("who deevy is on GitLab", () => {
     );
   });
 
-  it("lives on gitlab.com, whose accounts are the ones deevy signs people in with", () => {
-    const { module } = gitlabReturning({});
-
-    // So a Human who signed in to deevy with GitLab rules from GitLab with no
-    // linking step, as one who signed in with GitHub does from github.com.
-    expect(module.identityScope).toEqual({ instance: "gitlab.com", signInProvider: "gitlab" });
-  });
-
-  it("shares nothing with sign-in on another instance, unless that is the one people sign in with", () => {
-    const own = gitlabReturning({}, { baseUrl: "https://gitlab.example.com" });
-    const signedInThere = gitlabReturning(
-      {},
-      { baseUrl: "https://gitlab.example.com", signInIssuer: "https://gitlab.example.com" },
+  it("is asked of the GitLab the Socket is on, a self-managed one too", async () => {
+    const { module, asked } = gitlabReturning(
+      { "GET /user": { id: 7001, username: "deevy-bot", name: "deevy", bot: true } },
+      { baseUrl: "https://gitlab.example.com" },
     );
 
-    expect(own.module.identityScope).toEqual({ instance: "gitlab.example.com" });
-    expect(signedInThere.module.identityScope).toEqual({
-      instance: "gitlab.example.com",
-      signInProvider: "gitlab",
-    });
+    await expect(module.identity()).resolves.toMatchObject({ login: "deevy-bot", id: "7001" });
+    // The fake answers only below the base it was given, so a question sent
+    // to gitlab.com instead would have been a 404 with its whole URL here.
+    expect(asked[0]?.path).toBe("/user");
   });
 });
 

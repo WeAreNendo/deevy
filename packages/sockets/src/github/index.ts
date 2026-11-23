@@ -6,7 +6,6 @@ import type {
   InboundCheck,
   InboundEvent,
   InboundInput,
-  IdentityScope,
   Scope,
   SocketIdentity,
   SocketModule,
@@ -148,19 +147,9 @@ function numberFrom(ref: ExternalRef): string {
   return match[1];
 }
 
-/**
- * Where a GitHub Socket's accounts live: the host its API is on.
- *
- * `api.github.com` is github.com, and github.com's accounts are the ones deevy
- * signs people in with — Better Auth's GitHub provider knows no other host — so
- * a Human who signed in with GitHub rules from github.com with no linking step.
- * A GitHub Enterprise Server is a different set of accounts with the same ids
- * in it, and shares nothing (ADR-0025).
- */
-export function githubIdentityScope(api: string): IdentityScope {
-  const host = new URL(api).hostname;
-  const instance = host === "api.github.com" ? "github.com" : host;
-  return instance === "github.com" ? { instance, signInProvider: "github" } : { instance };
+/** Whether a Socket's API is github.com's, the one GitHub deevy can make an App on. */
+function onGithubCom(api: string): boolean {
+  return new URL(api).hostname === "api.github.com";
 }
 
 /**
@@ -364,8 +353,6 @@ export function createGithubSocket({
     }
   }
 
-  const identityScope = githubIdentityScope(api);
-
   return {
     provider: "github",
     capabilities: new Set(["tracker"] as const),
@@ -374,13 +361,12 @@ export function createGithubSocket({
     webhookSecretFrom: "either",
     // Walked against github.com itself (docs/plans/sockets.md, "What it found").
     walked: true,
-    identityScope,
     // The manifest is a form the browser posts from deevy's page, whose policy
     // lets a form go only to github.com (packages/core/src/headers.ts): posted
     // to any other GitHub — a GitHub Enterprise Server, or GHE.com — it is
     // refused before it leaves. Said to whoever reads it on a screen, so in
     // the screen's words.
-    ...(identityScope.instance === "github.com"
+    ...(onGithubCom(api)
       ? {}
       : {
           beginRefusal:
@@ -389,7 +375,7 @@ export function createGithubSocket({
 
     /**
      * Who deevy is on GitHub: the App's own bot account. The loop guard reads
-     * this to drop the comments deevy itself wrote (ADR-0025).
+     * this to drop the comments deevy itself wrote.
      *
      * And what a pasted App never said, which the manifest's conversion would
      * have. Its slug, and its page, which is where it is installed on more and

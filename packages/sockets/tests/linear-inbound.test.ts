@@ -137,7 +137,9 @@ describe("an issue, as deevy projects it", () => {
         delegateId: null,
         updatedAt: new Date("2026-09-24T09:14:05.311Z"),
       },
-      actor: { login: "Grace Hopper", id: GRACE, isBot: false, email: "grace@example.com" },
+      // Linear sends the actor's address too, which deevy does not take: an
+      // account on a tool is nobody's to deevy (ADR-0036).
+      actor: { login: "Grace Hopper", id: GRACE, isBot: false },
     });
   });
 
@@ -204,37 +206,44 @@ describe("an issue, as deevy projects it", () => {
 });
 
 describe("a comment", () => {
-  it("whose first line is /approve is a Ruling, with the rest as its note", () => {
-    const [event] = tracker().normalize("Comment", commented);
-
-    expect(event).toEqual({
-      kind: "ruling",
-      scopeKey: TEAM,
-      issueExternalId: "0b6e2f4a-3c1d-4e8b-9a7f-5d2c1b0a9e81",
-      comment: {
-        externalId: "b3a2c1d0-e9f8-4a7b-8c6d-5e4f3a2b1c0d",
-        url: "https://linear.app/acme/issue/ENG-12/checkout-totals-are-wrong-with-a-coupon#comment-b3a2c1d0",
-        body: "/approve cap it at the basket total\nand say so in the changelog",
-        author: { login: "Grace Hopper", id: GRACE, isBot: false, email: "grace@example.com" },
-        createdAt: new Date("2026-09-24T10:21:17.902Z"),
-      },
-      decision: "approved",
-      note: "cap it at the basket total\nand say so in the changelog",
-    });
-  });
-
-  it("that says anything else is a comment", () => {
+  it("is what was said, where, by whom and when, and not the address Linear sends with it", () => {
     const plain = {
       ...commented,
       data: { ...commented.data, body: "Is this the coupon from the spring sale?" },
     };
 
-    expect(tracker().normalize("Comment", plain)).toMatchObject([
-      { kind: "comment", issueExternalId: "0b6e2f4a-3c1d-4e8b-9a7f-5d2c1b0a9e81" },
+    expect(tracker().normalize("Comment", plain)).toEqual([
+      {
+        kind: "comment",
+        scopeKey: TEAM,
+        issueExternalId: "0b6e2f4a-3c1d-4e8b-9a7f-5d2c1b0a9e81",
+        comment: {
+          externalId: "b3a2c1d0-e9f8-4a7b-8c6d-5e4f3a2b1c0d",
+          url: "https://linear.app/acme/issue/ENG-12/checkout-totals-are-wrong-with-a-coupon#comment-b3a2c1d0",
+          body: "Is this the coupon from the spring sale?",
+          author: { login: "Grace Hopper", id: GRACE, isBot: false },
+          createdAt: new Date("2026-09-24T10:21:17.902Z"),
+        },
+      },
     ]);
   });
 
-  it("by an app is a machine's, which is what keeps deevy's own quoted words from ruling", () => {
+  it("whose first line is /approve is a comment too, its words untouched: a Ruling is made in deevy", () => {
+    const [event, ...more] = tracker().normalize("Comment", commented);
+
+    expect(more).toEqual([]);
+    expect(event).toEqual({
+      kind: "comment",
+      scopeKey: TEAM,
+      issueExternalId: "0b6e2f4a-3c1d-4e8b-9a7f-5d2c1b0a9e81",
+      comment: expect.objectContaining({
+        body: "/approve cap it at the basket total\nand say so in the changelog",
+        author: { login: "Grace Hopper", id: GRACE, isBot: false },
+      }),
+    });
+  });
+
+  it("by an app is a machine's: what deevy said coming back is not a comment anybody made", () => {
     const byApp = {
       ...commented,
       actor: { id: "2f4e6a8c-0b1d-4e3f-a5b7-c9d1e3f5a7b9", type: "OauthClient", name: "deevy" },
@@ -283,7 +292,7 @@ describe("a comment", () => {
     ]);
   });
 
-  it("that was edited or removed means nothing: deevy acts on what was said first", () => {
+  it("that was edited or removed is no new comment: deevy acts on what was said when it was said", () => {
     for (const action of ["update", "remove"]) {
       expect(tracker().normalize("Comment", { ...commented, action })).toMatchObject([
         { kind: "ignored" },

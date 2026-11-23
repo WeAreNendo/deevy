@@ -90,7 +90,6 @@ function linearReturning(
         ? Response.json({ error: "invalid_grant" }, { status: 400 })
         : Response.json(answer);
     }
-    if (url.endsWith("/oauth/revoke")) return new Response(null, { status: 200 });
     if (options.refuse?.(one)) {
       // As Linear answered a token it did not know on 2026-09-25.
       return Response.json(
@@ -246,22 +245,13 @@ describe("who deevy is on Linear", () => {
   it("is the app's own user, and connecting learns which workspace it is in", async () => {
     const { module } = linearReturning({ DeevyWho: who });
 
+    // The workspace is kept on the Socket, so an install of the app in
+    // another one is refused (below).
     expect(await module.identity()).toEqual({
       login: "deevy",
       id: APP_USER,
       mentionHandle: "@deevy",
       learned: { organizationId: ORG, organizationName: "Acme", urlKey: "acme" },
-    });
-    // An account id means nothing without the workspace that issued it
-    // (ADR-0025). A Linear user's id is one workspace's, and it is the id a
-    // Sign in with Linear keeps: a Human who signed in to deevy with this
-    // workspace's account rules here with no linking step. Settings ›
-    // Identities still links on Linear's own page, since a sign-in could be
-    // to another workspace.
-    expect(module.identityScope).toEqual({
-      instance: ORG,
-      signInProvider: "linear",
-      linkBySignIn: false,
     });
   });
 });
@@ -305,69 +295,6 @@ describe("the tracker", () => {
   });
 });
 
-describe("a Human proving a Linear account is theirs", () => {
-  it("is sent to Linear to consent as themselves, reading nothing but who they are", () => {
-    const { module } = linearReturning({});
-
-    const url = new URL(
-      module.accountLink?.authorizeUrl({
-        redirectUri: "https://deevy.test/api/identities/linear/callback",
-        state: "signed-state",
-      }) ?? "",
-    );
-
-    expect(url.origin + url.pathname).toBe("https://linear.app/oauth/authorize");
-    expect(Object.fromEntries(url.searchParams)).toEqual({
-      client_id: "lin_client_id_1",
-      redirect_uri: "https://deevy.test/api/identities/linear/callback",
-      response_type: "code",
-      scope: "read",
-      state: "signed-state",
-      // Always asked, so the Human sees which workspace they are consenting in.
-      prompt: "consent",
-    });
-  });
-
-  it("comes back with a code deevy spends once, reads the account with, and gives back", async () => {
-    const { module, asked } = linearReturning({
-      "token:authorization_code": {
-        access_token: "lin_oauth_grace_token",
-        token_type: "Bearer",
-        expires_in: 86399,
-        scope: "read",
-        refresh_token: "lin_refresh_grace",
-      },
-      DeevyWho: {
-        viewer: { id: "5a1b7c3e", name: "Grace Hopper", displayName: "grace" },
-        organization: { id: ORG, name: "Acme", urlKey: "acme" },
-      },
-    });
-
-    const account = await module.accountLink?.account({
-      code: "the-one-use-code",
-      redirectUri: "https://deevy.test/api/identities/linear/callback",
-    });
-
-    expect(account).toEqual({ id: "5a1b7c3e", login: "grace", instance: ORG });
-    expect(asked[0]?.form).toMatchObject({
-      grant_type: "authorization_code",
-      code: "the-one-use-code",
-      redirect_uri: "https://deevy.test/api/identities/linear/callback",
-      client_id: "lin_client_id_1",
-      client_secret: "lin_client_secret_1",
-    });
-    expect(asked.find((one) => one.operation === "DeevyWho")?.authorization).toBe(
-      "Bearer lin_oauth_grace_token",
-    );
-    // deevy keeps nothing of the Human's: the token is revoked once it has
-    // said who they are.
-    expect(asked.at(-1)).toMatchObject({
-      url: "https://api.linear.app/oauth/revoke",
-      form: { token: "lin_oauth_grace_token" },
-    });
-  });
-});
-
 describe("letting people assign issues to deevy", () => {
   it("starts on Linear's own page, as an install of the app by a workspace admin", () => {
     const { module } = linearReturning({});
@@ -406,6 +333,9 @@ describe("letting people assign issues to deevy", () => {
     });
 
     expect(result).toMatchObject({ config: { assignable: true } });
+    // The code proves the admin's consent, and the token it buys is not kept:
+    // the app's own grant is what deevy works with.
+    expect(result?.credentials).toBeUndefined();
     expect(asked[0]?.form).toMatchObject({
       grant_type: "authorization_code",
       redirect_uri: "https://deevy.test/hooks/sock_1/setup",

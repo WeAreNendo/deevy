@@ -83,9 +83,6 @@ export interface WorkerBindings {
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
-  GITLAB_CLIENT_ID?: string;
-  GITLAB_CLIENT_SECRET?: string;
-  GITLAB_ISSUER?: string;
   DEEVY_OIDC_ISSUER?: string;
   DEEVY_OIDC_CLIENT_ID?: string;
   DEEVY_OIDC_CLIENT_SECRET?: string;
@@ -93,12 +90,6 @@ export interface WorkerBindings {
   MICROSOFT_CLIENT_ID?: string;
   MICROSOFT_CLIENT_SECRET?: string;
   MICROSOFT_TENANT_ID?: string;
-  LINEAR_CLIENT_ID?: string;
-  LINEAR_CLIENT_SECRET?: string;
-  SLACK_CLIENT_ID?: string;
-  SLACK_CLIENT_SECRET?: string;
-  ATLASSIAN_CLIENT_ID?: string;
-  ATLASSIAN_CLIENT_SECRET?: string;
   DEEVY_SIGN_IN_ORDER?: string;
   DEEVY_ADMIN_EMAIL?: string;
   DEEVY_WORKSPACE_NAME?: string;

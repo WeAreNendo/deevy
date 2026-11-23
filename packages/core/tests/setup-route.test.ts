@@ -80,9 +80,7 @@ describe("a Socket that is not connected yet", () => {
     expect(begun.hasCredentials).toBe(false);
     expect(begun.inboundUrl).toBe(`https://deevy.test/hooks/${begun.id}`);
     expect(begun.setupUrl).toBe(`https://deevy.test/hooks/${begun.id}/setup`);
-    // And where a Human comes back to after linking their own account on the
-    // tool, which the tool's OAuth app has to list beside the setup route.
-    expect(begun.accountCallbackUrl).toBe("https://deevy.test/api/identities/stub/callback");
+    expect(begun).not.toHaveProperty("accountCallbackUrl");
     // What GitHub echoes back, so the redirect that lands can be shown to have
     // come from the flow this deevy started.
     expect(begun.state).toMatch(/^[0-9]+\.[A-Za-z0-9_-]+$/);

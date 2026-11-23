@@ -1,5 +1,9 @@
 # A sign-in may be relayed
 
+> Amended by [ADR-0036](./0036-a-ruling-is-made-in-deevy.md): the platform signs in with GitHub, Google and
+> Microsoft, so the relay holds those three Apps' callbacks. GitLab, Linear, Slack and Atlassian went as
+> sign-in providers, and a Workspace's own OpenID Connect provider was never relayed.
+
 Hosted Workspaces live at `app.deevy.dev/<slug>` ([ADR-0028](./0028-a-hosted-workspace-is-a-durable-object.md),
 [ADR-0029](./0029-a-deployment-may-live-under-a-path.md)), and every one of them signs Humans in with the
 same GitHub, Google, Microsoft, GitLab, Linear, Slack and Atlassian Apps — the platform's, because a team

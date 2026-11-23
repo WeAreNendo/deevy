@@ -1,12 +1,10 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
 import { DeevyLogo } from "@/components/deevy-logo";
 import { MemberChip } from "@/components/member-chip";
 import { SignInButton } from "@/components/sign-in-button";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth.ts";
@@ -18,10 +16,8 @@ import {
   invitationInPath,
 } from "@/lib/invitation.ts";
 import { appURL, inApp, withBase } from "@/lib/base.ts";
-import { ruleKinds, ruleKindsSaid, ruleKindWorks } from "@/lib/join-rules.ts";
 import { orpc } from "@/lib/orpc.ts";
 import { arrangeSignIn } from "@/lib/sign-in.ts";
-import { cn } from "@/lib/utils";
 import { createAppRouter } from "@/router.tsx";
 import type { ShellProps } from "@/routes/shell.tsx";
 
@@ -116,35 +112,6 @@ export function SignedOut({ invitation = null }: { invitation?: string | null })
               onClick={() => start(provider)}
             />
           ))}
-          {arranged.more.length > 0 ? (
-            <Collapsible className="flex flex-col gap-3">
-              <CollapsibleTrigger
-                className={cn(
-                  buttonVariants({ variant: "ghost", size: "sm" }),
-                  "self-center text-muted-foreground",
-                )}
-              >
-                More ways to sign in
-                <ChevronDown
-                  aria-hidden
-                  className="transition-transform group-data-[panel-open]/button:rotate-180"
-                />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="grid grid-cols-2 gap-3">
-                {arranged.more.map((provider) => (
-                  <SignInButton
-                    key={provider.id}
-                    provider={provider.id}
-                    label={provider.label}
-                    // A single sign-on's name is the operator's, of any length.
-                    compact={provider.id !== "oidc"}
-                    className={provider.id === "oidc" ? "col-span-2" : undefined}
-                    onClick={() => start(provider)}
-                  />
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          ) : null}
         </div>
       ) : null}
       {providers?.length === 0 ? (
@@ -340,13 +307,6 @@ export function NotAMember({
   onInvitationDropped?: () => void;
 }) {
   const [token, setToken] = useState(invitation);
-  // The rules that could let this address in here, as Settings › General
-  // offers them: a forge's rule only where people sign in with that forge, so
-  // deevy Cloud, which has no GitLab sign-in, sends nobody to ask for a GitLab
-  // group (lib/join-rules.ts). Until the server says which, the address's own
-  // rule, which every deployment has.
-  const health = useQuery(orpc.health.ping.queryOptions());
-  const rules = ruleKinds.filter((kind) => ruleKindWorks(kind, health.data?.providers ?? []));
   if (token) {
     return (
       <AcceptingInvitation
@@ -369,7 +329,7 @@ export function NotAMember({
         {addressConfirmed ? (
           <p className="text-sm text-muted-foreground">
             {email} isn&apos;t a Member of this Workspace yet. Ask an admin to invite you, or to
-            approve your {ruleKindsSaid(rules)} — then sign in again.
+            approve your email domain — then sign in again.
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">

@@ -68,7 +68,7 @@ request on GitHub. It ends **Finished** or **Failed**.
 
 If your Project lists Checkpoints, such as `plan` before the Agent writes code or `ship` before it
 finishes, the Agent stops at a Gate at each one, and the Run shows **Waiting on a ruling** until a Human
-rules: in deevy, or with `/approve` in a comment on the issue
+rules on it in deevy. deevy comments on the issue with a link to the Gate
 ([How a Gate asks](/gates/how-a-gate-asks/)).
 
 As its Sponsor, you also see its Runs on **Needs me**, under **Your Agents' Runs**, while they are

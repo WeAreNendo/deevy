@@ -273,7 +273,7 @@ export interface DeliverDueChatMessagesOptions {
 }
 
 /**
- * Sends what a chat tool is owed (ADR-0025): a Gate posted in the channel its
+ * Sends what a chat tool is owed (ADR-0036): a Gate posted in the channel its
  * Project binds (docs/plans/simplify.md, slice 8), and the update a Gate's
  * messages are owed when somebody rules.
  *
@@ -338,10 +338,7 @@ export async function deliverDueChatMessages({
         run: { with: { agent: { with: { user: { columns: { name: true } } } } } },
         checkpointPolicy: { columns: { approvalsRequired: true } },
         decisions: {
-          with: {
-            socket: { columns: { provider: true } },
-            member: { with: { user: { columns: { name: true } } } },
-          },
+          with: { member: { with: { user: { columns: { name: true } } } } },
         },
         mirrors: { where: { kind: "message" } },
       },
@@ -1110,7 +1107,7 @@ export async function runDueWork({
   }
   // And what a chat tool is owed: a Gate in the channel its Project binds,
   // and the update its message is owed when somebody rules. A Gate message
-  // links into deevy, so without an origin it waits (ADR-0025).
+  // links into deevy, so without an origin it waits (ADR-0036).
   if (sockets && baseUrl) {
     await drain(
       () =>

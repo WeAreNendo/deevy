@@ -4,6 +4,14 @@ import { member, workspace } from "./workspace.ts";
 
 const now = sql`(cast(unixepoch('subsecond') * 1000 as integer))`;
 
+/*
+ * Every table in this file is unused since docs/plans/simplify.md, slice 10: a
+ * Ruling is made in deevy (ADR-0036), so a Human's accounts on the tools mean
+ * nothing to it and there is no Identity to link. Nothing reads or writes
+ * them, and they are dropped when the migration history starts afresh
+ * (slice 12), because a dropped table is what ADR-0031's guard refuses.
+ */
+
 /**
  * How deevy came to believe an account on a tool is a Member (ADR-0025).
  *

@@ -1,6 +1,6 @@
 ---
 title: Needs me and chat
-description: What waits on you in deevy is the Gates you may rule on. Find them on Needs me, and have a Project post each of its Gates in a Slack channel with Approve and Reject.
+description: What waits on you in deevy is the Gates you may rule on. Find them on Needs me, and have a Project post each of its Gates in a Slack channel, with a link to rule on it in deevy.
 sidebar:
   order: 1
 ---
@@ -9,13 +9,15 @@ deevy asks you for one thing: a Ruling on a Gate. Your tracker tells you everyth
 it always has: a mention, a comment, a record assigned or closed. deevy keeps no inbox for you and sends you
 no email.
 
-A Gate you may rule on waits for you in three places at once. Rule in whichever you are already in, and the
-others follow:
+A Gate you may rule on is announced in up to three places at once, and each of them leads you to the Gate's
+page in deevy, where you rule:
 
 - **Needs me**, deevy's home page.
-- **The record in your tracker**, as a comment from deevy, which you can answer with `/approve` or
-  `/reject`. See [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/).
-- **The Project's chat channel**, when an admin has bound one, as a message with **Approve** and **Reject**.
+- **The record in your tracker**, as a comment from deevy with the Gate's link. A reply there, even one
+  that starts `/approve`, is only a comment, and rules nothing.
+- **The Project's chat channel**, when an admin has bound one, as a message with a link to the Gate.
+
+See [How a Gate asks](/gates/how-a-gate-asks/).
 
 ## Needs me
 
@@ -50,8 +52,8 @@ An admin binds the channel, once the Workspace has a [Slack Socket](/tools/slack
 
 Saving posts one line in the channel first, to prove deevy can post there:
 
-> deevy will post the Gates of Billing here, with Approve and Reject. A Gate waits until somebody who may
-> rule on it does.
+> deevy will post the Gates of Billing here, each with a link to rule on it in deevy. A Gate waits until
+> somebody who may rule on it does.
 
 Only once Slack takes that line is the channel bound. **Chat** then says which channel the Gates are posted
 in, and the Project's next Gate is posted there. A Gate asked before you bound the channel isn't posted.
@@ -91,39 +93,22 @@ Each Gate is one message in the channel:
 - **Waiting on a ruling at the `plan` Checkpoint**, and the record's key, linking to the record;
 - the Proposal, as the Agent wrote it, cut short if it is very long;
 - the count, such as **0 of 2 approvals**, the Agent that asked, and its Run;
-- every Ruling so far, and where it was made, such as "Ada approved, in deevy";
-- **Approve**, **Reject** and **Open in deevy**.
+- every Ruling so far, such as "Ada approved";
+- **Rule on it in deevy**, a link to the Gate's page.
 
-When anybody rules, in Slack, in deevy or with a comment in the tracker, deevy changes that same message
-rather than posting another. Once the Gate is decided, the message says **Ruled**, with **Approved**,
-**Rejected** or **Superseded by a newer Proposal**, and only **Open in deevy** is left. A click is answered
-at once, and the message changes a moment later.
-
-## Who may click
-
-**Approve** rules at once. **Reject** asks why first, in a dialog, and rules when you send it.
-
-A click counts only when deevy can tell which Human made it, from the Slack account behind it, never from a
-display name:
-
-- **If you sign in to deevy with Slack**, to the same Slack workspace, your clicks already count as you.
-- **Otherwise, link your account once.** Type `/deevy link` in Slack, or just click. Slack shows you a code
-  that only you can see; enter it under **Settings › Identities** within ten minutes, then click again. See
-  [Link an account](/gates/ruling-from-your-tools/#link-an-account).
-
-The Checkpoint's rules apply exactly as they do in deevy. A click that rules nothing is answered privately,
-so only the person who clicked sees why: their account isn't linked yet, they have already ruled, the
-Checkpoint names who may rule and they aren't one of them, or they are the Human the work is for and the
-Checkpoint wants somebody else's approval. Nothing changes in the channel until a click counts.
+The message has no buttons, and nothing said in the channel rules: you rule on the Gate's page, signed in to
+deevy, under the Checkpoint's rules. When anybody rules, deevy changes that same message rather than posting
+another. Once the Gate is decided, the message says **Ruled**, with **Approved**, **Rejected** or
+**Superseded by a newer Proposal**, and its link says **Open it in deevy**.
 
 :::note[deevy Cloud]
-Your Workspace's address is public, so Slack can always reach it. There is nothing to set up.
+There is nothing to set up: each message links to your Workspace's own address.
 :::
 
 :::note[Self-hosted]
 Each message links back to deevy, so deevy posts in chat only once it knows its own address,
-`BETTER_AUTH_URL`; until then the Gates wait to be posted. For a click to count, Slack has to reach your
-deevy over public HTTPS. See [Configure deevy](/self-hosting/configuration/).
+`BETTER_AUTH_URL`; until then the Gates wait to be posted. Slack never sends deevy anything, so a deevy
+Slack cannot reach posts all the same. See [Configure deevy](/self-hosting/configuration/).
 :::
 
 ## An Agent's inbox
@@ -136,4 +121,3 @@ refused. See [Bringing your own harness](/agents/your-own-harness/#work-a-record
 
 - [How a Gate asks](/gates/how-a-gate-asks/)
 - [Slack](/tools/slack/)
-- [Ruling from the tracker or Slack](/gates/ruling-from-your-tools/)

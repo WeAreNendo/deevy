@@ -2,7 +2,8 @@
  * The landing's workflow graph as data: one Issue's way through deevy, drawn
  * by Hero.astro at build time and walked by its script in the browser. Three
  * rows: the way in (the tracker, deevy, the Agent, its Checkpoint, the Gate),
- * the three places a Human can rule, and the way back to the tracker.
+ * the three places a Human hears of it, each a way to the Gate in deevy, where
+ * every Ruling is made, and the way back to the tracker.
  */
 
 export type Kind = "tool" | "deevy" | "agent" | "gate" | "human";
@@ -40,8 +41,8 @@ export const nodes: Node[] = [
     id: "comment",
     x: 720,
     y: 200,
-    title: "/approve",
-    detail: "comment on ENG-12",
+    title: "Comment on ENG-12",
+    detail: "links to the Gate",
     kind: "human",
   },
   {
@@ -49,10 +50,10 @@ export const nodes: Node[] = [
     x: 950,
     y: 200,
     title: "Slack · #billing",
-    detail: "Approve button",
+    detail: "links to the Gate",
     kind: "human",
   },
-  { id: "ruling", x: 490, y: 360, title: "Ruling", detail: "gate.approved", kind: "human" },
+  { id: "ruling", x: 490, y: 360, title: "Ruling", detail: "made in deevy", kind: "human" },
   { id: "pr", x: 260, y: 360, title: "Pull request", detail: "acme/billing#88", kind: "agent" },
   { id: "back", x: 30, y: 360, title: "Linear", detail: "builder's own comment", kind: "tool" },
 ];
@@ -128,7 +129,7 @@ export const ports: Point[] = [
   ...new Map(wires.flatMap((wire) => [wire.from, wire.to]).map((p) => [at(p), p])).values(),
 ];
 
-/** The way a Run goes: in, through one of the three channels, and back. */
+/** The way a Run goes: in, through one of the three places a Human hears of it, and back. */
 export const route = {
   in: ["linear>route", "route>run", "run>check", "check>gate"],
   channels: {
@@ -145,12 +146,12 @@ export const status: Record<string, string> = {
   "route>run": "routed to builder",
   "run>check": "builder is working",
   "check>gate": "Proposal on its way to the Gate",
-  "gate>needs": "approved in deevy",
-  "gate>comment": "approved with /approve",
-  "gate>slack": "approved from Slack",
-  "needs>ruling": "Ruling recorded",
-  "comment>ruling": "Ruling recorded",
-  "slack>ruling": "Ruling recorded",
+  "gate>needs": "waiting in Needs me",
+  "gate>comment": "said on ENG-12",
+  "gate>slack": "posted in #billing",
+  "needs>ruling": "approved in deevy",
+  "comment>ruling": "approved in deevy, from the comment's link",
+  "slack>ruling": "approved in deevy, from the message's link",
   "ruling>pr": "pull request opening",
   "pr>back": "builder tells Linear",
   "back>linear": "finished",

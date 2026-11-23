@@ -119,10 +119,6 @@ describe("who deevy is on Notion", () => {
     });
     expect(asked[0]?.headers.get("authorization")).toBe("Bearer ntn_deevy_integration_secret");
     expect(asked[0]?.headers.get("notion-version")).toBe("2026-03-11");
-    // Notion's accounts are nobody's sign-in and have no link of their own:
-    // an address a Member verified is the most Notion offers (ADR-0025).
-    expect(module.identityScope).toEqual({ instance: WORKSPACE });
-    expect(module.accountLink).toBeUndefined();
   });
 
   it("is never a person: a personal access token would write as them, and drop their comments", async () => {
@@ -227,7 +223,7 @@ describe("the tracker", () => {
     });
   });
 
-  it("reads one comment back with who wrote it, and the address Notion reports for them", async () => {
+  it("reads one comment back with who wrote it, and not the address Notion reports for them", async () => {
     const { tracker } = notionReturning({
       "GET /v1/comments/cmt-1": {
         object: "comment",
@@ -236,8 +232,8 @@ describe("the tracker", () => {
         created_time: "2026-09-24T10:21:00.000Z",
         created_by: { object: "user", id: GRACE },
         rich_text: [
-          { type: "text", plain_text: "/approve " },
-          { type: "text", plain_text: "cap it at the basket total" },
+          { type: "text", plain_text: "Is this the coupon " },
+          { type: "text", plain_text: "from the spring sale?" },
         ],
       },
       [`GET /v1/users/${GRACE}`]: {
@@ -252,8 +248,10 @@ describe("the tracker", () => {
     expect(await tracker.getComment(scope, ref, "cmt-1")).toEqual({
       externalId: "cmt-1",
       url: page.url,
-      body: "/approve cap it at the basket total",
-      author: { login: "Grace Hopper", id: GRACE, isBot: false, email: "grace@example.com" },
+      body: "Is this the coupon from the spring sale?",
+      // Who wrote it, by Notion's id, and nothing more: an account on a tool
+      // is nobody's to deevy (ADR-0036).
+      author: { login: "Grace Hopper", id: GRACE, isBot: false },
       createdAt: new Date("2026-09-24T10:21:00.000Z"),
     });
     expect(await tracker.getComment(scope, ref, "cmt-gone")).toBeNull();

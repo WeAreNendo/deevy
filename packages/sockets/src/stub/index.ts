@@ -1,8 +1,8 @@
 /**
  * The provider that is not a tool.
  *
- * Every rule deevy has about inbound deliveries, routing, rulings and the
- * comments that announce a Gate is a rule about what happens when a tracker
+ * Every rule deevy has about inbound deliveries, routing and the comments
+ * that announce a Gate is a rule about what happens when a tracker
  * says something, or is told something. Proving those against GitHub means a
  * network, an App, a tunnel and a clock; proving them against this means a
  * function call. So the stub is a real tracker with an in-memory store, it
@@ -202,17 +202,6 @@ export function createStubSocket({ config, now }: SocketModuleInput): SocketModu
     webhookSecretFrom: "either",
     // Walked on every deployment, on every commit (docs/acceptance.md).
     walked: true,
-    // Its own accounts, unless its configuration says they are the ones deevy
-    // signs people in with: that is how the acceptance walk and the seed play a
-    // Human who signed in with GitHub and rules from the tracker with no
-    // linking step (ADR-0025). The stub is refused in production, so saying so
-    // vouches for nobody real.
-    identityScope: {
-      instance: `stub:${store.id}`,
-      ...(config.signInProvider === "github" || config.signInProvider === "gitlab"
-        ? { signInProvider: config.signInProvider }
-        : {}),
-    },
     identity: () => Promise.resolve(store.identity),
 
     tracker: {

@@ -3,6 +3,7 @@ import {
   gateRequest as gateRequestTable,
   issue as issueTable,
   project as projectTable,
+  type GateDecision,
   type GateRequest,
 } from "@deevy/db";
 import { ORPCError } from "@orpc/server";
@@ -27,7 +28,6 @@ import {
   gateView,
   passLoweredGates,
   recordRuling,
-  type GateDecisionRow,
 } from "../gates.ts";
 import { newId } from "../ids.ts";
 import { recordOf } from "../issues.ts";
@@ -46,9 +46,8 @@ import {
  * Asking a Human, and being told (ADR-0024, ADR-0020).
  *
  * An Agent that reaches a Checkpoint stops and asks, carrying the Proposal a
- * Human rules on. The policy itself lives in `gates.ts`, because a Ruling can
- * arrive from the tracker or from Slack as well as from here and all three
- * doors have to mean the same thing (ADR-0025).
+ * Human rules on, here and nowhere else (ADR-0036). The policy itself lives
+ * in `gates.ts`, beside the Gate it decides.
  *
  * `gates.approve` and `gates.reject` are a Human's, so an Agent is refused
  * them, and a Human reaches deevy only signed in to its own pages (ADR-0035):
@@ -61,7 +60,7 @@ async function gateFor(context: ContextFor<"member">, requestId: string) {
   const found = await context.db.query.gateRequest.findFirst({
     where: { id: requestId },
     with: {
-      decisions: { with: { socket: true } },
+      decisions: true,
       issue: true,
       run: true,
       checkpointPolicy: { with: { approvers: true } },
@@ -108,7 +107,7 @@ function viewOf(
   parts: {
     request: GateRequest;
     policy: CheckpointPolicy;
-    decisions: GateDecisionRow[];
+    decisions: GateDecision[];
     issueKey: string;
     requesterId?: string | null;
     active: ReadonlySet<string> | null;
@@ -155,7 +154,6 @@ async function viewsOf(
   const ids = rows.map((row) => row.gate.id);
   const decisions = await context.db.query.gateDecision.findMany({
     where: { gateRequestId: { in: ids } },
-    with: { socket: true },
   });
   const unread = [...new Set(rows.map((row) => row.gate.projectId))].filter(
     (id) => !memo.projectsRead.has(id),
@@ -532,7 +530,6 @@ export const gates = {
         memberId: context.member.id,
         decision: "approved",
         note: input.note ?? null,
-        via: "web",
       });
       return viewOf(context, await gateFor(context, input.requestId));
     },
@@ -552,7 +549,6 @@ export const gates = {
         memberId: context.member.id,
         decision: "rejected",
         note: input.note ?? null,
-        via: "web",
       });
       return viewOf(context, await gateFor(context, input.requestId));
     },

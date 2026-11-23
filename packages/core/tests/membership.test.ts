@@ -189,161 +189,6 @@ describe("the Event a join appends", () => {
   });
 });
 
-describe("a rule a provider proves", () => {
-  it("admits by organisation even where the address is unverified, since the address decides nothing", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "acme", "github_org");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@unverified.example" });
-
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@unverified.example", name: "Bob", emailVerified: false },
-      { listOrgs: async () => ["Acme"] },
-    );
-
-    expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toBeDefined();
-  });
-});
-
-describe("a github_org rule", () => {
-  it("admits a sign-in whose organizations include the rule's value", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "acme", "github_org");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.org" });
-
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
-      { listOrgs: async () => ["Acme", "Acme"] },
-    );
-
-    expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toMatchObject({
-      role: "member",
-    });
-  });
-
-  it("turns away a sign-in in none of the allowed organizations", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "acme", "github_org");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.org" });
-
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
-      { listOrgs: async () => ["Globex"] },
-    );
-
-    expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toBeUndefined();
-  });
-
-  it("never asks for organizations when an email domain already matched", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "example.com");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.com" });
-    let asked = false;
-
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@example.com", name: "Bob", emailVerified: true },
-      {
-        listOrgs: async () => {
-          asked = true;
-          return [];
-        },
-      },
-    );
-
-    expect(asked).toBe(false);
-  });
-});
-
-/**
- * A GitLab group is a rule the way a GitHub organization is
- * (docs/plans/sign-in.md slice 5), decided through the same kind of lazy port
- * and holding a path rather than a single label.
- */
-describe("a gitlab_group rule", () => {
-  it("admits a sign-in whose groups include the rule's value", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "acme/platform", "gitlab_group");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.org" });
-
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
-      { listGroups: async () => ["Acme/Platform", "acme"] },
-    );
-
-    expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toMatchObject({
-      role: "member",
-    });
-  });
-
-  it("turns away a sign-in in none of the allowed groups", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "acme/platform", "gitlab_group");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.org" });
-
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
-      // A parent group is not the group the rule names: a rule is a path, and
-      // `acme` is not `acme/platform`.
-      { listGroups: async () => ["acme", "globex/platform"] },
-    );
-
-    expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toBeUndefined();
-  });
-
-  it("never asks for groups when an email domain already matched", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "example.com");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.com" });
-    let asked = false;
-
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@example.com", name: "Bob", emailVerified: true },
-      {
-        listGroups: async () => {
-          asked = true;
-          return [];
-        },
-      },
-    );
-
-    expect(asked).toBe(false);
-  });
-
-  it("leaves a sign-in no Member, rather than no sign-in, when GitLab is down", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await allow(db, "acme/platform", "gitlab_group");
-    await db.insert(user).values({ id: "u-bob", name: "Bob", email: "bob@example.org" });
-
-    // The join runs inside a Better Auth database hook, so a port that threw
-    // would be a sign-in that failed. The Human signs in and asks the admin.
-    await joinWorkspace(
-      db,
-      { userId: "u-bob", email: "bob@example.org", name: "Bob", emailVerified: true },
-      {
-        listGroups: async () => {
-          throw new Error("gitlab is down");
-        },
-      },
-    );
-
-    expect(await db.query.member.findFirst({ where: { userId: "u-bob" } })).toBeUndefined();
-  });
-});
-
 describe("a suspended Member", () => {
   it("is turned away from Workspace operations", async () => {
     const { db, close } = testDb();
@@ -398,12 +243,11 @@ describe("one Human, one Member", () => {
    */
   it("trusts no provider by name, whatever the deployment configured", () => {
     const github = { clientId: "id", clientSecret: "secret" };
+    // And no account on another address is linked to anybody: an account on a
+    // tool vouches for nobody (ADR-0036), so Better Auth's default holds.
     expect(accountLinkingOf({ providers: { github } })).toEqual({
       enabled: true,
       trustedProviders: [],
-      // Read only by the link a signed-in session asks for (Settings ›
-      // Identities), never by a sign-in: see accountLinkingOf.
-      allowDifferentEmails: true,
     });
     expect(accountLinkingOf({})).toMatchObject({ trustedProviders: [] });
   });
@@ -423,7 +267,7 @@ describe("one Human, one Member", () => {
     // `context.trustedProviders` is what handleOAuthUserInfo consults; the
     // option alone would be a value nothing had resolved.
     expect((await auth.$context).trustedProviders).toEqual([]);
-    expect(auth.options.account?.accountLinking).toMatchObject({ allowDifferentEmails: true });
+    expect(auth.options.account?.accountLinking).not.toHaveProperty("allowDifferentEmails");
   });
 
   it("adds no second Member when another account joins a Human who has one", async () => {
@@ -496,22 +340,22 @@ describe("joinPorts", () => {
     return { context, read };
   };
   const portsFor = async (db: Awaited<ReturnType<typeof testDb>>["db"]) =>
-    joinPorts(db, { providers: {} }, "u-bob", (await sealing(db)).read);
+    joinPorts(db, "u-bob", (await sealing(db)).read);
 
   /**
-   * What a forge was asked with. Tokens are sealed at rest
-   * (`encryptOAuthTokens`), and the forge wants the one it issued.
+   * What GitHub was asked with. Tokens are sealed at rest
+   * (`encryptOAuthTokens`), and GitHub wants the one it issued.
    */
   const bearersSent = () => {
     const sent: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
       sent.push(new Headers(init?.headers).get("authorization") ?? "");
-      return Response.json([{ login: "Acme" }]);
+      return Response.json({ login: "bvance" });
     });
     return sent;
   };
 
-  it("asks the forge with the token Better Auth sealed, opened", async () => {
+  it("asks GitHub with the token Better Auth sealed, opened", async () => {
     const { db, close } = testDb();
     closers.push(close);
     const { context } = await sealing(db);
@@ -527,118 +371,44 @@ describe("joinPorts", () => {
     await signedInWith(db, "github", sealed);
     const sent = bearersSent();
 
-    expect(await (await portsFor(db)).listOrgs?.()).toEqual(["Acme"]);
+    expect(await (await portsFor(db)).login?.()).toBe("bvance");
     expect(sent).toEqual(["Bearer gho_the-token-github-issued"]);
   });
 
-  /**
-   * A row from before tokens were sealed. GitHub's reads as plain to Better
-   * Auth; GitLab's is sixty-four hex characters, which Better Auth takes for a
-   * sealed one and fails to open, so deevy's reader is what keeps it working
-   * until that Human signs in again and it is sealed.
-   */
   it("still asks with a token written in the clear before sealing was on", async () => {
     const { db, close } = testDb();
     closers.push(close);
-    const gitlabToken = "de6780bc506a0446309bd9362820ba8aed28aa506c71eedbe1c5c4f9dd350e54";
-    await signedInWith(db, "gitlab", gitlabToken);
+    await signedInWith(db, "github", "gho_written-before-sealing");
     const sent = bearersSent();
 
-    await (await portsFor(db)).listGroups?.();
-    expect(sent).toEqual([`Bearer ${gitlabToken}`]);
-  });
-
-  /**
-   * Both forges page — thirty organizations, twenty groups — so the rule that
-   * names the one on the second page matched nothing, which looks exactly like
-   * a rule that did not match (docs/plans/sign-in.md).
-   */
-  it("reads past the first page of the groups a rule may name", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await signedInWith(db, "gitlab");
-    const asked: string[] = [];
-    vi.stubGlobal("fetch", async (url: string) => {
-      asked.push(url);
-      const page = Number(new URL(url).searchParams.get("page"));
-      const full = Array.from({ length: 100 }, (_, i) => ({ full_path: `acme/team-${i}` }));
-      return Response.json(page === 1 ? full : [{ full_path: "acme/platform" }]);
-    });
-
-    const groups = await (await portsFor(db)).listGroups?.();
-
-    expect(groups).toHaveLength(101);
-    expect(groups).toContain("acme/platform");
-    expect(asked).toHaveLength(2);
-    expect(asked[0]).toContain("per_page=100&page=1");
-    expect(asked[1]).toContain("page=2");
-  });
-
-  /**
-   * A page the forge refused is not the end of the list: a short list that
-   * looks complete makes a rule naming something on the missing page read
-   * exactly like a rule that did not match (docs/plans/sign-in.md).
-   */
-  it("treats a page it could not read as a question with no answer", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await signedInWith(db, "gitlab");
-    vi.stubGlobal("fetch", async (url: string) => {
-      const page = Number(new URL(url).searchParams.get("page"));
-      if (page > 1) return new Response("rate limited", { status: 403 });
-      return Response.json(
-        Array.from({ length: 100 }, (_, i) => ({ full_path: `acme/team-${i}` })),
-      );
-    });
-
-    await expect((await portsFor(db)).listGroups?.()).rejects.toThrow();
-  });
-
-  it("stops asking when a page is the last one", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await signedInWith(db, "github");
-    const asked: string[] = [];
-    vi.stubGlobal("fetch", async (url: string) => {
-      asked.push(url);
-      return Response.json([{ login: "Acme" }]);
-    });
-
-    expect(await (await portsFor(db)).listOrgs?.()).toEqual(["Acme"]);
-    expect(asked).toHaveLength(1);
-  });
-
-  /**
-   * The handle a join allocates: slice 5 promised a GitLab username is a
-   * handle the way a GitHub login is, and nothing was supplying either
-   * (docs/plans/sign-in.md).
-   */
-  it("hands the join whatever the provider calls this sign-in", async () => {
-    const { db, close } = testDb();
-    closers.push(close);
-    await signedInWith(db, "gitlab");
-    vi.stubGlobal("fetch", async (url: string) =>
-      new URL(url).pathname === "/api/v4/user"
-        ? Response.json({ username: "bvance" })
-        : Response.json(null, { status: 404 }),
-    );
-
     expect(await (await portsFor(db)).login?.()).toBe("bvance");
+    expect(sent).toEqual(["Bearer gho_written-before-sealing"]);
   });
 
-  it("spends no request on a provider this Human never signed in with", async () => {
+  it("answers no login, rather than failing the sign-in, when GitHub refuses or cannot be reached", async () => {
     const { db, close } = testDb();
     closers.push(close);
     await signedInWith(db, "github");
+    vi.stubGlobal("fetch", async () => new Response("unavailable", { status: 503 }));
+
+    expect(await (await portsFor(db)).login?.()).toBeNull();
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("connection reset");
+    });
+    expect(await (await portsFor(db)).login?.()).toBeNull();
+  });
+
+  it("spends no request on a Human who never signed in with GitHub", async () => {
+    const { db, close } = testDb();
+    closers.push(close);
+    await signedInWith(db, "google");
     let asked = 0;
     vi.stubGlobal("fetch", async () => {
       asked++;
       return Response.json({ login: "bvance" });
     });
 
-    expect(await (await portsFor(db)).login?.()).toBe("bvance");
-    // GitHub answered, so GitLab is never asked; a Human with neither account
-    // costs no request at all.
-    expect(asked).toBe(1);
+    expect(await (await portsFor(db)).login?.()).toBeNull();
+    expect(asked).toBe(0);
   });
 });

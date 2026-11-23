@@ -1,7 +1,6 @@
 import { openDatabase } from "@deevy/adapters/node";
 import { createApp, newId, router, runDueWork, sealSecret } from "@deevy/core";
 import {
-  account as accountTable,
   agent as agentTable,
   member as memberTable,
   project as projectTable,
@@ -20,14 +19,15 @@ import labeled from "./fixtures/gitlab/issue.labeled.json" with { type: "json" }
 import noted from "./fixtures/gitlab/note.approve.json" with { type: "json" };
 
 /**
- * GitLab, through the door deevy actually serves (ADR-0024, ADR-0025).
+ * GitLab, through the door deevy actually serves (ADR-0024, ADR-0036).
  *
  * The module is proved against recorded payloads and a fake REST API in the
  * other `gitlab-*` tests. This puts the real module behind the real route with
  * a real database and replaces only GitLab's API — so what is under test is the
  * whole sentence: somebody labels an issue on GitLab, the Agent it names has a
- * Run, its Proposal is a comment on the issue, a Human who signs in to deevy
- * with GitLab approves it by commenting with no linking step.
+ * Run, its Proposal is a comment on the issue that says where to rule on it, a
+ * reply there is only a reply, and a Human who rules in deevy has the issue
+ * told.
  */
 const closers: Array<() => void> = [];
 afterEach(() => {
@@ -91,8 +91,8 @@ async function human(db: Db, workspaceId: string, name: string, role: Member["ro
 /**
  * A Workspace with a GitLab Socket and a Project bound to `acme/deevy` for its
  * issues and its code, written straight into the tables. Ada is the admin and
- * the Planner's Sponsor; Grace signs in to deevy with GitLab, which is what
- * Better Auth's `account` row records.
+ * the Planner's Sponsor; Grace is a Member, and on GitLab the author of the
+ * recorded note, which deevy takes for nothing more than who wrote it.
  */
 async function workspaceOnGitlab(db: Db) {
   const workspaceId = newId("workspace");
@@ -102,14 +102,6 @@ async function workspaceOnGitlab(db: Db) {
   })) as Workspace;
   const ada = await human(db, workspaceId, "Ada", "admin");
   const grace = await human(db, workspaceId, "Grace");
-  await db.insert(accountTable).values({
-    id: newId("account"),
-    accountId: String(noted.user.id),
-    providerId: "gitlab",
-    userId: grace.userId,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
 
   const agentUserId = newId("user");
   await db
@@ -170,10 +162,11 @@ async function workspaceOnGitlab(db: Db) {
     context: contextFor(db, planner, workspace, { ...extra, grantedProjectIds: [projectId] }),
   });
   const asAda = createRouterClient(router, { context: contextFor(db, ada, workspace, extra) });
+  const asGrace = createRouterClient(router, { context: contextFor(db, grace, workspace, extra) });
   const sweep = () =>
     runDueWork({ db, sockets, socketSecret: sealing, baseUrl: "https://deevy.test" });
 
-  return { app, api, socketId, grace, planner, asPlanner, asAda, sweep };
+  return { app, api, socketId, grace, planner, asPlanner, asAda, asGrace, sweep };
 }
 
 let deliveries = 0;
@@ -214,11 +207,18 @@ async function opened(db: Db) {
   return { ...walk, run };
 }
 
+/** What deevy has written on the issue, oldest first. */
+function notesOn(api: ReturnType<typeof gitlabApi>) {
+  return api.calls
+    .filter((call) => call.path.endsWith("/notes"))
+    .map((call) => String(call.body.body));
+}
+
 describe("somebody labels an issue on GitLab", () => {
-  it("and the Agent it names has a Run, whose Gate is said on the issue and ruled from it", async () => {
+  it("and the Agent it names has a Run, whose Gate is said on the issue with where to rule on it", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
-    const { app, api, socketId, grace, planner, asPlanner, sweep, run } = await opened(db);
+    const { api, planner, asPlanner, sweep, run } = await opened(db);
 
     const issue = await db.query.issue.findFirst({ where: { externalKey: "acme/deevy#42" } });
     expect(issue).toMatchObject({ url: ISSUE_URL, state: "open", assigneeMemberId: planner.id });
@@ -232,79 +232,82 @@ describe("somebody labels an issue on GitLab", () => {
       proposal: "## What I will do\n\nCap the coupon at the basket total.",
     });
     await sweep();
-    expect(api.calls.find((call) => call.path.endsWith("/notes"))?.body.body).toContain(
-      "Cap the coupon",
-    );
-    expect(api.calls.filter((call) => !call.path.endsWith("/notes"))).toEqual([]);
 
-    // Grace signs in to deevy with GitLab, so her comment is hers with no
-    // linking step: GitLab's account id is what Better Auth recorded.
-    const ruled = await app.request(
+    const [said, ...more] = notesOn(api);
+    expect(more).toEqual([]);
+    expect(said).toContain("Cap the coupon");
+    expect(said).toContain(`Rule on it in deevy: https://deevy.test/gates/${gate.id}`);
+    expect(said).not.toContain("/approve");
+    expect(api.calls.filter((call) => !call.path.endsWith("/notes"))).toEqual([]);
+  });
+
+  it("and a reply of /approve is a comment, so the Gate waits for a Human in deevy, whose Ruling the issue is told", async () => {
+    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
+    closers.push(close);
+    const { app, api, socketId, grace, asPlanner, asGrace, sweep, run } = await opened(db);
+    const gate = await asPlanner.gates.request({
+      runId: run.id,
+      checkpoint: "plan",
+      proposal: "Cap the coupon at the basket total.",
+    });
+    await sweep();
+    const before = Math.max(0, ...(await db.query.event.findMany({})).map((one) => one.seq));
+
+    // Grace's own account on GitLab, and still only something she said.
+    const replied = await app.request(
       `/hooks/${socketId}`,
       delivery("Note Hook", comment("/approve cap it at the basket total")),
     );
-    expect(await ruled.json()).toMatchObject({ status: "applied" });
-    const [decision] = await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } });
-    expect(decision).toMatchObject({
-      memberId: grace.id,
-      decision: "approved",
-      via: "socket",
-      socketId,
-      note: "cap it at the basket total",
-    });
-    expect(await db.query.memberIdentity.findFirst({})).toMatchObject({
-      memberId: grace.id,
-      provider: "gitlab",
-      instance: "gitlab.com",
-      externalUserId: "2931",
-      verifiedBy: "sign_in",
-    });
-
-    // And the Ruling is said there too, as another comment.
+    expect(await replied.json()).toMatchObject({ status: "applied", applied: 1 });
     await sweep();
-    const said = api.calls.filter((call) => call.path.endsWith("/notes"));
-    expect(said.map((call) => String(call.body.body))).toEqual([
+
+    expect(await asGrace.gates.get({ requestId: gate.id })).toMatchObject({ status: "open" });
+    expect(await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } })).toEqual([]);
+    const since = await db.query.event.findMany({ where: { seq: { gt: before } } });
+    expect(since.map((one) => one.kind)).toEqual(["comment.created"]);
+    expect(since[0]?.payload).toMatchObject({
+      body: "/approve cap it at the basket total",
+      externalActor: "grace",
+    });
+    // And nothing answers it on the issue.
+    expect(notesOn(api)).toHaveLength(1);
+
+    // The Ruling is Grace's in deevy, and the issue hears of it as one more comment.
+    await asGrace.gates.approve({ requestId: gate.id, note: "Cap it at the basket total." });
+    await sweep();
+
+    expect(
+      await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } }),
+    ).toMatchObject([
+      { memberId: grace.id, decision: "approved", note: "Cap it at the basket total." },
+    ]);
+    expect(notesOn(api)).toEqual([
       expect.stringContaining("Cap the coupon"),
-      expect.stringContaining("Approved"),
+      expect.stringMatching(
+        /^\*\*Approved\*\* at the `plan` Checkpoint[^]*> Cap it at the basket total\./,
+      ),
     ]);
     expect(api.calls.filter((call) => !call.path.endsWith("/notes"))).toEqual([]);
   });
 
-  it("but a comment from an account nobody can place rules nothing, and is told where to link it", async () => {
-    const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
-    closers.push(close);
-    const { app, api, socketId, asPlanner, sweep, run } = await opened(db);
-    const gate = await asPlanner.gates.request({
-      runId: run.id,
-      checkpoint: "plan",
-      proposal: "Cap the coupon.",
-    });
-
-    await app.request(
-      `/hooks/${socketId}`,
-      delivery("Note Hook", comment("/approve", { id: 9999, username: "a-stranger" })),
-    );
-    await sweep();
-
-    expect(await db.query.gateDecision.findMany({ where: { gateRequestId: gate.id } })).toEqual([]);
-    const reply = api.calls
-      .filter((call) => call.path.endsWith("/notes"))
-      .map((call) => String(call.body.body))
-      .find((body) => body.includes("ruled nothing"));
-    expect(reply).toContain("https://deevy.test/settings/identities");
-  });
-
-  it("and deevy's own comment coming back rules nothing, whatever it quotes", async () => {
+  it("and deevy's own comment coming back is no comment anybody made, whatever it quotes", async () => {
     const { db, close } = openDatabase({ path: ":memory:", migrationsFolder });
     closers.push(close);
     const { app, socketId, asPlanner, run } = await opened(db);
     await asPlanner.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
 
-    await app.request(`/hooks/${socketId}`, delivery("Note Hook", comment("/approve", DEEVY_BOT)));
+    const echoed = await app.request(
+      `/hooks/${socketId}`,
+      delivery("Note Hook", comment("/approve", DEEVY_BOT)),
+    );
 
+    expect(await echoed.json()).toMatchObject({
+      status: "skipped",
+      skipped: ["Acme on GitLab wrote this comment itself"],
+    });
     expect(await db.query.gateDecision.findMany({})).toEqual([]);
     const kinds = (await db.query.event.findMany({})).map((event) => event.kind);
-    expect(kinds).not.toContain("gate.ruling_refused");
+    expect(kinds).not.toContain("comment.created");
   });
 
   it("refuses a delivery with somebody else's token, and writes nothing down", async () => {

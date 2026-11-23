@@ -220,17 +220,13 @@ describe("the development OAuth stub", () => {
       "github",
       "google",
       "microsoft",
-      "gitlab",
-      "linear",
-      "slack",
-      "atlassian",
       "oidc",
     ]);
     // Without the flag the same environment is what it always was: nothing.
     expect(signInProviders(readEnv({}))).toEqual([]);
   });
 
-  it("reads the new providers' pairs, Microsoft's tenant, and the operator's order", () => {
+  it("reads Microsoft's pair and tenant, the operator's order, and no provider deevy dropped", () => {
     const env = readEnv({
       MICROSOFT_CLIENT_ID: "ms",
       MICROSOFT_CLIENT_SECRET: "ms-secret",
@@ -251,13 +247,10 @@ describe("the development OAuth stub", () => {
       clientSecret: "ms-secret",
       tenantId: "organizations",
     });
-    expect(signInProviders(env).map(({ id }) => id)).toEqual([
-      "slack",
-      "microsoft",
-      "github",
-      "linear",
-      "atlassian",
-    ]);
+    // Linear, Slack and Atlassian are not sign-ins since slice 10
+    // (docs/plans/simplify.md): their pairs, and their place in the order,
+    // are read as nothing.
+    expect(signInProviders(env).map(({ id }) => id)).toEqual(["microsoft", "github"]);
   });
 
   it("leaves a pair the environment did set alone", () => {

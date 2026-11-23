@@ -29,13 +29,13 @@ export {
 export type { SignedDelivery } from "./generic/index.ts";
 export { createGithubSocket, resetGithubTokens } from "./github/index.ts";
 export type { GithubConfig, GithubCredentials } from "./github/index.ts";
-export { createGitlabSocket, gitlabIdentityScope } from "./gitlab/index.ts";
-export type { GitlabConfig, GitlabCredentials, GitlabOptions } from "./gitlab/index.ts";
+export { createGitlabSocket } from "./gitlab/index.ts";
+export type { GitlabConfig, GitlabCredentials } from "./gitlab/index.ts";
 export { createLinearSocket, resetLinearTokens } from "./linear/index.ts";
 export type { LinearConfig, LinearCredentials } from "./linear/index.ts";
 export { createNotionSocket } from "./notion/index.ts";
 export type { NotionConfig, NotionCredentials } from "./notion/index.ts";
-export { createSlackSocket, normalizeSlack } from "./slack/index.ts";
+export { createSlackSocket } from "./slack/index.ts";
 export type { SlackConfig, SlackCredentials } from "./slack/index.ts";
 
 /**
@@ -63,20 +63,12 @@ export interface SocketModulesOptions {
    * with one of each needs.
    */
   githubApiBase?: string;
-  /**
-   * The GitLab this deployment signs people in with (`GITLAB_ISSUER`), so a
-   * GitLab Socket on the same instance takes its accounts from sign-in and a
-   * Human who signed in with GitLab rules from it with no linking step.
-   * gitlab.com when unset, as sign-in's own default is (ADR-0025).
-   */
-  gitlabSignInIssuer?: string;
 }
 
 export function socketModules({
   devStub = false,
   devStubContainers,
   githubApiBase,
-  gitlabSignInIssuer,
 }: SocketModulesOptions = {}): SocketModules {
   // Once, where the registry is built rather than per request: a store rebuilt
   // is a store that forgot every record it held (src/stub).
@@ -88,8 +80,7 @@ export function socketModules({
           ? { ...input, config: { ...input.config, apiBase: githubApiBase } }
           : input,
       ),
-    gitlab: (input) =>
-      createGitlabSocket(input, gitlabSignInIssuer ? { signInIssuer: gitlabSignInIssuer } : {}),
+    gitlab: createGitlabSocket,
     linear: createLinearSocket,
     notion: createNotionSocket,
     slack: createSlackSocket,

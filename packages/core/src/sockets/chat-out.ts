@@ -11,17 +11,16 @@ import { gateRequestIdOf } from "../notifications.ts";
 import type { ChatGateMessage, ChatMessage } from "./port.ts";
 
 /**
- * What deevy says in a chat tool, and how it keeps it true (ADR-0025).
+ * What deevy says in a chat tool, and how it keeps it true (ADR-0036).
  *
  * A Project may bind one chat channel (docs/plans/simplify.md, slice 8), and
- * each Gate a Run waits at there is posted in it as one message with two
- * buttons. A Ruling made anywhere — Slack, deevy, the tracker — changes what
- * that message should say, so the message is remembered where it landed
- * (`socket_mirror`, kind `message`), and every Event that changes a Gate owes
- * each chat tool holding one of its messages an update. Both are rendered at
- * send time from the Gate's own rows, like everything else the outbox sends
- * (ADR-0003), so a message posted after somebody already ruled says so rather
- * than offering a button that would be refused.
+ * each Gate a Run waits at there is posted in it as one message with a link to
+ * rule on it in deevy. A Ruling changes what that message should say, so the
+ * message is remembered where it landed (`socket_mirror`, kind `message`), and
+ * every Event that changes a Gate owes each chat tool holding one of its
+ * messages an update. Both are rendered at send time from the Gate's own rows,
+ * like everything else the outbox sends (ADR-0003), so a message posted after
+ * somebody already ruled says so.
  */
 
 /** The kinds that change what a Gate's message says. */
@@ -97,14 +96,6 @@ async function deriveUpdates(db: Db, event: Event): Promise<string[]> {
   return owed.map((row) => row.id);
 }
 
-/** Where a Ruling came from, as a line on the message says it. */
-function whereFrom(via: string, provider: string | null): string {
-  if (via === "web") return "in deevy";
-  if (via === "slack") return "in Slack";
-  const named: Record<string, string> = { github: "GitHub", gitlab: "GitLab", linear: "Linear" };
-  return `in ${(provider && named[provider]) ?? "the tracker"}`;
-}
-
 export interface GateForChat {
   id: string;
   checkpoint: string;
@@ -116,8 +107,6 @@ export interface GateForChat {
   checkpointPolicy: { approvalsRequired: number } | null;
   decisions: Array<{
     decision: "approved" | "rejected";
-    via: string;
-    socket: { provider: string } | null;
     member: { user: { name: string } } | null;
   }>;
 }
@@ -138,10 +127,7 @@ export function chatGateMessage(gate: GateForChat, origin: string): ChatGateMess
     // (checkpoints.ts), which is what an absent policy means here too.
     required: gate.checkpointPolicy?.approvalsRequired ?? 1,
     url: `${origin.replace(/\/+$/, "")}/gates/${gate.id}`,
-    rulings: gate.decisions.map(
-      (one) =>
-        `${one.member?.user.name ?? "Somebody"} ${one.decision}, ${whereFrom(one.via, one.socket?.provider ?? null)}`,
-    ),
+    rulings: gate.decisions.map((one) => `${one.member?.user.name ?? "Somebody"} ${one.decision}`),
   };
 }
 
@@ -153,7 +139,7 @@ export function chatGateMessage(gate: GateForChat, origin: string): ChatGateMess
 export function chatHello(project: { name: string }, origin: string): ChatMessage {
   return {
     kind: "text",
-    text: `deevy will post the Gates of ${project.name} here, with Approve and Reject. A Gate waits until somebody who may rule on it does.`,
+    text: `deevy will post the Gates of ${project.name} here, each with a link to rule on it in deevy. A Gate waits until somebody who may rule on it does.`,
     link: { url: origin.replace(/\/+$/, "") || "/", label: "Open deevy" },
   };
 }

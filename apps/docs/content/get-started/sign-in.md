@@ -24,18 +24,15 @@ remembers it in a cookie that holds nothing but the provider's name.
 
 Either works, and both lead to the same Member as long as they carry the same email address. As long as
 GitHub and Google have both confirmed that address, signing in with Google one day and GitHub the next is
-still you. Two different addresses are two different Humans, unless you link the second account: a
-GitHub account you link under **Settings › Identities** signs you in as well, whatever its address
-([Ruling from your tools](/gates/ruling-from-your-tools/)).
+still you. Two different addresses are two different Humans, so sign in on the address your Workspace
+knows you by.
 
-Signing in with GitHub asks to read which organizations you belong to. That is how a rule that lets in a
-GitHub organization knows you are in it ([Invite your team](/get-started/invite-your-team/)), so such a
-rule lets you in when you sign in with GitHub, not with Google.
+Signing in with GitHub asks only who you are and the addresses you confirmed there.
 
 ## If you can't get in
 
 - **Signed in, not yet a Member**: deevy knows who you are, but nobody has let you in yet. Ask an admin
-  of the Workspace to invite you, or to approve your email domain or GitHub organization, then sign in
+  of the Workspace to invite you, or to add your email domain under **Who may join**, then sign in
   again.
 - **You have an invitation waiting**: you came from an invitation link. Sign in with the address it was
   sent to. If you sign in with another, deevy says **That invitation is not yours yet** and names the

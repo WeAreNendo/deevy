@@ -21,14 +21,8 @@ import {
 } from "../issues.ts";
 import { setRunStatus } from "../runs.ts";
 import { resolveMentions } from "../mentions.ts";
-import {
-  parseRulingCommand,
-  type IdentityScope,
-  type InboundEvent,
-  type TrackerSocket,
-} from "./port.ts";
+import type { InboundEvent, TrackerSocket } from "./port.ts";
 import { scopeKeyOf } from "./registry.ts";
-import { applyRuling } from "./rulings.ts";
 
 /**
  * What a tracker saying something does inside deevy (ADR-0024).
@@ -53,23 +47,10 @@ export interface ApplyInboundOptions {
   /** Where the Events this writes nudge their deliveries (jobs.ts). */
   jobs?: JobQueue;
   /**
-   * Where the tool's accounts live, which is what a Ruling's author is looked
-   * up in (identities.ts). The provider module knows; absent, the provider's
-   * own name is the instance and nothing is shared with sign-in.
-   */
-  identityScope?: IdentityScope;
-  /**
    * What reads a record or a comment back, for a tool whose deliveries only
    * name one (`changed`, `commented`): Notion's. Absent, those are skipped.
    */
   tracker?: TrackerSocket;
-  /**
-   * False where the tool cannot vouch for who made a Ruling on it, so every
-   * Ruling is refused (`SocketModule.vouches`): the generic Socket's. Said by
-   * every caller, never defaulted, so one that forgets cannot let such a
-   * Ruling reach the Identity lookup.
-   */
-  vouches: boolean;
   now?: () => Date;
 }
 
@@ -94,9 +75,7 @@ export async function applyInbound({
   socket,
   events,
   jobs,
-  identityScope,
   tracker,
-  vouches,
   now = () => new Date(),
 }: ApplyInboundOptions): Promise<ApplyInboundResult> {
   const source: EventSource = { db, workspace, member: null, ...(jobs ? { jobs } : {}) };
@@ -105,10 +84,9 @@ export async function applyInbound({
   const projects = new Map<string, Project | null>();
   const result: ApplyInboundResult = { applied: 0, skipped: [] };
 
-  const scope = identityScope ?? { instance: socket.provider };
   for (const event of events) {
     const why = await applyOne(
-      { db, socket, source, projects, scope, vouches, now, ...(tracker ? { tracker } : {}) },
+      { db, socket, source, projects, now, ...(tracker ? { tracker } : {}) },
       event,
     );
     if (why === null) result.applied += 1;
@@ -122,9 +100,7 @@ interface Applying {
   socket: Socket;
   source: EventSource;
   projects: Map<string, Project | null>;
-  scope: IdentityScope;
   tracker?: TrackerSocket;
-  vouches: boolean;
   now: () => Date;
 }
 
@@ -137,27 +113,18 @@ async function applyOne(applying: Applying, event: InboundEvent): Promise<string
   if (event.kind === "issue") return applyIssue(applying, event);
   if (event.kind === "comment") return applyComment(applying, event);
   if (event.kind === "installation") return applyInstallation(applying, event);
-  if (event.kind === "ruling") {
-    return applyRuling({
-      source: applying.source,
-      socket: applying.socket,
-      scope: applying.scope,
-      event,
-      vouches: applying.vouches,
-    });
-  }
   return event.why;
 }
 
 /**
  * What a delivery that only named something turns into once it is read back:
- * the `issue`, `comment` or `ruling` event the tool would have sent had it
- * said it — or why it could not be read.
+ * the `issue` or `comment` event the tool would have sent had it said it — or
+ * why it could not be read.
  *
  * A record is read through the Project its container is bound to, so the
  * binding's own words (which property is the status, which values are closed)
  * decide what it says. A comment is read through the Project of the record it
- * is on, and a `/approve` in it is a Ruling like any other (ADR-0025).
+ * is on.
  */
 async function readBack(
   applying: Applying,
@@ -195,17 +162,7 @@ async function readBack(
     event.commentExternalId,
   );
   if (!comment) return `Comment ${event.commentExternalId} is not there any more`;
-  const ruling = parseRulingCommand(comment.body);
-  return ruling
-    ? {
-        kind: "ruling",
-        scopeKey: "",
-        issueExternalId: issue.externalId,
-        comment,
-        decision: ruling.decision,
-        note: ruling.note,
-      }
-    : { kind: "comment", scopeKey: "", issueExternalId: issue.externalId, comment };
+  return { kind: "comment", scopeKey: "", issueExternalId: issue.externalId, comment };
 }
 
 /**

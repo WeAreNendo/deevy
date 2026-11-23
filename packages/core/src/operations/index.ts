@@ -10,7 +10,6 @@ import { agents } from "./agents.ts";
 import { allowlist } from "./allowlist.ts";
 import { events } from "./events.ts";
 import { checkpoints, gates } from "./gates.ts";
-import { identities } from "./identities.ts";
 import { inbox } from "./inbox.ts";
 import { invitations } from "./invitations.ts";
 import { issues } from "./issues.ts";
@@ -34,7 +33,6 @@ export const router = {
   allowlist,
   invitations,
   sockets,
-  identities,
   projects,
   checkpoints,
   gates,
@@ -52,7 +50,6 @@ export {
   events,
   gates,
   health,
-  identities,
   inbox,
   invitations,
   issues,

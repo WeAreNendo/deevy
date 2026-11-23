@@ -27,12 +27,6 @@ _Avoid_: bot, AI user, assistant, integration
 The Human accountable for an Agent.
 _Avoid_: owner, creator
 
-**Identity**:
-A Human's account on a Socket, linked to their Member so that a Ruling made there is theirs. Linked by
-signing in to deevy with the same provider, or by a link the Human completes while signed in; never by a
-display name.
-_Avoid_: alias, external user, linked account
-
 ### Structure
 
 **Workspace**:
@@ -45,8 +39,9 @@ _Avoid_: organization, tenant, account, instance
 One connected external tool under one identity: a GitHub App, a Linear app, a GitLab account, a Notion
 connection, a Slack app, or a generic Socket that any other tool reaches through an adapter of the team's.
 A Socket has capabilities — tracker, chat — and holds the credential deevy
-uses there. It listens and announces: it takes what the tool delivers, and says on a record when a Gate is
-waiting and how it was ruled. Everything else in the tool is the Agent's, with its own access.
+uses there. It listens and announces: a tracker delivers what changed, and deevy says on the record, or in
+the chat channel, when a Gate is waiting, with a link to rule on it in deevy, and how it was ruled. Nothing
+said in the tool rules. Everything else in the tool is the Agent's, with its own access.
 _Avoid_: integration, connector, plugin, provider (for the row; the provider is the kind of tool)
 
 **Project**:
@@ -109,8 +104,9 @@ Gate; a changed Proposal supersedes the Gate.
 _Avoid_: document, plan, spec, artifact
 
 **Ruling**:
-A Human's decision on a Gate, with a note, made in deevy, on the tracker, or in Slack, and recorded with
-where it came from. An Agent never rules; a credential deevy issued never rules.
+A Human's decision on a Gate, with a note, made in deevy by a signed-in Human and nowhere else. A comment
+on the record that starts `/approve` is a comment, and a message in the chat channel is a link. An Agent
+never rules; a credential deevy issued never rules.
 _Avoid_: approval (as the noun for the record), vote, verdict
 
 ### Attention
@@ -132,7 +128,7 @@ _Avoid_: activity, log entry, audit record
 **Id**:
 What names one row, in a shape that says what it is: a short prefix, an underscore, twelve characters —
 `iss_k3xr8v2m9qpw` is an Issue, `mem_…` a Member, `run_…` a Run, `proj_…` a Project, `sock_…` a Socket,
-`gate_…` a Gate, `chk_…` a Checkpoint, `mid_…` an Identity (the map is in
+`gate_…` a Gate, `chk_…` a Checkpoint, `dec_…` a Ruling (the map is in
 `docs/adr/0015-ids-are-prefixed-nanoids.md`). An Issue's **key**, `acme/deevy#42` or `ENG-12`, is the
 tracker's handle for it and its **URL** is canonical; neither is its id. An Event's **seq** is a number,
 its place in the record.
@@ -153,3 +149,6 @@ code and new writing do not.
 - **Key** as `DEV-42` — deevy's own numbering. An Issue's key is the tracker's.
 - **Usage** — the tokens and cost a Run's client reported. deevy says how long a Run worked and waited,
   which it saw itself.
+- **Identity** — a Human's account on a tool, linked to their Member so that a Ruling made there was
+  theirs. A Ruling is made in deevy (ADR-0036), so a Human is who they sign in as, and their accounts on
+  the tools mean nothing to deevy. A Socket's own account in a tool is still its identity there.
