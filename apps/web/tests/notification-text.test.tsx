@@ -32,12 +32,12 @@ describe("describeNotification", () => {
     ).toEqual({ verb: "wants your ruling", excerpt: null, tone: "gate" });
   });
 
-  it("tells an Agent's Sponsor what was answered: a ruling by name, or a plain answer", () => {
+  it("tells an Agent which way its Gate was ruled", () => {
     expect(
       describeNotification({
         kind: "run_answered",
         issue,
-        event: { kind: "run.answered", payload: { ruling: "rejected", note: "Not yet." } },
+        event: { kind: "run.answered", payload: { decision: "rejected", note: "Not yet." } },
       }),
     ).toEqual({
       verb: "rejected the Gate your Agent asked about",
@@ -48,27 +48,12 @@ describe("describeNotification", () => {
       describeNotification({
         kind: "run_answered",
         issue,
-        event: { kind: "run.answered", payload: { ruling: "approved" } },
+        event: { kind: "run.answered", payload: { decision: "approved" } },
       }).verb,
     ).toBe("approved the Gate your Agent asked about");
-    // A question answered is not a Gate ruled on.
-    expect(
-      describeNotification({
-        kind: "run_answered",
-        issue,
-        event: { kind: "run.answered", payload: { activityId: "a1" } },
-      }),
-    ).toEqual({ verb: "answered your Agent's question", excerpt: null, tone: "muted" });
   });
 
-  it("quotes the question, the summary and the comment", () => {
-    expect(
-      describeNotification({
-        kind: "run_awaiting_input",
-        issue,
-        event: { kind: "run.awaiting_input", payload: { question: "Exponential or fixed?" } },
-      }),
-    ).toEqual({ verb: "asks a question", excerpt: "Exponential or fixed?", tone: "agent" });
+  it("quotes the summary and the comment", () => {
     expect(
       describeNotification({
         kind: "run_finished",

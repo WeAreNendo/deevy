@@ -95,9 +95,11 @@ they work.
 Work one Issue at a time, in this order.
 
 1. **Find the work.** `inbox_list` with `unreadOnly: true`. An `assignment` Notification carries the Issue,
-   its key and its URL. Ignore every other kind. `runs_list` with no arguments is the other way in, and the
-   one that still works when the inbox has been read: it answers with your own Runs, since you have no way to
-   learn your own Member id.
+   its key and its URL. A `mention` is a comment on a record that names you, with what it said in `comment`:
+   work handed to you with a mention, or the reply to something you asked there (step 3). A `run_answered`
+   says somebody ruled at your Gate (step 7). Ignore every other kind. `runs_list` with no arguments is the
+   other way in, and the one that still works when the inbox has been read: it answers with your own Runs,
+   since you have no way to learn your own Member id.
 2. **Find your Run.** `runs_list` with that `issue`. The routing that assigned you already opened a Run in
    `pending`; its `id` is what every later call needs. A Run that is `completed` or `failed` is not it: those
    are finished attempts, and an open Issue still routed to you is still yours to work whatever happened on an
@@ -108,12 +110,21 @@ Work one Issue at a time, in this order.
    it is in the tracker, and you read it there with your own access to that tool (`gh issue view <url>
 --comments` on GitHub, the tool's own MCP server or CLI elsewhere): deevy keeps no copy of the
    conversation. That conversation is the brief. Where it links a page the team keeps its plans in — a Notion
-   page — read that with your own access too. If the record does not say enough to act on, say so in a
-   comment on it and ask.
+   page — read that with your own access too.
 
    The same answer carries `checkpoints`: the names this Project asks a Run to stop at. It is usually `plan`,
    `ship`, both or neither, and it is what decides steps 5 and 10. A Project that asks for none is one where
    you plan, build and finish without stopping.
+
+   If the record does not say enough to act on, **ask on the record**: a comment there, written with your
+   own access, naming who you are asking by their account in that tool and saying exactly what you need to
+   carry on. Ask them to mention you in their reply, the way they would hand you work, because a reply that
+   names you is what reaches you; do not write that mention yourself, since deevy reads it as somebody
+   naming you. Then post an `action` Activity saying what you asked, and stop. A question does not make your
+   Run wait — only a Gate does — so after thirty minutes of silence it goes `stale`, and that is fine: it is
+   still open, and your Activity says why it went quiet. The reply lands in your inbox as a `mention`, and
+   on your webhook if your operator registered one; read the conversation on the record and carry on the
+   same Run. What a Human has to approve before you go on is not a question but a Gate (step 5).
 
 4. **Narrate as you go.** `runs_post_activity` with `kind: "thought"` for a decision you are about to make and
    `kind: "action"` for a step you have taken. Keep them short and factual: this feed is what a Human reads to
@@ -209,16 +220,19 @@ They get a Notification the moment the Run stops: an inbox row always, and a Sla
 routes `gate_awaiting` to a Channel. The Checkpoint decides who is told — the approvers it names, or every
 active Human when it names none — not the Human behind the Run. And deevy says it again where the team
 already reads: a comment on the record in their own tracker, carrying the Proposal, signed with the Agent and
-the Run, with the record labelled while it waits.
+the Run.
 
-The Notification, the elicitation and that comment all carry the same link, `/gates/<requestId>`. Opening it
-puts the Human on the ruling screen with the Proposal rendered, its links, the arithmetic the Checkpoint
-asks for, and the Run's feed beside it. They approve or reject, with a note.
+The Notification, the answer `gates_request` gave the Agent, and that comment all carry the same link,
+`/gates/<requestId>`. Opening it puts the Human on the ruling screen with the Proposal rendered, its links,
+the arithmetic the Checkpoint asks for, and the Run's feed beside it. They approve or reject, with a note.
 
-Ruling happens in deevy, in a browser. A Human's own MCP client holds a valid credential for that Human and
-is still refused: the party that proposes has no route to approve, and a delegated credential is not the
-Human (ADR-0010). A Ruling made in the tracker is coming, and is bounded by what the tracker can vouch for
-(ADR-0025).
+They can rule in deevy, in a browser, or with `/approve` or `/reject <why>` in a comment on the record,
+which counts when the account they commented with is one of their Identities (ADR-0025). A Human's own MCP
+client holds a valid credential for that Human and is still refused: the party that proposes has no route
+to approve, and a delegated credential is not the Human (ADR-0010).
+
+A question the Agent asked on the record is answered there too, in a reply that mentions it. deevy does not
+hold the conversation; it only hears that the reply named the Agent, and tells the Agent so.
 
 The decision appends a Gate Event, resumes whatever Run stopped at that Checkpoint, and is said back in the
 tracker with the arithmetic. The Agent is told once, through `run_answered` in its inbox; `gates_get` says
@@ -235,11 +249,11 @@ tracker, where the team reads it (ADR-0024).
 
 ## Known edges of this example
 
-- **Reading an answer to an ordinary elicitation.** `gates_get` reports a Gate's own outcome, so a Gate needs
-  nothing else. A plain `elicitation` Activity is answered by a Human through the `runs.answer` operation,
-  which lands in the Run's feed — read with `runs_get`, or over the HTTP API with the same key
-  (`GET /api/runs/{runId}`). Asking through a Gate is usually the better shape: it is the thing a Human is
-  notified about.
+- **A reply that forgets to mention the Agent.** deevy hears every comment on a record, but only one that
+  names the Agent reaches its inbox, so a Human who answers without the mention has not told it. Its
+  webhook, where its operator registered one, carries every `comment.created` in its Projects, mention or
+  not, with `payload.mentionedMemberIds` saying whom each names, so a loop that listens there can notice a
+  reply on a record it asked on; one that does not can read the conversation again on its next pass.
 - **Webhook instead of polling.** An Agent with a registered URL is told rather than asked: the `run.started`
   delivery carries the Run's id as `subjectId`. It does not carry the Issue key, so the loop still calls
   `runs_list` to get one. Verifying the signature is in [OPERATIONS.md](./OPERATIONS.md).

@@ -66,31 +66,10 @@ describe("the Run lifecycle", () => {
     expect(posted.run.startedAt).toBeInstanceOf(Date);
   });
 
-  it("waits on an elicitation, and tells the Human behind the Run that it waits", async () => {
+  it("keeps waiting at its Gate when something is said to it, because nobody has ruled", async () => {
     const { asAdmin, asAgent, issue } = await workspaceWithAgent();
     const run = await asAgent.runs.start({ issue: issue.url });
-
-    const posted = await asAgent.runs.postActivity({
-      runId: run.id,
-      kind: "elicitation",
-      body: "Postgres or SQLite?",
-    });
-
-    expect(posted.run.status).toBe("awaiting_input");
-    // The Agent triggered its own Run, so the accountable Human is its Sponsor.
-    const { notifications } = await asAdmin.inbox.list({});
-    const waiting = notifications.filter((row) => row.kind === "run_awaiting_input");
-    expect(waiting).toHaveLength(1);
-    expect(waiting[0]?.issue?.externalKey).toBe(issue.externalKey);
-    // Never the actor: the Agent asked the question, it does not need telling.
-    const forTheAgent = await asAgent.inbox.list({});
-    expect(forTheAgent.notifications).toHaveLength(0);
-  });
-
-  it("keeps waiting when something is said to it, because nobody has answered", async () => {
-    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issue: issue.url });
-    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which one?" });
+    await asAgent.gates.request({ runId: run.id, checkpoint: "plan", proposal: "Cap it." });
 
     const said = await asAgent.runs.postActivity({
       runId: run.id,
@@ -100,32 +79,17 @@ describe("the Run lifecycle", () => {
 
     /*
      * A Run at a Gate waits and never goes stale (docs/plans/sockets.md), and
-     * only a Human un-waits it: `runs.answer`, or a Ruling on the Gate. An
-     * Activity that moved it back to `active` would put it under the stale
-     * sweep, and a Human watching would be told it is working when it is
-     * waiting on them. The reference runtime wrote one of these itself, after
-     * the session that asked had ended, which is how this was found.
+     * only a Ruling on the Gate un-waits it. An Activity that moved it back to
+     * `active` would put it under the stale sweep, and a Human watching would
+     * be told it is working when it is waiting on them. The reference runtime
+     * wrote one of these itself, after the session that asked had ended,
+     * which is how this was found.
      */
     expect(said.run.status).toBe("awaiting_input");
-    // And nobody is told twice about one question: `run.awaiting_input` is the
+    // And nobody is told twice about one Gate: `run.awaiting_input` is the
     // Run beginning to wait, not the Run still waiting.
     const events = await asAdmin.events.list({ limit: 50 });
     expect(events.events.filter((event) => event.kind === "run.awaiting_input")).toHaveLength(1);
-  });
-
-  it("comes back to active when a Human answers, with the answer where the Agent reads", async () => {
-    const { asAdmin, asAgent, issue } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issue: issue.url });
-    await asAgent.runs.postActivity({
-      runId: run.id,
-      kind: "elicitation",
-      body: "Postgres or SQLite?",
-    });
-
-    const answered = await asAdmin.runs.answer({ runId: run.id, body: "SQLite" });
-
-    expect(answered.run.status).toBe("active");
-    expect(answered.activity).toMatchObject({ kind: "prompt", body: "SQLite" });
   });
 
   it("finishes with a summary, and tells the Human behind it once", async () => {
@@ -191,15 +155,19 @@ describe("the Run lifecycle", () => {
       kind: "thought",
       body: "Reading the Issue",
     });
-    const question = await asAgent.runs.postActivity({
+    const action = await asAgent.runs.postActivity({
       runId: started.id,
-      kind: "elicitation",
-      body: "Postgres or SQLite?",
+      kind: "action",
+      body: "Chose SQLite",
     });
-    const answer = await asAdmin.runs.answer({ runId: started.id, body: "SQLite" });
+    const response = await asAgent.runs.postActivity({
+      runId: started.id,
+      kind: "response",
+      body: "SQLite, behind the adapter",
+    });
     // Three writes inside one millisecond order by nothing in particular;
     // spacing them says what the feed is supposed to be sorted by.
-    const seconds = [thought.activity.id, question.activity.id, answer.activity.id];
+    const seconds = [thought.activity.id, action.activity.id, response.activity.id];
     for (const [at, id] of seconds.entries()) {
       await db
         .update(activity)
@@ -216,8 +184,8 @@ describe("the Run lifecycle", () => {
     });
     expect(detail.activities.map((row) => [row.kind, row.body])).toEqual([
       ["thought", "Reading the Issue"],
-      ["elicitation", "Postgres or SQLite?"],
-      ["prompt", "SQLite"],
+      ["action", "Chose SQLite"],
+      ["response", "SQLite, behind the adapter"],
     ]);
   });
 
@@ -284,20 +252,6 @@ describe("the Run lifecycle", () => {
     expect(second.status).toBe("pending");
   });
 
-  it("refuses an Agent answering an elicitation, because the question is for a Human", async () => {
-    const { asAgent, issue } = await workspaceWithAgent();
-    const started = await asAgent.runs.start({ issue: issue.url });
-    await asAgent.runs.postActivity({
-      runId: started.id,
-      kind: "elicitation",
-      body: "Postgres or SQLite?",
-    });
-
-    await expect(asAgent.runs.answer({ runId: started.id, body: "SQLite" })).rejects.toMatchObject({
-      code: "FORBIDDEN",
-    });
-  });
-
   it("pages Runs from a cursor, showing each one once", async () => {
     const { db, agent, asAgent, issue, record } = await workspaceWithAgent();
     const second = await record({ externalId: "2", title: "Second thing" });
@@ -320,18 +274,15 @@ describe("the Run lifecycle", () => {
     expect(next.nextCursor).not.toBe(page.nextCursor);
   });
 
-  it("has started once it has spoken, even when its first word is a question", async () => {
+  it("has started once it has acted, even when its first act is a Gate", async () => {
     const { asAgent, issue } = await workspaceWithAgent();
     const started = await asAgent.runs.start({ issue: issue.url });
 
-    const posted = await asAgent.runs.postActivity({
-      runId: started.id,
-      kind: "elicitation",
-      body: "Postgres or SQLite?",
-    });
+    await asAgent.gates.request({ runId: started.id, checkpoint: "plan", proposal: "Cap it." });
 
-    expect(posted.run.status).toBe("awaiting_input");
-    expect(posted.run.startedAt).toBeInstanceOf(Date);
+    const read = await asAgent.runs.get({ runId: started.id });
+    expect(read.status).toBe("awaiting_input");
+    expect(read.startedAt).toBeInstanceOf(Date);
   });
 });
 
@@ -405,34 +356,31 @@ describe("trying a Run again", () => {
   });
 });
 
-describe("what a Human says into a Run", () => {
-  it("is a prompt, not the Agent's own response, so a ported agent can tell them apart", async () => {
-    const { asAgent, asAdmin, issue } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issue: issue.url });
-    await asAgent.runs.postActivity({ runId: run.id, kind: "elicitation", body: "Which repo?" });
+describe("what an Agent may post to its Run", () => {
+  /*
+   * What it narrates, and nothing that asks. A question is a comment on the
+   * record, and so is the reply; `prompt` was a Human's answer in the feed
+   * and `elicitation` the question it answered, and neither is a kind any
+   * more (docs/plans/simplify.md, slice 5).
+   */
+  for (const kind of ["elicitation", "prompt"]) {
+    it(`is never \`${kind}\``, async () => {
+      const { asAgent, issue } = await workspaceWithAgent();
+      const run = await asAgent.runs.start({ issue: issue.url });
 
-    await asAdmin.runs.answer({ runId: run.id, body: "the deevy one" });
+      // TypeScript already refuses this, which is why the cast is here: the
+      // callers that are not typechecked are the ones that matter, an MCP tool
+      // call or a raw HTTP request, and for those the schema is the only guard.
+      const posting = asAgent.runs.postActivity({
+        runId: run.id,
+        kind,
+        body: "Postgres or SQLite?",
+      } as unknown as Parameters<typeof asAgent.runs.postActivity>[0]);
 
-    const detail = await asAgent.runs.get({ runId: run.id });
-    const last = detail.activities.at(-1);
-    expect(last).toMatchObject({ kind: "prompt", body: "the deevy one" });
-  });
-
-  it("is a word only a Human may use", async () => {
-    const { asAgent, issue } = await workspaceWithAgent();
-    const run = await asAgent.runs.start({ issue: issue.url });
-
-    // TypeScript already refuses this, which is why the cast is here: the
-    // callers that are not typechecked are the ones that matter, an MCP tool
-    // call or a raw HTTP request, and for those the schema is the only guard.
-    const posting = asAgent.runs.postActivity({
-      runId: run.id,
-      kind: "prompt",
-      body: "answering myself",
-    } as unknown as Parameters<typeof asAgent.runs.postActivity>[0]);
-
-    await expect(posting).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
+      await expect(posting).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect((await asAgent.runs.get({ runId: run.id })).status).toBe("pending");
+    });
+  }
 });
 
 describe("a Run, seen from a Human", () => {

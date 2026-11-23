@@ -301,7 +301,6 @@ export function stubClient(overrides: StubOverrides = {}): never {
       get: async () => ({ activities: [] }),
       start: async () => ({}),
       postActivity: async () => ({ run: {}, activity: {} }),
-      answer: async () => ({ run: {}, activity: {} }),
       finish: async () => ({}),
     },
     gates: {

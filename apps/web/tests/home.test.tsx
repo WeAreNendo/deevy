@@ -26,15 +26,15 @@ const { mountAt } = await import("./mount.tsx");
 const { stubGate, stubRun } = await import("./stub-client.ts");
 
 describe("what needs me", () => {
-  it("puts a Gate first and a Run waiting on my answer second", async () => {
+  it("puts the Gates awaiting me first, and then my Agents' Runs", async () => {
     state.gates = [
       stubGate({ checkpoint: "ship", run: { id: "run_1", issueKey: "acme/deevy#42" } }),
     ];
     state.runs = [
-      stubRun({ id: "run_2", status: "awaiting_input", issueKey: "acme/deevy#7" }),
       stubRun({ id: "run_3", status: "active", issueKey: "acme/deevy#9" }),
-      // A Run waiting at a Gate is not a question: the Gate above is where it
-      // is answered, and counting it twice would say two things need me.
+      // A Run waiting at a Gate is not a second thing to do: the Gate above is
+      // where it is ruled on. It waits at nothing else (docs/plans/simplify.md,
+      // slice 5), so there is no list of Runs awaiting an answer.
       stubRun({
         id: "run_4",
         status: "awaiting_input",
@@ -48,19 +48,16 @@ describe("what needs me", () => {
     await screen.findByRole("region", { name: "Gates awaiting you" });
     // In this order, and no others: the page is a queue, not a dashboard. The
     // toaster is a region too, so the page's own are the ones named here.
-    const named = ["Gates awaiting you", "Runs awaiting your answer", "Your Agents' Runs"];
+    const named = ["Gates awaiting you", "Your Agents' Runs"];
     const regions = screen
       .getAllByRole("region")
-      .filter((region) => named.includes(region.getAttribute("aria-label") ?? ""));
+      .filter((region) => /awaiting|Runs/.test(region.getAttribute("aria-label") ?? ""));
     expect(regions.map((region) => region.getAttribute("aria-label"))).toEqual(named);
     const gates = regions[0] as HTMLElement;
     expect(within(gates).getByRole("link", { name: /ship/ }).getAttribute("href")).toBe(
       "/gates/gate_stub00000",
     );
-    const answers = regions[1] as HTMLElement;
-    expect(within(answers).getAllByRole("listitem")).toHaveLength(1);
-    expect(within(answers).getByText(/acme\/deevy#7/)).toBeTruthy();
-    expect(within(regions[2] as HTMLElement).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(regions[1] as HTMLElement).getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("says nothing needs you when nothing does", async () => {

@@ -38,9 +38,6 @@ export interface RenderInput {
   issue?: EmailIssue | null;
   /** For a Gate awaiting them. */
   gate?: EmailGate | null;
-  /** For a Run awaiting their answer: what the Agent asked, and the Run. */
-  question?: string | null;
-  runId?: string | null;
   /** The signed link that turns this kind of email off for this Human. */
   unsubscribeUrl?: string | null;
   /** A Human's own email, or a team address an admin routed it to. */
@@ -132,7 +129,7 @@ interface Body {
   headline: string;
   /** Paragraphs, plain. */
   lines: string[];
-  /** A quoted block — the Proposal, the question — when there is one. */
+  /** A quoted block — the Proposal — when there is one. */
   quote: string | null;
   action: { label: string; url: string } | null;
 }
@@ -158,29 +155,6 @@ function bodyOf(input: RenderInput): Body {
       ],
       quote: excerpt(prose(gate.proposal)),
       action: { label: "Open the Gate", url: `${origin}/gates/${encodeURIComponent(gate.id)}` },
-    };
-  }
-  if (input.kind === "run_awaiting_input") {
-    return {
-      subject:
-        input.audience === "team"
-          ? issue
-            ? `Waiting for an answer: ${issue.key}`
-            : "A Run is waiting for an answer"
-          : issue
-            ? `Waiting for your answer: ${issue.key}`
-            : "A Run is waiting for your answer",
-      headline:
-        input.audience === "team"
-          ? "A Run is waiting for an answer"
-          : "A Run is waiting for your answer",
-      lines: record ? [record] : [],
-      quote: input.question ? excerpt(prose(input.question)) : null,
-      action: input.runId
-        ? { label: "Answer in deevy", url: `${origin}/runs/${encodeURIComponent(input.runId)}` }
-        : issue
-          ? { label: "Open it in deevy", url: workItemUrl(origin, issue.id) }
-          : null,
     };
   }
   const headline = headlines[input.kind];

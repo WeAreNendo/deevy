@@ -330,7 +330,7 @@
     "/runs/{runId}/activities": {
       "post": {
         "operationId": "runs.postActivity",
-        "summary": "Post one Activity to your Run: a thought, an action, an elicitation, or an error",
+        "summary": "Post one Activity to your Run: a thought, an action, a response, or an error",
         "parameters": [
           {
             "in": "path",
@@ -353,7 +353,6 @@
                     "enum": [
                       "thought",
                       "action",
-                      "elicitation",
                       "response",
                       "error"
                     ]
@@ -531,241 +530,8 @@
                           "enum": [
                             "thought",
                             "action",
-                            "elicitation",
                             "response",
-                            "error",
-                            "prompt"
-                          ]
-                        },
-                        "body": {
-                          "type": "string"
-                        },
-                        "payload": {
-                          "anyOf": [
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {}
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "createdAt": {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "runId",
-                        "kind",
-                        "body",
-                        "payload",
-                        "createdAt"
-                      ],
-                      "additionalProperties": false
-                    }
-                  },
-                  "required": [
-                    "run",
-                    "activity"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/runs/{runId}/answer": {
-      "post": {
-        "operationId": "runs.answer",
-        "summary": "Answer a Run's elicitation, so the Agent carries on",
-        "parameters": [
-          {
-            "in": "path",
-            "required": true,
-            "name": "runId",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "body": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 20000
-                  }
-                },
-                "required": [
-                  "body"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "run": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "issueKey": {
-                          "type": "string"
-                        },
-                        "agentMemberId": {
-                          "type": "string"
-                        },
-                        "triggeredByMemberId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "trigger": {
-                          "type": "string",
-                          "enum": [
-                            "assignment",
-                            "mention",
-                            "schedule",
-                            "manual",
-                            "children_done",
-                            "retry"
-                          ]
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "pending",
-                            "active",
-                            "awaiting_input",
-                            "completed",
-                            "failed",
-                            "stale"
-                          ]
-                        },
-                        "summary": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "startedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "lastActivityAt": {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        "finishedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time",
-                              "x-native-type": "date"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "createdAt": {
-                          "type": "string",
-                          "format": "date-time",
-                          "x-native-type": "date"
-                        },
-                        "timing": {
-                          "type": "object",
-                          "properties": {
-                            "queuedMs": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "workingMs": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            },
-                            "waitingMs": {
-                              "type": "integer",
-                              "minimum": -9007199254740991,
-                              "maximum": 9007199254740991
-                            }
-                          },
-                          "required": [
-                            "queuedMs",
-                            "workingMs",
-                            "waitingMs"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "issueKey",
-                        "agentMemberId",
-                        "triggeredByMemberId",
-                        "trigger",
-                        "status",
-                        "summary",
-                        "startedAt",
-                        "lastActivityAt",
-                        "finishedAt",
-                        "createdAt",
-                        "timing"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "activity": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "runId": {
-                          "type": "string"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "enum": [
-                            "thought",
-                            "action",
-                            "elicitation",
-                            "response",
-                            "error",
-                            "prompt"
+                            "error"
                           ]
                         },
                         "body": {
@@ -1199,10 +965,8 @@
                                   "enum": [
                                     "thought",
                                     "action",
-                                    "elicitation",
                                     "response",
-                                    "error",
-                                    "prompt"
+                                    "error"
                                   ]
                                 },
                                 "body": {
@@ -1431,10 +1195,8 @@
                             "enum": [
                               "thought",
                               "action",
-                              "elicitation",
                               "response",
-                              "error",
-                              "prompt"
+                              "error"
                             ]
                           },
                           "body": {
@@ -13081,7 +12843,6 @@
                               "mention",
                               "assignment",
                               "gate_awaiting",
-                              "run_awaiting_input",
                               "run_finished",
                               "delegation",
                               "run_answered"
@@ -14559,7 +14320,6 @@
                                   "mention",
                                   "assignment",
                                   "gate_awaiting",
-                                  "run_awaiting_input",
                                   "run_finished",
                                   "delegation"
                                 ]
@@ -14632,7 +14392,6 @@
                                 "mention",
                                 "assignment",
                                 "gate_awaiting",
-                                "run_awaiting_input",
                                 "run_finished",
                                 "delegation"
                               ]
@@ -14688,7 +14447,6 @@
                                   "mention",
                                   "assignment",
                                   "gate_awaiting",
-                                  "run_awaiting_input",
                                   "run_finished",
                                   "delegation"
                                 ]
@@ -14761,7 +14519,6 @@
                               "mention",
                               "assignment",
                               "gate_awaiting",
-                              "run_awaiting_input",
                               "run_finished",
                               "delegation"
                             ]
@@ -14818,7 +14575,7 @@
                 "type": "object",
                 "properties": {
                   "preferences": {
-                    "maxItems": 6,
+                    "maxItems": 5,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -14829,7 +14586,6 @@
                             "mention",
                             "assignment",
                             "gate_awaiting",
-                            "run_awaiting_input",
                             "run_finished",
                             "delegation"
                           ]
@@ -14881,7 +14637,6 @@
                               "mention",
                               "assignment",
                               "gate_awaiting",
-                              "run_awaiting_input",
                               "run_finished",
                               "delegation"
                             ]

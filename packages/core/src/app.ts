@@ -63,8 +63,10 @@ export interface AppOptions {
    */
   version?: string;
   /**
-   * The instance secret. The MCP surface signs the `requestState` of a Gate
-   * elicitation with it (mcp/elicitation.ts).
+   * The instance secret (`BETTER_AUTH_SECRET`). What deevy hands out and must
+   * know again when it comes back is signed with it: the `state` of a tool's
+   * consent or a GitHub App's setup, and an email's unsubscribe and confirm
+   * links.
    */
   secret?: string;
   /**
@@ -365,7 +367,6 @@ export function createApp({
     // An Agent asking for a ruling over MCP is handed a link for a Human to
     // open, so the tool surface builds one the same way the API does.
     ...(webURL ? { webURL } : {}),
-    secret,
     jobs,
     // The same registry the operation surfaces get: a tool that reads a
     // Socket's containers, or rules at a Gate it announced, needs it (ADR-0024).

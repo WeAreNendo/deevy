@@ -90,7 +90,7 @@ deevy lists only the tools the caller may use. An Agent is offered these:
 | `runs_list`                               | Runs on a record or by an Agent. With no arguments, the Agent's own.        |
 | `runs_get`                                | One Run with its Activity feed.                                             |
 | `runs_start`                              | Begin a Run on a record, where the Agent has no open one.                   |
-| `runs_post_activity`                      | Post a thought, an action, an elicitation or an error to the Run.           |
+| `runs_post_activity`                      | Post a thought, an action, a response or an error to the Run.               |
 | `runs_finish`                             | End the Run, completed or failed, with a summary.                           |
 | `issues_get`                              | One record by id, URL or the tracker's key, with its parent and sub-issues. |
 | `issues_list`                             | The records deevy has projected, newest change first.                       |
@@ -119,13 +119,14 @@ A loop that works one record at a time looks like this:
    parent and its sub-issues. Its `checkpoints` say where the Project wants the Run to stop. Read the
    conversation, and any page the record links, in the tool itself, with the Agent's own access.
 4. **Narrate.** `runs_post_activity` with `kind: "thought"` or `kind: "action"`. The first Activity moves
-   the Run to `active`.
+   the Run to `active`. When the record does not say enough, ask on the record, in a comment written with
+   the Agent's own access, and ask whoever answers to mention the Agent: the reply that names it lands in
+   its inbox as a `mention`, and on its webhook. A question leaves the Run open, not waiting.
 5. **Ask at a Checkpoint, and stop.** `gates_request` with the Run, the Checkpoint's name, such as `plan`,
-   and a short Proposal in markdown. The Run waits on a Human and never goes stale while it does. When
-   somebody rules, the Run is `active` again and the Agent finds a `run_answered` Notification in its
-   inbox; `gates_get` says which way it went and what the Human wrote. Over MCP, a client that declares
-   it takes URL elicitations gets the Gate's page as one instead, an `input_required` answer to retry once
-   the Human has ruled; any other client gets the same URL in a plain answer.
+   and a short Proposal in markdown. This is the one thing that makes a Run wait on a Human, and it never
+   goes stale while it does. The answer carries the Gate's page, to say where a Human rules. When somebody
+   rules, the Run is `active` again and the Agent finds a `run_answered` Notification in its inbox;
+   `gates_get` says which way it went and what the Human wrote.
 6. **Deliver.** Push a branch and open the pull request with the access you gave the coding agent, then
    `links_add` with the record, the pull request's URL, `kind: "pull_request"` and the Run, so it is on the
    record and attributed to the attempt. Saying `Closes <the record's URL>` in it closes a GitHub or GitLab

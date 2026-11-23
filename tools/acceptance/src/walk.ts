@@ -254,6 +254,26 @@ function rulingComment(
 }
 
 /**
+ * A Human's comment on the record that rules nothing, as a provider's
+ * `normalize` reads one: here, the reply to what the Agent asked there.
+ */
+function replyComment(record: { externalId: string; url: string }, body: string): unknown {
+  comments += 1;
+  return {
+    kind: "comment",
+    scopeKey: CONTAINER,
+    issueExternalId: record.externalId,
+    comment: {
+      externalId: `walk-${String(comments)}`,
+      url: `${record.url}#walk-${String(comments)}`,
+      body,
+      author: { login: "ada", id: "stub-user-ada", isBot: false },
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
+
+/**
  * What deevy has said on the record so far, read where it said it: the stubbed
  * tracker's own comments, through the window a stubbed deployment opens on it
  * (`/dev/tracker`). deevy keeps no copy of a record's conversation to read
@@ -487,6 +507,50 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     kind: "thought",
     body: "Reading the record before I plan anything",
   });
+
+  // A question goes on the record, in the tracker, written with the Agent's
+  // own access, and the reply that mentions it is what reaches it. deevy has
+  // no kind of Activity to ask with (docs/plans/simplify.md, slice 5).
+  const asking = await agent
+    .tool("runs_post_activity", {
+      runId,
+      kind: "elicitation",
+      body: "Which path should it answer on?",
+    })
+    .then(
+      () => "posted",
+      (error: unknown) => String(error),
+    );
+  check(
+    "a question is not an Activity, and deevy names the kinds an Agent may post",
+    asking !== "posted" && asking.includes("thought") && asking.includes("error"),
+    asking,
+  );
+  await agent.tool("runs_post_activity", {
+    runId,
+    kind: "action",
+    body: "Asked on the record which path it should answer on",
+  });
+  await deliver(
+    origin,
+    socketId,
+    [replyComment(record, "@planner /healthz, like the other services")],
+    "acceptance-reply-1",
+  );
+  check(
+    "the reply that mentions the Agent reaches its inbox",
+    (await agent.unread()).some((one) => one.kind === "mention" && one.issueKey === issueKey),
+  );
+  const stillOne = (await agent.tool("runs_list", { issue: issueKey })).runs as Array<{
+    id: string;
+    status: string;
+  }>;
+  check(
+    "and opens no second Run: the one asking is still working",
+    stillOne.length === 1 && stillOne[0]?.id === runId && stillOne[0]?.status === "active",
+    JSON.stringify(stillOne),
+  );
+
   const plan = await agent.tool("gates_request", {
     runId,
     checkpoint: "plan",
@@ -736,7 +800,8 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   check(
     "the Event log tells the story of the Run from the label to the finish",
     story ===
-      "run.started run.activity gate.requested run.awaiting_input gate.ruling_refused " +
+      "run.started run.activity run.activity comment.created gate.requested run.awaiting_input " +
+        "gate.ruling_refused " +
         "identity.linked gate.approved run.answered issue.link_added gate.requested " +
         "run.awaiting_input gate.ruling_refused gate.approved run.answered " +
         "run.completed",
@@ -751,8 +816,9 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "gate.approved",
     "gate.rejected",
     "run.answered",
-    // The tracker's, not the Agent's: a comment deevy could not count, and an
-    // account it came to know. Neither is anything the Agent did.
+    // The tracker's, not the Agent's: the Human's reply, a comment deevy could
+    // not count, and an account it came to know. None is anything the Agent did.
+    "comment.created",
     "gate.ruling_refused",
     "identity.linked",
   ]);

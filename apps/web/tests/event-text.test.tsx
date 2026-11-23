@@ -60,18 +60,33 @@ describe("describeEvent", () => {
     expect(describeEvent({ kind: "run.activity", payload: {} })).toBeNull();
   });
 
-  it("says what a Run is waiting on, and quotes the question", () => {
+  // A Run waits only at a Gate (docs/plans/simplify.md, slice 5), and the
+  // Proposal is the Gate's, read on its own line rather than quoted twice.
+  it("says which Checkpoint a Run is waiting at", () => {
     expect(
       describeEvent({
         kind: "run.awaiting_input",
-        payload: { question: "Exponential or fixed?" },
+        payload: { gateRequestId: "gate_1", checkpoint: "plan", question: "Cap the coupon." },
         actorKind: "agent",
       }),
-    ).toMatchObject({
-      text: "is waiting on a Human",
-      detail: "Exponential or fixed?",
-      tone: "agent",
-    });
+    ).toMatchObject({ text: "is waiting at the plan Gate", detail: null, tone: "gate" });
+  });
+
+  it("says a Ruling let the Run carry on, which way it went", () => {
+    expect(
+      describeEvent({
+        kind: "run.answered",
+        payload: { gateRequestId: "gate_1", checkpoint: "plan", decision: "approved" },
+        actorKind: "human",
+      }),
+    ).toMatchObject({ text: "let the Run carry on past the plan Gate", tone: "human" });
+    expect(
+      describeEvent({
+        kind: "run.answered",
+        payload: { gateRequestId: "gate_1", checkpoint: "plan", decision: "rejected" },
+        actorKind: "human",
+      }),
+    ).toMatchObject({ text: "sent the Run back from the plan Gate", tone: "human" });
   });
 
   it("names what an Agent linked to a record, by its host", () => {
