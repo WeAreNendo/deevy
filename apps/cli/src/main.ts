@@ -213,8 +213,7 @@ if (isEntry()) {
   try {
     await program().parseAsync(process.argv);
   } catch (error) {
-    // A stack trace for a missing environment variable helps nobody, which is
-    // the lesson apps/agent/src/main.ts already learned.
+    // A stack trace for a missing environment variable helps nobody.
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }

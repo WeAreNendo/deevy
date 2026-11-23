@@ -2,9 +2,9 @@ import { appURL } from "@/lib/base";
 
 /**
  * How something reaches this deevy over MCP. The endpoint is this instance, so
- * it is read off the page rather than configured, and the recipes are the ones
- * the reference runtime itself drives (docs/harnesses.md, ADR-0018) plus the
- * shape everything else takes.
+ * it is read off the page rather than configured, and the recipes are the
+ * coding agents the docs connect (apps/docs/content/agents/your-own-harness.md)
+ * plus the shape everything else takes.
  */
 
 /** The MCP endpoint is this deevy, so it is read off the page. */
@@ -12,7 +12,7 @@ export function mcpEndpoint(): string {
   return appURL("/mcp");
 }
 
-/** What the runtime already calls the variable holding an Agent's key. */
+/** What every connect snippet calls the variable holding an Agent's key. */
 export const KEY_ENV = "DEEVY_AGENT_KEY";
 
 /**
@@ -57,9 +57,9 @@ function serverJson(
 }
 
 /**
- * One entry per coding agent deevy knows it is reached by. The four the
- * runtime ships a recipe for come first, in the order `docs/harnesses.md`
- * lists them; the last is for everything else, because MCP is the contract and
+ * One entry per coding agent deevy knows it is reached by. The four the docs
+ * give a recipe for come first, in the order the docs list them; the last is
+ * for everything else, because MCP is the contract and
  * a client deevy has never heard of connects the same way.
  */
 export const mcpRecipes: McpRecipe[] = [

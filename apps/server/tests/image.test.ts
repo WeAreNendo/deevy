@@ -98,11 +98,11 @@ describe("the deevy image", () => {
 
   it("is the only place the healthcheck is defined", async () => {
     // A healthcheck in compose overrides the image's, and the one that used to
-    // be there called `node` by name — so it would report unhealthy forever and
-    // hold back the agent service, which waits on service_healthy.
+    // be there called `node` by name — so it would report unhealthy forever.
+    // The deevy service is the only one, so the whole file is its definition.
     const compose = await read("docker-compose.yml");
-    const deevy = compose.slice(compose.indexOf("\n  deevy:"), compose.indexOf("\n  agent:"));
-    expect(deevy).not.toContain("healthcheck:");
+    expect(compose).toContain("\n  deevy:");
+    expect(compose).not.toContain("healthcheck:");
   });
 });
 

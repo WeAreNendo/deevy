@@ -94,8 +94,7 @@ describe("the committed tool manifest", () => {
       "runs_list",
       "runs_post_activity",
       // What one session of the Run spent, by model. A tool so any client can
-      // report, though the reference runtime's supervisor calls it over HTTP:
-      // a model does not know what it cost, and is not asked.
+      // report, though a model does not know what it cost and is not asked.
       "runs_report_usage",
       "runs_start",
     ]);

@@ -1,5 +1,0 @@
----
-"@deevy/agent": patch
----
-
-The reference runtime now records every branch a Run moves as an Activity in the Run's feed while the Run can still take one. A push the coding agent makes is an Activity as soon as it lands. When the coding agent finishes its own Run, the runtime commits and pushes whatever it left behind and opens the pull request just before the finish reaches deevy, so that branch is an Activity too. Before, the runtime posted both after the coding agent had stopped, and a Run the coding agent had already finished, which is how most Runs end, refused them, so the feed never said what was pushed. A branch somebody else moved during the Run is still reported, and still as a move rather than a rewrite. A move the feed still refuses, because the Run was finished some way the runtime did not see, is said in a comment on the record instead. The delivery waits no longer than the Run's timeout before the finish goes through, and no more than five minutes once the coding agent has stopped, so a push or pull request that never answers no longer holds the runtime.

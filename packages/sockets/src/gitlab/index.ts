@@ -28,9 +28,9 @@ import { commentOf, issueOf, normalizeGitlab } from "./payloads.ts";
  * group access token makes — and deevy acts as it through the token the
  * operator pasted: it comments, labels, opens merge requests and pushes as that
  * user. GitLab mints nothing narrower from a token, so the token a Run clones
- * with is the Socket's own; it stays in the supervisor process all the same,
- * behind the loopback proxy, and never reaches `.git/config` (ADR-0014,
- * ADR-0019). Give its user Developer on the projects it works and nothing more.
+ * with is the Socket's own, handed to whatever runs the Agent by
+ * `runs.checkout`. deevy cannot see where it goes from there, so give its user
+ * Developer on the projects it works and nothing more.
  *
  * gitlab.com and a self-managed GitLab are the same module with a different
  * `baseUrl`. Everything here is `fetch` and `crypto.subtle`, for the Worker.

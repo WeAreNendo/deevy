@@ -1,13 +1,13 @@
 ---
 /*
  * The landing's hand-off to a coding agent: deevy never runs an Agent (ADR-0003),
- * so the reference runtime is set up by whoever runs it, and the agent they
- * already use can read the guide and do it. Its border turns once through the
+ * so the coding agent a team already uses becomes one by holding its key, and
+ * can read the guide and set itself up. Its border turns once through the
  * four colours of the graph above, and again while it is hovered.
  */
-// The Agent's key stays out of the coding agent's reach, as the runtime's page says it must.
+// The Agent's key stays out of the model's context, as the guide says it must.
 const prompt =
-  "Read https://docs.deevy.dev/agents/reference-runtime/, then help me run deevy's agent runtime with Claude Code against our Workspace. I'll put the Agent's key and the Anthropic key in its environment myself; don't ask me for either.";
+  "Read https://docs.deevy.dev/agents/your-own-harness/, then help me connect you to our deevy Workspace as an Agent and work its first Run. I'll put the Agent's key in your MCP configuration myself; don't ask me for it.";
 ---
 
 <section class="prompt not-content" aria-labelledby="hand-off">
@@ -15,7 +15,7 @@ const prompt =
     <span class="kicker">deevy never runs an Agent</span>
     <h2 id="hand-off">Hand the setup to the agent you already use</h2>
     <p>
-      The reference runtime works each Run with Claude Code, OpenCode, Cursor or Copilot. Give your
+      Claude Code, OpenCode, Cursor or Copilot becomes an Agent by holding its key. Give your
       coding agent this prompt, or follow the guide yourself.
     </p>
   </div>
@@ -25,7 +25,7 @@ const prompt =
       <p class="say" id="agent-prompt">{prompt}</p>
       <div class="row">
         <button type="button" data-copy={prompt} data-copy-target="agent-prompt" hidden>Copy prompt</button>
-        <a href="/agents/reference-runtime/">Read the guide</a>
+        <a href="/agents/your-own-harness/">Read the guide</a>
       </div>
     </div>
   </div>

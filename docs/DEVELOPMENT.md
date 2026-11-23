@@ -137,8 +137,8 @@ The seed (`apps/server/src/seed.ts`, a second `vp pack` entry beside the server)
 Agents `Planner` and `Builder` with the admin as Sponsor, printing their keys once. Then two Projects bound
 to that Socket, thirty-odd records projected from it, Runs in every status, Gates with Proposals — one open,
 one ruled in deevy, one ruled `via: socket` — Links, a Slack Channel, routing and a webhook, all through the
-operations, so the inbox and the Event log fill themselves. Point a runtime at the printed key
-(`DEEVY_AGENT_KEY`) and it will find Planner's pending Runs.
+operations, so the inbox and the Event log fill themselves. Point a coding agent at `/mcp` with the printed
+key and it will find Planner's pending Runs.
 
 `.claude/launch.json` has a third configuration, `seeded`, for when the `.env` of the checkout you are in
 carries real addresses or a real client pair: it seeds `apps/server/data/seeded.sqlite` and serves the built
@@ -187,10 +187,9 @@ http://localhost:3030 deevy-walk`. `cloudflared tunnel route dns` writes the rec
   `DEEVY_SECRET`, `DEEVY_ADMIN_EMAIL`, and the client pair of an OAuth App made for that hostname — the one in
   `.env` has its callback on localhost. Its own database, `data/walk.sqlite`, so nothing of your dev loop is
   in it. Build first (`vp run -r build`).
-- **The runtime in its image**, so the Agent's shell is the container's and not your laptop's:
-  `docker run -d --env-file apps/agent/data/walk.env -e DEEVY_URL=https://<hostname> deevy-agent:claude-code`,
-  with the Agent's key from Settings › Agents and a model credential (`claude setup-token` gives one for a
-  Claude subscription, passed with `DEEVY_AGENT_PASS_ENV=CLAUDE_CODE_OAUTH_TOKEN`).
+- **A coding agent as the Agent**, pointed at `https://<hostname>/mcp` with the Agent's key from Settings ›
+  Agents (`apps/docs/content/agents/your-own-harness.md`), and given git access to the walk's repository
+  yourself. Run it in a container of your own if its shell should not be your laptop's.
 
 A browser that loaded the app before a rebuild may keep the old page; one reload fetches the new one.
 
@@ -402,7 +401,6 @@ migration an annotation names is one that release carried. `DEEVY_PREVIOUS_TAG=v
 ```
 apps/web            React SPA; also the Cloudflare Worker entry (src/worker.ts) when DEEVY_TARGET=workers
 apps/server         Node entry (Hono on @hono/node-server), bundled by vp pack; the seed; Dockerfile
-apps/agent          the reference agent runtime, which talks to deevy as a stranger does
 apps/cli            the command line, generated from the operation registry
 apps/docs           docs.deevy.dev, written from docs/, CONTEXT.md and the OpenAPI snapshot
 packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory, the Socket port
@@ -411,6 +409,7 @@ packages/email      the email senders that speak HTTP (resend, postmark, sendgri
 packages/db         Drizzle schema, relations, migrations
 packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron, SMTP) and workers/ (D1, Email Service)
 tools/release       the changelog fold and the commit-message rules
+tools/acceptance    the acceptance walk, a scripted Agent against every deployment (docs/acceptance.md)
 ```
 
 Rules that keep the two deployment targets honest (ADR-0006): `packages/core`, `packages/db`,
@@ -484,39 +483,19 @@ serves the SPA when `DEEVY_WEB_DIST` names a built one, which is how the Docker 
 Unset `BETTER_AUTH_URL` and the OAuth server is simply not there — a resource identifier is an absolute URL
 and there is nothing to build one from. Everything else, an Agent's API key included, works unchanged.
 
-## The reference agent runtime
+## The acceptance walk
 
-`apps/agent` is the service on the other side of the MCP endpoint, and it has its own
-[README](../apps/agent/README.md) (docs/plans/m4.md). It is in the workspace so `vp check` and
-`vp run -r test` cover it, and it may not import `packages/core` or take a `workspace:*` runtime dependency — it talks to deevy the way a stranger does, which is what makes its tests a
-test of the surfaces rather than a second view of the same objects. A test asserts that.
-
-Against the dev server:
+`tools/acceptance` walks a record through every deployment with a scripted Agent that holds only its key
+([acceptance.md](./acceptance.md)). It needs the builds the deployments are made of:
 
 ```bash
-vp run agent#build
+vp run -F '!@deevy/docs' build && vp run web#build:workers && vp run hosted#build:hosted
+vp run acceptance#walk
 ```
 
-```bash
-DEEVY_URL=http://localhost:3000 DEEVY_AGENT_KEY=<the key> node apps/agent/dist/main.mjs --once
-```
-
-Create the Agent, grant it a Project and issue its key under Settings, Agents first. `--once` makes one pass
-and exits; without it the loop stays up.
-
-**Working on it without an Anthropic key.** Every test in the package runs against a real deevy — built
-in-process, reached through the app's own fetch handler — with a _scripted session_: an async generator that
-yields the four events the runtime reads and calls back into deevy exactly as the model would. That is the
-seam the whole package hangs off, and it means the loop, the envelope, the Gate round trip and the delivery
-are all testable for free. `tests/helpers.ts` has the harness.
-
-One test does call the model, and it is skipped unless you ask for it:
-
-```bash
-DEEVY_AGENT_LIVE=1 vp run agent#test tests/live.test.ts
-```
-
-CI never sets it. A milestone whose suite needs a paid key is a milestone nobody runs twice.
+deevy ships nothing that runs an Agent. To try a real one against the dev server, create the Agent, grant it
+a Project and issue its key under Settings, Agents, then point a coding agent at `http://localhost:3000/mcp`
+with the key ([agent-loop.md](./agent-loop.md) has a Claude Code configuration to copy).
 
 ## The docs site
 
@@ -526,7 +505,7 @@ has one page of its own, the landing (`apps/docs/content/index.mdx`). Every othe
 
 - `docs/OPERATIONS.md` becomes a page per `##` section under Running deevy, each `###` raised to that page's `##`;
 - `docs/agent-loop.md` and `docs/as-yourself.md` are the worked examples, `CONTEXT.md` is the Glossary, this
-  file and `docs/harnesses.md` are Developing deevy, and each ADR is a page under Design decisions;
+  file is Developing deevy, and each ADR is a page under Design decisions;
 - the API reference is `packages/core/openapi.json`, grouped by the first part of each operation's id.
 
 `docs/plans`, `docs/research` and the acceptance walks stay in the repository. So a page is changed where it

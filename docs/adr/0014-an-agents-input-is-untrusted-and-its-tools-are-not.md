@@ -1,5 +1,9 @@
 # An Agent's input is untrusted, and its tools are not
 
+> Superseded by [ADR-0034](./0034-deevy-runs-no-agent-and-manages-no-access.md): deevy ships no runtime, so
+> what bounds a session is whoever runs the Agent. The position below still describes the risk; the Gate no
+> Agent can pass (ADR-0004) is still the last line.
+
 Issues, Documents, comments and Activities are written by everyone with access to a Project — Humans, and
 other Agents. All of it is read by a session that, when the runtime is configured with a repository, holds a
 shell in a checkout. This records what bounds that, because a decision that lives only in a documentation

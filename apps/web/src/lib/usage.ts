@@ -5,7 +5,7 @@
  * priced.
  */
 
-/** What deevy calls each harness the reference runtime drives; anything else is shown as sent. */
+/** What deevy calls each harness a client reports; anything else is shown as sent. */
 const harnessNames: Record<string, string> = {
   "claude-code": "Claude Code",
   opencode: "OpenCode",

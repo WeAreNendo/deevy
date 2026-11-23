@@ -118,8 +118,8 @@ A Run clones the repository and pushes its branch with a token GitHub mints for 
 that one repository and no other the App is installed on, with the App's **Contents** permission and nothing
 else: code, branches, tags and releases, but no issues or pull requests. It lasts an hour, and a Run resumed
 after a Gate gets a fresh one. deevy opens the pull request and writes on the issue with its own token, never
-the Run's. The [reference runtime](/agents/reference-runtime/) keeps the Run's token to itself, so the coding
-agent working the Run never holds it.
+the Run's. Whatever runs the Agent gets the Run's token from `runs.checkout`, which is not an MCP tool, so
+keep it out of the coding agent's context.
 
 ## Rule from GitHub
 

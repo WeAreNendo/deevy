@@ -8,7 +8,7 @@ vocabulary in [CONTEXT.md](CONTEXT.md) (Member, Human, Agent, Sponsor, Workspace
 Checkpoint, Gate, Proposal, Ruling, Identity, Run, Event) in code, API names, and UI copy; it lists the words to
 avoid. Hard-to-reverse choices live in `docs/adr`, the plan in `docs/PLAN.md`, setup and env vars in
 `docs/DEVELOPMENT.md`, running the image, the Worker and each tool's setup in `docs/OPERATIONS.md`. History:
-M1 (Humans), M2 (Agents), M3 (Workers) and M4 (the reference runtime, `apps/agent`) built v1, each from its
+M1 (Humans), M2 (Agents), M3 (Workers) and M4 (a reference runtime, since removed) built v1, each from its
 plan in `docs/plans/`, followed by the harness spike (ADR-0018), the agent owning git (ADR-0019), sign-in and
 invitations, four-eyes Gates (ADR-0020), live Documents (ADR-0021) and sub-issue delegation (ADR-0022). Then
 the **Sockets** milestone (`docs/plans/sockets.md`, ADR-0024 and ADR-0025), done in fifteen slices, cut
@@ -32,8 +32,10 @@ WeAreNendo/deevy-cloud deploys; deevy Cloud has served hosted Workspaces from it
 **public docs** (`docs/plans/docs.md`): docs.deevy.dev written by hand for a team on deevy Cloud and for
 whoever hosts deevy, with `docs/` kept as the internal documentation; and **one design system**
 (`docs/plans/design-system.md`): `@deevy/design` holds the tokens, faces and logo the app and the docs both
-wear, indigo for a Human and what a Human does, rose for an Agent, amber for a Gate. What comes next is the
-real walks of the tools beyond GitHub, then the rest of PLAN.md's "After Sockets" list, budgets first.
+wear, indigo for a Human and what a Human does, rose for an Agent, amber for a Gate. Now **simpler**
+(`docs/plans/simplify.md`, in fourteen slices): deevy ships no runtime and manages no access — an Agent is
+whatever holds its key — a Socket listens to its tool and announces only at Gates, and the breadth built
+ahead of need comes out. Build from that plan's slices in order; it says which ADRs each one supersedes.
 
 ## Commands
 
@@ -44,9 +46,8 @@ format, so pnpm 11 is required and pinned twice over: `devEngines.packageManager
 the prompt to wipe `node_modules`, so if an install hangs with no output, check `pnpm --version` first.
 `vp dev`, `vp build`, `vp test`, `vp check` are built-ins that ignore package.json scripts; `vp run <script>`
 runs scripts, `-r` recursively, `pkg#script` for one package (package names are `web`, `server`, `core`, `db`,
-`adapters`, `sockets`, `email`, `design`, `agent`, `cli`, `release`, `acceptance`, `hosted`, `docs`; `agent`
-has its own `apps/agent/README.md`, `release` is `tools/release`, which holds the changelog fold and the
-commit-message rules, `acceptance` is `tools/acceptance`, the walk, which needs the server, the Worker and
+`adapters`, `sockets`, `email`, `design`, `cli`, `release`, `acceptance`, `hosted`, `docs`; `release` is
+`tools/release`, which holds the changelog fold and the commit-message rules, `acceptance` is `tools/acceptance`, the walk, which needs the server, the Worker and
 the hosted Worker built first, `hosted` is `apps/hosted`, the many-Workspaces Worker: `vp run web#build:workers` then `vp run
 hosted#build:hosted`, and `vp run hosted#test:hosted` runs two Workspaces on workerd, `docs` is `apps/docs`,
 the docs.deevy.dev site, and `design` is `packages/design`, the tokens, faces and logo both of them
