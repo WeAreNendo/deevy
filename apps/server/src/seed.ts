@@ -86,7 +86,7 @@ function cookiesOf(response: Response): string {
 
 /**
  * One Human signing in, as the browser would do it and as the acceptance walk
- * does it (apps/agent/scripts/acceptance.ts).
+ * does it (tools/acceptance/src/walk.ts).
  *
  * The authorization page itself is not stubbed and could not usefully be: it
  * is where a person would click. What the stub answers is everything after the

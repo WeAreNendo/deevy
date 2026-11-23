@@ -3,7 +3,7 @@
  * for `wrangler dev --local` beside a stand-in for the console
  * (scripts/console-stub.js), started, and called the way the console calls it.
  * scripts/smoke-hosted.ts runs two Workspaces on it, and the acceptance walk
- * (apps/agent/scripts/boot.ts) works a record through one.
+ * (tools/acceptance/src/boot.ts) works a record through one.
  *
  * The configuration it runs is the one a release ships (scripts/artifact.ts)
  * with the deployer's blanks filled locally, so what is tested here is the

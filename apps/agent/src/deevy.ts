@@ -95,8 +95,8 @@ export interface PullRequest {
  * A refusal deevy explained, carrying the code the supervisor branches on.
  *
  * The fields are assigned rather than declared as constructor parameters:
- * Node's type stripping runs this source directly in `scripts/acceptance.ts`,
- * and a parameter property is syntax it refuses rather than erases.
+ * Node's type stripping may run this source directly, and a parameter
+ * property is syntax it refuses rather than erases.
  */
 export class DeevyError extends Error {
   readonly code: string;

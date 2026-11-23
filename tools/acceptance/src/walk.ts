@@ -1,6 +1,5 @@
 /**
- * The Sockets milestone's acceptance walk, executed rather than described
- * (docs/sockets-acceptance.md).
+ * deevy's acceptance walk, executed rather than described (docs/acceptance.md).
  *
  * Everything is on this machine: deevy on Node and on workerd, a sign-in stub,
  * a bare git repository as the remote, and a tracker deevy talks to exactly as
@@ -8,34 +7,23 @@
  * (packages/sockets/src/stub). No Cloudflare account, no OAuth App, no GitHub
  * App, no tunnel, no repository on the internet.
  *
- * What is real: the supervisor. Discovery, the claim, the checkout, the
- * envelope, the Gate round trip, the branch, the push, the pull request and
- * what deevy says back in the tracker are `apps/agent/src` and
- * `packages/core` doing their own jobs against a deevy over a socket.
- * What is scripted is the model's judgement — and the scripted session writes
- * over `/mcp` with the Agent's key, exactly as Claude would, so the surface is
- * the real one even though the reasoning is not.
+ * What is real is deevy: the Human's surface, the hooks a tracker delivers to,
+ * `/mcp` and `/api` as an Agent reaches them with its key, the Gates, the
+ * Rulings from the tracker and what deevy says back there. What is scripted is
+ * whatever runs the Agent. deevy runs no Agent and manages no access
+ * (docs/plans/simplify.md), so the scripted Agent does what any harness does:
+ * it finds its work in its inbox, calls the tools with its own key, clones and
+ * pushes with its own git, and attaches the pull request it opened.
  *
- * The one thing this cannot stand in for is Claude itself. That is
- * `tests/live.test.ts`, which is skipped unless DEEVY_AGENT_LIVE=1 and can be
- * pointed at either deployment this script starts.
- *
- *   vp run agent#acceptance              every deployment
- *   vp run agent#acceptance -- --url ... one that is already running
+ *   vp run acceptance#walk              every deployment
+ *   vp run acceptance#walk -- --url ... one that is already running
  */
 import { execFile } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { createDeevy } from "../src/deevy.ts";
-import { openGitProxy } from "../src/git-proxy.ts";
-import { openProxy } from "../src/proxy.ts";
-import type { SessionEvent } from "../src/session.ts";
-import { deevyToolNames } from "../src/tools.ts";
-import { runOnce } from "../src/work.ts";
-import { openWorkspace, type RepoConfig } from "../src/workspace.ts";
 import {
   adminEmail,
   startHosted,
@@ -49,7 +37,7 @@ const git = promisify(execFile);
 const mcpProtocolVersion = "2026-07-28";
 const mcpEnvelope = {
   "io.modelcontextprotocol/protocolVersion": mcpProtocolVersion,
-  "io.modelcontextprotocol/clientCapabilities": { elicitation: { url: {} } },
+  "io.modelcontextprotocol/clientCapabilities": {},
   "io.modelcontextprotocol/clientInfo": { name: "deevy-acceptance", version: "0" },
 };
 
@@ -60,23 +48,6 @@ const webhookSecret = "acceptance-webhook-secret";
 const secondEmail = "grace@example.com";
 
 let failures = 0;
-
-/** What one scripted session spent, as Claude Code would count it: a thousand in, and a cost. */
-function spent(costUsd: number) {
-  return {
-    models: [
-      {
-        model: "claude-haiku-4-5",
-        inputTokens: 1_000,
-        outputTokens: 200,
-        cacheReadTokens: 20_000,
-        cacheWriteTokens: 1_500,
-        costUsd,
-        costBasis: "list" as const,
-      },
-    ],
-  };
-}
 
 function check(name: string, ok: boolean, detail = ""): void {
   if (ok) console.log(`  ok  ${name}`);
@@ -237,7 +208,7 @@ function stated(
       key: record.externalKey,
       url: record.url,
       title: record.title,
-      body: "An operator cannot tell whether the runtime is alive.",
+      body: "An operator cannot tell whether the service is alive.",
       state: "open",
       stateName: "open",
       assignees: [],
@@ -288,54 +259,76 @@ async function said(origin: string, issue: string, cookie: string): Promise<stri
   return ((read.comments as Array<{ body: string }> | null) ?? []).map((one) => one.body);
 }
 
-// ---------------------------------------------------------------- the model
+// ---------------------------------------------------------------- the Agent
 
 /**
- * One tool call the way the model makes it: to the supervisor's loopback proxy,
- * with no credential at all. The proxy adds the Agent's key and refuses a tool
- * the runtime did not grant (src/proxy.ts).
+ * The Agent as any harness runs it: its key, deevy's URL, and nothing deevy
+ * hands it besides. Its tools are `/mcp` with the key as a bearer token, and
+ * what a loop wants rather than a model — marking its inbox read — is the same
+ * operation over `/api` (apps/docs/content/agents/your-own-harness.md).
  */
-async function tool(
-  mcpUrl: string,
-  name: string,
-  args: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const response = await fetch(mcpUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream",
-      "mcp-protocol-version": mcpProtocolVersion,
-      "mcp-method": "tools/call",
-      "mcp-name": name,
+function agentAt(origin: string, key: string) {
+  const authorization = `Bearer ${key}`;
+  return {
+    async tool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+      const response = await fetch(`${origin}/mcp`, {
+        method: "POST",
+        headers: {
+          authorization,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          "mcp-protocol-version": mcpProtocolVersion,
+          "mcp-method": "tools/call",
+          "mcp-name": name,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name, arguments: args, _meta: mcpEnvelope },
+        }),
+      });
+      const body = await response.text();
+      if (response.status !== 200) {
+        throw new Error(`${name} was ${String(response.status)}: ${body.slice(0, 300)}`);
+      }
+      const answer = JSON.parse(body) as {
+        error?: unknown;
+        result?: { isError?: boolean; content?: unknown; structuredContent?: unknown };
+      };
+      if (answer.error) throw new Error(`${name} failed: ${JSON.stringify(answer.error)}`);
+      if (answer.result?.isError) {
+        throw new Error(`${name} refused: ${JSON.stringify(answer.result.content)}`);
+      }
+      return (answer.result?.structuredContent ?? {}) as Record<string, unknown>;
     },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: { name, arguments: args, _meta: mcpEnvelope },
-    }),
-  });
-  const body = await response.text();
-  if (response.status !== 200) {
-    throw new Error(`${name} was ${String(response.status)}: ${body.slice(0, 300)}`);
-  }
-  const answer = JSON.parse(body) as {
-    error?: unknown;
-    result?: { isError?: boolean; content?: unknown; structuredContent?: unknown };
-  };
-  if (answer.error) throw new Error(`${name} failed: ${JSON.stringify(answer.error)}`);
-  if (answer.result?.isError) {
-    throw new Error(`${name} refused: ${JSON.stringify(answer.result.content)}`);
-  }
-  return (answer.result?.structuredContent ?? {}) as Record<string, unknown>;
-}
 
-const ready: SessionEvent = {
-  type: "ready",
-  tools: [],
-  servers: [{ name: "deevy", status: "connected" }],
-};
+    /** What is new in its inbox, marked read once it has been taken. */
+    async unread(): Promise<Array<{ kind: string; issueKey: string | null }>> {
+      const page = await this.tool("inbox_list", { unreadOnly: true });
+      const rows = (page.notifications ?? []) as Array<{
+        id: string;
+        kind: string;
+        issue: { externalKey: string } | null;
+      }>;
+      if (rows.length > 0) {
+        const read = await fetch(`${origin}/api/inbox/read`, {
+          method: "POST",
+          headers: { authorization, "content-type": "application/json" },
+          body: JSON.stringify({ ids: rows.map((row) => row.id) }),
+        });
+        if (read.status !== 200) throw new Error(`inbox/read was ${String(read.status)}`);
+        // Every row taken is a row marked, or a later read would find this
+        // one again and pass for something new.
+        const marked = ((await read.json()) as { read?: number }).read;
+        if (marked !== rows.length) {
+          throw new Error(`inbox/read marked ${String(marked)} of ${String(rows.length)}`);
+        }
+      }
+      return rows.map((row) => ({ kind: row.kind, issueKey: row.issue?.externalKey ?? null }));
+    },
+  };
+}
 
 // ------------------------------------------------------------- the outside
 
@@ -392,15 +385,12 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     JSON.stringify(socket.identity),
   );
 
+  // Bound to the tracker alone: the code is the Agent's to reach, with access
+  // its operator gave it, and deevy is told of a pull request as a Link.
   const project = await human(
     origin,
     "projects/create",
-    {
-      slug: "deevy",
-      name: "deevy",
-      tracker: { socketId, scope: { scopeKey: CONTAINER } },
-      forge: { socketId, scope: { scopeKey: CONTAINER, baseBranch: "main" } },
-    },
+    { slug: "deevy", name: "deevy", tracker: { socketId, scope: { scopeKey: CONTAINER } } },
     ada,
   );
   await human(
@@ -420,7 +410,7 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   const planner = await human(origin, "agents/create", { name: "Planner" }, ada);
   const plannerId = String(planner.id);
   await human(origin, "agents/grants/add", { memberId: plannerId, projectId: project.id }, ada);
-  const key = String((planner.key as { key?: string } | undefined)?.key ?? "");
+  const agent = agentAt(origin, String((planner.key as { key?: string } | undefined)?.key ?? ""));
 
   // Part 2: the work arrives, the way work arrives — as a record in the team's
   // own tracker, which deevy opens through the Socket and then projects.
@@ -429,8 +419,8 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     "issues/create",
     {
       projectSlug: "deevy",
-      title: "Give the runtime a health endpoint",
-      body: "An operator cannot tell whether the runtime is alive.",
+      title: "Give the service a health endpoint",
+      body: "An operator cannot tell whether the service is alive.",
     },
     ada,
   )) as unknown as { externalId: string; externalKey: string; url: string; title: string };
@@ -460,168 +450,69 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   });
   check("an unsigned delivery is refused", unsigned.status === 401, String(unsigned.status));
 
-  // Everything below is the runtime's own code, against this deployment.
-  const config = {
-    url: origin,
-    key,
-    harness: "claude-code",
-    pollSeconds: 1,
-    runTimeoutSeconds: 120,
-    model: "scripted",
-    effort: "high" as const,
-    maxTurns: 10,
-    // No repository here: the Project is bound to one, and deevy answers every
-    // Run with the clone URL, the branch and a credential (ADR-0024).
-    repo: null,
-    listenPort: 0,
-    sessionUid: 10002,
-    sessionGid: 10002,
-  };
-  const deevy = createDeevy({ config });
-  const proxies: Array<() => Promise<void>> = [];
-  const work = {
-    deevy,
-    // What each session's usage says counted it (docs/plans/run-usage.md).
-    harness: "claude-code",
-    // Every push in this walk goes through the supervisor's git proxy, which is
-    // how the session reaches a remote at all (docs/plans/agent-owns-git.md).
-    // It says each push in the Run's feed as it carries it.
-    gitProxy: async (
-      checkout: { cloneUrl: string; token: string },
-      hooks: { onPushed: () => Promise<void> },
-    ) => {
-      const proxy = await openGitProxy({
-        upstream: checkout.cloneUrl,
-        token: checkout.token,
-        ...hooks,
-      });
-      proxies.push(() => proxy.close());
-      return proxy;
-    },
-    proxy: (options: {
-      onDenied: (name: string) => Promise<void>;
-      onCall: (name: string, args: Record<string, unknown>) => Promise<void>;
-    }) => openProxy({ url: origin, key, tools: deevyToolNames, ...options }),
-    runTimeoutMs: 120_000,
-    workspace: (options: { runId: string; repo: RepoConfig | null; originUrl?: string }) =>
-      openWorkspace(options),
-  };
-
+  // Part 3: the Agent finds its work where any harness finds it, reads the
+  // record, says what it intends to do, and stops at the Gate.
+  const assigned = await agent.unread();
   check(
-    "the runtime is the Agent, and says which Member",
-    (await deevy.me()).memberId === plannerId,
+    "the label puts the record in the Agent's inbox",
+    assigned.some((one) => one.kind === "assignment" && one.issueKey === issueKey),
+    JSON.stringify(assigned),
   );
-
-  const pending = await deevy.runs("pending");
+  const pending = (await agent.tool("runs_list", { issue: issueKey })).runs as Array<{
+    id: string;
+    status: string;
+  }>;
   check(
-    "the label opened exactly one Run, for the Agent it named",
-    pending.length === 1 && pending[0]?.issueKey === issueKey,
-    JSON.stringify(pending.map((run) => [run.issueKey, run.status])),
+    "and opened exactly one Run, waiting for it",
+    pending.length === 1 && pending[0]?.status === "pending",
+    JSON.stringify(pending),
   );
   const runId = pending[0]?.id ?? "";
 
-  // Part 3: the first pass. The model reads the record, says what it intends
-  // to do, and stops at the Gate.
-  let sawInConfig = "";
-  const planned = await runOnce({
-    ...work,
-    session: async function* (input) {
-      yield ready;
-      // The credential is the supervisor's: there is no tool for it, and the
-      // working directory it cloned carries none (ADR-0014, ADR-0019).
-      const denied = await tool(input.mcpUrl, "runs_checkout", { runId }).catch((error: unknown) =>
-        error instanceof Error ? error.message : String(error),
-      );
-      check(
-        "the proxy refuses the checkout, which is not a tool at all",
-        typeof denied === "string" && denied.includes("not available to this session"),
-        JSON.stringify(denied),
-      );
-      sawInConfig = await readFile(join(input.cwd, ".git", "config"), "utf8");
-
-      const read = await tool(input.mcpUrl, "issues_get", { issue: issueKey, comments: true });
-      check(
-        "the record an Agent reads is the tracker's, and says where to stop",
-        JSON.stringify(read.checkpoints) === JSON.stringify(["plan", "ship"]),
-        JSON.stringify(read.checkpoints),
-      );
-      await tool(input.mcpUrl, "runs_post_activity", {
-        runId,
-        kind: "thought",
-        body: "Reading the record before I plan anything",
-      });
-      await tool(input.mcpUrl, "gates_request", {
-        runId,
-        checkpoint: "plan",
-        proposal: "## What I will do\n\nAdd a health endpoint, and a smoke that proves it answers.",
-      });
-      yield { type: "done", ok: true, detail: "asked", usage: spent(0.5) };
-    },
+  const read = await agent.tool("issues_get", { issue: issueKey, comments: true });
+  check(
+    "the record an Agent reads is the tracker's, and says where to stop",
+    JSON.stringify(read.checkpoints) === JSON.stringify(["plan", "ship"]),
+    JSON.stringify(read.checkpoints),
+  );
+  await agent.tool("runs_post_activity", {
+    runId,
+    kind: "thought",
+    body: "Reading the record before I plan anything",
   });
-
+  const plan = await agent.tool("gates_request", {
+    runId,
+    checkpoint: "plan",
+    proposal: "## What I will do\n\nAdd a health endpoint, and a smoke that proves it answers.",
+  });
   check(
-    "the Run is taken up and stops at the Gate",
-    planned.worked.length === 1 && planned.worked[0]?.status === "awaiting_input",
-    JSON.stringify(planned.worked),
-  );
-  check(
-    "nothing is delivered by a Run that only asked",
-    planned.worked[0]?.delivered === undefined,
-  );
-  check(
-    "the credential is in no working directory the session can read",
-    sawInConfig.includes("127.0.0.1") && !sawInConfig.includes("stub-token"),
-    sawInConfig,
-  );
-  const feed = (await human(origin, "runs/get", { runId }, ada)).activities as Array<{
-    kind: string;
-    body: string;
-  }>;
-  check(
-    "the refusal is in the Run's feed, in the Agent's name",
-    feed.some((one) => one.kind === "error" && one.body.includes("runs_checkout")),
-    JSON.stringify(feed.map((one) => [one.kind, one.body])),
+    "asking at a Checkpoint stops the Run at its Gate",
+    plan.status === "open" && (await agent.tool("runs_get", { runId })).status === "awaiting_input",
+    JSON.stringify(plan.status),
   );
 
-  // What deevy says back where the team reads: the Proposal, signed, and the
-  // record labelled while it waits (slice 7).
+  // What deevy says back where the team reads: the Proposal, signed.
   const mirrored = await until(deployment, "the Gate reaching the tracker", async () => {
-    const said = (await human(origin, "issues/get", { issue: issueKey, comments: true }, ada))
-      .comments as Array<{ body: string }> | null;
-    return said?.find((one) => one.body.includes("## What I will do")) ?? null;
+    return (
+      (await said(origin, issueKey, ada)).find((one) => one.includes("## What I will do")) ?? null
+    );
   });
   check(
     "the Proposal is a comment in the tracker, signed with the Agent and the Run",
-    mirrored.body.includes("Planner") && mirrored.body.includes(runId),
-    mirrored.body,
+    mirrored.includes("Planner") && mirrored.includes(runId),
+    mirrored,
   );
-  /*
-   * The label that goes with it — `deevy:awaiting-approval` while the Gate is
-   * open, off again when it is ruled — is the same delivery as this comment and
-   * is asserted against the tracker's own state in
-   * `packages/core/tests/mirror.test.ts`. It cannot be asserted from here: what
-   * `issues.get` answers is deevy's projection, and deevy's copy of the labels
-   * is whatever the tracker last told it, not what deevy last asked for.
-   */
 
-  // A pass that finds a Run waiting on a Human leaves it exactly there.
-  const untouched = await runOnce({
-    ...work,
-    session: async function* () {
-      yield ready;
-      throw new Error("a Run waiting on a Human is not the runtime's to work");
-    },
-  });
+  // A Run waiting on a Human is waiting, whatever the sweeps do meanwhile.
+  await deployment.tick();
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
   check(
-    "a Run nobody has ruled on is reported, not worked",
-    untouched.worked.length === 0 &&
-      untouched.resumed.length === 0 &&
-      untouched.waiting.length === 1,
-    JSON.stringify(untouched.waiting.map((run) => run.status)),
+    "a Run nobody has ruled on stays at its Gate",
+    (await agent.tool("runs_get", { runId })).status === "awaiting_input",
   );
 
   // Part 4: the Human rules where they read the Proposal — in the tracker —
-  // and the loop carries on (ADR-0025).
+  // and the Agent carries on (ADR-0025).
   //
   // First somebody deevy cannot place, who is told how to be placed and rules
   // nothing: an account id is proof, a login is not.
@@ -642,14 +533,8 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     linkReply.includes("ruled nothing") && linkReply.includes("/settings/identities"),
     linkReply,
   );
-  const stillOpen = (await human(origin, "gates/list", { runId }, ada)).gates as Array<{
-    status: string;
-  }>;
-  check(
-    "and the Gate is still waiting",
-    stillOpen[0]?.status === "open",
-    JSON.stringify(stillOpen),
-  );
+  const stillOpen = await agent.tool("gates_get", { requestId: plan.id });
+  check("and the Gate is still waiting", stillOpen.status === "open", JSON.stringify(stillOpen));
 
   // Then the admin, from the GitHub account they signed in to deevy with.
   await deliver(
@@ -660,75 +545,77 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   );
   const planRuled = (await human(origin, "gates/list", { runId }, ada)).gates as Array<{
     status: string;
-    decisions: Array<{ via: string; memberId: string }>;
+    decisions: Array<{ via: string }>;
   }>;
   check(
     "the admin rules from the tracker with no linking step, and deevy says where it came from",
     planRuled[0]?.status === "approved" && planRuled[0]?.decisions[0]?.via === "socket",
     JSON.stringify(planRuled.map((gate) => [gate.status, gate.decisions])),
   );
+
   check(
-    "the ruling reaches the Agent's inbox",
-    (await deevy.unread()).some((one) => one.kind === "run_answered"),
+    "the Ruling reaches the Agent's inbox",
+    (await agent.unread()).some((one) => one.kind === "run_answered" && one.issueKey === issueKey),
+  );
+  check(
+    "and puts its Run back to work",
+    (await agent.tool("runs_get", { runId })).status === "active",
+  );
+  const planned = (await agent.tool("gates_get", { requestId: plan.id })) as {
+    status: string;
+    decisions: Array<{ note: string | null }>;
+  };
+  check(
+    "and the Agent reads what was decided, and what the Human said, from the Gate",
+    planned.status === "approved" &&
+      planned.decisions.some((one) => one.note === "Looks right, build it"),
+    JSON.stringify(planned.decisions),
   );
 
-  let resumePrompt = "";
-  const built = await runOnce({
-    ...work,
-    session: async function* (input) {
-      resumePrompt = input.prompt;
-      yield ready;
-      // git is the Agent's: its own branch, its own commit, its own push,
-      // through the loopback origin the supervisor put in front of it.
-      const inside = (args: string[]) => git("git", ["-C", input.cwd, ...args]);
-      await inside(["checkout", "--quiet", "-b", "health-endpoint"]);
-      await writeFile(join(input.cwd, "health.ts"), "export const ok = true;\n");
-      await inside(["add", "-A"]);
-      await inside([
-        "-c",
-        "user.name=Planner",
-        "-c",
-        "user.email=planner@deevy.invalid",
-        "commit",
-        "-qm",
-        "Add a health endpoint",
-      ]);
-      await inside(["push", "--quiet", "origin", "health-endpoint"]);
+  // git is the Agent's: its own clone, with access its operator gave it, its
+  // own branch, its own commit, its own push. deevy is not in the way of any
+  // of it, and is told about the pull request when there is one.
+  const checkout = await mkdtemp(join(tmpdir(), "deevy-acceptance-checkout-"));
+  const inside = (args: string[]) => git("git", ["-C", checkout, ...args]);
+  await git("git", ["clone", "--quiet", repo, checkout]);
+  await inside(["checkout", "--quiet", "-b", "health-endpoint"]);
+  await writeFile(join(checkout, "health.ts"), "export const ok = true;\n");
+  await inside(["add", "-A"]);
+  await inside([
+    "-c",
+    "user.name=Planner",
+    "-c",
+    "user.email=planner@deevy.invalid",
+    "commit",
+    "-qm",
+    "Add a health endpoint",
+  ]);
+  await inside(["push", "--quiet", "origin", "health-endpoint"]);
 
-      const opened = await tool(input.mcpUrl, "pulls_open", {
-        runId,
-        head: "health-endpoint",
-        summary: "Added a health endpoint and a smoke for it",
-      });
-      await tool(input.mcpUrl, "gates_request", {
-        runId,
-        checkpoint: "ship",
-        proposal: "## What I built\n\nA health endpoint, and a smoke that proves it answers.",
-        links: [{ url: String(opened.url), title: "The pull request" }],
-      });
-      yield { type: "done", ok: true, detail: "built", usage: spent(1.25) };
-    },
+  // The pull request the Agent opened in the tool its code lives in, which
+  // the stub only names: deevy's part is the Link.
+  const pullRequest = `https://stub.invalid/${CONTAINER}/pull/1`;
+  await agent.tool("links_add", {
+    issue: issueKey,
+    url: pullRequest,
+    title: "The pull request",
+    kind: "pull_request",
+    runId,
   });
-
+  const ship = await agent.tool("gates_request", {
+    runId,
+    checkpoint: "ship",
+    proposal: "## What I built\n\nA health endpoint, and a smoke that proves it answers.",
+    links: [{ url: pullRequest, title: "The pull request" }],
+  });
   check(
-    "the ruling hands the Run back, and it stops at the second Gate",
-    built.resumed.length === 1 && built.resumed[0]?.status === "awaiting_input",
-    JSON.stringify(built.resumed),
-  );
-  check(
-    "the resumed session is told what was decided, and what the Human said",
-    resumePrompt.includes("approved the plan Gate") &&
-      resumePrompt.includes("Looks right, build it"),
-    resumePrompt,
+    "the Agent builds, and stops at the second Gate",
+    ship.status === "open" && (await agent.tool("runs_get", { runId })).status === "awaiting_input",
+    JSON.stringify(ship.status),
   );
 
   // Part 5: four eyes. The Human the work is for cannot wave it through.
-  const shipGate = (
-    (await human(origin, "gates/list", { runId, status: "open" }, ada)).gates as Array<{
-      id: string;
-    }>
-  )[0];
-  const refusedSaid = await refused(origin, "gates/approve", { requestId: shipGate?.id }, ada);
+  const refusedSaid = await refused(origin, "gates/approve", { requestId: ship.id }, ada);
   check(
     "the Human the Run is for is refused at a four-eyes Checkpoint",
     refusedSaid.includes("wants somebody other than the Human this Run is for"),
@@ -754,81 +641,63 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     fourEyes,
   );
   // Somebody else rules, in deevy: both doors lead to the same Ruling.
-  await human(origin, "gates/approve", { requestId: shipGate?.id, note: "Ship it" }, grace);
-  check("and somebody else can rule on it", graceId !== "");
+  await human(origin, "gates/approve", { requestId: ship.id, note: "Ship it" }, grace);
+  const shipped = (await agent.tool("gates_get", { requestId: ship.id })) as {
+    status: string;
+    decisions: Array<{ memberId: string; via: string }>;
+  };
+  check(
+    "and somebody else rules on it, in deevy",
+    graceId !== "" &&
+      shipped.status === "approved" &&
+      shipped.decisions.some((one) => one.memberId === graceId && one.via === "web"),
+    JSON.stringify(shipped.decisions),
+  );
 
-  const finished = await runOnce({
-    ...work,
-    session: async function* (input) {
-      yield ready;
-      await tool(input.mcpUrl, "runs_finish", {
-        runId,
-        status: "completed",
-        summary: "Added a health endpoint and a smoke for it",
-      });
-      yield { type: "done", ok: true, detail: "finished", usage: spent(0.25) };
-    },
+  check(
+    "the second Ruling reaches the Agent's inbox too",
+    (await agent.unread()).some((one) => one.kind === "run_answered" && one.issueKey === issueKey),
+  );
+  check(
+    "and puts its Run back to work again",
+    (await agent.tool("runs_get", { runId })).status === "active",
+  );
+  await agent.tool("runs_finish", {
+    runId,
+    status: "completed",
+    summary: "Added a health endpoint and a smoke for it",
   });
   check(
-    "the second ruling hands it back again, and it finishes",
-    finished.resumed.length === 1 && finished.resumed[0]?.status === "completed",
-    JSON.stringify(finished.resumed),
+    "and the Agent finishes its Run",
+    (await agent.tool("runs_get", { runId })).status === "completed",
   );
 
-  // Part 6: the evidence, on the remote and on the record.
-  const branches = repo ? (await git("git", ["-C", repo, "branch", "--list"])).stdout : "";
-  check(
-    "the branch the session pushed is on the remote, and main is untouched",
-    branches.includes("health-endpoint") && !branches.includes("deevy/"),
-    branches.replaceAll("\n", " "),
-  );
-
+  // Part 6: the evidence on the record. What reached the remote is the
+  // Agent's own push and nothing deevy did, so there is nothing of deevy's to
+  // check there.
   const links = (await human(origin, "links/list", { issue: issueKey }, ada)).links as Array<{
     kind: string;
     url: string;
     runId: string | null;
   }>;
   check(
-    "one pull request, attributed to the attempt that produced it",
-    links.length === 1 && links[0]?.kind === "pull_request" && links[0]?.runId === runId,
+    "one pull request, the Agent's, attributed to the attempt that produced it",
+    links.length === 1 &&
+      links[0]?.kind === "pull_request" &&
+      links[0]?.url === pullRequest &&
+      links[0]?.runId === runId,
     JSON.stringify(links),
   );
-  check(
-    "and it was opened in the tracker, not by the runtime",
-    links[0]?.url.includes(`/${CONTAINER}/pull/`) === true,
-    links[0]?.url ?? "",
-  );
 
-  const ruled = await until(deployment, "the ruling reaching the tracker", async () => {
-    const said = (await human(origin, "issues/get", { issue: issueKey, comments: true }, ada))
-      .comments as Array<{ body: string }> | null;
-    return said?.find((one) => one.body.includes("Ship it")) ?? null;
-  });
+  const ruled = await until(
+    deployment,
+    "the ruling reaching the tracker",
+    async () => (await said(origin, issueKey, ada)).find((one) => one.includes("Ship it")) ?? null,
+  );
   check(
     "the ruling is said back in the tracker too, with the arithmetic",
-    ruled.body.includes("1 of 1") || ruled.body.toLowerCase().includes("approved"),
-    ruled.body,
-  );
-
-  // What the Run spent: three sessions, each reported by the supervisor as it
-  // ended, and added up by deevy (docs/plans/run-usage.md).
-  const spentRun = (await human(origin, "runs/get", { runId }, ada)).usage as {
-    inputTokens: number;
-    cacheReadTokens: number;
-    costUsd: number | null;
-    reports: number;
-    models: Array<{ harness: string; model: string | null }>;
-  };
-  check(
-    "each session's usage reached the Run, added up and named by its harness",
-    spentRun.reports === 3 &&
-      spentRun.inputTokens === 3_000 &&
-      spentRun.cacheReadTokens === 60_000 &&
-      spentRun.costUsd === 2 &&
-      spentRun.models.length === 1 &&
-      spentRun.models[0]?.harness === "claude-code" &&
-      spentRun.models[0]?.model === "claude-haiku-4-5",
-    JSON.stringify(spentRun),
+    ruled.includes("1 of 1") || ruled.toLowerCase().includes("approved"),
+    ruled,
   );
 
   // Part 7: what the record has to say.
@@ -842,17 +711,11 @@ export async function walk(deployment: Deployment, label: string, repo: string):
   console.log(`  —   ${story}`);
   check(
     "the Event log tells the story of the Run from the label to the finish",
-    // Each session ends by reporting what it spent: `run.usage_reported` after
-    // the plan, after the build, and after the finish. The branch the build
-    // pushed is an Activity the moment the push lands, before the pull request
-    // that names it.
     story ===
-      "run.started run.checkout_issued run.activity run.activity gate.requested " +
-        "run.awaiting_input run.usage_reported gate.ruling_refused identity.linked " +
-        "gate.approved run.answered run.checkout_issued run.activity issue.link_added " +
-        "run.pull_request_opened gate.requested run.awaiting_input run.usage_reported " +
-        "comment.created gate.ruling_refused gate.approved run.answered " +
-        "run.checkout_issued run.completed run.usage_reported",
+      "run.started run.activity gate.requested run.awaiting_input gate.ruling_refused " +
+        "identity.linked gate.approved run.answered issue.link_added gate.requested " +
+        "run.awaiting_input gate.ruling_refused gate.approved run.answered " +
+        "run.completed",
     story,
   );
   // These are a Human's or the tracker's, each for the right reason:
@@ -879,7 +742,6 @@ export async function walk(deployment: Deployment, label: string, repo: string):
     JSON.stringify(events.map((event) => [event.kind, event.actorMemberId === plannerId])),
   );
 
-  for (const close of proxies) await close();
   return story;
 }
 
@@ -887,7 +749,13 @@ async function main(): Promise<void> {
   const given = process.argv.indexOf("--url");
   if (given !== -1) {
     // An instance somebody else started names its own containers, so the
-    // repository behind it is theirs to say.
+    // repository the Agent pushes to is theirs to say.
+    const repo = process.env.DEEVY_ACCEPTANCE_REPO ?? "";
+    if (!repo) {
+      throw new Error(
+        "Set DEEVY_ACCEPTANCE_REPO to a bare repository the Agent may clone and push to",
+      );
+    }
     await walk(
       {
         name: "given",
@@ -896,10 +764,10 @@ async function main(): Promise<void> {
         stop: () => undefined,
       },
       "an instance that is already running",
-      process.env.DEEVY_ACCEPTANCE_REPO ?? "",
+      repo,
     );
   } else {
-    // Both deployments, from one codebase, and the runtime cannot tell them
+    // Every deployment, from one codebase, and the Agent cannot tell them
     // apart: that is the claim ADR-0006 makes and this is what checks it. And
     // the image once more under a path, which is where a hosted Workspace
     // lives (docs/plans/hosted.md): nothing the walk does may notice. Then a
@@ -909,11 +777,13 @@ async function main(): Promise<void> {
     const underAPath = (options: StartOptions) => startNode({ ...options, basePath: "/deevy" });
     for (const start of [startNode, startWorkers, underAPath, startHosted]) {
       let deployment: Deployment | null = null;
-      // A repository each: the walk pushes the same branch on both, and a
+      // A repository each: the walk pushes the same branch on every one, and a
       // shared remote would make the second push a non-fast-forward.
       const repo = await remote();
       try {
-        deployment = await start({ containers: `${CONTAINER}=${repo}` });
+        // The tracker holds the container and nothing about the code: deevy
+        // never learns where the repository is.
+        deployment = await start({ containers: CONTAINER });
         stories[deployment.name] = await walk(deployment, `deevy on ${deployment.name}`, repo);
       } finally {
         deployment?.stop();

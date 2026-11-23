@@ -7,7 +7,7 @@
  * a configured issuer, so the only seam that covers all eight is the global
  * `fetch` they are called through.
  * `apps/server/src/index.ts` imports this file when `DEEVY_DEV_STUB_OAUTH=1`;
- * `apps/web/scripts/smoke-workers.ts` and `apps/agent/scripts/boot.ts` prepend
+ * `apps/web/scripts/smoke-workers.ts` and `tools/acceptance/src/boot.ts` prepend
  * its source to a built bundle instead. Either way deevy itself — its routing,
  * its database, Better Auth's real OAuth dance — is the real one, and the
  * outside world is the only thing replaced.
@@ -28,7 +28,7 @@
  * Everything lives inside one function so the file declares nothing at module
  * scope: its source is prepended to a bundle whose own top-level names it
  * would otherwise collide with, and esbuild refuses the duplicate rather than
- * shadowing it — which is how `vp run agent#acceptance` catches this.
+ * shadowing it — which is how `vp run acceptance#walk` catches this.
  */
 (() => {
   const upstream = globalThis.fetch;
