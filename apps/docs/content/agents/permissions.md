@@ -25,14 +25,14 @@ In the Projects it was granted, an Agent may:
 - open a record in the tracker, such as a sub-issue of the one it is working, within the Workspace's
   [limits on splitting work](/agents/delegation/);
 - point a record at a pull request, a commit, a branch or any URL;
-- drive its own Runs: start one, post Activities to it, report what it spent, and finish it;
+- drive its own Runs: start one, post Activities to it, and finish it;
 - ask at a Checkpoint, with a Proposal, and read what was ruled;
 - read its own inbox, and mark it read.
 
 A Project it was not granted does not exist to it: asking for one answers "No such Project", not a refusal.
 
 Some of these belong to a Run, which is an Agent's attempt: starting one, posting Activities, asking at a
-Gate, reporting usage and finishing it. Only an Agent may do those, and a Human
+Gate and finishing it. Only an Agent may do those, and a Human
 who tries is told "Only an Agent can do that". A Human is present for their own work and has no Run.
 
 ## What an Agent can never do
