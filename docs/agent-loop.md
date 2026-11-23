@@ -8,7 +8,7 @@ carries on once a Human rules in deevy.
 Which identity a Claude Code carries is decided by its key and by nothing else. The loop below holds an
 Agent's API key, so it is that Agent: its own Member, its own Runs, its Sponsor one hop away. Only an Agent
 speaks MCP (ADR-0035): the same Claude Code pointed at the endpoint with no key is refused, and a person
-reads and rules in deevy, in their tracker or in the Project's chat channel. An Agent is only ever something
+reads in their tracker and in the Project's chat channel, and rules in deevy. An Agent is only ever something
 a Sponsor created.
 
 It is an example, not a product, and it is the CLI configuration a person can copy. deevy ships nothing that
@@ -69,9 +69,9 @@ The file tools are how it changes code; the last two are the loop's own git and 
 request, with a credential its operator gave it: deevy holds no Run's code (ADR-0034). Narrow them to what
 the loop should be able to do.
 
-deevy filters `tools/list` to what this principal may call, so an Agent never sees `gates_approve` — but that
-is display. The refusal is the same one the HTTP API gives, in the same middleware, whichever surface asked
-(ADR-0011).
+`tools/list` offers the Agent whose key it is every tool, since each faces an Agent, and none of them rules on
+a Gate. What a call may do is decided where the HTTP API decides it, in the same middleware, whichever
+surface asked (ADR-0011).
 
 ## The `CLAUDE.md` snippet
 
@@ -200,7 +200,7 @@ then the detail.
 Do not decide there is nothing to do while an Issue is routed to you and is open. There almost always is, and
 it is one of three things: a Proposal to write, a Gate to wait at, or a rejection to read and act on. If you
 genuinely cannot tell which, say so — a comment naming what you looked at beats finishing silently, because a
-Human watching a Gate they were notified about has no way to know you decided you were finished.
+Human watching the record has no way to know you decided you were finished.
 
 If you cannot go on — a record you cannot read, a Project you cannot see, a tool that refuses — post
 `runs_post_activity` with `kind: "error"` saying exactly what stopped you, then `runs_finish` with
@@ -217,20 +217,18 @@ Run failed over work that succeeded is the worst record you can leave.
 
 ## What the Human does
 
-They get a Notification the moment the Run stops: an inbox row always, and a Slack message when the Workspace
-routes `gate_awaiting` to a Channel. The Checkpoint decides who is told — the approvers it names, or every
-active Human when it names none — not the Human behind the Run. And deevy says it again where the team
-already reads: a comment on the record in their own tracker, carrying the Proposal, signed with the Agent and
-the Run.
+deevy sends them nothing. The Gate waits on **Needs me** for the Humans who may rule on it — the approvers
+the Checkpoint names, or every active Human when it names none — not for the Human behind the Run. And deevy
+says it where the team already reads: a comment on the record in their own tracker, signed with the Agent and
+the Run, and one message in the Project's chat channel where the Project binds one.
 
-The Notification, the answer `gates_request` gave the Agent, and that comment all carry the same link,
+That comment, that message and the answer `gates_request` gave the Agent all carry the same link,
 `/gates/<requestId>`. Opening it puts the Human on the ruling screen with the Proposal rendered, its links,
 the arithmetic the Checkpoint asks for, and the Run's feed beside it. They approve or reject, with a note.
 
-They can rule in deevy, in a browser, or with `/approve` or `/reject <why>` in a comment on the record,
-which counts when the account they commented with is one of their Identities (ADR-0025). A Human's own MCP
-client holds a valid credential for that Human and is still refused: the party that proposes has no route
-to approve, and a delegated credential is not the Human (ADR-0010).
+They rule there, signed in, and nowhere else (ADR-0036): `/approve` or `/reject <why>` in a comment on the
+record is a comment, and the chat message is a link with no buttons. A Human has no MCP client to rule with
+either, since `/mcp` takes only an Agent's key (ADR-0035): the party that proposes has no route to approve.
 
 A question the Agent asked on the record is answered there too, in a reply that mentions it. deevy does not
 hold the conversation; it only hears that the reply named the Agent, and tells the Agent so.

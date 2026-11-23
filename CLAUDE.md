@@ -22,10 +22,8 @@ through every deployment on every commit with no account, App or network, with a
 only its key. Then **usage and time per Run**
 (`docs/plans/run-usage.md`): deevy derives how long a Run worked and waited, and the Run page and the feed
 show it; the tokens and cost a Run's client reported (`runs.reportUsage`) were since removed. Then
-**email** (`docs/plans/email-channel.md`): a port in `@deevy/core/email` with seven senders — the HTTP ones in
-`packages/email`, SMTP in `@deevy/adapters/node`, Cloudflare Email Service in `@deevy/adapters/workers` — a
-Human's Notifications at their verified address, team addresses as Channels, invitations by email, and
-Settings › Email. Then **hosted Workspaces** (`docs/plans/hosted.md`, ADR-0028 to ADR-0032): a deployment may
+**email** (`docs/plans/email-channel.md`): seven senders, a Human's Notifications at their verified address,
+team addresses, invitations by email — all of it since removed, with a Human's inbox. Then **hosted Workspaces** (`docs/plans/hosted.md`, ADR-0028 to ADR-0032): a deployment may
 live under a path, several may sign in through one relay, and `apps/hosted` serves many Workspaces from one
 Worker, each one's database a Durable Object of its own, released as an attested archive that the private
 WeAreNendo/deevy-cloud deploys; deevy Cloud has served hosted Workspaces from it at app.deevy.dev since
@@ -33,10 +31,13 @@ WeAreNendo/deevy-cloud deploys; deevy Cloud has served hosted Workspaces from it
 **public docs** (`docs/plans/docs.md`): docs.deevy.dev written by hand for a team on deevy Cloud and for
 whoever hosts deevy, with `docs/` kept as the internal documentation; and **one design system**
 (`docs/plans/design-system.md`): `@deevy/design` holds the tokens, faces and logo the app and the docs both
-wear, indigo for a Human and what a Human does, rose for an Agent, amber for a Gate. Now **simpler**
-(`docs/plans/simplify.md`, in fourteen slices): deevy ships no runtime and manages no access — an Agent is
-whatever holds its key — a Socket listens to its tool and announces only at Gates, a Gate is ruled on in
-deevy alone, and the breadth built ahead of need comes out. Build from that plan's slices in order; it says which ADRs each one supersedes.
+wear, indigo for a Human and what a Human does, rose for an Agent, amber for a Gate. Then **simpler**
+(`docs/plans/simplify.md`, fourteen slices, ADR-0034 to ADR-0037), the release that is 0.12: deevy ships no
+runtime and manages no access — an Agent is whatever holds its key, and only an Agent speaks MCP — a Socket
+listens to its tool and announces only at Gates, on the record and in the one chat channel a Project binds, a
+Gate is ruled on in deevy alone, a Human is sent nothing, four providers sign in, the image and the hosted
+Worker are the two deployments, and the migration history starts afresh. What each slice found, and what it
+removed, is at the end of that plan.
 
 ## Commands
 
@@ -118,7 +119,8 @@ Durable Object).
 
 **Sockets** (ADR-0024): the core holds the port — the types a tool must answer to, in
 `packages/core/src/sockets/port.ts`, exported as `@deevy/core/sockets` — and never a provider. Each tool is a
-module in `packages/sockets/src/<provider>` (github, linear, gitlab, notion, slack, and the in-process `stub`);
+module in `packages/sockets/src/<provider>` (github, linear, gitlab, notion, slack, the `generic` Socket any
+other tool reaches through an adapter of the team's, and the in-process `stub`);
 the entries build the registry with `socketModules()` and pass it as `createApp({ sockets })`. A tool
 delivers to `POST /hooks/:socketId`, mounted before everything else, where the module verifies the raw body,
 `normalize` turns it into `InboundEvent`s, and `applyInbound` projects and routes; nothing a tool delivers

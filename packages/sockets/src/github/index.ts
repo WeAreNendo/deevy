@@ -45,9 +45,6 @@ export interface GithubConfig {
 export interface GithubCredentials {
   /** The `.pem` GitHub gave the operator, PKCS#1 or PKCS#8 (keys.ts). */
   privateKey?: string;
-  /** For the sign-in and identity flows that come later; unread here. */
-  clientId?: string;
-  clientSecret?: string;
 }
 
 const DEFAULT_API = "https://api.github.com";
@@ -420,8 +417,6 @@ export function createGithubSocket({
           name: string;
           pem: string;
           webhook_secret: string;
-          client_id: string;
-          client_secret: string;
           html_url?: string;
         }>(`/app-manifests/${encodeURIComponent(params.code)}/conversions`, {
           method: "POST",
@@ -435,11 +430,9 @@ export function createGithubSocket({
             slug: converted.slug,
             ...(converted.html_url ? { htmlUrl: converted.html_url } : {}),
           },
-          credentials: {
-            privateKey: converted.pem,
-            clientId: converted.client_id,
-            clientSecret: converted.client_secret,
-          },
+          // The App's client pair, also in the answer, is for signing in through
+          // it, which deevy never does (ADR-0036), so its secret is not kept.
+          credentials: { privateKey: converted.pem },
           webhookSecret: converted.webhook_secret,
           identity: {
             login: `${converted.slug}[bot]`,

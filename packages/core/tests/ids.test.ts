@@ -34,8 +34,8 @@ describe("newId", () => {
     expect(authId("apikey")).toMatch(/^key_[0-9a-z]{12}$/);
     // A new plugin table must fail loudly, not mint a prefix isId rejects.
     expect(() => authId("somethingNew")).toThrow(/somethingNew/);
-    // The OAuth server's tables are kept unused (docs/plans/simplify.md,
-    // slice 9), and nothing may write a row into one.
+    // The OAuth server's tables went with it (docs/plans/simplify.md, slices
+    // 9 and 12), and nothing may write a row into one again.
     expect(() => authId("oauthClient")).toThrow(/oauthClient/);
   });
 

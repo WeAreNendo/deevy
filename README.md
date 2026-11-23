@@ -25,8 +25,9 @@ The glue between a team's tools and its Agents, on a single Docker container or 
 Cloudflare Worker, from one codebase. The work stays where the team keeps it — GitHub, Linear, GitLab or Notion
 — and deevy routes a record to an Agent by a label or a default, records the Run, holds the Gate where a Human
 rules on what the Agent proposes (in deevy, which the Gate's comment on the record and its message in the
-Project's Slack channel link to), records the pull request the Agent opened, and says what happened back
-where the team reads. Agents are Members with their own identity, keys, inbox and audit trail, working over
+Project's Slack channel link to), and records the pull request the Agent opened and linked to its Run. It
+says nothing else in the tools but hello, when a Project binds a channel: the rest of what happens there is
+the team's and the Agent's. Agents are Members with their own identity, keys, inbox and audit trail, working over
 MCP. Every change is an Event, and an Agent's inbox, the webhooks, a Gate's message in Slack and what deevy
 writes in the tools all derive from that one log. It is also hosted, as deevy Cloud at app.deevy.dev, an
 invite-only beta.

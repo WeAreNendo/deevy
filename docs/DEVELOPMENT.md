@@ -395,13 +395,17 @@ apps/web            React SPA, which the image and the hosted Worker both serve
 apps/server         Node entry (Hono on @hono/node-server), bundled by vp pack; the seed; Dockerfile
 apps/hosted         the many-Workspaces Worker: the router, a Durable Object per Workspace, Platform
 apps/cli            the command line, generated from the operation registry
-apps/docs           docs.deevy.dev, written from docs/, CONTEXT.md and the OpenAPI snapshot
+apps/docs           docs.deevy.dev, written by hand in content/, its API reference from the OpenAPI snapshot
 packages/core       operation registry, oRPC router, Hono app factory, Better Auth factory, the Socket port
-packages/sockets    one module per tool deevy speaks (github, linear, gitlab, notion, slack) and the stub
+packages/sockets    one module per tool deevy speaks (github, linear, gitlab, notion, slack), the generic
+                    Socket any other tool reaches through an adapter, and the stub
 packages/db         Drizzle schema, relations, migrations
+packages/design     the tokens, faces and logo the SPA and the docs site both wear
 packages/adapters   node/ (node:sqlite, migrator, static assets, timer cron), durable/ (a Durable Object's
                     database, migrator, alarm and dump), spa.ts (the SPA under a path), testing/
-tools/release       the changelog fold and the commit-message rules
+tools/release       the changelog fold, the commit-message rules, and the tests that hold the repository to
+                    what it says (its members, its two deployment shapes, the record)
+tools/lint          the oxlint plugin with deevy's own rules
 tools/acceptance    the acceptance walk, a scripted Agent against every deployment (docs/acceptance.md)
 ```
 

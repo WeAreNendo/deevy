@@ -147,9 +147,8 @@ Signing in proves who somebody is; joining the Workspace is up to its admins. Bo
 **A rule** lets in everyone whose verified address is at an email domain, now and later. Under **Who may
 join**, choose **Add rule**, enter the **Domain**, such as `example.com`, and choose **Add rule**.
 
-A domain is the only rule there is. A GitHub organization or GitLab group rule saved by an earlier release
-is no longer listed and lets nobody in; a Member it let in before stays a Member. To let in somebody whose
-address is at no domain of yours, invite them.
+A domain is the only rule there is. To let in somebody whose address is at no domain of yours, invite
+them.
 
 Until there is a rule, the admin is the only one who can get in, apart from those they invite.
 

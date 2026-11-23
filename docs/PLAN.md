@@ -1,7 +1,7 @@
 # deevy: the plan
 
 Discovery output, 2026-09-03; rewritten 2026-09-24, when the Sockets milestone closed and deevy stopped being
-a tracker of its own. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); the reasoning behind the
+a tracker of its own, and again 2026-11-23, when [simplify.md](./plans/simplify.md) made it simpler. Vocabulary is defined in [CONTEXT.md](../CONTEXT.md); the reasoning behind the
 hard-to-reverse choices is in [docs/adr](./adr). Research notes that informed this plan are in
 [docs/research](./research).
 
@@ -22,7 +22,9 @@ Four things make it different:
    the live UI, an Agent's inbox and what deevy says back in the tools all derive from it.
 4. **deevy never runs agents, and never owns the tracker.** It triggers Agents through events and an MCP
    inbox and receives Runs back — Claude Code in CI, an Agent SDK service or a local loop does the running,
-   and deevy ships none of them — and the work stays where the team keeps it.
+   and deevy ships none of them — and the work stays where the team keeps it. An Agent is whatever holds its
+   key, with the access to the repository and the tracker its operator gave it (ADR-0003, true again since
+   [ADR-0034](./adr/0034-deevy-runs-no-agent-and-manages-no-access.md)).
 
 ## What deevy became
 
@@ -41,8 +43,8 @@ empty database.
 ## Domain model in one paragraph
 
 A **Workspace** holds **Members** (Humans and Agents), **Sockets**, **Projects**, and settings. A Socket is a
-connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion) and
-**chat** (Slack). A **Project** is a binding: the container in a tracker its records come from, optionally
+connected tool, with capabilities: a **tracker** (GitHub, Linear, GitLab, Notion, or any other tool through
+a generic Socket and an adapter of the team's) and **chat** (Slack). A **Project** is a binding: the container in a tracker its records come from, optionally
 one channel in a chat tool its Gates are posted in, which Agents may work it, the default Agent, how a record
 names an Agent (a label prefix, a mention), and its **Checkpoints**. What deevy says back in the tracker is a Gate and its Ruling, on every Project. An **Issue** is a projection of a record in a tracker — its key, URL,
 title, body and state as the tool last said them — routed to one Agent; deevy authors none of it. An Agent
@@ -122,12 +124,13 @@ One typed core, projected three ways (ADR-0005):
   through the fetch adapter, with generated OpenAPI 3.1 and a reference UI. The React SPA uses the typed client
   with TanStack Query (ADR-0009).
 - **MCP server** speaking the 2026-07-28 revision in stateless form. Tools are projected from the same
-  procedures. The set is fourteen, and each says which way it faces (ADR-0016): `issues_list`, `issues_get`,
-  `projects_get`, `links_list`, `links_add`, `links_remove`, `gates_get`, `runs_list`, `runs_get` for
-  anyone; `runs_start`, `runs_post_activity`, `gates_request`, `runs_finish` for an Agent alone, because a Run
-  is its attempt, and `inbox_list`, because only an Agent has an inbox. A question is asked and
-  answered on the record, in the tracker, so none is a Human's alone. A client is offered what it may call. Ruling on a Gate stays off it: a Gate is a Human's to
-  rule on, in deevy's pages.
+  procedures. The set is fourteen, every one an Agent's, since only an Agent speaks MCP (ADR-0035):
+  `issues_list`, `issues_get`, `projects_get`, `links_list`, `links_add`, `links_remove`, `gates_get`,
+  `runs_list` and `runs_get` are operations deevy's pages call for a Human too; `runs_start`,
+  `runs_post_activity`, `gates_request` and `runs_finish` are an Agent's alone, because a Run is its attempt,
+  and so is `inbox_list`, because only an Agent has an inbox. A question is asked and answered on the record,
+  in the tracker. A client is offered every tool while its Agent is a Member. Ruling on a Gate stays off it:
+  a Gate is a Human's to rule on, in deevy's pages.
 - **The hooks** at `/hooks/<socket>`, beside the registry rather than through it: a tool with a signature is
   not a Member with a session.
 - **Events** delivered as signed webhooks to Agents and to generic subscribers, and consumed internally by the
@@ -167,11 +170,14 @@ apps/web          React SPA, which both shapes serve
 apps/server       Node entry (Hono on @hono/node-server), built with vp pack; Docker image
 apps/hosted       the many-Workspaces Worker, one Durable Object per Workspace
 apps/cli          the command line, generated from the operation registry
+apps/docs         docs.deevy.dev, for a team on deevy Cloud and for whoever hosts deevy
 packages/core     operation registry, Event log, Gates and Checkpoints, the Socket port, MCP tool projection
-packages/sockets  GitHub, Linear, GitLab, Notion and Slack, and the stub
+packages/sockets  GitHub, Linear, GitLab, Notion and Slack, the generic Socket, and the stub
 packages/db       Drizzle schema and migrations (shared by node:sqlite and the Durable Object)
 packages/adapters node/ and durable/ implementations of storage, jobs, schedule; the SPA under a path
+packages/design   the tokens, faces and logo the app and the docs share
 tools/acceptance  the acceptance walk: a scripted Agent against every deployment
+tools/release     the changelog fold, the commit-message rules, and the repository's own tests
 ```
 
 ## Attention
@@ -187,8 +193,8 @@ its webhook. Invitations are links an admin copies.
 
 What each milestone built, written when it was built. Sockets removed a good deal of what M1, Four-eyes Gates
 and Live Documents describe — the Workflow, Documents, Labels, Teams, the board — and
-[simplify.md](./plans/simplify.md) took out more: M4's runtime, the inbox and Channels M1 and M2 gave a
-Human, the email that followed Sockets, the Rulings from a tool that Sockets added, with the Identities
+[simplify.md](./plans/simplify.md) took out more: M4's runtime, the inbox M1 gave a Human and the Slack rooms
+M2 sent Events to, the email that followed Sockets, the Rulings from a tool that Sockets added, with the Identities
 and the sign-in providers they needed, and the single-Workspace Worker on D1 that M3 built (ADR-0037).
 Read those as the record of what was built, and the paragraphs above as what deevy is now.
 
@@ -203,7 +209,7 @@ image with no agents yet.
 
 **M2 Agents.** Agents created by Sponsors with API keys; MCP server with the v1 tool set; OAuth authorization
 server for Human MCP clients (removed again by ADR-0035); all four triggers; Runs and Activities with the stale sweep; signed webhooks with
-retries; Gate approvals including URL elicitation; Slack Channel and routing rules. Done when a Claude Code loop
+retries; Gate approvals including URL elicitation; Slack rooms Events were routed to. Done when a Claude Code loop
 outside deevy picks up an assigned Issue, writes a plan Document, hits the Plan Gate, and resumes after a Human
 approves in deevy.
 
@@ -222,8 +228,9 @@ per-invocation cap.
 
 The three things M2 left are closed. The **`delivery` table has its uniqueness guard** back, as a unique
 `(target, targetId, eventSeq)` with the matching one on `notification`, so a message duplicated by an
-at-least-once queue costs one POST. The **v1 tool set matches the promise above**, at the twenty tools M2 had
-listed; ADR-0016 later widened it to the twenty-three above and said which way each faces. And the **DNS-rebinding gap closed on Node and narrowed on Workers**, which is not the single answer M2
+at-least-once queue costs one POST. The **v1 tool set matched its promise**, at the twenty tools M2 had
+listed; ADR-0016 later widened it to twenty-three and said which way each faces, later milestones
+moved the count, and [simplify.md](./plans/simplify.md) cut it from twenty to the fourteen above. And the **DNS-rebinding gap closed on Node and narrowed on Workers**, which is not the single answer M2
 expected: `apps/server/src/cimd.ts` resolved with `node:dns`, checked every address, and connected to one that
 passed with the name kept for SNI, while the Workers transport put a DNS-over-HTTPS pre-resolution in front of
 its shape check. The gap itself went with the OAuth server in slice 9 of [simplify.md](./plans/simplify.md):
@@ -231,7 +238,7 @@ deevy dereferences no client's URL any more (ADR-0035).
 
 **M4 Reference runtime.** Removed again by [simplify.md](./plans/simplify.md), slice 1, with the harness spike
 and the agent owning git below ([ADR-0034](./adr/0034-deevy-runs-no-agent-and-manages-no-access.md)).
-`apps/agent`: a service holding one Agent's API key that finds the Issues
+A service holding one Agent's API key that finds the Issues
 that Agent is assigned, runs Claude against them through the Claude Agent SDK, stops at Gates, resumes when a
 Human rules, and delivers a branch and a pull request linked back to the Run that produced it. It reaches
 deevy over HTTP and MCP like any third party — no `packages/core` import, no `workspace:*` dependency — which
@@ -255,7 +262,7 @@ Agent can approve — is
 [ADR-0014](./adr/0014-an-agents-input-is-untrusted-and-its-tools-are-not.md), along with what is deliberately
 not bounded.
 
-**Harness spike.** After v1, `apps/claude-agent` became `apps/agent`: the supervisor drives a coding-agent
+**Harness spike.** After v1, the Claude-only runtime became one for any harness: the supervisor drives a coding-agent
 CLI as a subprocess behind the same session seam, four recipes are in the tree (Claude Code, OpenCode, Cursor
 CLI, GitHub Copilot CLI) and shipped as one image each, the Agent's key never enters a session's process
 tree, and `docs/harnesses.md` said how a fifth was added. Built in six slices from
@@ -333,9 +340,9 @@ Linear's, GitLab's, Notion's and Slack's, each walked once against the real tool
 2026-09-26): every Run shows how long it worked and waited, and so does the Runs feed. The tokens and cost
 its client reported went with the reference runtime that reported them ([simplify.md](./plans/simplify.md)). Email followed
 ([email-channel.md](./plans/email-channel.md), done 2026-10-09): a Human's Notifications at their verified
-address, team addresses as Channels, invitations by email, through whichever of seven senders the operator
-had. It went again, with the Human's inbox, the Channels and Gate reminders, in slice 8 of
-[simplify.md](./plans/simplify.md), when a Project gained a chat channel of its own. Hosted Workspaces
+address, team addresses, invitations by email, through whichever of seven senders the operator had. It went
+again, with the Human's inbox, the rooms and addresses Events were routed to and the Gate reminders, in slice
+8 of [simplify.md](./plans/simplify.md), when a Project gained a chat channel of its own. Hosted Workspaces
 followed ([hosted.md](./plans/hosted.md), built 2026-10-09; ADR-0028 to ADR-0032): one
 Worker serving every hosted Workspace at `app.deevy.dev/<slug>`, each Workspace's database a Durable Object of
 its own, sign-in through one relay, the release carrying that Worker for a private console and deploy
@@ -343,16 +350,35 @@ pipeline (WeAreNendo/deevy-cloud) to run; an invite-only free beta first and bil
 at app.deevy.dev since 2026-10-14, with what an idle Workspace costs and how many awake ones an isolate holds
 measured (hosted.md, "What it found"). The public docs were then rewritten for their two readers
 ([docs.md](./plans/docs.md)) and the app and the docs given one design system
-([design-system.md](./plans/design-system.md)), on 2026-10-16 and 2026-10-17. Next are the real walks of
-Linear, GitLab, Notion and Slack, which only GitHub has had so far. Then, in rough order: per-Agent identities on a Socket where
-a provider makes them cheap; Jira and Asana; private Projects; Postgres adapter.
+([design-system.md](./plans/design-system.md)), on 2026-10-16 and 2026-10-17.
+
+**Simpler.** The second milestone to remove more than it added, decided with Matt on 2026-10-25 and built in
+fourteen slices by 2026-11-23, the release that is 0.12. The reference runtime had grown with every gap a
+hardening found in it, and the breadth built ahead of need made every tool expensive to keep. So deevy ships
+no runtime and holds no git credential: an Agent is whatever holds its key, opens its own pull request and
+links it to its Run ([ADR-0034](./adr/0034-deevy-runs-no-agent-and-manages-no-access.md)). Only an Agent
+speaks MCP, and deevy is no OAuth server ([ADR-0035](./adr/0035-only-agents-speak-mcp.md)). A Socket listens
+to its tool and announces only at a Gate, on the record and in the one chat channel a Project binds, with a
+link to rule in deevy, where alone a Ruling is made; nothing said in a tool rules, so there are no Identities
+and four providers sign in ([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)). A Human is sent nothing:
+no inbox, no email, no reminder. A question is asked on the record, delegation is a sub-issue in the tracker
+with one ceiling, no Agent is woken on a schedule, and what a Run cost is how long it took. A generic Socket takes
+any tool through an adapter of the team's, and modules not yet walked against their tool are marked preview.
+The image and the hosted Worker are the two deployments
+([ADR-0037](./adr/0037-two-deployment-shapes.md)), and the migration history
+starts afresh, the one exception ADR-0031 makes. The MCP tools went from twenty to fourteen. Plan and what
+each slice found, with what it removed, in [simplify.md](./plans/simplify.md).
+
+Next are the real walks of Linear, GitLab, Notion and Slack, which take a module out of preview and which
+only GitHub has had so far. Then, in rough order: per-Agent identities on a Socket where a provider makes them
+cheap; Jira and Asana, each a module or the generic Socket; private Projects; Postgres adapter.
 
 ## Risks worth naming
 
 - oRPC 2.0 is a beta from a single maintainer with no GA date; pin exact versions and keep the registry type ours.
-- Better Auth's client-registration surface is changing weekly; pin 1.7.x and expect to chase upstream fixes.
+- Better Auth changes quickly between minor releases; pin 1.7.x and expect to chase upstream fixes.
 - Drizzle 1.0 is a release candidate: queries and the Better Auth adapter are verified, but drizzle-kit has open
-  migration regressions, and a fallback to 0.45 re-baselines the migration history. Decide before the first
-  production migration.
+  migration regressions (the `NOT NULL` patch every new migration takes by hand), and a fallback to 0.45
+  re-baselines the migration history, which 0.12's fresh start makes cheap only once.
 - Vite+ is beta with no first-class Node server dev loop; the server dev loop is a watch-and-respawn task.
 - Cursor and VS Code have not documented 2026-07-28 support; the SDK's legacy stateless mode covers them.

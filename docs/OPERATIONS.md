@@ -22,7 +22,7 @@ about running deevy applies to a hosted Workspace too; what differs is this.
 - **Its address is a path.** Your Workspace lives at `https://app.deevy.dev/<slug>` — its pages, its API at
   `…/<slug>/api`, its MCP endpoint at `…/<slug>/mcp`, its tools' webhooks at `…/<slug>/hooks/…`. An Agent's
   `DEEVY_URL`, the CLI's included, takes that whole URL. A slug does not change once it is chosen.
-- **Signing in** is with the platform's GitHub, Google and other Apps, through one relay at
+- **Signing in** is with the platform's GitHub, Google and Microsoft Apps, through one relay at
   `app.deevy.dev/auth` ([ADR-0030](adr/0030-a-sign-in-may-be-relayed.md)). The address you asked for the
   Workspace with becomes its admin the first time it signs in, as on any deevy. Each Workspace is its own
   sign-in: being in one signs you in to no other. Who else joins is an address's domain on the allowlist, or
@@ -425,7 +425,7 @@ row's own attempt count that decides when deevy gives up and appends `webhook.ex
 
 ### Live updates
 
-The board keeps itself in step by reading the Event log as it happens, over one long-lived request per
+The SPA keeps its screens in step by reading the Event log as it happens, over one long-lived request per
 browser: `events.subscribe` polls the log and sends what it finds, plus a heartbeat carrying its cursor. In
 the image that request lives as long as the browser holds it.
 
@@ -473,12 +473,8 @@ signed in with last, so the page offers that one first and marks it "Last used".
 [simplify.md](./plans/simplify.md) ([ADR-0036](./adr/0036-a-ruling-is-made-in-deevy.md)). They were there so
 that a sign-in could vouch for a Ruling made in that tool, or for a team that lives there, and a Ruling is
 made in deevy now. Their variables are read as nothing, and their ids in `DEEVY_SIGN_IN_ORDER` are ignored.
-A Member who signed in only with GitLab or Slack keeps their Member: they sign in with another provider at
-the same verified address, and Better Auth links that sign-in back onto the same user. Linear and Atlassian
-never said an address was verified, so the user row one of them made is unverified, and Better Auth refuses
-to link onto it (`account_not_linked`, below): another provider at that address is refused, so such a
-Member could not get back to their row until 0.12 started from an empty database, where they are invited
-again. The Linear application, the GitLab user and the
+That went in the same release as the clean break, so no 0.12 database holds a Member who signed in with one
+of them: whoever did is invited again on the empty database 0.12 starts from. The Linear application, the GitLab user and the
 Slack app a Socket uses are not sign-ins, and connecting them is unchanged.
 
 **Microsoft** is Microsoft Entra ID: register an application under Entra ID › App registrations, add a web
@@ -522,8 +518,7 @@ here: that link is refused, for the reason under **One Human is one Member** bel
 domain — and it goes on admitting everybody who matches it, this month and next. It is the only kind of rule
 there is: the GitHub-organization and GitLab-group rules, which read a tool's organizations through the
 sign-in's token, went with slice 10 of [simplify.md](./plans/simplify.md). `allowlist.add` refuses either
-kind, a rule of either saved before is not listed and admits nobody, and the Members who joined by one stay
-Members. An invitation admits one person: an admin creates it in Settings, Workspace with an address and a role, and gets a link back once
+kind, and 0.12 starts from an empty database, so none is left from before. An invitation admits one person: an admin creates it in Settings, Workspace with an address and a role, and gets a link back once
 (`invitations.create` answers `url` and `path`) to copy and send however they like, because deevy sends no
 email and keeps only a hash of the token. The invited Human clicks the link, signs in with whichever provider
 the instance offers, and accepting is what makes them a Member — the address that signs in has to be the

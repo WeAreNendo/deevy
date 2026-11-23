@@ -11,8 +11,8 @@ Fourteen slices, 0 to 13, in dependency order. Each is one PR on `main` and carr
 built as one `gh stack` and released together, because slice 12 starts the migration history afresh and no
 release between the first slice and that one would upgrade cleanly.
 
-**Status: planned, 2026-10-25.** Nothing is built yet. What each slice finds goes under "What it found", at
-the end.
+**Status: built, 2026-11-23, as one `gh stack` (#219), for 0.12.** Planned 2026-10-25. What each slice found
+is under "What it found", at the end.
 
 Why this and why now. deevy's goal is to be the glue between whatever software a product and engineering team
 uses and its Agents, and that only works if adding a tool is cheap. Three things made it expensive. The
@@ -1009,3 +1009,74 @@ things.
 - The secrets test stopped naming three columns of tables that are gone.
 - The example tag in DEVELOPMENT.md was one the smoke now excuses.
 - Two sentences spoke in the past tense of deevy-cloud's change, which is still owed.
+
+**Slice 13, the record.** The documentation lost 94 lines and gained 125, not counting this plan. The source
+lost 18 and gained 13, the tests lost 9 and gained 137, of which 130 are the acceptance test, and CI lost 11
+lines and gained 16. That test is `tools/release/tests/the-record.test.ts`. It reads every tracked file
+outside the history, and it was red on three of its four cases. Fourteen lines named something this plan
+took out: the reference runtime three times, in PLAN.md and the research on coding-agent CLIs; the checkout
+deevy issued and the pull request it opened three times, all in acceptance.md; and the retired Channel eight
+times, in CLAUDE.md, PLAN.md, agent-loop.md, the docs site's config and a comment in `outbox.ts`.
+CONTEXT.md's Retired held no **Channel** and no **Sender**. And PLAN.md had no milestone for this plan.
+The third case holds PLAN.md's MCP bullet to the tool snapshot's fourteen names. It has passed since
+slice 4 and stays, as the guard that keeps the two together.
+
+The grep the plan wrote could not be taken literally. "Channel" is still a word: a chat tool has channels,
+and the field that picks one is labelled **Channel**. So the test looks for the retired Channel: the
+plural, a Channel after a word that picks one out (an article, "no", "each", "every", "its", Slack), or
+"Channel and Sender", including where the line wraps between the two words. macOS's `git grep -E`
+matches nothing where `\b` stands, which at first hid every hit, so the test reads the files itself. The
+history is wider than the plan's three places. It also holds:
+
+- the changesets, which become the changelog;
+- the tests, which name a removed thing to prove it is gone;
+- the lockfile;
+- `.design-sync/`, the UI kit as it was last synced to Claude Design.
+
+That kit still shows components the Sockets milestone removed, and the sky that marked a Human before indigo. The next sync
+replaces it whole, which is a task of its own.
+
+Two things were more than words. The GitHub Socket sealed the App's client ID and secret from the
+manifest's answer, "for the sign-in and identity flows that come later". Those flows will not come
+(ADR-0036), so it keeps only the private key and the webhook secret, with a changeset that tells a 0.11
+operator how to be rid of the old secret. And CI did not run the test on the edits it guards. ci.yml skips a change
+that is only Markdown, and prose.yml, which checks one, built the docs and ran their tests but not
+tools/release's. It runs them now, and ci.yml's comment no longer says no suite reads Markdown. The record
+itself changed in several places:
+
+- **The public glossary** folds **Identity** into **Human**: who they sign in as, and that their accounts on
+  the tools mean nothing to deevy.
+- **agent-loop.md** said a Human is sent a Notification, routed to a Channel, and may rule with `/approve`.
+  It now says deevy sends them nothing, the Gate waits on Needs me, and they rule only in deevy.
+- **The README** said deevy "says what happened back where the team reads". It now says deevy records the
+  pull request the Agent linked to its Run, and says nothing else in the tools but hello.
+- **PLAN.md** gains the **Simpler.** milestone, and promise four is true again. Its MCP bullet says every
+  tool is an Agent's. Its layout names `apps/docs`, `packages/design`, `tools/release` and the generic
+  Socket.
+- **CLAUDE.md** tells this plan's story as history. It no longer says to build from the slices, and it names
+  the ADRs the plan wrote and the 0.12 it makes.
+
+The review checked every claim the changed pages make against the code. What it found is below, and all
+of it is fixed.
+
+- **The cache.** The test listed the files through git, whose index the task cache does not fingerprint, so
+  a file added below the root replayed the last pass. It now lists every folder it reads, and a probe in
+  `apps/web/src/lib` now runs it again.
+- **The Channel pattern** missed "no Channel" and "Channel and Sender", and a line that wraps between "a" and
+  "Channel"; HEAD's CONTEXT.md had one such line.
+- **agent-loop.md** said an Agent never sees `gates_approve`, a tool that no longer exists, and spoke of a
+  Gate a Human "was notified about".
+- **acceptance.md** said deevy is real for "the Rulings from the tracker".
+- **The public glossary** said a Run waits "for an answer", which no longer sets a Run waiting since slice 5.
+  It also gave a Project no chat channel, and named no generic Socket.
+- **This plan** still read "Nothing is built yet".
+- **OPERATIONS.md and the sign-in page** described a filter that slice 12 removed, of organisation rules
+  saved before. OPERATIONS.md also said what a GitLab-only Member does on an upgrade that starts from an
+  empty database, and how "the board" keeps in step.
+- **DEVELOPMENT.md** said the docs site is written from `docs/`.
+- **PLAN.md** let the M3 line read as if simplify.md cut twenty-three tools. It said "nothing runs on a
+  schedule", where the stale sweep does; what went is waking an Agent on one. And its domain paragraph
+  named no generic Socket.
+- **CONTEXT.md** said nothing but Gates is posted in a Project's channel, which also hears hello when it is
+  bound, and the README said deevy says nothing else in the tools.
+- **The docs site's config** named three slices' redirects, and the list holds slice 11's too.
