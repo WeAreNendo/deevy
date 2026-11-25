@@ -10,8 +10,8 @@ export const Default = () => (
 
 export const WithValue = () => (
   <div className="flex w-full max-w-sm flex-col gap-2">
-    <Label htmlFor="input-branch">Base branch</Label>
-    <Input id="input-branch" defaultValue="release/0.12" placeholder="main" className="font-mono" />
+    <Label htmlFor="input-routing">Routing label</Label>
+    <Input id="input-routing" defaultValue="agent:" placeholder="agent:" className="font-mono" />
   </div>
 );
 

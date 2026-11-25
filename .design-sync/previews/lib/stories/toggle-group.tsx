@@ -18,11 +18,11 @@ export const RoutedTo = () => (
   </ToggleGroup>
 );
 
-/** Open records, or every record. */
-export const OpenOrAll = () => (
+/** Open records or closed ones; neither pressed is both. */
+export const OpenOrClosed = () => (
   <ToggleGroup defaultValue={["open"]} aria-label="Open or closed" variant="outline" spacing={0}>
     <ToggleGroupItem value="open">Open</ToggleGroupItem>
-    <ToggleGroupItem value="all">All</ToggleGroupItem>
+    <ToggleGroupItem value="closed">Closed</ToggleGroupItem>
   </ToggleGroup>
 );
 
@@ -77,6 +77,6 @@ export const Disabled = () => (
     disabled
   >
     <ToggleGroupItem value="open">Open</ToggleGroupItem>
-    <ToggleGroupItem value="all">All</ToggleGroupItem>
+    <ToggleGroupItem value="closed">Closed</ToggleGroupItem>
   </ToggleGroup>
 );

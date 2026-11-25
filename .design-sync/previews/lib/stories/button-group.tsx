@@ -1,48 +1,39 @@
-import {
-  Badge,
-  Button,
-  ButtonGroup,
-  ButtonGroupSeparator,
-  ButtonGroupText,
-} from "@deevy/design-system";
-import { ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
+import { Button, ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "@deevy/design-system";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 
-/** Two actions on one thing, joined: a Project's Checkpoints, Move up / Move down for one of them. */
-export const Reorder = () => (
+/** Two actions on one thing, joined: the page before and the page after. */
+export const Pager = () => (
   <div className="flex w-80 items-center gap-2 rounded-md border bg-card px-3 py-2">
-    <Badge variant="outline" className="border-gate/50 text-gate-foreground dark:text-gate">
-      ship
-    </Badge>
-    <span className="text-xs tabular-nums text-muted-foreground">2 approvals</span>
+    <span className="text-xs tabular-nums text-muted-foreground">Runs 101–200</span>
     <span className="flex-1" />
-    <ButtonGroup aria-label="Reorder ship">
-      <Button variant="outline" size="icon" aria-label="Move ship up">
-        <ArrowUp />
+    <ButtonGroup aria-label="Pages of Runs">
+      <Button variant="outline" size="icon" aria-label="Newer Runs">
+        <ChevronLeft />
       </Button>
-      <Button variant="outline" size="icon" aria-label="Move ship down">
-        <ArrowDown />
+      <Button variant="outline" size="icon" aria-label="Older Runs">
+        <ChevronRight />
       </Button>
     </ButtonGroup>
   </div>
 );
 
-/** The first Checkpoint cannot move up; the last cannot move down. */
+/** Nothing is newer than the first page, nor older than the last. */
 export const AtTheEnds = () => (
   <div className="flex flex-wrap items-center gap-6">
-    <ButtonGroup aria-label="Reorder plan">
-      <Button variant="outline" size="icon" aria-label="Move plan up" disabled>
-        <ArrowUp />
+    <ButtonGroup aria-label="First page">
+      <Button variant="outline" size="icon" aria-label="Newer Runs" disabled>
+        <ChevronLeft />
       </Button>
-      <Button variant="outline" size="icon" aria-label="Move plan down">
-        <ArrowDown />
+      <Button variant="outline" size="icon" aria-label="Older Runs">
+        <ChevronRight />
       </Button>
     </ButtonGroup>
-    <ButtonGroup aria-label="Reorder ship">
-      <Button variant="outline" size="icon" aria-label="Move ship up">
-        <ArrowUp />
+    <ButtonGroup aria-label="Last page">
+      <Button variant="outline" size="icon" aria-label="Newer Runs">
+        <ChevronLeft />
       </Button>
-      <Button variant="outline" size="icon" aria-label="Move ship down" disabled>
-        <ArrowDown />
+      <Button variant="outline" size="icon" aria-label="Older Runs" disabled>
+        <ChevronRight />
       </Button>
     </ButtonGroup>
   </div>
@@ -50,13 +41,13 @@ export const AtTheEnds = () => (
 
 /** Text inside the group, joined to the buttons it describes. */
 export const WithText = () => (
-  <ButtonGroup aria-label="Checkpoint">
-    <ButtonGroupText className="tabular-nums">Checkpoint 2 of 3</ButtonGroupText>
-    <Button variant="outline" size="icon" aria-label="Move up">
-      <ArrowUp />
+  <ButtonGroup aria-label="Pages of Runs">
+    <ButtonGroupText className="tabular-nums">Page 2 of 3</ButtonGroupText>
+    <Button variant="outline" size="icon" aria-label="Newer Runs">
+      <ChevronLeft />
     </Button>
-    <Button variant="outline" size="icon" aria-label="Move down">
-      <ArrowDown />
+    <Button variant="outline" size="icon" aria-label="Older Runs">
+      <ChevronRight />
     </Button>
   </ButtonGroup>
 );
@@ -66,7 +57,7 @@ export const WithSeparator = () => (
   <ButtonGroup aria-label="Rule on the Gate">
     <Button>Approve</Button>
     <ButtonGroupSeparator />
-    <Button size="icon" aria-label="Reject instead">
+    <Button size="icon-lg" aria-label="Reject instead">
       <ChevronDown />
     </Button>
   </ButtonGroup>
@@ -74,12 +65,12 @@ export const WithSeparator = () => (
 
 /** Stacked, where the row has no room. */
 export const Vertical = () => (
-  <ButtonGroup orientation="vertical" aria-label="Reorder ship">
-    <Button variant="outline" size="icon" aria-label="Move ship up">
-      <ArrowUp />
+  <ButtonGroup orientation="vertical" aria-label="Pages of Runs">
+    <Button variant="outline" size="icon" aria-label="Newer Runs">
+      <ChevronUp />
     </Button>
-    <Button variant="outline" size="icon" aria-label="Move ship down">
-      <ArrowDown />
+    <Button variant="outline" size="icon" aria-label="Older Runs">
+      <ChevronDown />
     </Button>
   </ButtonGroup>
 );

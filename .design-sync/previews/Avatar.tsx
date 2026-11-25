@@ -43,7 +43,6 @@ export const Sizes = () => (
   </div>
 );
 
-/** The Humans who may rule on a Gate, folded past three. */
 /** Overlapping Humans, as a Checkpoint shows who may rule on it; two initials need the smaller type and a 6px overlap to stay whole. */
 export const Group = () => (
   <div className="flex items-center gap-4">

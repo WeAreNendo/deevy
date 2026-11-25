@@ -31,70 +31,66 @@ export const ConnectAgent = () => (
   </Tabs>
 );
 
-/** The Proposal's view switch, small, in the toolbar above it on a Gate. */
-export const ProposalView = () => (
+/** Small, in a toolbar above the thing it shows: the same entry, one way or another. */
+export const Small = () => (
   <div className="rounded-md border bg-card">
     <div className="flex items-center justify-end border-b px-1 py-1">
-      <Tabs defaultValue="source">
-        <TabsList aria-label="Proposal view" className="h-7">
-          <TabsTrigger value="rendered" className="text-xs">
-            Rendered
+      <Tabs defaultValue="opencode">
+        <TabsList aria-label="Coding agent" className="h-7">
+          <TabsTrigger value="claude-code" className="text-xs">
+            Claude Code
           </TabsTrigger>
-          <TabsTrigger value="source" className="text-xs">
-            Source
+          <TabsTrigger value="opencode" className="text-xs">
+            OpenCode
           </TabsTrigger>
         </TabsList>
       </Tabs>
     </div>
-    <p className="px-3 py-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-      ## Plan{"\n"}Page every list operation by an opaque cursor instead of an offset.
-    </p>
+    <p className="px-3 py-2 font-mono text-xs text-muted-foreground">opencode.json</p>
   </div>
 );
 
 /** The line variant: an underline instead of a filled pill. */
 export const Line = () => (
-  <Tabs defaultValue="activity">
-    <TabsList variant="line" aria-label="Run">
-      <TabsTrigger value="activity">Activity</TabsTrigger>
-      <TabsTrigger value="gates">Gates</TabsTrigger>
-      <TabsTrigger value="time">Time</TabsTrigger>
+  <Tabs defaultValue="cursor">
+    <TabsList variant="line" aria-label="Coding agent">
+      <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
+      <TabsTrigger value="opencode">OpenCode</TabsTrigger>
+      <TabsTrigger value="cursor">Cursor CLI</TabsTrigger>
     </TabsList>
-    <TabsContent value="activity">
+    <TabsContent value="cursor">
       <p className="text-sm text-muted-foreground">
-        Planner wrote the plan for cursor paging and stopped at{" "}
-        <span className="font-mono">plan</span>.
+        In <span className="font-mono">~/.cursor/mcp.json</span>, the same file the editor reads.
       </p>
     </TabsContent>
   </Tabs>
 );
 
-/** Stacked, for a Settings nav: the active tab's mark sits on its right edge. */
+/** Stacked: the active tab's mark sits on its right edge. */
 export const Vertical = () => (
-  <Tabs defaultValue="agents" orientation="vertical" className="w-64">
-    <TabsList variant="line" aria-label="Settings">
-      <TabsTrigger value="general">General</TabsTrigger>
-      <TabsTrigger value="members">Members</TabsTrigger>
-      <TabsTrigger value="sockets">Sockets</TabsTrigger>
-      <TabsTrigger value="projects">Projects</TabsTrigger>
-      <TabsTrigger value="agents">Agents</TabsTrigger>
-      <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+  <Tabs defaultValue="copilot" orientation="vertical" className="w-full">
+    <TabsList variant="line" aria-label="Coding agent">
+      <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
+      <TabsTrigger value="opencode">OpenCode</TabsTrigger>
+      <TabsTrigger value="cursor">Cursor CLI</TabsTrigger>
+      <TabsTrigger value="copilot">Copilot CLI</TabsTrigger>
+      <TabsTrigger value="other">Anything else</TabsTrigger>
     </TabsList>
-    <TabsContent value="agents">
-      <p className="text-sm text-muted-foreground">Two Agents, both sponsored by Ada.</p>
+    <TabsContent value="copilot">
+      <p className="text-sm text-muted-foreground">One entry, and the Agent&apos;s key.</p>
     </TabsContent>
   </Tabs>
 );
 
-/** A view with nothing in it cannot be opened: this Run has asked for nothing yet. */
+/** A view that cannot be opened yet. */
 export const Disabled = () => (
-  <Tabs defaultValue="activity">
-    <TabsList aria-label="Run">
-      <TabsTrigger value="activity">Activity</TabsTrigger>
-      <TabsTrigger value="gates" disabled>
-        Gates
+  <Tabs defaultValue="claude-code">
+    <TabsList aria-label="Coding agent">
+      <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
+      <TabsTrigger value="opencode" disabled>
+        OpenCode
       </TabsTrigger>
-      <TabsTrigger value="time">Time</TabsTrigger>
+      <TabsTrigger value="cursor">Cursor CLI</TabsTrigger>
     </TabsList>
   </Tabs>
 );

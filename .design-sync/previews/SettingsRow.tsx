@@ -22,7 +22,7 @@ export const Binding = () => (
       <div className="flex flex-col">
         <SettingsRow
           label="Default Agent"
-          hint="Gets every record routed to this Project, and is granted the Project."
+          hint="Who gets an open record no label and no mention named."
         >
           <Select defaultValue="planner">
             <SelectTrigger aria-label="Default Agent" className="w-48">
@@ -41,24 +41,17 @@ export const Binding = () => (
         </SettingsRow>
         <SettingsRow
           label="Routing label"
-          hint="A record carrying this label in the tracker is routed here."
+          hint="A record labelled agent:planner goes to that Agent."
           htmlFor="routing-label"
         >
-          <Input id="routing-label" defaultValue="deevy" className="w-48 font-mono" />
+          <Input id="routing-label" defaultValue="agent:" className="w-48 font-mono" />
         </SettingsRow>
         <SettingsRow
           label="Route by mention"
-          hint="Mentioning an Agent on a record routes it to that Agent."
+          hint="A comment such as @deevy planner hands the record to that Agent."
           htmlFor="route-by-mention"
         >
           <Switch id="route-by-mention" defaultChecked />
-        </SettingsRow>
-        <SettingsRow
-          label="Base branch"
-          hint="Where an Agent's work starts from."
-          htmlFor="base-branch"
-        >
-          <Input id="base-branch" defaultValue="main" className="w-48 font-mono" />
         </SettingsRow>
       </div>
     </SettingsSection>

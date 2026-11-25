@@ -141,7 +141,7 @@ export const SingleInput = () => (
   </div>
 );
 
-/** Open, grouped: Members under Humans / Agents with a separator between, as a filter by who did it reads. */
+/** Open, grouped: Members under Humans / Agents with a separator between. */
 export const GroupedOpen = () => (
   <div className="flex h-72 w-64 flex-col">
     <Combobox
@@ -151,7 +151,7 @@ export const GroupedOpen = () => (
       itemToStringLabel={memberName}
       isItemEqualToValue={byId}
     >
-      <ComboboxInput aria-label="Who did it" placeholder="Anybody…" />
+      <ComboboxInput aria-label="Member" placeholder="Choose a Member…" />
       <ComboboxContent>
         <ComboboxEmpty>No Member by that name.</ComboboxEmpty>
         <ComboboxList>

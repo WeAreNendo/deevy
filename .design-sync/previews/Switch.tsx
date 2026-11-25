@@ -10,8 +10,8 @@ export const On = () => (
 
 export const Off = () => (
   <div className="flex items-center gap-2">
-    <Switch id="switch-webhook" />
-    <Label htmlFor="switch-webhook">Deliver work by webhook</Label>
+    <Switch id="switch-mention-off" />
+    <Label htmlFor="switch-mention-off">Route by mention</Label>
   </div>
 );
 
@@ -19,7 +19,7 @@ export const Disabled = () => (
   <div className="flex flex-col gap-3">
     <div className="flex items-center gap-2">
       <Switch id="switch-off-disabled" disabled />
-      <Label htmlFor="switch-off-disabled">Route by label</Label>
+      <Label htmlFor="switch-off-disabled">Route by mention</Label>
     </div>
     <div className="flex items-center gap-2">
       <Switch id="switch-on-disabled" disabled defaultChecked />
@@ -48,11 +48,12 @@ export const Sizes = () => (
 export const SettingsRow = () => (
   <div className="flex w-full max-w-sm items-start justify-between gap-4 rounded-md border bg-card p-3">
     <div className="flex flex-col gap-0.5">
-      <Label htmlFor="switch-deliver">Deliver work by webhook</Label>
+      <Label htmlFor="switch-row">Route by mention</Label>
       <p className="text-xs text-muted-foreground">
-        deevy posts to this Agent's webhook the moment there is work in its Projects.
+        A comment such as <span className="font-mono">@deevy planner</span> hands the record to that
+        Agent.
       </p>
     </div>
-    <Switch id="switch-deliver" defaultChecked />
+    <Switch id="switch-row" defaultChecked />
   </div>
 );

@@ -83,11 +83,9 @@ export const BindAProject = () => (
         <Input id="bp-name" placeholder="deevy" />
       </Field>
       <Field data-invalid>
-        <FieldLabel htmlFor="bp-branch">Base branch</FieldLabel>
-        <Input id="bp-branch" defaultValue="mian" aria-invalid className="w-44 font-mono" />
-        <FieldError>
-          <span className="font-mono">acme/deevy</span> has no branch called mian.
-        </FieldError>
+        <FieldLabel htmlFor="bp-container">Container</FieldLabel>
+        <Input id="bp-container" defaultValue="acme/deevy" aria-invalid className="font-mono" />
+        <FieldError>Another Project is already bound to this container.</FieldError>
       </Field>
       <Field>
         <FieldLabel htmlFor="bp-description">Description</FieldLabel>

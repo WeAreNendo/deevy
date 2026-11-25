@@ -111,7 +111,7 @@ export const AgentMenu = () => (
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">Revoke every API key</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive">Revoke acme/ops</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   </div>
