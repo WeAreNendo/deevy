@@ -1,7 +1,7 @@
 import { DeevyLogo, MemberChip } from "@deevy/design-system";
 import { ada, planner } from "./lib/fixtures";
 
-/** The mark and the word, at the sizes the app draws it: the sign-in frame's, and the default. */
+/** The mark and the word: `h-8` as the sign-in frame has it, the default, and small. */
 export const Sizes = () => (
   <div className="flex flex-col items-start gap-6">
     <DeevyLogo className="h-8" />

@@ -12,136 +12,163 @@ import {
   FieldSet,
   FieldTitle,
   Input,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Switch,
-  Textarea,
 } from "@deevy/design-system";
 
-/** Label, control, description: the unit every deevy form is built from. */
+/** Label, control, description: the unit the connect dialogs are built from. */
 export const Default = () => (
   <Field className="max-w-sm">
     <FieldLabel htmlFor="field-name">Name</FieldLabel>
-    <Input id="field-name" defaultValue="deevy" />
-    <FieldDescription>
-      What this Project is called in deevy. Its records keep their tracker&apos;s keys, like{" "}
-      <span className="font-mono">acme/deevy#412</span>.
-    </FieldDescription>
+    <Input id="field-name" placeholder="Acme on GitLab" />
+    <FieldDescription>What this Socket is called in deevy.</FieldDescription>
   </Field>
 );
 
-/** `data-invalid` turns the Field's text destructive; FieldError carries the message. */
+/** `aria-invalid` on the control and a FieldError under it, as connecting GitHub says a login is not one. */
 export const Invalid = () => (
   <Field className="max-w-sm" data-invalid>
-    <FieldLabel htmlFor="field-webhook">Webhook URL</FieldLabel>
-    <Input id="field-webhook" defaultValue="http://agent.example.com/" aria-invalid />
-    <FieldError>It must be https.</FieldError>
+    <FieldLabel htmlFor="field-organization">Organization</FieldLabel>
+    <Input id="field-organization" defaultValue="acme--inc" aria-invalid />
+    <FieldError>
+      GitHub gives out no such login: letters, digits and single hyphens, with no hyphen first or
+      last, and no more than 39 of them.
+    </FieldError>
   </Field>
 );
 
-/** Several messages fold into a list. */
+/** Several messages fold into a list. No screen gives it more than one. */
 export const Errors = () => (
   <Field className="max-w-sm" data-invalid>
-    <FieldLabel htmlFor="field-handle">Handle</FieldLabel>
-    <Input id="field-handle" defaultValue="Planner Agent" aria-invalid />
-    <FieldError
-      errors={[
-        { message: "Lowercase letters, digits and dashes only." },
-        { message: "Another Member already uses this handle." },
-      ]}
-    />
+    <FieldLabel htmlFor="field-text">Text</FieldLabel>
+    <Input id="field-text" defaultValue="A value" aria-invalid />
+    <FieldError errors={[{ message: "The first thing wrong." }, { message: "And the second." }]} />
   </Field>
 );
 
-/** Horizontal: the control leads, the words follow. A Checkbox or a Switch reads this way. */
+/** Horizontal: the control leads, or the words do. No screen lays a Field out this way. */
 export const Horizontal = () => (
   <div className="flex max-w-sm flex-col gap-4">
     <Field orientation="horizontal">
-      <Checkbox id="field-exclude" defaultChecked />
-      <FieldContent>
-        <FieldLabel htmlFor="field-exclude">Not the Human the work is for</FieldLabel>
-        <FieldDescription>Whoever asked for the work cannot approve it here.</FieldDescription>
-      </FieldContent>
+      <Checkbox id="field-leads" defaultChecked />
+      <FieldLabel htmlFor="field-leads">The control leads</FieldLabel>
     </Field>
     <Field orientation="horizontal">
       <FieldContent>
-        <FieldLabel htmlFor="field-mention">Route by mention</FieldLabel>
-        <FieldDescription>
-          A comment such as <span className="font-mono">@deevy planner</span> hands the record to
-          that Agent.
-        </FieldDescription>
+        <FieldLabel htmlFor="field-trails">The words lead</FieldLabel>
+        <FieldDescription>With a line under them.</FieldDescription>
       </FieldContent>
-      <Switch id="field-mention" />
+      <Switch id="field-trails" defaultChecked />
     </Field>
   </div>
 );
 
-/** A whole form: a FieldGroup of Fields, a FieldSet with a legend, a separator, the actions. */
+const socketName = (selected: string) =>
+  selected === "sock_4k9m2q7x1z3c" ? "acme on GitHub (GitHub)" : "Which tool";
+
+/** A whole form, with the fields and the words of Bind a Project: a tool, a container in it, a name. */
 export const BindAProject = () => (
   <form className="w-full max-w-md" onSubmit={(submitted) => submitted.preventDefault()}>
     <FieldGroup>
       <Field>
-        <FieldLabel htmlFor="bp-name">Name</FieldLabel>
-        <Input id="bp-name" placeholder="deevy" />
-      </Field>
-      <Field data-invalid>
-        <FieldLabel htmlFor="bp-container">Container</FieldLabel>
-        <Input id="bp-container" defaultValue="acme/deevy" aria-invalid className="font-mono" />
-        <FieldError>Another Project is already bound to this container.</FieldError>
+        <FieldLabel htmlFor="bp-tool">Tool</FieldLabel>
+        <Select defaultValue="sock_4k9m2q7x1z3c">
+          <SelectTrigger id="bp-tool" aria-label="Tool">
+            <SelectValue>{socketName}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="sock_4k9m2q7x1z3c">acme on GitHub (GitHub)</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </Field>
       <Field>
-        <FieldLabel htmlFor="bp-description">Description</FieldLabel>
-        <Textarea id="bp-description" rows={3} placeholder="What this Project is for." />
-        <FieldDescription>Markdown, for whoever opens the Project next.</FieldDescription>
-      </Field>
-      <FieldSeparator>Who works here</FieldSeparator>
-      <FieldSet>
-        <FieldLegend>Agents</FieldLegend>
+        <FieldLabel htmlFor="bp-container">Container</FieldLabel>
+        <Select defaultValue="acme/deevy">
+          <SelectTrigger id="bp-container" aria-label="Container">
+            <SelectValue placeholder="Which container" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="acme/deevy">acme/deevy</SelectItem>
+              <SelectItem value="acme/ops">acme/ops</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <FieldDescription>
-          The Agents that may see this Project&apos;s records. The Default Agent always can.
+          What the tool itself offers. One container is one Project.
         </FieldDescription>
-        <Field orientation="horizontal">
-          <Checkbox id="bp-planner" defaultChecked />
-          <FieldLabel htmlFor="bp-planner">Planner</FieldLabel>
-        </Field>
-        <Field orientation="horizontal">
-          <Checkbox id="bp-reviewer" />
-          <FieldLabel htmlFor="bp-reviewer">Reviewer</FieldLabel>
-        </Field>
-        <Field orientation="horizontal">
-          <Checkbox id="bp-builder" defaultChecked />
-          <FieldContent>
-            <FieldLabel htmlFor="bp-builder">Builder</FieldLabel>
-            <FieldDescription>An Agent; Ada Lovelace sponsors it.</FieldDescription>
-          </FieldContent>
-        </Field>
-      </FieldSet>
-      <Field orientation="horizontal" className="justify-end">
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="bp-name">Name</FieldLabel>
+        <Input id="bp-name" defaultValue="deevy" placeholder="deevy" />
+      </Field>
+      <div className="flex justify-end gap-2">
         <Button variant="ghost" type="button">
           Cancel
         </Button>
         <Button type="submit">Bind it</Button>
-      </Field>
+      </div>
     </FieldGroup>
   </form>
 );
 
-/** A FieldLabel that wraps a Field becomes a selectable card; `FieldTitle` is the small heading inside. */
+/** A FieldSet and its legend, over a FieldGroup. No screen uses them: who may rule at a Checkpoint is Checkbox's own card. */
+export const FieldsetAndLegend = () => (
+  <FieldSet className="max-w-sm">
+    <FieldLegend variant="label">A set of choices</FieldLegend>
+    <FieldGroup className="gap-3">
+      <Field orientation="horizontal">
+        <Checkbox id="set-one" defaultChecked />
+        <FieldLabel htmlFor="set-one">One</FieldLabel>
+      </Field>
+      <Field orientation="horizontal">
+        <Checkbox id="set-two" />
+        <FieldLabel htmlFor="set-two">Two</FieldLabel>
+      </Field>
+    </FieldGroup>
+  </FieldSet>
+);
+
+/** Two fields ruled apart. No screen uses the separator. */
+export const Separated = () => (
+  <FieldGroup className="max-w-sm">
+    <Field>
+      <FieldLabel htmlFor="separated-one">One</FieldLabel>
+      <Input id="separated-one" />
+    </Field>
+    <FieldSeparator />
+    <Field>
+      <FieldLabel htmlFor="separated-two">Two</FieldLabel>
+      <Input id="separated-two" />
+    </Field>
+  </FieldGroup>
+);
+
+/** A FieldLabel that wraps a Field becomes a selectable card; `FieldTitle` is the small heading inside. No screen uses one. */
 export const Choice = () => (
   <FieldGroup className="max-w-sm">
-    <FieldLabel htmlFor="choice-any">
+    <FieldLabel htmlFor="choice-one">
       <Field orientation="horizontal">
-        <Checkbox id="choice-any" defaultChecked />
+        <Checkbox id="choice-one" defaultChecked />
         <FieldContent>
-          <FieldTitle>Any Human may rule</FieldTitle>
-          <FieldDescription>None named means every active Human.</FieldDescription>
+          <FieldTitle>The first choice</FieldTitle>
+          <FieldDescription>A line on what it does.</FieldDescription>
         </FieldContent>
       </Field>
     </FieldLabel>
-    <FieldLabel htmlFor="choice-named">
+    <FieldLabel htmlFor="choice-two">
       <Field orientation="horizontal">
-        <Checkbox id="choice-named" />
+        <Checkbox id="choice-two" />
         <FieldContent>
-          <FieldTitle>Only named Humans</FieldTitle>
-          <FieldDescription>Pick them below. An Agent never rules.</FieldDescription>
+          <FieldTitle>The second choice</FieldTitle>
+          <FieldDescription>And a line on this one.</FieldDescription>
         </FieldContent>
       </Field>
     </FieldLabel>

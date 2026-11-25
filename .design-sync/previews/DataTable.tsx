@@ -1,6 +1,6 @@
-import { Badge, DataTable, MemberChip, RunStatus } from "@deevy/design-system";
-import { ClipboardList, ExternalLink, PlayCircle } from "lucide-react";
-import { records, runs, type RecordRow, type RunRow } from "./lib/fixtures";
+import { Badge, Button, DataTable, MemberChip, RunStatus } from "@deevy/design-system";
+import { ClipboardList, ExternalLink, PlayCircle, SearchX } from "lucide-react";
+import { builder, planner, records, runs, type RecordRow, type RunRow } from "./lib/fixtures";
 
 const runColumns = [
   {
@@ -24,7 +24,9 @@ const runColumns = [
   {
     id: "summary",
     header: "Last",
-    cell: (row: RunRow) => <span className="truncate text-muted-foreground">{row.summary}</span>,
+    cell: (row: RunRow) => (
+      <span className="truncate text-muted-foreground">{row.summary ?? ""}</span>
+    ),
     // The one column that gives way: it takes what the others leave, and clips.
     className: "w-full max-w-0 min-w-0 overflow-hidden",
   },
@@ -44,15 +46,9 @@ const runColumns = [
   },
 ];
 
-/** The Runs feed: status, record, Agent, what it last said, working time, when. */
+/** The Runs feed: status, record, Agent, the summary once it has ended, working time, when. */
 export const Runs = () => (
-  <DataTable
-    aria-label="Runs"
-    columns={runColumns}
-    rows={runs}
-    getRowId={(row) => row.id}
-    selectedId="run_3n7p0w5d8e2f"
-  />
+  <DataTable aria-label="Runs" columns={runColumns} rows={runs} getRowId={(row) => row.id} />
 );
 
 const recordColumns = [
@@ -81,12 +77,12 @@ const recordColumns = [
     cell: (row: RecordRow) => (
       <Badge
         variant="outline"
-        className={row.state === "Closed" ? "text-muted-foreground" : undefined}
+        className={row.state === "closed" ? "text-muted-foreground" : undefined}
       >
-        {row.state}
+        {row.stateName}
       </Badge>
     ),
-    sortValue: (row: RecordRow) => row.state,
+    sortValue: (row: RecordRow) => row.stateName,
   },
   {
     id: "routed",
@@ -122,7 +118,120 @@ export const Work = () => (
   <DataTable aria-label="Work" columns={recordColumns} rows={records} getRowId={(row) => row.key} />
 );
 
-/** Grouped, one header row per group; a folded group shows only its header. */
+const events = [
+  {
+    seq: 419,
+    when: "11/25/2026, 9:48:12 AM",
+    kind: "gate.requested",
+    tone: "text-agent",
+    actor: planner,
+    what: "asked to pass plan",
+    subject: "gate",
+  },
+  {
+    seq: 418,
+    when: "11/25/2026, 9:40:51 AM",
+    kind: "run.activity",
+    tone: "",
+    actor: planner,
+    what: null,
+    subject: "run",
+  },
+  {
+    seq: 417,
+    when: "11/25/2026, 9:34:05 AM",
+    kind: "run.started",
+    tone: "text-agent",
+    actor: null,
+    what: "started a Run, by assignment",
+    subject: "run",
+  },
+  {
+    seq: 416,
+    when: "11/25/2026, 9:34:04 AM",
+    kind: "issue.assigned",
+    tone: "text-muted-foreground",
+    actor: null,
+    what: "routed it to Planner",
+    subject: "issue",
+  },
+];
+
+/** `selectedId` marks a row: the Event log's, 12px throughout, with the row whose payload is open. */
+export const Selected = () => (
+  <DataTable
+    className="text-xs"
+    aria-label="Event log"
+    columns={[
+      {
+        id: "seq",
+        header: "Seq",
+        cell: (row: (typeof events)[number]) => (
+          <span className="font-mono text-muted-foreground">{row.seq}</span>
+        ),
+        className: "w-16",
+      },
+      {
+        id: "when",
+        header: "When",
+        cell: (row: (typeof events)[number]) => (
+          <span className="font-mono text-muted-foreground">{row.when}</span>
+        ),
+        className: "w-44",
+      },
+      {
+        id: "kind",
+        header: "Kind",
+        cell: (row: (typeof events)[number]) => (
+          <Badge variant="outline" className={`font-mono font-normal ${row.tone}`}>
+            {row.kind}
+          </Badge>
+        ),
+        className: "w-48",
+      },
+      {
+        id: "actor",
+        header: "Actor",
+        // A name, not a chip: the kind shows in its colour.
+        cell: (row: (typeof events)[number]) =>
+          row.actor ? (
+            <span className="text-agent">{row.actor.user.name}</span>
+          ) : (
+            <span className="text-muted-foreground">deevy</span>
+          ),
+        className: "w-44",
+      },
+      {
+        id: "what",
+        header: "What",
+        // What an Activity says is the Run's to show.
+        cell: (row: (typeof events)[number]) =>
+          row.what ? (
+            <span className="truncate">{row.what}</span>
+          ) : (
+            <span className="text-muted-foreground">a Run step</span>
+          ),
+        className: "max-w-0 w-full",
+      },
+      {
+        id: "subject",
+        header: "Subject",
+        cell: (row: (typeof events)[number]) => (
+          <span className="flex items-center gap-2">
+            <span className="text-muted-foreground">{row.subject}</span>
+            <span className="font-mono">acme-deevy</span>
+          </span>
+        ),
+        className: "w-56",
+      },
+    ]}
+    rows={events}
+    getRowId={(row) => String(row.seq)}
+    selectedId="417"
+  />
+);
+
+/** Grouped, one header row per group; a folded group shows only its header. No screen groups its rows. */
 export const Grouped = () => (
   <DataTable
     aria-label="Runs by Agent"
@@ -130,13 +239,13 @@ export const Grouped = () => (
     groups={[
       {
         id: "planner",
-        header: <MemberChip member={runs[0]!.agent} size="xs" />,
+        header: <MemberChip member={planner} size="xs" />,
         rows: runs.filter((run) => run.agent.handle === "planner"),
         onToggle: () => {},
       },
       {
         id: "builder",
-        header: <MemberChip member={runs[1]!.agent} size="xs" />,
+        header: <MemberChip member={builder} size="xs" />,
         rows: runs.filter((run) => run.agent.handle === "builder"),
         collapsed: true,
         onToggle: () => {},
@@ -146,11 +255,12 @@ export const Grouped = () => (
   />
 );
 
+/** 40px rows instead of 32. */
 export const Comfortable = () => (
   <DataTable
     aria-label="Runs"
     columns={runColumns}
-    rows={runs.slice(0, 3)}
+    rows={runs.slice(2, 5)}
     getRowId={(row) => row.id}
     density="comfortable"
   />
@@ -171,6 +281,26 @@ export const Empty = () => (
       icon: PlayCircle,
       title: "No Runs match your filters",
       description: "A Run starts when a record is routed to an Agent, or when one is mentioned.",
+    }}
+  />
+);
+
+/** With the action that undoes it, as the Event log has it. */
+export const EmptyWithAction = () => (
+  <DataTable
+    aria-label="Event log"
+    columns={runColumns}
+    rows={[]}
+    getRowId={(row) => row.id}
+    empty={{
+      icon: SearchX,
+      title: "No Events match your filters",
+      description: "Try adjusting or clearing your filters.",
+      action: (
+        <Button variant="outline" size="sm">
+          Clear filters
+        </Button>
+      ),
     }}
   />
 );

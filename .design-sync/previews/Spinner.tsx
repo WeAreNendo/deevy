@@ -1,5 +1,8 @@
 import { Button, Spinner } from "@deevy/design-system";
 
+// No screen uses Spinner: a list waits as Skeletons, a page as a muted line
+// ("Loading the Run…"), a Button as disabled. The words here are of no product.
+
 /** 16px by default; a size class overrides it. */
 export const Sizes = () => (
   <div className="flex items-center gap-6">
@@ -12,27 +15,19 @@ export const Sizes = () => (
 
 /** Beside the words that say what is going on. */
 export const WithLabel = () => (
-  <div className="flex flex-col gap-3">
-    <span className="flex items-center gap-2 text-muted-foreground">
-      <Spinner /> Loading Runs…
-    </span>
-    <span className="flex items-center gap-2 text-agent">
-      <Spinner /> Builder is working on <span className="font-mono">acme/deevy#409</span>
-    </span>
-  </div>
+  <span className="flex items-center gap-2 text-sm text-muted-foreground">
+    <Spinner /> Loading…
+  </span>
 );
 
 /** Inside a Button while its action is pending. */
 export const InButton = () => (
   <div className="flex flex-wrap items-center gap-2">
     <Button disabled>
-      <Spinner data-icon="inline-start" /> Connecting GitHub
+      <Spinner data-icon="inline-start" /> Saving
     </Button>
     <Button variant="outline" disabled>
-      <Spinner data-icon="inline-start" /> Reinstating
-    </Button>
-    <Button variant="destructive" size="sm" disabled>
-      <Spinner data-icon="inline-start" /> Revoking
+      <Spinner data-icon="inline-start" /> Saving
     </Button>
   </div>
 );

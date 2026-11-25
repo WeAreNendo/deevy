@@ -1,63 +1,48 @@
 import { Button, ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "@deevy/design-system";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 
-/** Two actions on one thing, joined: the page before and the page after. */
-export const Pager = () => (
-  <div className="flex w-80 items-center gap-2 rounded-md border bg-card px-3 py-2">
-    <span className="text-xs tabular-nums text-muted-foreground">Runs 101–200</span>
-    <span className="flex-1" />
-    <ButtonGroup aria-label="Pages of Runs">
-      <Button variant="outline" size="icon" aria-label="Newer Runs">
-        <ChevronLeft />
-      </Button>
-      <Button variant="outline" size="icon" aria-label="Older Runs">
-        <ChevronRight />
-      </Button>
-    </ButtonGroup>
-  </div>
+// No screen uses a ButtonGroup. A Gate's Approve and Reject are two separate
+// Buttons, never joined and never one behind the other. The words are of no product.
+
+/** Two actions on one thing, joined. */
+export const Joined = () => (
+  <ButtonGroup aria-label="Move">
+    <Button variant="outline">Back</Button>
+    <Button variant="outline">Forward</Button>
+  </ButtonGroup>
 );
 
-/** Nothing is newer than the first page, nor older than the last. */
-export const AtTheEnds = () => (
-  <div className="flex flex-wrap items-center gap-6">
-    <ButtonGroup aria-label="First page">
-      <Button variant="outline" size="icon" aria-label="Newer Runs" disabled>
-        <ChevronLeft />
-      </Button>
-      <Button variant="outline" size="icon" aria-label="Older Runs">
-        <ChevronRight />
-      </Button>
-    </ButtonGroup>
-    <ButtonGroup aria-label="Last page">
-      <Button variant="outline" size="icon" aria-label="Newer Runs">
-        <ChevronLeft />
-      </Button>
-      <Button variant="outline" size="icon" aria-label="Older Runs" disabled>
-        <ChevronRight />
-      </Button>
-    </ButtonGroup>
-  </div>
-);
-
-/** Text inside the group, joined to the buttons it describes. */
-export const WithText = () => (
-  <ButtonGroup aria-label="Pages of Runs">
-    <ButtonGroupText className="tabular-nums">Page 2 of 3</ButtonGroupText>
-    <Button variant="outline" size="icon" aria-label="Newer Runs">
+/** Icons, one of them with nowhere to go. */
+export const Icons = () => (
+  <ButtonGroup aria-label="Move">
+    <Button variant="outline" size="icon" aria-label="Back" disabled>
       <ChevronLeft />
     </Button>
-    <Button variant="outline" size="icon" aria-label="Older Runs">
+    <Button variant="outline" size="icon" aria-label="Forward">
       <ChevronRight />
     </Button>
   </ButtonGroup>
 );
 
-/** A split button: Approve, and the other Ruling behind a separator. */
+/** Text inside the group, joined to the buttons it describes. */
+export const WithText = () => (
+  <ButtonGroup aria-label="Amount">
+    <ButtonGroupText className="tabular-nums">2 of 3</ButtonGroupText>
+    <Button variant="outline" size="icon" aria-label="Less">
+      <Minus />
+    </Button>
+    <Button variant="outline" size="icon" aria-label="More">
+      <Plus />
+    </Button>
+  </ButtonGroup>
+);
+
+/** A filled pair, with a separator between because neither has a border. */
 export const WithSeparator = () => (
-  <ButtonGroup aria-label="Rule on the Gate">
-    <Button>Approve</Button>
+  <ButtonGroup aria-label="Save">
+    <Button>Save</Button>
     <ButtonGroupSeparator />
-    <Button size="icon-lg" aria-label="Reject instead">
+    <Button size="icon-lg" aria-label="Other ways to save">
       <ChevronDown />
     </Button>
   </ButtonGroup>
@@ -65,12 +50,12 @@ export const WithSeparator = () => (
 
 /** Stacked, where the row has no room. */
 export const Vertical = () => (
-  <ButtonGroup orientation="vertical" aria-label="Pages of Runs">
-    <Button variant="outline" size="icon" aria-label="Newer Runs">
-      <ChevronUp />
+  <ButtonGroup orientation="vertical" aria-label="Amount">
+    <Button variant="outline" size="icon" aria-label="More">
+      <Plus />
     </Button>
-    <Button variant="outline" size="icon" aria-label="Older Runs">
-      <ChevronDown />
+    <Button variant="outline" size="icon" aria-label="Less">
+      <Minus />
     </Button>
   </ButtonGroup>
 );

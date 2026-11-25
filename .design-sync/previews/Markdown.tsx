@@ -13,16 +13,39 @@ const plan = `${proposal}
 - [x] the cursor encodes the last \`seq\`
 - [ ] the SPA reads \`next\` instead of counting rows
 
-See [ADR-0015](https://example.com/adr/0015) for why ids are not sequential.`;
+See [the design note](https://example.com/paging) for why the cursor is opaque.`;
 
 /** A Proposal: headings, a list, code coloured by lowlight, a quote, a table, a task list. */
 export const Proposal = () => <Markdown>{plan}</Markdown>;
 
-/** A Ruling's note: short, a little inline code. */
-export const RulingNote = () => (
-  <div className="max-w-md rounded-md border bg-card px-3 py-2">
-    <Markdown>{`Approved. Keep \`offset\` working for one release, and say so in the changeset — somebody's script pages by it.`}</Markdown>
-  </div>
+/** A Run's Activities, each in its kind's tone: an action, a thought, a response, an error. */
+export const Activities = () => (
+  <ol className="flex max-w-md flex-col gap-2">
+    <li className="flex flex-col gap-0.5 border-l-2 pl-3">
+      <Markdown className="text-sm">
+        {"Read the three list operations that still page by `offset`."}
+      </Markdown>
+      <span className="text-xs text-muted-foreground">14 minutes ago</span>
+    </li>
+    <li className="flex flex-col gap-0.5 border-l-2 pl-3">
+      <Markdown className="text-sm text-muted-foreground italic">
+        {"An offset skips a row whenever one arrives mid-page, so the cursor is the last `seq`."}
+      </Markdown>
+      <span className="text-xs text-muted-foreground">13 minutes ago</span>
+    </li>
+    <li className="flex flex-col gap-0.5 border-l-2 pl-3">
+      <Markdown className="text-sm text-agent">
+        {"One cursor fits all three, so the change is one shape."}
+      </Markdown>
+      <span className="text-xs text-muted-foreground">13 minutes ago</span>
+    </li>
+    <li className="flex flex-col gap-0.5 border-l-2 pl-3">
+      <Markdown className="font-mono text-sm text-destructive">
+        {"The test database refused the connection."}
+      </Markdown>
+      <span className="text-xs text-muted-foreground">12 minutes ago</span>
+    </li>
+  </ol>
 );
 
 /** A record's body, as its tracker wrote it: a numbered list and emphasis, no headings. */

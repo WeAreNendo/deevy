@@ -1,1 +1,1 @@
-export * from "./lib/stories/sheet";
+export * from "./lib/stories/sheet-footer";

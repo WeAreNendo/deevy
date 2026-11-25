@@ -5,19 +5,9 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@deevy/design-system";
-import { Plus } from "lucide-react";
 
-export const WithActions = () => (
-  <PageHeader
-    title="Agents"
-    description="The Agents in this Workspace, and the Humans who sponsor them."
-    actions={
-      <Button>
-        <Plus data-icon="inline-start" /> New Agent
-      </Button>
-    }
-  />
-);
+/** A title and the page's action on the right: Settings › Agents. */
+export const WithActions = () => <PageHeader title="Agents" actions={<Button>New Agent</Button>} />;
 
 /** A row under the title: the Runs feed's filters. */
 export const WithChildren = () => (
@@ -37,6 +27,7 @@ export const WithChildren = () => (
   </PageHeader>
 );
 
-export const TitleOnly = () => (
+/** A title and one line on what the page is for: the home page. */
+export const WithDescription = () => (
   <PageHeader title="Needs me" description="Rulings, and what your Agents are doing." />
 );

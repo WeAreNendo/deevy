@@ -2,28 +2,28 @@ import { Label, Switch } from "@deevy/design-system";
 
 /** On: the track fills in the action colour and the thumb slides right. */
 export const On = () => (
-  <div className="flex items-center gap-2">
-    <Switch id="switch-mention" defaultChecked />
-    <Label htmlFor="switch-mention">Route by mention</Label>
-  </div>
+  <label className="flex h-8 items-center gap-3 text-sm">
+    <Switch defaultChecked />
+    Route by mention
+  </label>
 );
 
 export const Off = () => (
-  <div className="flex items-center gap-2">
-    <Switch id="switch-mention-off" />
-    <Label htmlFor="switch-mention-off">Route by mention</Label>
-  </div>
+  <label className="flex h-8 items-center gap-3 text-sm">
+    <Switch />
+    Route by mention
+  </label>
 );
 
 export const Disabled = () => (
   <div className="flex flex-col gap-3">
     <div className="flex items-center gap-2">
       <Switch id="switch-off-disabled" disabled />
-      <Label htmlFor="switch-off-disabled">Route by mention</Label>
+      <Label htmlFor="switch-off-disabled">Off</Label>
     </div>
     <div className="flex items-center gap-2">
       <Switch id="switch-on-disabled" disabled defaultChecked />
-      <Label htmlFor="switch-on-disabled">Route by mention</Label>
+      <Label htmlFor="switch-on-disabled">On</Label>
     </div>
   </div>
 );
@@ -44,16 +44,17 @@ export const Sizes = () => (
   </div>
 );
 
-/** A settings row: the Label and its explanation on the left, the Switch on the right. */
-export const SettingsRow = () => (
-  <div className="flex w-full max-w-sm items-start justify-between gap-4 rounded-md border bg-card p-3">
-    <div className="flex flex-col gap-0.5">
-      <Label htmlFor="switch-row">Route by mention</Label>
-      <p className="text-xs text-muted-foreground">
-        A comment such as <span className="font-mono">@deevy planner</span> hands the record to that
-        Agent.
-      </p>
-    </div>
-    <Switch id="switch-row" defaultChecked />
+/** The one switch deevy has, in a Project's binding: named by the label around it, what it does under it. */
+export const RouteByMention = () => (
+  <div className="flex max-w-sm flex-col gap-1.5">
+    <label className="flex h-8 items-center gap-3 text-sm">
+      <Switch defaultChecked />
+      Route by mention
+    </label>
+    <span className="text-xs text-muted-foreground">
+      A comment such as <code className="font-mono">@deevy planner</code> hands the record to that
+      Agent. Off, a comment hands it to nobody: a label, an assignment in the tool or the Default
+      Agent still does.
+    </span>
   </div>
 );

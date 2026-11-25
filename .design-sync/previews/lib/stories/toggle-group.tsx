@@ -1,56 +1,12 @@
 import { runStatusLabels, ToggleGroup, ToggleGroupItem } from "@deevy/design-system";
-import { Bot, Monitor, Moon, Sun, User } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight } from "lucide-react";
 
-/** Work's filter bar as joined toggles: who a record is routed to, one of three pressed. */
-export const RoutedTo = () => (
-  <ToggleGroup defaultValue={["agent"]} aria-label="Routed to" variant="outline" spacing={0}>
-    <ToggleGroupItem value="any" aria-label="Anybody">
-      Anybody
-    </ToggleGroupItem>
-    <ToggleGroupItem value="human" aria-label="A Human">
-      <User />
-      A Human
-    </ToggleGroupItem>
-    <ToggleGroupItem value="agent" aria-label="An Agent">
-      <Bot />
-      An Agent
-    </ToggleGroupItem>
-  </ToggleGroup>
-);
+const statuses = ["active", "awaiting_input", "completed"] as const;
 
-/** Open records or closed ones; neither pressed is both. */
-export const OpenOrClosed = () => (
-  <ToggleGroup defaultValue={["open"]} aria-label="Open or closed" variant="outline" spacing={0}>
-    <ToggleGroupItem value="open">Open</ToggleGroupItem>
-    <ToggleGroupItem value="closed">Closed</ToggleGroupItem>
-  </ToggleGroup>
-);
-
-/** Icon only: the theme, as System, Light or Dark. */
-export const Theme = () => (
-  <ToggleGroup defaultValue={["system"]} aria-label="Theme" variant="outline" spacing={0}>
-    <ToggleGroupItem value="system" aria-label="System">
-      <Monitor />
-    </ToggleGroupItem>
-    <ToggleGroupItem value="light" aria-label="Light">
-      <Sun />
-    </ToggleGroupItem>
-    <ToggleGroupItem value="dark" aria-label="Dark">
-      <Moon />
-    </ToggleGroupItem>
-  </ToggleGroup>
-);
-
-/** Small, in a page header: the Runs feed's statuses, in the kit's own words. */
-export const Small = () => (
-  <ToggleGroup
-    defaultValue={["awaiting_input"]}
-    aria-label="Runs"
-    variant="outline"
-    size="sm"
-    spacing={0}
-  >
-    {(["active", "awaiting_input", "completed"] as const).map((status) => (
+/** The Runs feed's statuses, in the kit's own words: joined, one pressed or none. */
+export const RunStatuses = () => (
+  <ToggleGroup defaultValue={["awaiting_input"]} variant="outline" spacing={0}>
+    {statuses.map((status) => (
       <ToggleGroupItem key={status} value={status}>
         {runStatusLabels[status]}
       </ToggleGroupItem>
@@ -58,25 +14,51 @@ export const Small = () => (
   </ToggleGroup>
 );
 
-/** Spaced and borderless, the default: for a set that is not one control — the Event log's families. */
-export const Spaced = () => (
-  <ToggleGroup defaultValue={["runs"]} aria-label="Show">
-    <ToggleGroupItem value="records">Records</ToggleGroupItem>
-    <ToggleGroupItem value="runs">Runs and Gates</ToggleGroupItem>
-    <ToggleGroupItem value="workspace">Workspace</ToggleGroupItem>
+/** Work's: open records or closed ones; neither pressed is both. */
+export const OpenOrClosed = () => (
+  <ToggleGroup defaultValue={["open"]} variant="outline" spacing={0}>
+    <ToggleGroupItem value="open">Open</ToggleGroupItem>
+    <ToggleGroupItem value="closed">Closed</ToggleGroupItem>
   </ToggleGroup>
 );
 
-/** Nothing to choose while the list loads. */
+// No screen has the ones below, so their words are of no product.
+
+/** Icon only. */
+export const IconOnly = () => (
+  <ToggleGroup defaultValue={["left"]} aria-label="Align" variant="outline" spacing={0}>
+    <ToggleGroupItem value="left" aria-label="Left">
+      <AlignLeft />
+    </ToggleGroupItem>
+    <ToggleGroupItem value="center" aria-label="Centre">
+      <AlignCenter />
+    </ToggleGroupItem>
+    <ToggleGroupItem value="right" aria-label="Right">
+      <AlignRight />
+    </ToggleGroupItem>
+  </ToggleGroup>
+);
+
+/** Small. */
+export const Small = () => (
+  <ToggleGroup defaultValue={["one"]} aria-label="Pick one" variant="outline" size="sm" spacing={0}>
+    <ToggleGroupItem value="one">One</ToggleGroupItem>
+    <ToggleGroupItem value="two">Two</ToggleGroupItem>
+  </ToggleGroup>
+);
+
+/** Spaced and borderless, the default: for a set that is not one control. */
+export const Spaced = () => (
+  <ToggleGroup defaultValue={["one"]} aria-label="Show">
+    <ToggleGroupItem value="one">One</ToggleGroupItem>
+    <ToggleGroupItem value="two">Two</ToggleGroupItem>
+    <ToggleGroupItem value="three">Three</ToggleGroupItem>
+  </ToggleGroup>
+);
+
 export const Disabled = () => (
-  <ToggleGroup
-    defaultValue={["open"]}
-    aria-label="Open or closed"
-    variant="outline"
-    spacing={0}
-    disabled
-  >
-    <ToggleGroupItem value="open">Open</ToggleGroupItem>
-    <ToggleGroupItem value="closed">Closed</ToggleGroupItem>
+  <ToggleGroup defaultValue={["one"]} aria-label="Pick one" variant="outline" spacing={0} disabled>
+    <ToggleGroupItem value="one">One</ToggleGroupItem>
+    <ToggleGroupItem value="two">Two</ToggleGroupItem>
   </ToggleGroup>
 );

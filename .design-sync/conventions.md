@@ -33,18 +33,19 @@ Type: Inter for the UI; `font-display` (Outfit) for titles only — a page's `h1
 ## Layout
 
 - The frame is the sidebar (Needs me, Runs, Work, Settings at the foot, the Member's chip last; search on ⌘K at the top) and a page under a 44px top bar with a breadcrumb. A page's root is `flex flex-1 flex-col`.
-- A list is an edge-to-edge `DataTable` under a `PageHeader` whose children are the filters. Cards only for things that are cards: a Gate on Needs me, a Run in a list of Runs, a Socket's section.
+- A list is an edge-to-edge `DataTable` under a `PageHeader` whose children are the filters. What is not a list is a bordered row (`rounded-lg border p-3`, `border-gate/40 bg-gate/5` for a Gate): a Gate or a Run on Needs me (a rail's rows are `rounded-md border p-2`). A Socket is a page of `SettingsSection`s.
 - A page with a subject and its context — a Gate, a Run, a record — is `@container`, then `grid grid-cols-[minmax(0,1fr)] gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]`: the main column and a rail. Rail sections are named by `RailHeading`. Where the rail holds what a Human acts on (a Gate's ruling card, a Run's Gates) it comes first on a phone (`-order-1 @3xl:order-none`).
-- A Settings page is `SettingsPage` › `SettingsSection`s, one setting per `SettingsRow`, and lays itself out by its container (`@sm:` … `@3xl:`), never the window.
+- A Settings page is `SettingsPage` › `SettingsSection`s (General is `SettingsRow`s instead, one setting a row, in a plain column), and lays itself out by its container (`@sm:` … `@3xl:`), never the window.
 - Motion only in answer to an action. Nothing on load.
 
 ## Compose with the real pieces
 
 - A Member is always `MemberChip` (round indigo ring = Human, square rose ring = Agent); `size="inline"` inside a sentence, `nameOnly` in a timeline. A Run's status is `RunStatus`; a shortcut hint is `Shortcut keys="mod+k"`; a secret field is `SecretInput`; deevy's name is `DeevyLogo`.
-- A Gate says its arithmetic out loud ("1 of 2") and names its Checkpoint; ruling is Approve and Reject with a Note, and `⌘Enter` is the only submit key. An Agent never rules.
+- A Gate says its arithmetic out loud ("1 of 2") and names its Checkpoint; ruling is Approve and Reject with an optional Note, and `⌘Enter` is the only submit key. An Agent never rules.
 - A page starts with `PageHeader` (title, description, actions). An empty list is `Empty` whose words say what emptied it: "No Runs match your filters", "Nothing has arrived yet", "Nothing needs you".
-- Toggling buttons are a `ToggleGroup variant="outline" spacing={0}`; buttons that act are a `ButtonGroup`; views of one thing are `Tabs`. Disconnect, Remove, Revoke, Archive are `variant="destructive"` (they do not undo); Suspend, Reinstate, Pause are `outline`.
-- Text a Member wrote — a Proposal, a record's body, a Ruling's note — is `Markdown`, read-only.
+- Toggling buttons are a `ToggleGroup variant="outline" spacing={0}`; buttons that act stand apart, each its own `Button` (a Gate's Approve and Reject are two `size="sm"` outline buttons, never joined and never one behind the other); a choice of what to show below is `Tabs`. Disconnect, Remove, Revoke, Archive are `variant="destructive"` (they do not undo); Suspend, Reinstate, Pause are `outline`.
+- A Proposal, a record's body and a Run's Activity are `Markdown`, read-only. A Ruling's note, a Run's summary and everything else a Member wrote is plain text.
+- Some of the kit no screen of deevy uses: `Alert`, `ButtonGroup`, `Card`, `Collapsible`, `InputGroup`, `Item`, `Popover`, `Resizable*`, `ScrollArea`, `Separator`, `Spinner`, `Toggle` alone, and `toast()` (the `Toaster` is mounted and nothing calls it). Their cards say nothing about deevy. Prefer what the screens use: a bordered row, a `SettingsSection`, a `Dialog`, a `Select` or `Combobox`, `Skeleton`s while a list loads, a refusal as `text-sm text-destructive` beside what was refused.
 
 ## Where the truth lives
 

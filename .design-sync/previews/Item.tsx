@@ -1,5 +1,5 @@
 import {
-  Button,
+  Badge,
   Item,
   ItemActions,
   ItemContent,
@@ -13,172 +13,107 @@ import {
   MemberChip,
   RunStatus,
 } from "@deevy/design-system";
-import { builder, grace, planner } from "./lib/fixtures";
+import { ChevronRight } from "lucide-react";
+import { activeRun, gates, waitingRun, type GateRow, type RunRow } from "./lib/fixtures";
 
-const Waiting = () => <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-gate" />;
+// No screen uses Item: Needs me draws its rows as plain links. These are the
+// same rows, in the same words, out of Item's parts.
 
-/** One Gate on Needs me: who stopped at which Checkpoint on which record, its title under it, the way in beside it. */
-export const GateRow = () => (
-  <Item variant="outline" className="max-w-lg">
+const Gate = ({ gate }: { gate: GateRow }) => (
+  <Item variant="outline" className="border-gate/40 bg-gate/5">
     <ItemMedia>
-      <MemberChip member={planner} avatarOnly size="md" />
+      <Badge variant="outline" className="border-gate/50 text-gate-foreground dark:text-gate">
+        {gate.checkpoint}
+      </Badge>
     </ItemMedia>
     <ItemContent>
-      <ItemTitle>
-        <span>
-          Planner stopped at plan on <span className="font-mono text-xs">acme/deevy#412</span>
-        </span>
-      </ItemTitle>
-      <ItemDescription>Cursor-based paging on every list operation</ItemDescription>
+      <ItemTitle>{gate.says}</ItemTitle>
+      <ItemDescription className="flex items-center gap-2 text-xs">
+        <span className="font-mono">{gate.record}</span>
+        <MemberChip member={gate.agent} size="inline" />
+        <span>{gate.asked}</span>
+      </ItemDescription>
     </ItemContent>
     <ItemActions>
-      <span className="font-mono text-xs text-muted-foreground tabular-nums">12m</span>
-      <Waiting />
-      <Button variant="ghost" size="xs">
-        Open Gate
-      </Button>
+      <span className="font-mono text-xs text-muted-foreground tabular-nums">
+        {gate.approvals} of {gate.required}
+      </span>
+      <ChevronRight aria-hidden className="size-4 text-muted-foreground" />
     </ItemActions>
   </Item>
 );
 
-/** Needs me: rows in an ItemGroup, a separator between the Gates and your Agents' Runs. */
+const Run = ({ run }: { run: RunRow }) => (
+  <Item variant="outline">
+    <ItemMedia>
+      <RunStatus status={run.status} />
+    </ItemMedia>
+    <ItemContent>
+      <ItemTitle className="font-normal">
+        {run.summary ?? `${run.agent.user.name} is working`}
+      </ItemTitle>
+      <ItemDescription className="flex items-center gap-2 text-xs">
+        <span className="font-mono">{run.record}</span>
+        <MemberChip member={run.agent} size="inline" />
+        <span>{run.last}</span>
+      </ItemDescription>
+    </ItemContent>
+    <ItemActions>
+      <ChevronRight aria-hidden className="size-4 text-muted-foreground" />
+    </ItemActions>
+  </Item>
+);
+
+/** One Gate on Needs me: its Checkpoint in amber, what is asked, the record, the Agent that asked, the count. */
+export const GateAwaitingYou = () => (
+  <div className="max-w-lg">
+    <Gate gate={gates[0]!} />
+  </div>
+);
+
+/** Needs me: the Gates awaiting you, then your Agents' Runs that are still going. */
 export const NeedsMe = () => (
-  <ItemGroup className="max-w-lg">
-    <Item variant="outline">
-      <ItemMedia>
-        <MemberChip member={planner} avatarOnly size="md" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          <span>
-            Planner stopped at plan on <span className="font-mono text-xs">acme/deevy#412</span>
-          </span>
-        </ItemTitle>
-        <ItemDescription>Cursor-based paging on every list operation</ItemDescription>
-      </ItemContent>
-      <ItemActions>
-        <span className="font-mono text-xs text-muted-foreground tabular-nums">12m</span>
-        <Waiting />
-        <Button variant="ghost" size="xs">
-          Open Gate
-        </Button>
-      </ItemActions>
-    </Item>
-    <Item variant="outline">
-      <ItemMedia>
-        <MemberChip member={grace} avatarOnly size="md" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          <span>
-            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
-          </span>
-        </ItemTitle>
-        <ItemDescription>
-          Sign the delivery id · <span className="tabular-nums">1 of 2</span>
-        </ItemDescription>
-      </ItemContent>
-      <ItemActions>
-        <span className="font-mono text-xs text-muted-foreground tabular-nums">2h</span>
-        <Waiting />
-        <Button variant="ghost" size="xs">
-          Open Gate
-        </Button>
-      </ItemActions>
-    </Item>
+  <ItemGroup className="max-w-lg gap-2">
+    {gates.map((gate) => (
+      <Gate key={gate.id} gate={gate} />
+    ))}
     <ItemSeparator />
-    <Item variant="outline">
-      <ItemMedia>
-        <MemberChip member={builder} avatarOnly size="md" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          <span>
-            Builder failed on <span className="font-mono text-xs">acme/ops#88</span>
-          </span>
-        </ItemTitle>
-        <ItemDescription>“The registry refused the new key.”</ItemDescription>
-      </ItemContent>
-      <ItemActions>
-        <span className="font-mono text-xs text-muted-foreground tabular-nums">5h</span>
-      </ItemActions>
-    </Item>
+    <Run run={activeRun} />
+    <Run run={waitingRun} />
   </ItemGroup>
 );
 
 /** The three looks: default sits flat, outline has a border, muted a tint. */
 export const Variants = () => (
   <div className="flex max-w-lg flex-col gap-2">
-    <Item variant="default">
-      <ItemMedia>
-        <MemberChip member={grace} avatarOnly size="md" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          <span>
-            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
-          </span>
-        </ItemTitle>
-        <ItemDescription>default</ItemDescription>
-      </ItemContent>
-    </Item>
-    <Item variant="outline">
-      <ItemMedia>
-        <MemberChip member={grace} avatarOnly size="md" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          <span>
-            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
-          </span>
-        </ItemTitle>
-        <ItemDescription>outline</ItemDescription>
-      </ItemContent>
-    </Item>
-    <Item variant="muted">
-      <ItemMedia>
-        <MemberChip member={grace} avatarOnly size="md" />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>
-          <span>
-            Grace Hopper approved ship on <span className="font-mono text-xs">acme/deevy#409</span>
-          </span>
-        </ItemTitle>
-        <ItemDescription>muted</ItemDescription>
-      </ItemContent>
-    </Item>
+    {(["default", "outline", "muted"] as const).map((variant) => (
+      <Item key={variant} variant={variant}>
+        <ItemContent>
+          <ItemTitle>{variant}</ItemTitle>
+          <ItemDescription>A line under the title.</ItemDescription>
+        </ItemContent>
+      </Item>
+    ))}
   </div>
 );
 
-/** A Run as an Item, with a header line and a footer line spanning the row. */
+/** A header line and a footer line spanning the row. */
 export const WithHeaderAndFooter = () => (
   <Item variant="outline" className="max-w-lg">
     <ItemHeader>
-      <span className="font-mono text-xs text-muted-foreground">run_3n7p0w5d8e2f</span>
-      <RunStatus status="active" />
+      <span className="font-mono text-xs text-muted-foreground">{activeRun.id}</span>
+      <RunStatus status={activeRun.status} />
     </ItemHeader>
-    <ItemMedia>
-      <MemberChip member={builder} avatarOnly size="md" />
-    </ItemMedia>
     <ItemContent>
-      <ItemTitle>
-        <span>
-          Builder is working on <span className="font-mono text-xs">acme/deevy#409</span>
-        </span>
-      </ItemTitle>
-      <ItemDescription>
-        Adding the delivery id to the signed payload; a test for a replayed delivery is next.
+      <ItemTitle className="font-mono">{activeRun.record}</ItemTitle>
+      <ItemDescription className="flex items-center gap-2">
+        <MemberChip member={activeRun.agent} size="inline" />
+        <span>started by assignment</span>
       </ItemDescription>
     </ItemContent>
-    <ItemActions>
-      <Button variant="outline" size="xs">
-        Open Run
-      </Button>
-    </ItemActions>
-    <ItemFooter>
-      <span className="text-muted-foreground tabular-nums">Working for 41m</span>
-      <span className="text-muted-foreground">Sponsored by Ada Lovelace</span>
+    <ItemFooter className="text-muted-foreground tabular-nums">
+      <span>Working {activeRun.time}</span>
+      <span>Waiting on a Human 0 s</span>
     </ItemFooter>
   </Item>
 );

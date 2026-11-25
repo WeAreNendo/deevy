@@ -7,8 +7,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@deevy/design-system";
+import { records, waitingRun } from "../fixtures";
 
-/** The top bar's trail for a Run: where you are, each step above it a link. */
+/** The top bar's trail for a Run: the list above it a link, then its id, which is its only name. */
 export const RunTrail = () => (
   <Breadcrumb>
     <BreadcrumbList>
@@ -17,18 +18,33 @@ export const RunTrail = () => (
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbPage className="font-mono">acme/deevy#412</BreadcrumbPage>
+        <BreadcrumbPage>{waitingRun.id}</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>
 );
 
-/** A top-level page is one crumb, and it is not a link. */
+/** A record, by its tracker's key. */
+export const RecordTrail = () => (
+  <Breadcrumb>
+    <BreadcrumbList>
+      <BreadcrumbItem>
+        <BreadcrumbLink href="#">Work</BreadcrumbLink>
+      </BreadcrumbItem>
+      <BreadcrumbSeparator />
+      <BreadcrumbItem>
+        <BreadcrumbPage>{records[0]!.key}</BreadcrumbPage>
+      </BreadcrumbItem>
+    </BreadcrumbList>
+  </Breadcrumb>
+);
+
+/** A top-level page is one crumb, and it is not a link: the home page, where Needs me is. */
 export const SinglePage = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
-        <BreadcrumbPage>Needs me</BreadcrumbPage>
+        <BreadcrumbPage>Home</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>
@@ -47,18 +63,18 @@ export const SocketPage = () => (
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbPage>GitHub · acme</BreadcrumbPage>
+        <BreadcrumbPage>acme on GitHub</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>
 );
 
-/** A deep trail folds its middle into an ellipsis. */
+/** The middle folded into an ellipsis. deevy's trails are three crumbs at most and never fold. */
 export const WithEllipsis = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">Settings</BreadcrumbLink>
+        <BreadcrumbLink href="#">First</BreadcrumbLink>
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
@@ -66,11 +82,7 @@ export const WithEllipsis = () => (
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">Agents</BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbPage>Planner</BreadcrumbPage>
+        <BreadcrumbPage>Last</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>

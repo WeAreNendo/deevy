@@ -3,7 +3,7 @@ import { Kbd, KbdGroup } from "@deevy/design-system";
 /** One key each: a letter, a symbol, a named key. */
 export const SingleKeys = () => (
   <div className="flex flex-wrap items-center gap-3">
-    <Kbd>J</Kbd>
+    <Kbd>A</Kbd>
     <Kbd>?</Kbd>
     <Kbd>Esc</Kbd>
     <Kbd>↵</Kbd>
@@ -11,7 +11,7 @@ export const SingleKeys = () => (
   </div>
 );
 
-/** A combination pressed together: jump, commit a Ruling, Approve. */
+/** A combination pressed together: jump, commit a ruling, choose Approve. */
 export const Group = () => (
   <div className="flex flex-wrap items-center gap-6">
     <KbdGroup>
@@ -46,6 +46,6 @@ export const InText = () => (
       <Kbd>⌘</Kbd>
       <Kbd>K</Kbd>
     </KbdGroup>{" "}
-    to jump to a page, a Run or a record.
+    to jump to a page.
   </p>
 );

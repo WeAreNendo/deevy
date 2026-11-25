@@ -1,13 +1,13 @@
 import { Toaster, toast } from "@deevy/design-system";
 import { useEffect } from "react";
 
-/** Toasts land bottom-right: a success with the record's key, a plain confirmation, and an error with what to do. */
+/** Toasts land bottom-right: a success, a plain line, and an error with a second line. The app mounts the Toaster and no screen calls `toast()`, so the words are of no product. */
 export const Toasts = () => {
   useEffect(() => {
-    toast.success("Approved plan on acme/deevy#412");
-    toast("Copied run_8k2m4q9x1z7c");
-    toast.error("Could not approve the Gate", {
-      description: "Grace Hopper ruled on it a moment ago. Reload to see the ruling.",
+    toast.success("Saved");
+    toast("Copied");
+    toast.error("It could not be saved", {
+      description: "Try again in a moment.",
     });
   }, []);
   return (

@@ -6,41 +6,55 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Field,
-  FieldLabel,
   Input,
-  Textarea,
+  Label,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@deevy/design-system";
 
-/** A form in a Dialog, open. The kit portals it to the body; the card keeps it inside. */
-export const ConnectGitHub = () => (
+const roleName = (selected: string) => (selected === "admin" ? "Admin" : "Member");
+
+/** A form in a Dialog, open: Invite someone, from Settings › General. The kit portals it to the body; the card keeps it inside. */
+export const InviteSomeone = () => (
   <Dialog open>
-    <DialogContent className="sm:max-w-lg">
+    <DialogContent>
       <DialogHeader>
-        <DialogTitle>Connect GitHub</DialogTitle>
+        <DialogTitle>Invite someone</DialogTitle>
         <DialogDescription>
-          Paste the App you made under Developer settings › GitHub Apps. deevy seals its key and
-          never shows it again.
+          Invite one person by email address. You get a link to send them, good for seven days; they
+          join by signing in with that address.
         </DialogDescription>
       </DialogHeader>
-      <div className="flex flex-col gap-4">
-        <Field>
-          <FieldLabel htmlFor="connect-github-app-id">App id</FieldLabel>
-          <Input id="connect-github-app-id" defaultValue="1284461" className="font-mono" />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="connect-github-key">Private key</FieldLabel>
-          <Textarea
-            id="connect-github-key"
-            rows={4}
-            placeholder="-----BEGIN RSA PRIVATE KEY-----"
-          />
-        </Field>
-      </div>
-      <DialogFooter>
-        <Button variant="ghost">Cancel</Button>
-        <Button>Connect</Button>
-      </DialogFooter>
+      <form className="flex flex-col gap-4" onSubmit={(submitted) => submitted.preventDefault()}>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="invite-email">Email</Label>
+          <Input id="invite-email" type="email" placeholder="grace@example.com" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="invite-role">Role</Label>
+          <Select defaultValue="member">
+            <SelectTrigger id="invite-role" className="w-full">
+              <SelectValue>{roleName}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost">
+            Cancel
+          </Button>
+          <Button type="submit">Create invitation</Button>
+        </DialogFooter>
+      </form>
     </DialogContent>
   </Dialog>
 );

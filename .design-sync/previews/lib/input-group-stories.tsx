@@ -1,40 +1,41 @@
 import {
-  Button,
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
-  Kbd,
   Label,
 } from "@deevy/design-system";
-import { Check, Copy, Link2, Search, X } from "lucide-react";
+import { Copy, Link2, Search, X } from "lucide-react";
 
-/** A search with the shortcut that opens it at the end. */
-export const SearchWithShortcut = () => (
+// No screen composes an InputGroup (the palette's search and Combobox carry
+// their own inside the kit), so these show the parts in words of no product.
+
+/** An icon before the field, a count after it. */
+export const IconAndText = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
       <InputGroupAddon>
         <Search />
       </InputGroupAddon>
-      <InputGroupInput placeholder="A key or a word of the title…" aria-label="Search Work" />
+      <InputGroupInput placeholder="Search…" aria-label="Search" />
       <InputGroupAddon align="inline-end">
-        <Kbd>/</Kbd>
+        <InputGroupText className="tabular-nums">12 results</InputGroupText>
       </InputGroupAddon>
     </InputGroup>
   </div>
 );
 
-/** A fixed prefix: the scheme is not up for editing. */
-export const UrlPrefix = () => (
+/** A fixed prefix that is not up for editing, and a button at the end. */
+export const Prefix = () => (
   <div className="flex w-full max-w-sm flex-col gap-2">
-    <Label htmlFor="ig-webhook">Webhook URL</Label>
+    <Label htmlFor="ig-address">Address</Label>
     <InputGroup>
       <InputGroupAddon>
         <InputGroupText>https://</InputGroupText>
       </InputGroupAddon>
-      <InputGroupInput id="ig-webhook" defaultValue="agent.example.com/deevy" />
+      <InputGroupInput id="ig-address" defaultValue="example.com" />
       <InputGroupAddon align="inline-end">
         <InputGroupButton size="icon-xs" aria-label="Copy">
           <Copy />
@@ -44,21 +45,15 @@ export const UrlPrefix = () => (
   </div>
 );
 
-/** A textarea with the ruling below it: the Note on a Gate, and Approve. */
-export const NoteWithApprove = () => (
+/** A textarea with a row under it, in the same frame. */
+export const TextareaWithFooter = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
-      <InputGroupTextarea
-        rows={3}
-        placeholder="Why, in a sentence. Optional on an approval."
-        aria-label="Note"
-      />
+      <InputGroupTextarea rows={3} placeholder="Write something…" aria-label="Text" />
       <InputGroupAddon align="block-end">
-        <InputGroupText>
-          <Kbd>⌘↵</Kbd> commits
-        </InputGroupText>
+        <InputGroupText className="tabular-nums">0 of 280</InputGroupText>
         <InputGroupButton className="ml-auto" variant="default" size="sm">
-          Approve <Check data-icon="inline-end" />
+          Save
         </InputGroupButton>
       </InputGroupAddon>
     </InputGroup>
@@ -69,7 +64,7 @@ export const NoteWithApprove = () => (
 export const ClearAndInvalid = () => (
   <div className="flex w-full max-w-sm flex-col gap-3">
     <InputGroup>
-      <InputGroupInput defaultValue="cursor paging" aria-label="Search Work" />
+      <InputGroupInput defaultValue="A value" aria-label="Text" />
       <InputGroupAddon align="inline-end">
         <InputGroupButton size="icon-xs" aria-label="Clear">
           <X />
@@ -80,7 +75,7 @@ export const ClearAndInvalid = () => (
       <InputGroupAddon>
         <Link2 />
       </InputGroupAddon>
-      <InputGroupInput defaultValue="not a url" aria-invalid aria-label="Webhook URL" />
+      <InputGroupInput defaultValue="not an address" aria-invalid aria-label="Address" />
     </InputGroup>
   </div>
 );
@@ -90,17 +85,12 @@ export const BlockStart = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
       <InputGroupAddon align="block-start" className="border-b">
-        <InputGroupText>Signing secret</InputGroupText>
-        <Button variant="ghost" size="xs" className="ml-auto" type="button">
-          Generate
-        </Button>
+        <InputGroupText>Title</InputGroupText>
+        <InputGroupButton size="xs" className="ml-auto">
+          Reset
+        </InputGroupButton>
       </InputGroupAddon>
-      <InputGroupInput
-        readOnly
-        defaultValue="whsec_7Hq2…Lm4x"
-        className="font-mono"
-        aria-label="Signing secret"
-      />
+      <InputGroupInput defaultValue="A value" aria-label="Title" />
     </InputGroup>
   </div>
 );

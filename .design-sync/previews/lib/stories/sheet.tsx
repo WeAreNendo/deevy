@@ -1,20 +1,19 @@
 import {
-  Button,
   Sheet,
-  SheetClose,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
   Shortcut,
 } from "@deevy/design-system";
 
+// The keys something binds (lib/shortcuts.ts); the app's sheet also lists a
+// list's `j`, `k` and Enter and a Note's `@`, which nothing does today.
 const groups: Array<{ title: string; rows: Array<[keys: string, does: string]> }> = [
   {
     title: "Anywhere",
     rows: [
-      ["mod+k", "Jump to a page, a Run or a record"],
+      ["mod+k", "Jump to a page"],
       ["?", "This sheet"],
       ["mod+b", "Fold the sidebar"],
       ["g r", "Runs"],
@@ -24,20 +23,11 @@ const groups: Array<{ title: string; rows: Array<[keys: string, does: string]> }
     ],
   },
   {
-    title: "In a list",
-    rows: [
-      ["j", "Next row"],
-      ["k", "Previous row"],
-      ["enter", "Open it"],
-      ["escape", "Clear the selection, or close what is open"],
-    ],
-  },
-  {
     title: "On a Gate",
     rows: [
       ["shift+a", "Approve: the Note, with Approve chosen for ⌘↵"],
       ["shift+r", "Reject: the same, with Reject chosen"],
-      ["mod+enter", "Commit the Ruling"],
+      ["mod+enter", "Commit the ruling"],
     ],
   },
 ];
@@ -69,9 +59,6 @@ export const Keyboard = () => (
           </section>
         ))}
       </div>
-      <SheetFooter className="border-t px-5 py-4">
-        <SheetClose render={<Button variant="outline" />}>Close</SheetClose>
-      </SheetFooter>
     </SheetContent>
   </Sheet>
 );

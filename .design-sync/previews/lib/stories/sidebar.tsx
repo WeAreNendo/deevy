@@ -3,8 +3,8 @@ import {
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
-  Button,
   MemberChip,
+  PageHeader,
   Shortcut,
   Sidebar,
   SidebarContent,
@@ -35,7 +35,7 @@ import {
   BellRing,
   ChevronsUpDown,
   ClipboardList,
-  FolderKanban,
+  Folder,
   MoreHorizontal,
   PlayCircle,
   Plus,
@@ -54,9 +54,14 @@ const MemberRow = () => {
       size="lg"
       tooltip={ada.user.name}
       aria-label={ada.user.name}
-      className="min-w-0 group-data-[collapsible=icon]:justify-center"
+      className="min-w-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:overflow-visible"
     >
-      <MemberChip member={ada} size="md" className="min-w-0 flex-1" avatarOnly={folded} />
+      <MemberChip
+        member={ada}
+        size="md"
+        className={folded ? "min-w-0 shrink-0" : "min-w-0 flex-1"}
+        avatarOnly={folded}
+      />
       <ChevronsUpDown className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
     </SidebarMenuButton>
   );
@@ -97,7 +102,7 @@ const AppSidebar = () => (
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Needs me" isActive>
+              <SidebarMenuButton tooltip="Needs me">
                 <BellRing />
                 <span>Needs me</span>
               </SidebarMenuButton>
@@ -147,17 +152,13 @@ const Page = () => (
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">
           <BreadcrumbItem>
-            <BreadcrumbPage>Needs me</BreadcrumbPage>
+            <BreadcrumbPage>Home</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <span className="flex-1" />
-      <Button variant="outline" size="sm">
-        Search <Shortcut keys="mod+k" />
-      </Button>
     </div>
     <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
-      <h1 className="font-display text-xl font-semibold tracking-tight">Needs me</h1>
+      <PageHeader title="Needs me" description="Rulings, and what your Agents are doing." />
       <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
         The page, full width
       </div>
@@ -185,7 +186,7 @@ export const Expanded = () => (
   </Frame>
 );
 
-/** Folded to its icons: labels and badges hide, the Member is the avatar alone. */
+/** Folded to its icons: the labels hide, the Member is the avatar alone. */
 export const Collapsed = () => (
   <Frame defaultOpen={false}>
     <AppSidebar />
@@ -193,26 +194,26 @@ export const Collapsed = () => (
   </Frame>
 );
 
-/** A sidebar that does not fold, with the parts the frame does not use: search, sub-menus, actions, a count, a loading group. */
-export const StandaloneWithSubmenus = () => (
+/** The parts the frame does not use, on a sidebar that does not fold: a field, a group's label and action, a sub-menu, a row's action, a count, a group still loading. The words are of no product. */
+export const EveryPart = () => (
   <div className="h-[520px] w-fit overflow-hidden rounded-lg border">
     <SidebarProvider className="h-full min-h-0 w-fit">
       <Sidebar collapsible="none" className="border-r">
         <SidebarHeader>
-          <SidebarInput placeholder="Filter Projects…" aria-label="Filter Projects" />
+          <SidebarInput placeholder="Filter…" aria-label="Filter" />
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Projects</SidebarGroupLabel>
-            <SidebarGroupAction aria-label="Bind a Project">
+            <SidebarGroupLabel>A group</SidebarGroupLabel>
+            <SidebarGroupAction aria-label="Add">
               <Plus />
             </SidebarGroupAction>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton isActive>
-                    <FolderKanban />
-                    <span>deevy</span>
+                    <Folder />
+                    <span>First</span>
                   </SidebarMenuButton>
                   <SidebarMenuAction aria-label="More">
                     <MoreHorizontal />
@@ -220,59 +221,39 @@ export const StandaloneWithSubmenus = () => (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton isActive>
-                        <span>Binding</span>
+                        <span>One</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton>
-                        <span>Checkpoints</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton>
-                        <span>Agents</span>
+                        <span>Two</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton>
-                    <FolderKanban />
-                    <span>Operations</span>
+                    <Folder />
+                    <span>Second</span>
                   </SidebarMenuButton>
-                  <SidebarMenuBadge
-                    aria-label="3 Runs working"
-                    className="rounded-full bg-muted-foreground/15 px-1.5 text-[11px] font-medium text-foreground/75 tabular-nums"
-                  >
-                    3
-                  </SidebarMenuBadge>
+                  <SidebarMenuBadge className="tabular-nums">3</SidebarMenuBadge>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
           <SidebarSeparator />
           <SidebarGroup>
-            <SidebarGroupLabel>Agents</SidebarGroupLabel>
+            <SidebarGroupLabel>Loading</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuSkeleton
-                    showIcon
-                    className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
-                  />
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuSkeleton
-                    showIcon
-                    className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
-                  />
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuSkeleton
-                    showIcon
-                    className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
-                  />
-                </SidebarMenuItem>
+                {[1, 2, 3].map((row) => (
+                  <SidebarMenuItem key={row}>
+                    <SidebarMenuSkeleton
+                      showIcon
+                      className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
+                    />
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

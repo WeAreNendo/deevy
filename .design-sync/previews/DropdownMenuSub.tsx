@@ -1,1 +1,1 @@
-export * from "./lib/stories/dropdown-menu";
+export * from "./lib/stories/dropdown-menu-parts";

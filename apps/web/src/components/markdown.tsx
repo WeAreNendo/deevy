@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * The typography of everything Humans and Agents write, read in deevy: a
- * Proposal, a record's body, a Ruling's note (deevy-ui). Code is coloured by
+ * Proposal, a record's body, an Activity (deevy-ui). Code is coloured by
  * lowlight through rehype-highlight, one palette (index.css, `.hljs-*`).
  */
 export const proseClassName = cn(
@@ -42,7 +42,7 @@ export const proseClassName = cn(
 );
 
 /**
- * A Proposal, a record's body or a Ruling's note. Markdown is the format Humans
+ * A Proposal, a record's body or an Activity. Markdown is the format Humans
  * and Agents both write, so it is rendered rather than shown as source; deevy
  * has no editor for it.
  */
