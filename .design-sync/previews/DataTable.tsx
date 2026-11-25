@@ -132,12 +132,14 @@ export const Grouped = () => (
         id: "planner",
         header: <MemberChip member={runs[0]!.agent} size="xs" />,
         rows: runs.filter((run) => run.agent.handle === "planner"),
+        onToggle: () => {},
       },
       {
         id: "builder",
         header: <MemberChip member={runs[1]!.agent} size="xs" />,
         rows: runs.filter((run) => run.agent.handle === "builder"),
         collapsed: true,
+        onToggle: () => {},
       },
     ]}
     getRowId={(row) => row.id}

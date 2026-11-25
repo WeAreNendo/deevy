@@ -44,26 +44,37 @@ export const Sizes = () => (
 );
 
 /** The Humans who may rule on a Gate, folded past three. */
+/** Overlapping Humans, as a Checkpoint shows who may rule on it; two initials need the smaller type and a 6px overlap to stay whole. */
 export const Group = () => (
   <div className="flex items-center gap-4">
-    <AvatarGroup>
+    <AvatarGroup className="-space-x-1.5">
       <Avatar>
-        <AvatarFallback>AL</AvatarFallback>
+        <AvatarFallback className="bg-human/15 text-[11px] font-medium text-human">
+          AL
+        </AvatarFallback>
       </Avatar>
       <Avatar>
-        <AvatarFallback>GH</AvatarFallback>
+        <AvatarFallback className="bg-human/15 text-[11px] font-medium text-human">
+          GH
+        </AvatarFallback>
       </Avatar>
       <Avatar>
-        <AvatarFallback>OH</AvatarFallback>
+        <AvatarFallback className="bg-human/15 text-[11px] font-medium text-human">
+          OH
+        </AvatarFallback>
       </Avatar>
       <AvatarGroupCount>+2</AvatarGroupCount>
     </AvatarGroup>
-    <AvatarGroup>
+    <AvatarGroup className="-space-x-1.5">
       <Avatar size="sm">
-        <AvatarFallback>AL</AvatarFallback>
+        <AvatarFallback className="bg-human/15 text-[9px] font-medium text-human">
+          AL
+        </AvatarFallback>
       </Avatar>
       <Avatar size="sm">
-        <AvatarFallback>GH</AvatarFallback>
+        <AvatarFallback className="bg-human/15 text-[9px] font-medium text-human">
+          GH
+        </AvatarFallback>
       </Avatar>
       <AvatarGroupCount>+4</AvatarGroupCount>
     </AvatarGroup>

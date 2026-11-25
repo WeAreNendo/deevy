@@ -16,13 +16,14 @@ export const Checked = () => (
   </div>
 );
 
+/** A disabled box dims its Label through the row's `data-disabled`. */
 export const Disabled = () => (
   <div className="flex flex-col gap-3">
-    <div className="flex items-center gap-2">
+    <div className="group flex items-center gap-2" data-disabled="true">
       <Checkbox id="checkbox-off" disabled />
       <Label htmlFor="checkbox-off">Omar Haddad</Label>
     </div>
-    <div className="flex items-center gap-2">
+    <div className="group flex items-center gap-2" data-disabled="true">
       <Checkbox id="checkbox-on" disabled defaultChecked />
       <Label htmlFor="checkbox-on">Ada Lovelace</Label>
     </div>
@@ -43,10 +44,6 @@ export const Group = () => (
     <div className="flex items-center gap-2">
       <Checkbox id="checkbox-omar" />
       <Label htmlFor="checkbox-omar">Omar Haddad</Label>
-    </div>
-    <div className="flex items-center gap-2">
-      <Checkbox id="checkbox-requester" aria-invalid />
-      <Label htmlFor="checkbox-requester">Not the Human the work is for</Label>
     </div>
   </div>
 );

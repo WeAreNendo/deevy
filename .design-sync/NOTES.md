@@ -44,7 +44,7 @@ Repo-specific facts a re-sync needs. `config.json` holds what maps to a `cfg.*` 
 
 - `[RENDER_THIN] ... rendered height is 0px` on 30 cards: every `Dialog`, `AlertDialog` and `Sheet` card, roots and parts. Their content is `position: fixed`, so the measured root is 0 tall while the screenshot shows the whole dialog. Checked in `_screenshots/overlays__Dialog.png` and its siblings. Not a defect; expect the same 30 lines on every sync.
 - `[GRID_OVERFLOW] ... stories position content outside their cells (Collapsed, Expanded) (fixed/portal)` on the 23 Sidebar cards. The sidebar is `position: fixed` inside the story's `transform-gpu` frame, which keeps it in the card; the screenshot (`_screenshots/navigation__Sidebar.png`) shows both frames whole. The check suggests `cardMode: "single"`, which would keep one story of three. Flagged the same way in 2026-09; not a defect.
-- The 2026-09 check was `243/243 previews render cleanly`; the 2026-11 re-sync's was `221/221`, `bad` 0, with the 30 thin lines and the 23 Sidebar lines above as its only warnings.
+- The 2026-09 check was `243/243 previews render cleanly`; the 2026-11 re-sync's (headless 2026-11-23, uploaded 2026-11-25) was `221/221`, `bad` 0, with the 30 thin lines and the 23 Sidebar lines above as its only warnings.
 
 ## Re-sync of 2026-11
 
@@ -55,9 +55,17 @@ The kit had not been synced since mattallty/deevy#28 (2026-09), so it still show
 - took `.design-sync/` out of the history in `tools/release/tests/the-record.test.ts`, so the kit is held to the same record as the rest of the tree: a card that names something simplify.md removed fails CI;
 - was checked headless with the 2026-09 converter staged in `.ds-sync/` (build, validate, the screenshots of every reworked card read by eye), before the upload, which needs the `/design-sync` skill's own driver.
 
+The upload followed on 2026-11-25 with the `/design-sync` driver (anchored on the project's 2026-09 `_ds_sync.json`): 189 components unchanged, 26 changed, 6 added and 28 removed, and 1,129 files written and the removed components' 160 remote files deleted. Grading the 32 changed and added components plus the spot-checks found seven cells that needed work, and fixed them:
+
+- **MemberChip at `inline` and `xs` (a kit bug, fixed in `apps/web/src/components/member-chip.tsx`)**: the size's font size sat on the `Avatar` root, while `AvatarFallback` sets its own `text-sm`, so the initials drew at 14px and spilled out of a 12px circle. The size table now has an `initials` key that goes on the fallback. RailHeading's "Last ruling" line showed the same bug.
+- **Avatar Group**: with the kit's 8px overlap, two 12px initials are cut off by the next circle. The story uses `-space-x-1.5` and 11px (9px at `sm`) initials, tinted as a Human.
+- **Checkbox Disabled**: a Label beside a Base UI checkbox does not dim through `peer-disabled`, because the root carries `data-disabled`, not `:disabled`. The row takes `group` with `data-disabled="true"`, as Label's own Disabled story does. **Checkbox Group** is now only the approvers; the invalid "Not the Human the work is for" row read as broken.
+- **DataTable Grouped**: a group draws its chevron only when it has `onToggle`, so a folded group with none looked like an empty body. Both groups pass a no-op.
+- **Sheet (every part) and SettingsPage**: the 720x560 and default viewports cut off the keyboard sheet's header and the Agent page's Webhook and Suspend cards. They are now `720x900` and `960x1100`.
+
 ## Re-sync risks
 
-- **The upload needs a login this session may not have.** The `DesignSync` tool needs design-system authorization; a headless or SDK session cannot run `/design-login` itself, so run it once from an interactive `claude` session on the machine first. Standalone Claude Design closes by 2026-12-14 and its projects move into Claude: call `get_project` before an upload, and if it returns a `notice` or a `moveState`, follow that instead of uploading to the old project. Never create a second project.
+- **The upload needs a login this session may not have.** (Done for the 2026-11 re-sync on 2026-11-25; the project then had no move notice.) The `DesignSync` tool needs design-system authorization; a headless or SDK session cannot run `/design-login` itself, so run it once from an interactive `claude` session on the machine first. Standalone Claude Design closes by 2026-12-14 and its projects move into Claude: call `get_project` before an upload, and if it returns a `notice` or a `moveState`, follow that instead of uploading to the old project. Never create a second project.
 
 - **The fork drifts.** `.design-sync/overrides/story-imports.mjs` is a copy of the converter's lib file plus one line; a newer design-sync ships a newer lib. Diff them on every re-sync and re-apply the one `FORK:` line.
 - **The kit's export list is hand-maintained.** `apps/web/design-system/index.ts` and `families.json` list the components; a new file under `components/ui/` or a new standalone component is invisible to the sync until both are updated (a `[DOCS_UNMAPPED]` line is the tell).

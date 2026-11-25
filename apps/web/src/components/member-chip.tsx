@@ -22,14 +22,15 @@ const sizes = {
    * the tallest thing on the row.
    */
   inline: {
-    avatar: "size-3 text-[7px] ring-offset-0",
+    avatar: "size-3 ring-offset-0",
+    initials: "text-[7px]",
     text: "text-sm",
     gap: "gap-1.5",
   },
-  xs: { avatar: "size-4 text-[9px]", text: "text-xs", gap: "gap-1.5" },
-  sm: { avatar: "size-5 text-[10px]", text: "text-sm", gap: "gap-2" },
-  md: { avatar: "size-7 text-xs", text: "text-sm", gap: "gap-2" },
-  lg: { avatar: "size-10 text-sm", text: "text-base", gap: "gap-3" },
+  xs: { avatar: "size-4", initials: "text-[9px]", text: "text-xs", gap: "gap-1.5" },
+  sm: { avatar: "size-5", initials: "text-[10px]", text: "text-sm", gap: "gap-2" },
+  md: { avatar: "size-7", initials: "text-xs", text: "text-sm", gap: "gap-2" },
+  lg: { avatar: "size-10", initials: "text-sm", text: "text-base", gap: "gap-3" },
 } as const;
 
 function initials(name: string): string {
@@ -107,9 +108,12 @@ export function MemberChip({
           >
             {member.user.image ? <AvatarImage src={member.user.image} alt="" /> : null}
             <AvatarFallback
+              // The initials' size goes on the fallback itself: it sets its own
+              // `text-sm`, which would win over one inherited from the Avatar.
               className={cn(
                 "font-medium",
                 agent ? "rounded-sm bg-agent/15 text-agent" : "rounded-full bg-human/15 text-human",
+                style.initials,
               )}
             >
               {agent && !member.user.image ? <Bot className="size-[60%]" aria-hidden /> : null}

@@ -10,7 +10,7 @@
   "cssEntry": "dist/index.css",
   "docsDir": "dist/docs",
   "dtsPropsFor": {
-    "MemberChip": "/** What `members.list` carries: a Human or an Agent, with a name and an optional picture. */ member: { id: string; kind: \"human\" | \"agent\"; handle?: string | null; suspendedAt?: Date | string | null; user: { name: string; image?: string | null } }; /** `inline` for a chip inside a sentence (who did a thing), sized to the words either side of it; `xs`\u2013`lg` elsewhere. */ size?: \"inline\" | \"xs\" | \"sm\" | \"md\" | \"lg\"; /** The handle in mono after the name, as `@handle`, where the name alone is ambiguous. */ showHandle?: boolean; /** The Human accountable for this Agent, for the tooltip. */ sponsorName?: string | null; className?: string; /** Only the avatar, where there is no room for a name: the folded sidebar. */ avatarOnly?: boolean; /** Only the name, where an avatar on every line is noise (a timeline): an Agent's name takes the Agent colour. */ nameOnly?: boolean;",
+    "MemberChip": "/** What `members.list` carries: a Human or an Agent, with a name and an optional picture. */ member: { id: string; kind: \"human\" | \"agent\"; handle?: string | null; suspendedAt?: Date | string | null; user: { name: string; image?: string | null } }; /** `inline` for a chip inside a sentence (who did a thing), sized to the words either side of it; `xs`–`lg` elsewhere. */ size?: \"inline\" | \"xs\" | \"sm\" | \"md\" | \"lg\"; /** The handle in mono after the name, as `@handle`, where the name alone is ambiguous. */ showHandle?: boolean; /** The Human accountable for this Agent, for the tooltip. */ sponsorName?: string | null; className?: string; /** Only the avatar, where there is no room for a name: the folded sidebar. */ avatarOnly?: boolean; /** Only the name, where an avatar on every line is noise (a timeline): an Agent's name takes the Agent colour. */ nameOnly?: boolean;",
     "DataTable": "/** One entry per column; `cell` renders the row's value, `sortValue` makes the column sortable. */ columns: { id: string; header: React.ReactNode; cell: (row: any) => React.ReactNode; sortValue?: (row: any) => string | number | null | undefined; className?: string; headerClassName?: string }[]; /** Flat rows, or `groups` of them with a header row between. */ rows?: any[]; groups?: { id: string; header: React.ReactNode; rows: any[]; collapsed?: boolean; onToggle?: () => void }[]; getRowId: (row: any) => string; /** The row the keyboard is on; the page owns it. */ selectedId?: string | null; onSelect?: (id: string) => void; /** A click or Enter on a row. */ onOpen?: (id: string) => void; /** Renders skeleton rows. */ loading?: boolean; /** What to say when there are no rows; the lucide icon says what kind of thing is missing. */ empty?: { title: React.ReactNode; description?: React.ReactNode; icon?: React.ComponentType<{ className?: string }>; action?: React.ReactNode }; /** 32px rows, or 40px. */ density?: \"compact\" | \"comfortable\"; className?: string; \"aria-label\"?: string;"
   },
   "overrides": {
@@ -22,7 +22,8 @@
       "cardMode": "column"
     },
     "SettingsPage": {
-      "cardMode": "column"
+      "cardMode": "column",
+      "viewport": "960x1100"
     },
     "PageHeader": {
       "cardMode": "column"
@@ -37,7 +38,7 @@
     },
     "Sheet": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "Command": {
       "cardMode": "single",
@@ -344,31 +345,31 @@
     },
     "SheetClose": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetContent": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetDescription": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetFooter": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetHeader": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetTitle": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetTrigger": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "Toaster": {
       "cardMode": "single"
