@@ -1,15 +1,15 @@
 import { Button } from "@deevy/design-system";
-import { ArrowRight, Check, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Plus, Trash2, X } from "lucide-react";
 
-/** The six looks. `default` is the one action colour; `destructive` is for what does not undo. */
+/** The six looks. `default` is the one action colour; `destructive` is for what does not undo. No screen uses `secondary` or `link`. */
 export const Variants = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <Button>New Issue</Button>
-    <Button variant="secondary">Save draft</Button>
+    <Button>Bind a Project</Button>
     <Button variant="outline">Reinstate</Button>
     <Button variant="ghost">Cancel</Button>
-    <Button variant="destructive">Revoke key</Button>
-    <Button variant="link">All Issues</Button>
+    <Button variant="destructive">Revoke</Button>
+    <Button variant="secondary">Secondary</Button>
+    <Button variant="link">Link</Button>
   </div>
 );
 
@@ -24,30 +24,31 @@ export const Sizes = () => (
 
 export const WithIcon = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <Button>
-      <Plus data-icon="inline-start" /> New Issue
+    <Button size="sm" variant="outline">
+      <Plus data-icon="inline-start" /> Add a Checkpoint
+    </Button>
+    <Button size="sm" variant="outline">
+      <Plus data-icon="inline-start" /> Invite someone
     </Button>
     <Button variant="outline">
-      Continue <ArrowRight data-icon="inline-end" />
-    </Button>
-    <Button variant="secondary">
-      <Check data-icon="inline-start" /> Approve
+      Next <ArrowRight data-icon="inline-end" />
     </Button>
   </div>
 );
 
+/** The action is the label, so it takes an `aria-label`. */
 export const IconOnly = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <Button size="icon-xs" variant="ghost" aria-label="Add">
-      <Plus />
+    <Button size="icon-xs" variant="ghost" aria-label="Close">
+      <X />
     </Button>
-    <Button size="icon-sm" variant="outline" aria-label="Add">
-      <Plus />
+    <Button size="icon-sm" variant="ghost" aria-label="Stop allowing example.com">
+      <X />
     </Button>
     <Button size="icon" variant="outline" aria-label="Add">
       <Plus />
     </Button>
-    <Button size="icon-lg" variant="destructive" aria-label="Delete">
+    <Button size="icon-lg" variant="destructive" aria-label="Remove ship">
       <Trash2 />
     </Button>
   </div>
@@ -55,12 +56,12 @@ export const IconOnly = () => (
 
 export const Disabled = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <Button disabled>New Issue</Button>
+    <Button disabled>Bind it</Button>
     <Button variant="outline" disabled>
       Reinstate
     </Button>
     <Button variant="destructive" disabled>
-      Revoke key
+      Revoke
     </Button>
   </div>
 );

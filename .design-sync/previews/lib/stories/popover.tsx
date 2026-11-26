@@ -1,73 +1,37 @@
 import {
   Button,
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
+  Input,
+  Label,
   Popover,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-  StateBadge,
 } from "@deevy/design-system";
-import { ChevronDown } from "lucide-react";
-import { states } from "../fixtures";
 
-/** `s` on an Issue: the Workflow's States in a Popover under the current one, open so the card shows it. */
-export const StatePicker = () => (
-  <div className="flex min-h-80 items-start">
-    <Popover open>
-      <PopoverTrigger render={<Button variant="outline" size="sm" />}>
-        <StateBadge state={states.review} />
-        <ChevronDown data-icon="inline-end" />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-0">
-        <Command label="State">
-          <CommandInput placeholder="Change State…" />
-          <CommandList>
-            <CommandEmpty>No State matches.</CommandEmpty>
-            <CommandGroup heading="States">
-              {Object.values(states).map((state) => (
-                <CommandItem
-                  key={state.name}
-                  value={state.name}
-                  data-checked={state === states.review ? "true" : undefined}
-                >
-                  <StateBadge state={state} />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  </div>
-);
+// No screen uses a Popover: a choice is a Select or a Combobox, a form is a
+// Dialog. The words are of no product.
 
-/** A header with a title and description, above plain content: what a Gate wants. */
+/** A header with a title and a line under it, then a field and its action. Open so the card shows it. */
 export const WithHeader = () => (
-  <div className="flex min-h-56 items-start">
+  <div className="flex min-h-64 items-start">
     <Popover open>
-      <PopoverTrigger render={<Button variant="outline" size="sm" />}>
-        What is Review waiting for?
-      </PopoverTrigger>
+      <PopoverTrigger render={<Button variant="outline" size="sm" />}>Open</PopoverTrigger>
       <PopoverContent align="start">
         <PopoverHeader>
-          <PopoverTitle>Review is a Gate</PopoverTitle>
-          <PopoverDescription>
-            An Issue leaves it when a Human approves the Note. Ada Lovelace and Grace Hopper can
-            rule; an Agent never decides a Gate.
-          </PopoverDescription>
+          <PopoverTitle>A title</PopoverTitle>
+          <PopoverDescription>A line on what this is for.</PopoverDescription>
         </PopoverHeader>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="popover-value">Value</Label>
+          <Input id="popover-value" />
+        </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm">
-            Later
+            Cancel
           </Button>
-          <Button size="sm">Open the Note</Button>
+          <Button size="sm">Done</Button>
         </div>
       </PopoverContent>
     </Popover>

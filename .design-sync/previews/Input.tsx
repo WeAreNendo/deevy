@@ -1,25 +1,29 @@
 import { Input, Label } from "@deevy/design-system";
 
-/** 32px tall, 14px text, on the card surface. The Issue title is the input deevy types into most. */
+/** 32px tall, 14px text, on the card surface. A new Agent's name. */
 export const Default = () => (
   <div className="flex w-full max-w-sm flex-col gap-2">
-    <Label htmlFor="input-title">Title</Label>
-    <Input id="input-title" placeholder="Add ruling authority to Gate" />
+    <Label htmlFor="input-agent-name">Name</Label>
+    <Input id="input-agent-name" placeholder="Planner" />
   </div>
 );
 
+/** With the line under it that says what the value does: a Project's routing label. */
 export const WithValue = () => (
-  <div className="flex w-full max-w-sm flex-col gap-2">
-    <Label htmlFor="input-document">Document it asks for</Label>
-    <Input id="input-document" defaultValue="spec" placeholder="intent, spec, plan… or nothing" />
+  <div className="flex w-full max-w-sm flex-col gap-1.5">
+    <Label htmlFor="input-routing">Routing label</Label>
+    <Input id="input-routing" className="w-44" defaultValue="agent:" placeholder="agent:" />
+    <span className="text-xs text-muted-foreground">
+      A record labelled <code className="font-mono">agent:planner</code> goes to that Agent.
+    </span>
   </div>
 );
 
-/** Muted surface at half opacity; the cursor says not-allowed. */
+/** Muted surface at half opacity; the cursor says not-allowed. Connecting Linear, once its addresses are shown. */
 export const Disabled = () => (
   <div className="flex w-full max-w-sm flex-col gap-2">
-    <Label htmlFor="input-key">Project key</Label>
-    <Input id="input-key" defaultValue="DEV" disabled />
+    <Label htmlFor="input-disabled">Name</Label>
+    <Input id="input-disabled" defaultValue="Acme on Linear" disabled />
   </div>
 );
 
@@ -27,27 +31,26 @@ export const Disabled = () => (
 export const Invalid = () => (
   <div className="flex w-full max-w-sm flex-col gap-2">
     <Label htmlFor="input-name">Name</Label>
-    <Input id="input-name" defaultValue="" aria-invalid placeholder="Project name" />
-    <p className="text-xs text-destructive">A Project needs a name.</p>
+    <Input id="input-name" defaultValue="" aria-invalid />
+    <p className="text-xs text-destructive">A Project needs a name</p>
   </div>
 );
 
-/** A plain search box; the Issues list filters as you type. */
+/** Work's search: a plain field in the filter bar, its label for screen readers. */
 export const Search = () => (
-  <div className="w-full max-w-sm">
-    <Input type="search" aria-label="Search Issues" placeholder="Search Issues…" />
+  <div>
+    <Label htmlFor="work-search" className="sr-only">
+      Search
+    </Label>
+    <Input id="work-search" placeholder="A key or a word of the title…" className="w-56" />
   </div>
 );
 
 /** Types the browser draws differently still get the same frame. */
 export const Types = () => (
   <div className="flex w-full max-w-sm flex-col gap-3">
-    <Input type="email" placeholder="ada@example.com" aria-label="Email" />
-    <Input
-      type="url"
-      defaultValue="https://deevy.example.com/api/events"
-      aria-label="Webhook URL"
-    />
-    <Input type="number" defaultValue={3} min={1} aria-label="Retries" className="w-24" />
+    <Input type="email" placeholder="grace@example.com" aria-label="Email" />
+    <Input inputMode="url" placeholder="https://agent.example.com/" aria-label="Webhook URL" />
+    <Input type="number" defaultValue={2} min={1} aria-label="Approvals" className="w-20" />
   </div>
 );

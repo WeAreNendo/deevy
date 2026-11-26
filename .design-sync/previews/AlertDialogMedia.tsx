@@ -1,1 +1,1 @@
-export * from "./lib/stories/alert-dialog";
+export * from "./lib/stories/alert-dialog-media";

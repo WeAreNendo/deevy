@@ -23,7 +23,7 @@ export function keyLabel(key: string): string {
 
 /**
  * A shortcut drawn beside the thing it triggers, in the syntax lib/shortcuts.ts
- * reads: `mod+k` is one combination, `g i` a chord of two keys in sequence.
+ * reads: `mod+k` is one combination, `g r` a chord of two keys in sequence.
  */
 export function Shortcut({ keys, className }: { keys: string; className?: string }) {
   const chord = keys.split(" ");

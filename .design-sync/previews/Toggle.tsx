@@ -1,14 +1,17 @@
 import { Toggle } from "@deevy/design-system";
-import { Bell, Bot, Eye } from "lucide-react";
+import { Eye, Pin } from "lucide-react";
+
+// No screen uses a Toggle on its own: the filters that toggle are a
+// ToggleGroup, and the Runs feed's Mine is a Button. The words are of no product.
 
 /** Pressed, it tints with the action colour; unpressed it is quiet. */
 export const PressedAndNot = () => (
   <div className="flex flex-wrap items-center gap-3">
-    <Toggle aria-label="Watch this Issue" defaultPressed>
-      <Bell data-icon="inline-start" /> Watching
+    <Toggle defaultPressed>
+      <Eye data-icon="inline-start" /> Details
     </Toggle>
-    <Toggle aria-label="Watch this Issue">
-      <Bell data-icon="inline-start" /> Watch
+    <Toggle>
+      <Eye data-icon="inline-start" /> Details
     </Toggle>
   </div>
 );
@@ -16,11 +19,11 @@ export const PressedAndNot = () => (
 /** Outline: on, the border tints with the fill. */
 export const Outline = () => (
   <div className="flex flex-wrap items-center gap-3">
-    <Toggle variant="outline" aria-label="Show Agents' Issues" defaultPressed>
-      <Bot data-icon="inline-start" /> Agents
+    <Toggle variant="outline" defaultPressed>
+      <Pin data-icon="inline-start" /> Pinned
     </Toggle>
-    <Toggle variant="outline" aria-label="Show Agents' Issues">
-      <Bot data-icon="inline-start" /> Agents
+    <Toggle variant="outline">
+      <Pin data-icon="inline-start" /> Pinned
     </Toggle>
   </div>
 );
@@ -28,14 +31,14 @@ export const Outline = () => (
 /** The same heights as Button, so a toggle beside one lines up. */
 export const Sizes = () => (
   <div className="flex flex-wrap items-center gap-3">
-    <Toggle variant="outline" size="sm" aria-label="Watch" defaultPressed>
-      <Eye data-icon="inline-start" /> Small
+    <Toggle variant="outline" size="sm" defaultPressed>
+      <Pin data-icon="inline-start" /> Small
     </Toggle>
-    <Toggle variant="outline" aria-label="Watch" defaultPressed>
-      <Eye data-icon="inline-start" /> Default
+    <Toggle variant="outline" defaultPressed>
+      <Pin data-icon="inline-start" /> Default
     </Toggle>
-    <Toggle variant="outline" size="lg" aria-label="Watch" defaultPressed>
-      <Eye data-icon="inline-start" /> Large
+    <Toggle variant="outline" size="lg" defaultPressed>
+      <Pin data-icon="inline-start" /> Large
     </Toggle>
   </div>
 );
@@ -43,14 +46,14 @@ export const Sizes = () => (
 /** Icon only, and disabled. */
 export const IconOnlyAndDisabled = () => (
   <div className="flex flex-wrap items-center gap-3">
-    <Toggle variant="outline" aria-label="Watch" defaultPressed>
-      <Eye />
+    <Toggle variant="outline" aria-label="Pinned" defaultPressed>
+      <Pin />
     </Toggle>
-    <Toggle variant="outline" aria-label="Watch">
-      <Eye />
+    <Toggle variant="outline" aria-label="Pinned">
+      <Pin />
     </Toggle>
-    <Toggle variant="outline" aria-label="Watch" disabled>
-      <Eye data-icon="inline-start" /> Watch
+    <Toggle variant="outline" disabled>
+      <Pin data-icon="inline-start" /> Pinned
     </Toggle>
   </div>
 );

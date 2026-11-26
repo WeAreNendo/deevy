@@ -3,8 +3,8 @@ import {
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
-  Button,
   MemberChip,
+  PageHeader,
   Shortcut,
   Sidebar,
   SidebarContent,
@@ -32,24 +32,19 @@ import {
   useSidebar,
 } from "@deevy/design-system";
 import {
-  Bot,
+  BellRing,
   ChevronsUpDown,
-  CircleUser,
-  FolderKanban,
-  Inbox,
-  ListTodo,
+  ClipboardList,
+  Folder,
   MoreHorizontal,
+  PlayCircle,
   Plus,
   Search,
   Settings,
 } from "lucide-react";
 import { ada } from "../fixtures";
 
-const workspaceName = "Analytical Engines";
-const projects = [
-  { key: "DEV", name: "Developer platform" },
-  { key: "OPS", name: "Operations" },
-];
+const workspaceName = "Acme";
 
 /** The signed-in Member in the footer: folded to icons, the avatar alone. */
 const MemberRow = () => {
@@ -59,9 +54,14 @@ const MemberRow = () => {
       size="lg"
       tooltip={ada.user.name}
       aria-label={ada.user.name}
-      className="min-w-0 group-data-[collapsible=icon]:justify-center"
+      className="min-w-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:overflow-visible"
     >
-      <MemberChip member={ada} size="md" className="min-w-0 flex-1" avatarOnly={folded} />
+      <MemberChip
+        member={ada}
+        size="md"
+        className={folded ? "min-w-0 shrink-0" : "min-w-0 flex-1"}
+        avatarOnly={folded}
+      />
       <ChevronsUpDown className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
     </SidebarMenuButton>
   );
@@ -73,14 +73,18 @@ const AppSidebar = () => (
     <SidebarHeader>
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton size="lg" tooltip={workspaceName} className="font-semibold">
+          <SidebarMenuButton
+            size="lg"
+            tooltip={workspaceName}
+            className="font-semibold group-data-[collapsible=icon]:justify-center"
+          >
             <span
               aria-hidden
               className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary font-mono text-xs text-primary-foreground"
             >
               A
             </span>
-            <span className="truncate">{workspaceName}</span>
+            <span className="truncate group-data-[collapsible=icon]:hidden">{workspaceName}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
@@ -98,59 +102,25 @@ const AppSidebar = () => (
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Inbox">
-                <Inbox />
-                <span>Inbox</span>
-              </SidebarMenuButton>
-              <SidebarMenuBadge
-                aria-label="3 unread"
-                className="rounded-full bg-muted-foreground/15 px-1.5 text-[11px] font-medium text-foreground/75 tabular-nums"
-              >
-                3
-              </SidebarMenuBadge>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton tooltip="My Issues">
-                <CircleUser />
-                <span>My Issues</span>
+              <SidebarMenuButton tooltip="Needs me">
+                <BellRing />
+                <span>Needs me</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="My Agents' Issues">
-                <Bot />
-                <span>My Agents&apos; Issues</span>
+              <SidebarMenuButton tooltip="Runs">
+                <PlayCircle />
+                <span>Runs</span>
+                <Shortcut keys="g r" className="ml-auto" />
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="All Issues" isActive>
-                <ListTodo />
-                <span>All Issues</span>
+              <SidebarMenuButton tooltip="Work">
+                <ClipboardList />
+                <span>Work</span>
+                <Shortcut keys="g w" className="ml-auto" />
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Projects">
-                <FolderKanban />
-                <span>Projects</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-
-      <SidebarGroup>
-        <SidebarGroupLabel>Projects</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            {projects.map((project) => (
-              <SidebarMenuItem key={project.key}>
-                <SidebarMenuButton tooltip={project.name}>
-                  <span className="flex size-4 shrink-0 items-center justify-center font-mono text-[10px] font-medium text-muted-foreground">
-                    {project.key}
-                  </span>
-                  <span className="truncate">{project.name}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -182,17 +152,13 @@ const Page = () => (
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">
           <BreadcrumbItem>
-            <BreadcrumbPage>All Issues</BreadcrumbPage>
+            <BreadcrumbPage>Home</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <span className="flex-1" />
-      <Button>
-        New Issue <Shortcut keys="c" />
-      </Button>
     </div>
     <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold">All Issues</h1>
+      <PageHeader title="Needs me" description="Rulings, and what your Agents are doing." />
       <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
         The page, full width
       </div>
@@ -220,7 +186,7 @@ export const Expanded = () => (
   </Frame>
 );
 
-/** Folded to its icons: labels and badges hide, the Member is the avatar alone. */
+/** Folded to its icons: the labels hide, the Member is the avatar alone. */
 export const Collapsed = () => (
   <Frame defaultOpen={false}>
     <AppSidebar />
@@ -228,26 +194,26 @@ export const Collapsed = () => (
   </Frame>
 );
 
-/** A sidebar that does not fold, with the parts the frame does not use: search, sub-menus, actions, a loading group. */
-export const StandaloneWithSubmenus = () => (
+/** The parts the frame does not use, on a sidebar that does not fold: a field, a group's label and action, a sub-menu, a row's action, a count, a group still loading. The words are of no product. */
+export const EveryPart = () => (
   <div className="h-[520px] w-fit overflow-hidden rounded-lg border">
     <SidebarProvider className="h-full min-h-0 w-fit">
       <Sidebar collapsible="none" className="border-r">
         <SidebarHeader>
-          <SidebarInput placeholder="Filter Projects…" aria-label="Filter Projects" />
+          <SidebarInput placeholder="Filter…" aria-label="Filter" />
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Projects</SidebarGroupLabel>
-            <SidebarGroupAction aria-label="New Project">
+            <SidebarGroupLabel>A group</SidebarGroupLabel>
+            <SidebarGroupAction aria-label="Add">
               <Plus />
             </SidebarGroupAction>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton isActive>
-                    <FolderKanban />
-                    <span>Developer platform</span>
+                    <Folder />
+                    <span>First</span>
                   </SidebarMenuButton>
                   <SidebarMenuAction aria-label="More">
                     <MoreHorizontal />
@@ -255,56 +221,39 @@ export const StandaloneWithSubmenus = () => (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton isActive>
-                        <span>Board</span>
+                        <span>One</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton>
-                        <span>Workflow</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton>
-                        <span>Settings</span>
+                        <span>Two</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton>
-                    <FolderKanban />
-                    <span>Operations</span>
+                    <Folder />
+                    <span>Second</span>
                   </SidebarMenuButton>
-                  <SidebarMenuAction aria-label="More">
-                    <MoreHorizontal />
-                  </SidebarMenuAction>
+                  <SidebarMenuBadge className="tabular-nums">3</SidebarMenuBadge>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
           <SidebarSeparator />
           <SidebarGroup>
-            <SidebarGroupLabel>Agents</SidebarGroupLabel>
+            <SidebarGroupLabel>Loading</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuSkeleton
-                    showIcon
-                    className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
-                  />
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuSkeleton
-                    showIcon
-                    className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
-                  />
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuSkeleton
-                    showIcon
-                    className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
-                  />
-                </SidebarMenuItem>
+                {[1, 2, 3].map((row) => (
+                  <SidebarMenuItem key={row}>
+                    <SidebarMenuSkeleton
+                      showIcon
+                      className="[&_[data-slot=skeleton]]:bg-sidebar-foreground/10"
+                    />
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

@@ -1,1 +1,0 @@
-The 40px bar above an Issue list: Project, State, Assignee (Members grouped Humans / Agents, plus Me, My Agents, Unassigned), a Humans / Agents / Any `ToggleGroup`, Open / All, Group by State, and optionally List / Board. Every control writes a patch to the URL through `onChange`. Sits in a `PageHeader`'s child row or directly above the `DataTable`.

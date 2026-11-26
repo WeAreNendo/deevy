@@ -1,129 +1,322 @@
-import { DataTable, LabelBadge, MemberChip, StateBadge } from "@deevy/design-system";
-import { ClipboardList } from "lucide-react";
-import { issues, states, type IssueRow } from "./lib/fixtures";
+import { Badge, Button, DataTable, MemberChip, RunStatus } from "@deevy/design-system";
+import { ClipboardList, ExternalLink, PlayCircle, SearchX } from "lucide-react";
+import { builder, planner, records, runs, type RecordRow, type RunRow } from "./lib/fixtures";
 
-const columns = [
+const runColumns = [
+  {
+    id: "status",
+    header: "Status",
+    cell: (row: RunRow) => <RunStatus status={row.status} />,
+    sortValue: (row: RunRow) => row.status,
+  },
+  {
+    id: "record",
+    header: "Record",
+    cell: (row: RunRow) => <span className="font-mono text-xs">{row.record}</span>,
+    sortValue: (row: RunRow) => row.record,
+  },
+  {
+    id: "agent",
+    header: "Agent",
+    cell: (row: RunRow) => <MemberChip member={row.agent} size="xs" />,
+    sortValue: (row: RunRow) => row.agent.user.name,
+  },
+  {
+    id: "summary",
+    header: "Last",
+    cell: (row: RunRow) => (
+      <span className="truncate text-muted-foreground">{row.summary ?? ""}</span>
+    ),
+    // The one column that gives way: it takes what the others leave, and clips.
+    className: "w-full max-w-0 min-w-0 overflow-hidden",
+  },
+  {
+    id: "time",
+    header: "Time",
+    cell: (row: RunRow) => (
+      <span className="text-xs tabular-nums text-muted-foreground">{row.time}</span>
+    ),
+    className: "text-right whitespace-nowrap",
+    headerClassName: "text-right",
+  },
+  {
+    id: "when",
+    header: "Last activity",
+    cell: (row: RunRow) => <span className="text-xs text-muted-foreground">{row.last}</span>,
+  },
+];
+
+/** The Runs feed: status, record, Agent, the summary once it has ended, working time, when. */
+export const Runs = () => (
+  <DataTable aria-label="Runs" columns={runColumns} rows={runs} getRowId={(row) => row.id} />
+);
+
+const recordColumns = [
   {
     id: "key",
     header: "Key",
-    cell: (row: IssueRow) => (
-      <span className="font-mono text-xs text-muted-foreground">{row.key}</span>
+    cell: (row: RecordRow) => (
+      <a href="#" className="inline-flex items-center gap-1 font-mono text-xs hover:underline">
+        {row.key}
+        <ExternalLink aria-hidden className="size-3" />
+      </a>
     ),
-    sortValue: (row: IssueRow) => row.key,
-    className: "w-24",
+    sortValue: (row: RecordRow) => row.key,
   },
   {
     id: "title",
     header: "Title",
-    cell: (row: IssueRow) => (
-      <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-        <span className="min-w-0 truncate font-medium">{row.title}</span>
-        {row.labels.slice(0, 2).map((label) => (
-          <LabelBadge key={label.id} label={label} className="shrink-0" />
-        ))}
-      </span>
-    ),
-    sortValue: (row: IssueRow) => row.title,
-    className: "max-w-0 w-full",
+    cell: (row: RecordRow) => <span className="truncate">{row.title}</span>,
+    sortValue: (row: RecordRow) => row.title,
+    className: "w-full max-w-0 min-w-0 overflow-hidden",
   },
   {
     id: "state",
     header: "State",
-    cell: (row: IssueRow) => <StateBadge state={row.state} />,
-    sortValue: (row: IssueRow) => row.state.name,
-    className: "w-36",
-  },
-  {
-    id: "assignee",
-    header: "Assignee",
-    cell: (row: IssueRow) =>
-      row.assignee ? (
-        <MemberChip member={row.assignee} size="xs" />
-      ) : (
-        <span className="text-xs text-muted-foreground">Unassigned</span>
-      ),
-    sortValue: (row: IssueRow) => row.assignee?.user.name ?? "",
-    className: "w-44",
-  },
-  {
-    id: "updated",
-    header: "Updated",
-    cell: (row: IssueRow) => (
-      <span className="font-mono text-xs text-muted-foreground">{row.updated}</span>
+    // The tracker's own word, not deevy's.
+    cell: (row: RecordRow) => (
+      <Badge
+        variant="outline"
+        className={row.state === "closed" ? "text-muted-foreground" : undefined}
+      >
+        {row.stateName}
+      </Badge>
     ),
-    className: "w-20 text-right",
-    headerClassName: "text-right",
+    sortValue: (row: RecordRow) => row.stateName,
+  },
+  {
+    id: "routed",
+    header: "Routed to",
+    cell: (row: RecordRow) =>
+      row.routedTo ? (
+        <MemberChip member={row.routedTo} size="xs" />
+      ) : (
+        <span className="text-muted-foreground">Nobody</span>
+      ),
+    sortValue: (row: RecordRow) => row.routedTo?.user.name ?? "",
+  },
+  {
+    id: "gate",
+    header: "Gate",
+    cell: (row: RecordRow) =>
+      row.gate ? (
+        <Badge variant="outline" className="border-gate/50 text-gate-foreground dark:text-gate">
+          {row.gate}
+        </Badge>
+      ) : null,
+  },
+  {
+    id: "changed",
+    header: "Changed",
+    cell: (row: RecordRow) => <span className="text-xs text-muted-foreground">{row.changed}</span>,
+    className: "whitespace-nowrap",
   },
 ];
 
-/** The Issues list: key, title with Labels, State, Assignee, updated. */
-export const Issues = () => (
-  <DataTable
-    aria-label="Issues"
-    columns={columns}
-    rows={issues}
-    getRowId={(row) => row.key}
-    selectedId="DEV-41"
-  />
+/** Work: every record deevy projected, read-only; the key links out to where it lives. */
+export const Work = () => (
+  <DataTable aria-label="Work" columns={recordColumns} rows={records} getRowId={(row) => row.key} />
 );
 
-/** Grouped by State, one header row per group; a folded group shows only its header. */
-export const GroupedByState = () => (
+const events = [
+  {
+    seq: 419,
+    when: "11/25/2026, 9:48:12 AM",
+    kind: "gate.requested",
+    tone: "text-agent",
+    actor: planner,
+    what: "asked to pass plan",
+    subject: "gate",
+  },
+  {
+    seq: 418,
+    when: "11/25/2026, 9:40:51 AM",
+    kind: "run.activity",
+    tone: "",
+    actor: planner,
+    what: null,
+    subject: "run",
+  },
+  {
+    seq: 417,
+    when: "11/25/2026, 9:34:05 AM",
+    kind: "run.started",
+    tone: "text-agent",
+    actor: null,
+    what: "started a Run, by assignment",
+    subject: "run",
+  },
+  {
+    seq: 416,
+    when: "11/25/2026, 9:34:04 AM",
+    kind: "issue.assigned",
+    tone: "text-muted-foreground",
+    actor: null,
+    what: "routed it to Planner",
+    subject: "issue",
+  },
+];
+
+/** `selectedId` marks a row: the Event log's, 12px throughout, with the row whose payload is open. */
+export const Selected = () => (
   <DataTable
-    aria-label="Issues by State"
-    columns={columns.filter((column) => column.id !== "state")}
-    groups={[
+    className="text-xs"
+    aria-label="Event log"
+    columns={[
       {
-        id: "review",
-        header: <StateBadge state={states.review} />,
-        rows: issues.filter((i) => i.state === states.review),
+        id: "seq",
+        header: "Seq",
+        cell: (row: (typeof events)[number]) => (
+          <span className="font-mono text-muted-foreground">{row.seq}</span>
+        ),
+        className: "w-16",
       },
       {
-        id: "active",
-        header: <StateBadge state={states.inProgress} />,
-        rows: issues.filter((i) => i.state === states.inProgress),
+        id: "when",
+        header: "When",
+        cell: (row: (typeof events)[number]) => (
+          <span className="font-mono text-muted-foreground">{row.when}</span>
+        ),
+        className: "w-44",
       },
       {
-        id: "todo",
-        header: <StateBadge state={states.todo} />,
-        rows: issues.filter((i) => i.state === states.todo),
+        id: "kind",
+        header: "Kind",
+        cell: (row: (typeof events)[number]) => (
+          <Badge variant="outline" className={`font-mono font-normal ${row.tone}`}>
+            {row.kind}
+          </Badge>
+        ),
+        className: "w-48",
       },
       {
-        id: "done",
-        header: <StateBadge state={states.done} />,
-        rows: issues.filter((i) => i.state === states.done),
-        collapsed: true,
+        id: "actor",
+        header: "Actor",
+        // A name, not a chip: the kind shows in its colour.
+        cell: (row: (typeof events)[number]) =>
+          row.actor ? (
+            <span className="text-agent">{row.actor.user.name}</span>
+          ) : (
+            <span className="text-muted-foreground">deevy</span>
+          ),
+        className: "w-44",
+      },
+      {
+        id: "what",
+        header: "What",
+        // What an Activity says is the Run's to show.
+        cell: (row: (typeof events)[number]) =>
+          row.what ? (
+            <span className="truncate">{row.what}</span>
+          ) : (
+            <span className="text-muted-foreground">a Run step</span>
+          ),
+        className: "max-w-0 w-full",
+      },
+      {
+        id: "subject",
+        header: "Subject",
+        cell: (row: (typeof events)[number]) => (
+          <span className="flex items-center gap-2">
+            <span className="text-muted-foreground">{row.subject}</span>
+            <span className="font-mono">acme-deevy</span>
+          </span>
+        ),
+        className: "w-56",
       },
     ]}
-    getRowId={(row) => row.key}
+    rows={events}
+    getRowId={(row) => String(row.seq)}
+    selectedId="417"
   />
 );
 
+/** Grouped, one header row per group; a folded group shows only its header. No screen groups its rows. */
+export const Grouped = () => (
+  <DataTable
+    aria-label="Runs by Agent"
+    columns={runColumns.filter((column) => column.id !== "agent")}
+    groups={[
+      {
+        id: "planner",
+        header: <MemberChip member={planner} size="xs" />,
+        rows: runs.filter((run) => run.agent.handle === "planner"),
+        onToggle: () => {},
+      },
+      {
+        id: "builder",
+        header: <MemberChip member={builder} size="xs" />,
+        rows: runs.filter((run) => run.agent.handle === "builder"),
+        collapsed: true,
+        onToggle: () => {},
+      },
+    ]}
+    getRowId={(row) => row.id}
+  />
+);
+
+/** 40px rows instead of 32. */
 export const Comfortable = () => (
   <DataTable
-    aria-label="Issues"
-    columns={columns}
-    rows={issues.slice(0, 3)}
-    getRowId={(row) => row.key}
+    aria-label="Runs"
+    columns={runColumns}
+    rows={runs.slice(2, 5)}
+    getRowId={(row) => row.id}
     density="comfortable"
   />
 );
 
 export const Loading = () => (
-  <DataTable aria-label="Issues" columns={columns} rows={[]} getRowId={(row) => row.key} loading />
+  <DataTable aria-label="Runs" columns={runColumns} rows={[]} getRowId={(row) => row.id} loading />
 );
 
 /** The words say what emptied the list. */
 export const Empty = () => (
   <DataTable
-    aria-label="Issues"
-    columns={columns}
+    aria-label="Runs"
+    columns={runColumns}
+    rows={[]}
+    getRowId={(row) => row.id}
+    empty={{
+      icon: PlayCircle,
+      title: "No Runs match your filters",
+      description: "A Run starts when a record is routed to an Agent, or when one is mentioned.",
+    }}
+  />
+);
+
+/** With the action that undoes it, as the Event log has it. */
+export const EmptyWithAction = () => (
+  <DataTable
+    aria-label="Event log"
+    columns={runColumns}
+    rows={[]}
+    getRowId={(row) => row.id}
+    empty={{
+      icon: SearchX,
+      title: "No Events match your filters",
+      description: "Try adjusting or clearing your filters.",
+      action: (
+        <Button variant="outline" size="sm">
+          Clear filters
+        </Button>
+      ),
+    }}
+  />
+);
+
+/** Nothing has arrived yet, as Work says it before any tool has. */
+export const NothingYet = () => (
+  <DataTable
+    aria-label="Work"
+    columns={recordColumns}
     rows={[]}
     getRowId={(row) => row.key}
     empty={{
       icon: ClipboardList,
-      title: "No Issues match your filters",
-      description: "Clear a filter, or widen the view.",
+      title: "Nothing has arrived yet",
+      description:
+        "A record shows up here when its tracker tells deevy about it, or when deevy asks.",
     }}
   />
 );

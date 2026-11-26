@@ -6,28 +6,23 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogMedia,
   AlertDialogTitle,
 } from "@deevy/design-system";
-import { KeyRound } from "lucide-react";
 
-/** What does not undo asks first: the destructive action sits last, Cancel beside it. Open, so the card shows it. */
-export const RevokeKey = () => (
+/** What does not undo asks first, and says what stays and what goes: disconnecting a Socket. Open, so the card shows it. */
+export const Disconnect = () => (
   <AlertDialog open>
     <AlertDialogContent>
       <AlertDialogHeader>
-        <AlertDialogMedia>
-          <KeyRound />
-        </AlertDialogMedia>
-        <AlertDialogTitle>Revoke this API key?</AlertDialogTitle>
+        <AlertDialogTitle>Disconnect acme on GitHub?</AlertDialogTitle>
         <AlertDialogDescription>
-          The key <span className="font-mono">dvk_…8f2a</span> for Builder stops working at once.
-          Runs it has already started finish; the next one fails to sign in.
+          The Issues it projected and the Runs on them stay. deevy drops the credential, stops
+          taking deliveries, and the Projects bound to it have nothing to work.
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel>Cancel</AlertDialogCancel>
-        <AlertDialogAction variant="destructive">Revoke key</AlertDialogAction>
+        <AlertDialogCancel>Keep it</AlertDialogCancel>
+        <AlertDialogAction>Disconnect it</AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>

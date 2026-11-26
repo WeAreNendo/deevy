@@ -6,34 +6,55 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Field,
-  FieldLabel,
   Input,
-  Textarea,
+  Label,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@deevy/design-system";
 
-/** A form in a Dialog, open. The kit portals it to the body; the card keeps it inside. */
-export const NewIssue = () => (
+const roleName = (selected: string) => (selected === "admin" ? "Admin" : "Member");
+
+/** A form in a Dialog, open: Invite someone, from Settings › General. The kit portals it to the body; the card keeps it inside. */
+export const InviteSomeone = () => (
   <Dialog open>
-    <DialogContent className="sm:max-w-lg">
+    <DialogContent>
       <DialogHeader>
-        <DialogTitle>New Issue</DialogTitle>
-        <DialogDescription>In DEV. It starts in Backlog, unassigned.</DialogDescription>
+        <DialogTitle>Invite someone</DialogTitle>
+        <DialogDescription>
+          Invite one person by email address. You get a link to send them, good for seven days; they
+          join by signing in with that address.
+        </DialogDescription>
       </DialogHeader>
-      <div className="flex flex-col gap-4">
-        <Field>
-          <FieldLabel htmlFor="new-issue-title">Title</FieldLabel>
-          <Input id="new-issue-title" defaultValue="Add ruling authority to Gate" />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="new-issue-body">Description</FieldLabel>
-          <Textarea id="new-issue-body" rows={4} placeholder="What, and why. Markdown." />
-        </Field>
-      </div>
-      <DialogFooter>
-        <Button variant="ghost">Cancel</Button>
-        <Button>Create Issue</Button>
-      </DialogFooter>
+      <form className="flex flex-col gap-4" onSubmit={(submitted) => submitted.preventDefault()}>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="invite-email">Email</Label>
+          <Input id="invite-email" type="email" placeholder="grace@example.com" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="invite-role">Role</Label>
+          <Select defaultValue="member">
+            <SelectTrigger id="invite-role" className="w-full">
+              <SelectValue>{roleName}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost">
+            Cancel
+          </Button>
+          <Button type="submit">Create invitation</Button>
+        </DialogFooter>
+      </form>
     </DialogContent>
   </Dialog>
 );

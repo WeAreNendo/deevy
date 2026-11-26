@@ -10,14 +10,8 @@
   "cssEntry": "dist/index.css",
   "docsDir": "dist/docs",
   "dtsPropsFor": {
-    "MemberChip": "/** What `members.list` carries: a Human or an Agent, with a name and an optional picture. */ member: { id: string; kind: \"human\" | \"agent\"; handle?: string | null; suspendedAt?: Date | string | null; user: { name: string; image?: string | null } }; size?: \"xs\" | \"sm\" | \"md\" | \"lg\"; /** The handle in mono after the name, as `@handle`, where the name alone is ambiguous. */ showHandle?: boolean; /** The Human accountable for this Agent, for the tooltip. */ sponsorName?: string | null; className?: string; /** Only the avatar, where there is no room for a name: the folded sidebar. */ avatarOnly?: boolean;",
-    "StateBadge": "/** A State: a dot coloured by its category, or an amber diamond when it is a Gate. */ state: { name: string; isGate: boolean; category: \"backlog\" | \"active\" | \"done\" }; size?: \"sm\" | \"md\"; className?: string;",
-    "LabelBadge": "/** A Label: `scope` is the small pill inside the badge (`epic` in `[[epic] Agent loop]`), `color` one of LABEL_COLORS. */ label: { scope: string | null; name: string; color: string }; /** `solid` paints the badge in the Label colour (Settings); `outline` keeps it quiet and colours only the scope pill (rows, cards). */ variant?: \"solid\" | \"outline\"; className?: string;",
-    "LabelText": "label: { scope: string | null; name: string; color: string }; scopeClassName?: string; scopeStyle?: React.CSSProperties;",
-    "DataTable": "/** One entry per column; `cell` renders the row's value, `sortValue` makes the column sortable. */ columns: { id: string; header: React.ReactNode; cell: (row: any) => React.ReactNode; sortValue?: (row: any) => string | number | null | undefined; className?: string; headerClassName?: string }[]; /** Flat rows, or `groups` of them with a header row between. */ rows?: any[]; groups?: { id: string; header: React.ReactNode; rows: any[]; collapsed?: boolean; onToggle?: () => void }[]; getRowId: (row: any) => string; /** The row the keyboard is on; the page owns it. */ selectedId?: string | null; onSelect?: (id: string) => void; /** A click or Enter on a row. */ onOpen?: (id: string) => void; /** Renders skeleton rows. */ loading?: boolean; /** What to say when there are no rows; the lucide icon says what kind of thing is missing. */ empty?: { title: React.ReactNode; description?: React.ReactNode; icon?: React.ComponentType<{ className?: string }>; action?: React.ReactNode }; /** 32px rows, or 40px. */ density?: \"compact\" | \"comfortable\"; className?: string; \"aria-label\"?: string;",
-    "StateFields": "/** The State as the Workflow editor holds it while it is being edited. */ state: { uid: string; id?: string; name: string; isGate: boolean; category: \"backlog\" | \"active\" | \"done\"; documentName: string | null; documentTemplate: string | null; triggerAgentMemberId: string | null; approverMemberIds: string[] }; /** Makes the ids unique when several States are on one page. */ index: number; /** The Agents that may be assigned on entering the State. */ agents: { id: string; user: { name: string } }[]; onEdit: (change: Partial<{ uid: string; id?: string; name: string; isGate: boolean; category: \"backlog\" | \"active\" | \"done\"; documentName: string | null; documentTemplate: string | null; triggerAgentMemberId: string | null; approverMemberIds: string[] }>) => void; /** The Document template control; the default is a plain Textarea. */ renderTemplate?: (state: { uid: string; id?: string; name: string; isGate: boolean; category: \"backlog\" | \"active\" | \"done\"; documentName: string | null; documentTemplate: string | null; triggerAgentMemberId: string | null; approverMemberIds: string[] }, onEdit: (change: object) => void) => React.ReactNode; /** The approvers control for a Gate: render an ApproversPicker here. */ renderApprovers: (state: { uid: string; id?: string; name: string; isGate: boolean; category: \"backlog\" | \"active\" | \"done\"; documentName: string | null; documentTemplate: string | null; triggerAgentMemberId: string | null; approverMemberIds: string[] }, onEdit: (change: object) => void) => React.ReactNode; /** One column (a narrow card) rather than a wrapping row. */ stacked?: boolean;",
-    "ApproversPicker": "/** The input's id, so the \"Approvers for <State>\" label reaches it. */ id: string; /** Only Humans are offered: an Agent never decides a Gate. */ humans: { id: string; kind: \"human\" | \"agent\"; handle?: string | null; suspendedAt?: Date | string | null; user: { name: string; image?: string | null } }[]; /** The chosen Member ids; empty means any Human may decide. */ value: string[]; onChange: (memberIds: string[]) => void;",
-    "IssueFilters": "/** The filters as they ride in the URL. */ value: { project?: string; state?: string; assignee?: string; kind?: \"human\" | \"agent\"; open?: \"0\" | \"1\"; group?: \"state\" | \"none\"; view?: \"list\" | \"board\"; q?: string; peek?: string }; onChange: (patch: Partial<{ project?: string; state?: string; assignee?: string; kind?: \"human\" | \"agent\"; open?: \"0\" | \"1\"; group?: \"state\" | \"none\"; view?: \"list\" | \"board\"; q?: string; peek?: string }>) => void; projects: { key: string; name: string }[]; states: { name: string; isGate: boolean; category: \"backlog\" | \"active\" | \"done\" }[]; members: ({ id: string; kind: \"human\" | \"agent\"; handle?: string | null; suspendedAt?: Date | string | null; user: { name: string; image?: string | null } } & { sponsorId?: string | null })[]; /** Whether the signed-in Human sponsors any Agent, which is when \"My Agents\" is offered. */ sponsorsAgents: boolean; hideProject?: boolean; /** On a board the rows are already grouped; the Group control would lie. */ hideGroup?: boolean; /** Offer List / Board. */ showView?: boolean;"
+    "MemberChip": "/** What `members.list` carries: a Human or an Agent, with a name and an optional picture. */ member: { id: string; kind: \"human\" | \"agent\"; handle?: string | null; suspendedAt?: Date | string | null; user: { name: string; image?: string | null } }; /** `inline` for a chip inside a sentence (who did a thing), sized to the words either side of it; `xs`–`lg` elsewhere. */ size?: \"inline\" | \"xs\" | \"sm\" | \"md\" | \"lg\"; /** The handle in mono after the name, as `@handle`, where the name alone is ambiguous. */ showHandle?: boolean; /** The Human accountable for this Agent, for the tooltip. */ sponsorName?: string | null; className?: string; /** Only the avatar, where there is no room for a name: the folded sidebar. */ avatarOnly?: boolean; /** Only the name, where an avatar on every line is noise (a timeline): an Agent's name takes the Agent colour. */ nameOnly?: boolean;",
+    "DataTable": "/** One entry per column; `cell` renders the row's value, `sortValue` makes the column sortable. */ columns: { id: string; header: React.ReactNode; cell: (row: any) => React.ReactNode; sortValue?: (row: any) => string | number | null | undefined; className?: string; headerClassName?: string }[]; /** Flat rows, or `groups` of them with a header row between. */ rows?: any[]; groups?: { id: string; header: React.ReactNode; rows: any[]; collapsed?: boolean; onToggle?: () => void }[]; getRowId: (row: any) => string; /** The row drawn as selected; the page owns it. */ selectedId?: string | null; onSelect?: (id: string) => void; /** A click on a row. */ onOpen?: (id: string) => void; /** Renders skeleton rows. */ loading?: boolean; /** What to say when there are no rows; the lucide icon says what kind of thing is missing. */ empty?: { title: React.ReactNode; description?: React.ReactNode; icon?: React.ComponentType<{ className?: string }>; action?: React.ReactNode }; /** 32px rows, or 40px. */ density?: \"compact\" | \"comfortable\"; className?: string; \"aria-label\"?: string;"
   },
   "overrides": {
     "Dialog": {
@@ -25,23 +19,20 @@
       "viewport": "720x560"
     },
     "DataTable": {
-      "cardMode": "column"
+      "cardMode": "column",
+      "viewport": "1200x900"
     },
     "SettingsPage": {
-      "cardMode": "column"
+      "cardMode": "column",
+      "viewport": "960x1100"
     },
     "PageHeader": {
       "cardMode": "column"
     },
-    "Kanban": {
-      "cardMode": "column"
-    },
     "Sidebar": {
       "cardMode": "column",
-      "viewport": "900x700"
-    },
-    "IssueFilters": {
-      "cardMode": "column"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "AlertDialog": {
       "cardMode": "single",
@@ -49,7 +40,7 @@
     },
     "Sheet": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "Command": {
       "cardMode": "single",
@@ -111,9 +102,6 @@
       "cardMode": "single",
       "viewport": "720x560"
     },
-    "ApproversPicker": {
-      "cardMode": "column"
-    },
     "ButtonGroup": {
       "cardMode": "column"
     },
@@ -133,49 +121,60 @@
       "cardMode": "column"
     },
     "Combobox": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "GrantAProject"
     },
     "ComboboxChip": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Chips"
     },
     "ComboboxChips": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Chips"
     },
     "ComboboxChipsInput": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Chips"
     },
     "ComboboxCollection": {
       "cardMode": "single"
     },
     "ComboboxContent": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "GrantAProject"
     },
     "ComboboxEmpty": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "NoMatch"
     },
     "ComboboxGroup": {
       "cardMode": "single"
     },
     "ComboboxInput": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "GrantAProject"
     },
     "ComboboxItem": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "GrantAProject"
     },
     "ComboboxLabel": {
       "cardMode": "single"
     },
     "ComboboxList": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "GrantAProject"
     },
     "ComboboxSeparator": {
       "cardMode": "single"
     },
     "ComboboxTrigger": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "GrantAProject"
     },
     "ComboboxValue": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Chips"
     },
     "CommandDialog": {
       "cardMode": "single",
@@ -301,27 +300,6 @@
       "cardMode": "single",
       "viewport": "720x560"
     },
-    "KanbanBoard": {
-      "cardMode": "column"
-    },
-    "KanbanColumn": {
-      "cardMode": "column"
-    },
-    "KanbanColumnContent": {
-      "cardMode": "column"
-    },
-    "KanbanColumnHandle": {
-      "cardMode": "column"
-    },
-    "KanbanItem": {
-      "cardMode": "column"
-    },
-    "KanbanItemHandle": {
-      "cardMode": "column"
-    },
-    "KanbanOverlay": {
-      "cardMode": "column"
-    },
     "PopoverContent": {
       "cardMode": "single",
       "viewport": "720x560"
@@ -349,65 +327,72 @@
       "cardMode": "column"
     },
     "Select": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectContent": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectGroup": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectItem": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectLabel": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectScrollDownButton": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectScrollUpButton": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectSeparator": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectTrigger": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SelectValue": {
-      "cardMode": "single"
+      "cardMode": "single",
+      "primaryStory": "Open"
     },
     "SheetClose": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetContent": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetDescription": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetFooter": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetHeader": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetTitle": {
       "cardMode": "single",
-      "viewport": "720x560"
+      "viewport": "720x900"
     },
     "SheetTrigger": {
       "cardMode": "single",
-      "viewport": "720x560"
-    },
-    "StateFields": {
-      "cardMode": "column"
+      "viewport": "720x900"
     },
     "Toaster": {
       "cardMode": "single"
@@ -426,97 +411,216 @@
     },
     "SidebarContent": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarFooter": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarGroup": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarGroupAction": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarGroupContent": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarGroupLabel": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarHeader": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarInput": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarInset": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarMenu": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarMenuAction": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarMenuBadge": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarMenuButton": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarMenuItem": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarMenuSkeleton": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarMenuSub": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarMenuSubButton": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarMenuSubItem": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarProvider": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarRail": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
     },
     "SidebarSeparator": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "EveryPart"
     },
     "SidebarTrigger": {
       "cardMode": "column",
-      "viewport": "900x700"
+      "viewport": "900x700",
+      "primaryStory": "Expanded"
+    },
+    "SignInButton": {
+      "cardMode": "column"
+    },
+    "SettingsRow": {
+      "cardMode": "column"
+    },
+    "SettingsSection": {
+      "cardMode": "column"
+    },
+    "ToggleGroup": {
+      "cardMode": "column"
+    },
+    "ToggleGroupItem": {
+      "cardMode": "column"
+    },
+    "Table": {
+      "cardMode": "column"
+    },
+    "TableBody": {
+      "cardMode": "column"
+    },
+    "TableCaption": {
+      "cardMode": "column"
+    },
+    "TableCell": {
+      "cardMode": "column"
+    },
+    "TableFooter": {
+      "cardMode": "column"
+    },
+    "TableHead": {
+      "cardMode": "column"
+    },
+    "TableHeader": {
+      "cardMode": "column"
+    },
+    "TableRow": {
+      "cardMode": "column"
+    },
+    "Item": {
+      "cardMode": "column"
+    },
+    "ItemActions": {
+      "cardMode": "column"
+    },
+    "ItemContent": {
+      "cardMode": "column"
+    },
+    "ItemDescription": {
+      "cardMode": "column"
+    },
+    "ItemFooter": {
+      "cardMode": "column"
+    },
+    "ItemGroup": {
+      "cardMode": "column"
+    },
+    "ItemHeader": {
+      "cardMode": "column"
+    },
+    "ItemMedia": {
+      "cardMode": "column"
+    },
+    "ItemSeparator": {
+      "cardMode": "column"
+    },
+    "ItemTitle": {
+      "cardMode": "column"
+    },
+    "Card": {
+      "cardMode": "column"
+    },
+    "CardAction": {
+      "cardMode": "column"
+    },
+    "CardContent": {
+      "cardMode": "column"
+    },
+    "CardDescription": {
+      "cardMode": "column"
+    },
+    "CardFooter": {
+      "cardMode": "column"
+    },
+    "CardHeader": {
+      "cardMode": "column"
+    },
+    "CardTitle": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "TabsContent": {
+      "cardMode": "column"
+    },
+    "TabsList": {
+      "cardMode": "column"
+    },
+    "TabsTrigger": {
+      "cardMode": "column"
     }
-  },
-  "componentSrcMap": {
-    "Kanban": "regrouped-by-docs",
-    "Timeline": "regrouped-by-docs",
-    "Sortable": "regrouped-by-docs"
   },
   "storyImports": {
     "bundle": [".design-sync/previews/"]

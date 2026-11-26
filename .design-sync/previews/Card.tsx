@@ -12,84 +12,76 @@ import {
   MemberChip,
   RunStatus,
 } from "@deevy/design-system";
-import { ada, builder, planner } from "./lib/fixtures";
+import { failedRun, finishedRun, planGate, waitingRun } from "./lib/fixtures";
 
-const summary = `Moved **DEV-41** to Review and opened a pull request.
+// No screen uses Card: a Run and a Gate are bordered rows, a Socket is a
+// SettingsSection. These say the same things in the same words.
 
-- Replaced the poll with the SSE Event stream
-- Added a test for the reconnect path`;
-
-/** A Run: what the Agent did on an Issue, its status in the corner, and the Agent who ran it. */
+/** A Run that finished: the record, where it stands, the Agent, its summary and how long it worked. */
 export const Run = () => (
   <Card className="max-w-md">
     <CardHeader>
-      <CardTitle>Run on DEV-41</CardTitle>
-      <CardDescription>Started 2h ago · finished in 14 min</CardDescription>
+      <CardTitle className="font-mono">{finishedRun.record}</CardTitle>
+      <CardDescription className="flex flex-wrap items-center gap-x-2">
+        <MemberChip member={finishedRun.agent} size="inline" />
+        <span>started by assignment</span>
+        <span aria-hidden>·</span>
+        <span>{finishedRun.last}</span>
+      </CardDescription>
       <CardAction>
-        <RunStatus status="completed" />
+        <RunStatus status={finishedRun.status} />
       </CardAction>
     </CardHeader>
-    <CardContent className="flex flex-col gap-3">
-      <MemberChip member={builder} size="sm" sponsorName="Ada Lovelace" />
-      <Markdown>{summary}</Markdown>
-    </CardContent>
-    <CardFooter className="justify-between border-t">
-      <span className="font-mono text-xs text-muted-foreground">run_9k2m4x7p1q0z</span>
-      <Button variant="ghost" size="sm">
-        Open Run
-      </Button>
+    <CardContent className="text-sm">{finishedRun.summary}</CardContent>
+    <CardFooter className="justify-between border-t text-xs text-muted-foreground">
+      <span className="font-mono">{finishedRun.id}</span>
+      <span className="tabular-nums">Working {finishedRun.time}</span>
     </CardFooter>
   </Card>
 );
 
-/** A Run still going, with a Gate waiting on a Human. */
-export const RunAwaitingInput = () => (
+/** A Run stopped at a Gate: an Activity in markdown, then the Checkpoint and the count. */
+export const RunAtAGate = () => (
   <Card className="max-w-md">
     <CardHeader>
-      <CardTitle>Run on DEV-42</CardTitle>
-      <CardDescription>Started 20 min ago</CardDescription>
+      <CardTitle className="font-mono">{waitingRun.record}</CardTitle>
+      <CardDescription className="flex flex-wrap items-center gap-x-2">
+        <MemberChip member={waitingRun.agent} size="inline" />
+        <span>{waitingRun.last}</span>
+      </CardDescription>
       <CardAction>
-        <RunStatus status="awaiting_input" label="Waiting for approval" />
+        <RunStatus status={waitingRun.status} />
       </CardAction>
     </CardHeader>
-    <CardContent className="flex flex-col gap-3">
-      <MemberChip member={planner} size="sm" sponsorName="Ada Lovelace" />
-      <Markdown>
-        {
-          "Drafted the spec for *ruling authority* on a Gate. Needs a Human to approve before I touch the schema."
-        }
-      </Markdown>
+    <CardContent>
+      <Markdown>{"Read the three list operations that still page by `offset`."}</Markdown>
     </CardContent>
     <CardFooter className="gap-2 border-t">
-      <Button size="sm">Approve</Button>
-      <Button variant="outline" size="sm">
-        Send back
-      </Button>
+      <Badge variant="outline">{planGate.checkpoint}</Badge>
+      <span className="text-sm text-muted-foreground tabular-nums">
+        {planGate.approvals} of {planGate.required}
+      </span>
     </CardFooter>
   </Card>
 );
 
-/** A Channel: where the Workspace's Events go out, and whether it is reachable. */
-export const Channel = () => (
+/** A Socket, as its page says it is doing. */
+export const Socket = () => (
   <Card className="max-w-md">
     <CardHeader>
-      <CardTitle>#deevy-runs</CardTitle>
-      <CardDescription>Slack · Runs, Gates and mentions</CardDescription>
+      <CardTitle>acme on GitHub</CardTitle>
+      <CardDescription>A GitHub Socket, as acme-deevy[bot].</CardDescription>
       <CardAction>
-        <Badge variant="secondary">Connected</Badge>
+        <Badge variant="outline">GitHub</Badge>
       </CardAction>
     </CardHeader>
-    <CardContent className="flex flex-col gap-1">
-      <span>Last delivery 4 min ago, from a Run by Builder.</span>
-      <span className="text-muted-foreground">Set up by</span>
-      <MemberChip member={ada} size="xs" />
-    </CardContent>
+    <CardContent className="text-sm">Spoke 4 minutes ago</CardContent>
     <CardFooter className="gap-2">
       <Button variant="outline" size="sm">
-        Send a test
+        Ask who deevy is there
       </Button>
-      <Button variant="ghost" size="sm">
-        Disconnect
+      <Button variant="outline" size="sm">
+        Pause
       </Button>
     </CardFooter>
   </Card>
@@ -99,14 +91,15 @@ export const Channel = () => (
 export const Small = () => (
   <Card size="sm" className="max-w-sm">
     <CardHeader>
-      <CardTitle>Run on DEV-40</CardTitle>
-      <CardDescription>1d ago · failed after 3 min</CardDescription>
+      <CardTitle className="font-mono">{failedRun.record}</CardTitle>
+      <CardDescription className="flex flex-wrap items-center gap-x-2">
+        <MemberChip member={failedRun.agent} size="inline" />
+        <span>{failedRun.last}</span>
+      </CardDescription>
       <CardAction>
-        <RunStatus status="failed" />
+        <RunStatus status={failedRun.status} />
       </CardAction>
     </CardHeader>
-    <CardContent>
-      <Markdown>{"The migration check failed: `member.suspended_at` is not `NOT NULL`."}</Markdown>
-    </CardContent>
+    <CardContent className="text-sm">{failedRun.summary}</CardContent>
   </Card>
 );

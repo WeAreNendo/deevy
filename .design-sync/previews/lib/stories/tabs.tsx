@@ -1,89 +1,111 @@
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@deevy/design-system";
 
-/** An Issue's Documents: one tab per Document, the current one's text below. */
-export const Documents = () => (
-  <Tabs defaultValue="Spec">
-    <TabsList aria-label="Documents">
-      <TabsTrigger value="Spec">Spec</TabsTrigger>
-      <TabsTrigger value="Plan">Plan</TabsTrigger>
-      <TabsTrigger value="Review">Review</TabsTrigger>
-    </TabsList>
-    <TabsContent value="Spec">
-      <p className="max-w-prose text-sm text-muted-foreground">
-        A Gate names the Human who rules on it. The Run that reaches the Gate waits until that Human
-        approves or sends the Issue back.
-      </p>
-    </TabsContent>
-    <TabsContent value="Plan">
-      <p className="text-sm text-muted-foreground">Planner writes the Plan on entering Todo.</p>
-    </TabsContent>
-    <TabsContent value="Review">
-      <p className="text-sm text-muted-foreground">
-        Nothing yet: the Issue has not reached Review.
-      </p>
-    </TabsContent>
-  </Tabs>
-);
+const endpoint = "https://deevy.example.com/mcp";
 
-/** The editor's view switch, small, in the toolbar of a Document. */
-export const EditorView = () => (
-  <div className="rounded-md border bg-card">
-    <div className="flex items-center justify-end border-b px-1 py-1">
-      <Tabs defaultValue="edit">
-        <TabsList aria-label="Editor view" className="h-7">
-          <TabsTrigger value="edit" className="text-xs">
-            Edit
-          </TabsTrigger>
-          <TabsTrigger value="source" className="text-xs">
-            Source
-          </TabsTrigger>
+// The coding agents, in the order lib/mcp.ts lists them, and where each one's
+// entry goes. deevy's only tabs.
+const agents = [
+  {
+    label: "Claude Code",
+    where: "Run this where the Agent works, and it writes the entry itself.",
+  },
+  {
+    label: "OpenCode",
+    where: "In opencode.json, beside the repository or under ~/.config/opencode.",
+  },
+  { label: "Cursor CLI", where: "In ~/.cursor/mcp.json, the same file the editor reads." },
+  { label: "Copilot CLI", where: "In ~/.copilot/mcp-config.json." },
+  {
+    label: "Anything else",
+    where: "Any MCP client over streamable HTTP, with the key as a bearer token.",
+  },
+];
+
+/** Connect an Agent: one tab per coding agent. The strip only chooses: what it says is under it, not in a TabsContent. What to write is drawn for the first one. */
+export const ConnectAgent = () => {
+  const [client, setClient] = useState(agents[0]!.label);
+  return (
+    <div className="flex max-w-xl flex-col gap-3">
+      <code className="w-fit rounded bg-muted px-2 py-1 text-sm">{endpoint}</code>
+      <Tabs value={client} onValueChange={(next) => setClient(String(next))}>
+        <TabsList aria-label="Coding agent" className="scrollbar-thin max-w-full overflow-x-auto">
+          {agents.map((agent) => (
+            <TabsTrigger key={agent.label} value={agent.label}>
+              {agent.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
       </Tabs>
+      <p className="text-sm text-muted-foreground">
+        {agents.find((agent) => agent.label === client)?.where}
+      </p>
+      {client === agents[0]!.label ? (
+        <>
+          <pre className="overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
+            {"export DEEVY_AGENT_KEY=…   # the key, from when it was issued"}
+          </pre>
+          <pre className="overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
+            {`claude mcp add --transport http deevy ${endpoint} \\\n  --header "Authorization: Bearer $DEEVY_AGENT_KEY"`}
+          </pre>
+        </>
+      ) : null}
     </div>
-    <p className="px-3 py-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-      ## Ruling authority{"\n"}A Gate names the Human who rules on it.
-    </p>
-  </div>
+  );
+};
+
+// No screen has the ones below, so their words are of no product.
+
+/** With its panels: the tab chooses what is under it. */
+export const WithContent = () => (
+  <Tabs defaultValue="one">
+    <TabsList aria-label="Views">
+      <TabsTrigger value="one">One</TabsTrigger>
+      <TabsTrigger value="two">Two</TabsTrigger>
+    </TabsList>
+    <TabsContent value="one">
+      <p className="text-sm text-muted-foreground">What the first one holds.</p>
+    </TabsContent>
+    <TabsContent value="two">
+      <p className="text-sm text-muted-foreground">What the second one holds.</p>
+    </TabsContent>
+  </Tabs>
 );
 
 /** The line variant: an underline instead of a filled pill. */
 export const Line = () => (
-  <Tabs defaultValue="board">
-    <TabsList variant="line" aria-label="Project">
-      <TabsTrigger value="board">Board</TabsTrigger>
-      <TabsTrigger value="workflow">Workflow</TabsTrigger>
-      <TabsTrigger value="settings">Settings</TabsTrigger>
+  <Tabs defaultValue="two">
+    <TabsList variant="line" aria-label="Views">
+      <TabsTrigger value="one">One</TabsTrigger>
+      <TabsTrigger value="two">Two</TabsTrigger>
+      <TabsTrigger value="three">Three</TabsTrigger>
     </TabsList>
-    <TabsContent value="board">
-      <p className="text-sm text-muted-foreground">Issues by State, one column each.</p>
-    </TabsContent>
   </Tabs>
 );
 
-/** Stacked, for a Settings nav: the active tab's mark sits on its right edge. */
+/** Stacked: the active tab's mark sits on its right edge. */
 export const Vertical = () => (
-  <Tabs defaultValue="agents" orientation="vertical" className="w-64">
-    <TabsList variant="line" aria-label="Settings">
-      <TabsTrigger value="workspace">Workspace</TabsTrigger>
-      <TabsTrigger value="members">Members</TabsTrigger>
-      <TabsTrigger value="agents">Agents</TabsTrigger>
-      <TabsTrigger value="labels">Labels</TabsTrigger>
+  <Tabs defaultValue="two" orientation="vertical" className="w-full">
+    <TabsList variant="line" aria-label="Views">
+      <TabsTrigger value="one">One</TabsTrigger>
+      <TabsTrigger value="two">Two</TabsTrigger>
+      <TabsTrigger value="three">Three</TabsTrigger>
     </TabsList>
-    <TabsContent value="agents">
-      <p className="text-sm text-muted-foreground">Two Agents, both sponsored by Ada.</p>
+    <TabsContent value="two">
+      <p className="text-sm text-muted-foreground">What the second one holds.</p>
     </TabsContent>
   </Tabs>
 );
 
-/** A Document that is not there yet cannot be opened. */
+/** One that cannot be opened. */
 export const Disabled = () => (
-  <Tabs defaultValue="Spec">
-    <TabsList aria-label="Documents">
-      <TabsTrigger value="Spec">Spec</TabsTrigger>
-      <TabsTrigger value="Plan">Plan</TabsTrigger>
-      <TabsTrigger value="Review" disabled>
-        Review
+  <Tabs defaultValue="one">
+    <TabsList aria-label="Views">
+      <TabsTrigger value="one">One</TabsTrigger>
+      <TabsTrigger value="two" disabled>
+        Two
       </TabsTrigger>
+      <TabsTrigger value="three">Three</TabsTrigger>
     </TabsList>
   </Tabs>
 );

@@ -1,1 +1,0 @@
-The Humans a Gate names as its approvers: a multi-select `Combobox` with `MemberChip` chips. Only Humans are offered — an Agent never decides a Gate — and naming nobody leaves the ruling to any Human, which the empty box says.

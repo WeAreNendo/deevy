@@ -1,1 +1,0 @@
-The fields of one State in the Workflow editor: Name, Counts as (backlog / active / done), Gate, the Document it asks for (and its template), the Agent to assign on entering, and, for a Gate, its approvers (`renderApprovers` renders an `ApproversPicker`). Wrapping row by default; `stacked` for a narrow card. The editor lists one of these per State inside a `Sortable`.

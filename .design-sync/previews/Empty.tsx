@@ -7,17 +7,17 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@deevy/design-system";
-import { ClipboardList, Inbox, SearchX } from "lucide-react";
+import { Cable, FolderKanban, SearchX } from "lucide-react";
 
-/** The words say what emptied the list, and the action undoes it. */
+/** The words say what emptied the list, and the action undoes it: the Event log under its filters. */
 export const NoMatch = () => (
   <Empty>
     <EmptyHeader>
       <EmptyMedia variant="icon">
         <SearchX aria-hidden />
       </EmptyMedia>
-      <EmptyTitle>No Issues match your filters</EmptyTitle>
-      <EmptyDescription>Clear a filter, or widen the view.</EmptyDescription>
+      <EmptyTitle>No Events match your filters</EmptyTitle>
+      <EmptyDescription>Try adjusting or clearing your filters.</EmptyDescription>
     </EmptyHeader>
     <EmptyContent>
       <Button variant="outline" size="sm">
@@ -27,51 +27,44 @@ export const NoMatch = () => (
   </Empty>
 );
 
-export const NothingAssigned = () => (
+/** Needs me with nothing on it: no icon, because nothing is missing. */
+export const NothingNeedsYou = () => (
   <Empty>
     <EmptyHeader>
-      <EmptyMedia variant="icon">
-        <ClipboardList aria-hidden />
-      </EmptyMedia>
-      <EmptyTitle>Nothing assigned to you</EmptyTitle>
+      <EmptyTitle>Nothing needs you</EmptyTitle>
       <EmptyDescription>
-        Issues assigned to you, or to an Agent you sponsor, show up here.
+        Gates awaiting your ruling and your Agents&apos; Runs will show up here.
       </EmptyDescription>
     </EmptyHeader>
   </Empty>
 );
 
-export const NoOpenIssues = () => (
+export const NoTools = () => (
   <Empty>
     <EmptyHeader>
       <EmptyMedia variant="icon">
-        <ClipboardList aria-hidden />
+        <Cable aria-hidden />
       </EmptyMedia>
-      <EmptyTitle>No open Issues</EmptyTitle>
+      <EmptyTitle>No tools connected yet</EmptyTitle>
       <EmptyDescription>
-        Everything in DEV is done. Create an Issue to start something.
+        deevy works in the tools your team already uses. Connect one, and bind a Project to a
+        container inside it.
       </EmptyDescription>
     </EmptyHeader>
-    <EmptyContent>
-      <Button size="sm">New Issue</Button>
-    </EmptyContent>
   </Empty>
 );
 
-/** The inbox under its Unread filter, with the way back to All. */
-export const NothingUnread = () => (
+export const NoProjects = () => (
   <Empty>
     <EmptyHeader>
       <EmptyMedia variant="icon">
-        <Inbox aria-hidden />
+        <FolderKanban aria-hidden />
       </EmptyMedia>
-      <EmptyTitle>Nothing unread</EmptyTitle>
-      <EmptyDescription>You are caught up. All shows what you have read.</EmptyDescription>
+      <EmptyTitle>No Projects yet</EmptyTitle>
+      <EmptyDescription>
+        A Project binds a container in one of your tools to the Agents that work it. Connect a tool
+        under Sockets, then bind one of its containers here.
+      </EmptyDescription>
     </EmptyHeader>
-    <EmptyContent>
-      <Button variant="outline" size="sm">
-        Show All
-      </Button>
-    </EmptyContent>
   </Empty>
 );

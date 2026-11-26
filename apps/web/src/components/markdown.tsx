@@ -4,10 +4,9 @@ import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 /**
- * The typography of everything Humans and Agents write: read mode and the
- * editor share it, so switching between them does not reflow (deevy-ui).
- * Code is coloured by lowlight in both — rehype-highlight here, the code block
- * extension there — one engine, one palette (index.css, `.hljs-*`).
+ * The typography of everything Humans and Agents write, read in deevy: a
+ * Proposal, a record's body, an Activity (deevy-ui). Code is coloured by
+ * lowlight through rehype-highlight, one palette (index.css, `.hljs-*`).
  */
 export const proseClassName = cn(
   "prose-deevy flex flex-col gap-3 text-sm/6 text-foreground",
@@ -43,8 +42,9 @@ export const proseClassName = cn(
 );
 
 /**
- * A Document, a description or a comment. Markdown is the format Humans and
- * Agents both write, so it is rendered rather than shown as source.
+ * A Proposal, a record's body or an Activity. Markdown is the format Humans
+ * and Agents both write, so it is rendered rather than shown as source; deevy
+ * has no editor for it.
  */
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (

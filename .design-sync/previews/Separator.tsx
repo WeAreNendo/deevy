@@ -1,44 +1,50 @@
-import { Separator } from "@deevy/design-system";
+import { MemberChip, runStatusLabels, Separator } from "@deevy/design-system";
+import { activeRun, records } from "./lib/fixtures";
+
+// No screen places one itself (a DropdownMenu, a Select and the sidebar have
+// their own); a list rules its rows with `divide-y` or borders.
 
 /** A line between two blocks of text. */
 export const Horizontal = () => (
-  <div className="flex max-w-md flex-col gap-3">
+  <div className="flex max-w-md flex-col gap-3 text-sm">
     <div className="flex flex-col gap-1">
-      <span className="font-medium">Add ruling authority to Gate</span>
-      <span className="text-muted-foreground">DEV-42 · Review · assigned to Ada Lovelace</span>
+      <span className="font-medium">{records[0]!.title}</span>
+      <span className="text-muted-foreground">
+        <span className="font-mono text-xs">{records[0]!.key}</span> · changed {records[0]!.changed}
+      </span>
     </div>
     <Separator />
     <div className="flex flex-col gap-1">
-      <span className="font-medium">Stream Events to the inbox without polling</span>
-      <span className="text-muted-foreground">DEV-41 · In progress · assigned to Builder</span>
+      <span className="font-medium">{records[1]!.title}</span>
+      <span className="text-muted-foreground">
+        <span className="font-mono text-xs">{records[1]!.key}</span> · changed {records[1]!.changed}
+      </span>
     </div>
   </div>
 );
 
 /** Between facts in one row; the separator stretches to the row's height. */
 export const Vertical = () => (
-  <div className="flex h-5 items-center gap-3 text-muted-foreground">
-    <span className="font-mono text-xs">DEV-42</span>
+  <div className="flex h-5 items-center gap-3 text-sm text-muted-foreground">
+    <span className="font-mono text-xs">{records[0]!.key}</span>
     <Separator orientation="vertical" />
-    <span>Review</span>
+    <span>{records[0]!.stateName}</span>
     <Separator orientation="vertical" />
-    <span>Ada Lovelace</span>
-    <Separator orientation="vertical" />
-    <span className="font-mono text-xs">2h</span>
+    <span className="text-xs">{records[0]!.changed}</span>
   </div>
 );
 
-/** Both inside a Run's header: the title above, the facts under it. */
+/** Both: a title above, its facts under it. */
 export const InAHeader = () => (
-  <div className="flex max-w-md flex-col gap-2">
-    <span className="font-medium">Run on DEV-41</span>
+  <div className="flex max-w-md flex-col gap-2 text-sm">
+    <span className="font-mono font-medium">{activeRun.record}</span>
     <Separator />
     <div className="flex h-5 items-center gap-3 text-muted-foreground">
-      <span>Builder</span>
+      <MemberChip member={activeRun.agent} size="inline" />
       <Separator orientation="vertical" />
-      <span>Completed</span>
+      <span>{runStatusLabels[activeRun.status]}</span>
       <Separator orientation="vertical" />
-      <span className="font-mono text-xs">14 min</span>
+      <span className="text-xs tabular-nums">{activeRun.time}</span>
     </div>
   </div>
 );

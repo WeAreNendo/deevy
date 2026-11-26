@@ -1,40 +1,41 @@
 import {
-  Button,
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
-  Kbd,
   Label,
 } from "@deevy/design-system";
-import { Copy, Link2, Search, Send, X } from "lucide-react";
+import { Copy, Link2, Search, X } from "lucide-react";
 
-/** A search with the shortcut that opens it at the end. */
-export const SearchWithShortcut = () => (
+// No screen composes an InputGroup (the palette's search and Combobox carry
+// their own inside the kit), so these show the parts in words of no product.
+
+/** An icon before the field, a count after it. */
+export const IconAndText = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
       <InputGroupAddon>
         <Search />
       </InputGroupAddon>
-      <InputGroupInput placeholder="Search Issues…" aria-label="Search Issues" />
+      <InputGroupInput placeholder="Search…" aria-label="Search" />
       <InputGroupAddon align="inline-end">
-        <Kbd>/</Kbd>
+        <InputGroupText className="tabular-nums">12 results</InputGroupText>
       </InputGroupAddon>
     </InputGroup>
   </div>
 );
 
-/** A fixed prefix: the scheme is not up for editing. */
-export const UrlPrefix = () => (
+/** A fixed prefix that is not up for editing, and a button at the end. */
+export const Prefix = () => (
   <div className="flex w-full max-w-sm flex-col gap-2">
-    <Label htmlFor="ig-webhook">Webhook URL</Label>
+    <Label htmlFor="ig-address">Address</Label>
     <InputGroup>
       <InputGroupAddon>
         <InputGroupText>https://</InputGroupText>
       </InputGroupAddon>
-      <InputGroupInput id="ig-webhook" defaultValue="hooks.example.com/deevy/events" />
+      <InputGroupInput id="ig-address" defaultValue="example.com" />
       <InputGroupAddon align="inline-end">
         <InputGroupButton size="icon-xs" aria-label="Copy">
           <Copy />
@@ -44,19 +45,15 @@ export const UrlPrefix = () => (
   </div>
 );
 
-/** A textarea with the send button below: a comment on an Issue. */
-export const CommentWithSend = () => (
+/** A textarea with a row under it, in the same frame. */
+export const TextareaWithFooter = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
-      <InputGroupTextarea
-        rows={3}
-        placeholder="Comment on DEV-42… @mention a Member to notify them."
-        aria-label="Comment"
-      />
+      <InputGroupTextarea rows={3} placeholder="Write something…" aria-label="Text" />
       <InputGroupAddon align="block-end">
-        <InputGroupText>Markdown</InputGroupText>
+        <InputGroupText className="tabular-nums">0 of 280</InputGroupText>
         <InputGroupButton className="ml-auto" variant="default" size="sm">
-          Send <Send data-icon="inline-end" />
+          Save
         </InputGroupButton>
       </InputGroupAddon>
     </InputGroup>
@@ -67,7 +64,7 @@ export const CommentWithSend = () => (
 export const ClearAndInvalid = () => (
   <div className="flex w-full max-w-sm flex-col gap-3">
     <InputGroup>
-      <InputGroupInput defaultValue="assignee:planner state:review" aria-label="Filter" />
+      <InputGroupInput defaultValue="A value" aria-label="Text" />
       <InputGroupAddon align="inline-end">
         <InputGroupButton size="icon-xs" aria-label="Clear">
           <X />
@@ -78,7 +75,7 @@ export const ClearAndInvalid = () => (
       <InputGroupAddon>
         <Link2 />
       </InputGroupAddon>
-      <InputGroupInput defaultValue="not a url" aria-invalid aria-label="Repository URL" />
+      <InputGroupInput defaultValue="not an address" aria-invalid aria-label="Address" />
     </InputGroup>
   </div>
 );
@@ -88,17 +85,12 @@ export const BlockStart = () => (
   <div className="w-full max-w-sm">
     <InputGroup>
       <InputGroupAddon align="block-start" className="border-b">
-        <InputGroupText>API key</InputGroupText>
-        <Button variant="ghost" size="xs" className="ml-auto" type="button">
-          Regenerate
-        </Button>
+        <InputGroupText>Title</InputGroupText>
+        <InputGroupButton size="xs" className="ml-auto">
+          Reset
+        </InputGroupButton>
       </InputGroupAddon>
-      <InputGroupInput
-        readOnly
-        defaultValue="dvy_k3f9a2…c8e1"
-        className="font-mono"
-        aria-label="API key"
-      />
+      <InputGroupInput defaultValue="A value" aria-label="Title" />
     </InputGroup>
   </div>
 );

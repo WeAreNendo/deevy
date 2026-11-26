@@ -7,58 +7,51 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@deevy/design-system";
+import { records, waitingRun } from "../fixtures";
 
-/** The top bar's trail for an Issue: where you are, each step above it a link. */
-export const IssueTrail = () => (
+/** The top bar's trail for a Run: the list above it a link, then its id, which is its only name. */
+export const RunTrail = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">Projects</BreadcrumbLink>
+        <BreadcrumbLink href="#">Runs</BreadcrumbLink>
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">DEV</BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbPage>DEV-42</BreadcrumbPage>
+        <BreadcrumbPage>{waitingRun.id}</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>
 );
 
-/** A top-level page is one crumb, and it is not a link. */
+/** A record, by its tracker's key. */
+export const RecordTrail = () => (
+  <Breadcrumb>
+    <BreadcrumbList>
+      <BreadcrumbItem>
+        <BreadcrumbLink href="#">Work</BreadcrumbLink>
+      </BreadcrumbItem>
+      <BreadcrumbSeparator />
+      <BreadcrumbItem>
+        <BreadcrumbPage>{records[0]!.key}</BreadcrumbPage>
+      </BreadcrumbItem>
+    </BreadcrumbList>
+  </Breadcrumb>
+);
+
+/** A top-level page is one crumb, and it is not a link: the home page, where Needs me is. */
 export const SinglePage = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
-        <BreadcrumbPage>Inbox</BreadcrumbPage>
+        <BreadcrumbPage>Home</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>
 );
 
-/** A Project's tab: the Project is named, never its key alone. */
-export const ProjectTab = () => (
-  <Breadcrumb>
-    <BreadcrumbList>
-      <BreadcrumbItem>
-        <BreadcrumbLink href="#">Projects</BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbLink href="#">Developer platform</BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbPage>Workflow</BreadcrumbPage>
-      </BreadcrumbItem>
-    </BreadcrumbList>
-  </Breadcrumb>
-);
-
-/** A deep trail folds its middle into an ellipsis. */
-export const WithEllipsis = () => (
+/** A Socket's page: named by its name, never its id. */
+export const SocketPage = () => (
   <Breadcrumb>
     <BreadcrumbList>
       <BreadcrumbItem>
@@ -66,15 +59,30 @@ export const WithEllipsis = () => (
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
+        <BreadcrumbLink href="#">Sockets</BreadcrumbLink>
+      </BreadcrumbItem>
+      <BreadcrumbSeparator />
+      <BreadcrumbItem>
+        <BreadcrumbPage>acme on GitHub</BreadcrumbPage>
+      </BreadcrumbItem>
+    </BreadcrumbList>
+  </Breadcrumb>
+);
+
+/** The middle folded into an ellipsis. deevy's trails are three crumbs at most and never fold. */
+export const WithEllipsis = () => (
+  <Breadcrumb>
+    <BreadcrumbList>
+      <BreadcrumbItem>
+        <BreadcrumbLink href="#">First</BreadcrumbLink>
+      </BreadcrumbItem>
+      <BreadcrumbSeparator />
+      <BreadcrumbItem>
         <BreadcrumbEllipsis />
       </BreadcrumbItem>
       <BreadcrumbSeparator />
       <BreadcrumbItem>
-        <BreadcrumbLink href="#">Agents</BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator />
-      <BreadcrumbItem>
-        <BreadcrumbPage>Planner</BreadcrumbPage>
+        <BreadcrumbPage>Last</BreadcrumbPage>
       </BreadcrumbItem>
     </BreadcrumbList>
   </Breadcrumb>

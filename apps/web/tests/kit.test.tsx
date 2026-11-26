@@ -30,6 +30,19 @@ describe("MemberChip", () => {
     expect(screen.getByText("Ada Lovelace")).toBeTruthy();
     expect(screen.getByText("AL")).toBeTruthy();
   });
+
+  it("sizes the initials with the chip, on the fallback that would set its own", () => {
+    const { container } = render(
+      <MemberChip
+        member={{ id: "h", kind: "human", user: { name: "Ada Lovelace" } }}
+        size="inline"
+      />,
+    );
+    const fallback = container.querySelector("[data-slot=avatar-fallback]");
+    expect(fallback?.textContent).toBe("AL");
+    expect(fallback?.classList.contains("text-[7px]")).toBe(true);
+    expect(fallback?.classList.contains("text-sm")).toBe(false);
+  });
 });
 
 describe("RunStatus", () => {

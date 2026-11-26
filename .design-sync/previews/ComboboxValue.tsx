@@ -1,1 +1,1 @@
-export * from "./lib/combobox-stories";
+export * from "./lib/combobox-chips-stories";
